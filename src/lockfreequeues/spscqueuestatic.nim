@@ -57,7 +57,7 @@ proc pop*[N: static int, T](
 ):
   Option[seq[T]]
   {.inline.} =
-  ## Pop items to the queue.
+  ## Pop items from the head of the queue..
   ## If > 1 items could be popped, some(seq[T]) will be returned.
   ## Otherwise, `none(seq[T])` will be returned.
   return self.face[].pop(self.storage, count)

@@ -184,7 +184,7 @@ template pop(
   count: int,
   rettype: typedesc,
 ) =
-  ## Pop items from the front of the queue.
+  ## Pop items from the head of the queue.
   ## If > 1 items could be popped, some(seq[T]) will be returned.
   ## Otherwise, `none(seq[T])` will be returned.
   let tail = self.tail.load(moAcquire)
@@ -239,7 +239,7 @@ proc pop*[T](
   count: int,
 ):
   Option[seq[T]] =
-  ## Pop items from the front of the queue.
+  ## Pop items from the head of the queue.
   ## If > 1 items could be popped, some(seq[T]) will be returned.
   ## Otherwise, `none(seq[T])` will be returned.
   self.pop(storage, capacity, count, seq[T])
@@ -251,7 +251,7 @@ proc pop*[N: static int, T](
   count: int,
 ):
   Option[seq[T]] =
-  ## Pop items from the front of the queue.
+  ## Pop items from the head of the queue.
   ## If > 1 items could be popped, some(seq[T]) will be returned.
   ## Otherwise, `none(seq[T])` will be returned.
   self.pop(storage, storage.len, count, seq[T])
