@@ -101,7 +101,7 @@ function main() {
 <li>
   <a class="reference reference-toplevel" href="#6" id="56">Imports</a>
   <ul class="simple simple-toc-section">
-
+    
   </ul>
 </li>
 <li>
@@ -117,10 +117,12 @@ function main() {
   <ul class="simple simple-toc-section">
       <li><a class="reference" href="#newSPSCQueue"
     ><wbr />new<wbr />SPSCQueue<span class="attachedType">SPSCQueueStatic</span></a></li>
-  <li><a class="reference" href="#%3Ddestroy%2CSPSCQueueStatic%5BN%2CT%5D"
-    ><wbr /><b>=destroy</b><span class="attachedType">SPSCQueueStatic</span></a></li>
+  <li><a class="reference" href="#push%2CSPSCQueueStatic%5BN%2CT%5D%2CT"
+    ><wbr />push<span class="attachedType">SPSCQueueStatic</span></a></li>
   <li><a class="reference" href="#push%2CSPSCQueueStatic%5BN%2CT%5D%2CopenArray%5BT%5D"
     ><wbr />push<span class="attachedType">SPSCQueueStatic</span></a></li>
+  <li><a class="reference" href="#pop%2CSPSCQueueStatic%5BN%2CT%5D"
+    ><wbr />pop<span class="attachedType">SPSCQueueStatic</span></a></li>
   <li><a class="reference" href="#pop%2CSPSCQueueStatic%5BN%2CT%5D%2Cint"
     ><wbr />pop<span class="attachedType">SPSCQueueStatic</span></a></li>
   <li><a class="reference" href="#capacity%2CSPSCQueueStatic%5BN%2CT%5D"
@@ -140,7 +142,7 @@ function main() {
   </div>
   <div class="nine columns" id="content">
   <div id="tocRoot"></div>
-
+  
   <p class="module-desc"><p>A single-producer, single-consumer, lock-free, wait-free queue.</p>
 <p>Based on the algorithm outlined by Juho Snellman at <a class="reference external" href="https://www.snellman.net/blog/archive/2016-12-13-ring-buffers">https://www.snellman.net/blog/archive/2016-12-13-ring-buffers</a>/</p>
 </p>
@@ -154,7 +156,7 @@ function main() {
 <dl class="item">
 <a id="SPSCQueueStatic"></a>
 <dt><pre><a href="spscqueuestatic.html#SPSCQueueStatic"><span class="Identifier">SPSCQueueStatic</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span> <span class="Other">=</span> <span class="Keyword">object</span>
-  <span class="Identifier">face</span><span class="Other">:</span> <span class="Keyword">ptr</span> <a href="spscqueueinterface.html#SPSCQueueInterface"><span class="Identifier">SPSCQueueInterface</span></a>
+  <span class="Identifier">face</span><span class="Other">:</span> <a href="spscqueueinterface.html#SPSCQueueInterface"><span class="Identifier">SPSCQueueInterface</span></a>
   <span class="Identifier">storage</span><span class="Other">:</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span>
 </pre></dt>
 <dd>
@@ -182,27 +184,38 @@ class="link-seesrc" target="_blank">Source</a>
 <a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueuestatic.nim#L27" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="=destroy,SPSCQueueStatic[N,T]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#%3Ddestroy%2CSPSCQueueStatic%5BN%2CT%5D"><span class="Identifier"><b>=destroy</b></span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="spscqueuestatic.html#SPSCQueueStatic"><span class="Identifier">SPSCQueueStatic</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span></pre></dt>
+<a id="push,SPSCQueueStatic[N,T],T"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#push%2CSPSCQueueStatic%5BN%2CT%5D%2CT"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="spscqueuestatic.html#SPSCQueueStatic"><span class="Identifier">SPSCQueueStatic</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">item</span><span class="Other">:</span> <span class="Identifier">T</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span></pre></dt>
 <dd>
 
-
+Append a single item to the tail of the queue. If the item was appended, <tt class="docutils literal"><span class="pre">true</span></tt> is returned. If the queue is full, <tt class="docutils literal"><span class="pre">false</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueuestatic.nim#L37"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueuestatic.nim#L34"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueuestatic.nim#L37" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueuestatic.nim#L34" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="push,SPSCQueueStatic[N,T],openArray[T]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#push%2CSPSCQueueStatic%5BN%2CT%5D%2CopenArray%5BT%5D"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="spscqueuestatic.html#SPSCQueueStatic"><span class="Identifier">SPSCQueueStatic</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">data</span><span class="Other">:</span> <span class="Identifier">openArray</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span>
+<dt><pre><span class="Keyword">proc</span> <a href="#push%2CSPSCQueueStatic%5BN%2CT%5D%2CopenArray%5BT%5D"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="spscqueuestatic.html#SPSCQueueStatic"><span class="Identifier">SPSCQueueStatic</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">items</span><span class="Other">:</span> <span class="Identifier">openArray</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span>
     <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Append items to the tail of the queue. If &gt; 1 items could not be pushed, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
+Append items to the tail of the queue. If &gt; 1 items could not be appended, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueuestatic.nim#L42"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueuestatic.nim#L45"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueuestatic.nim#L42" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueuestatic.nim#L45" class="link-seesrc" target="_blank" >Edit</a>
+
+</dd>
+<a id="pop,SPSCQueueStatic[N,T]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#pop%2CSPSCQueueStatic%5BN%2CT%5D"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="spscqueuestatic.html#SPSCQueueStatic"><span class="Identifier">SPSCQueueStatic</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+Pop a single item from the head of the queue. If an item could be popped, some(T) will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(T)</span></tt> will be returned.
+&nbsp;&nbsp;<a
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueuestatic.nim#L57"
+class="link-seesrc" target="_blank">Source</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueuestatic.nim#L57" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="pop,SPSCQueueStatic[N,T],int"></a>
@@ -210,11 +223,11 @@ class="link-seesrc" target="_blank">Source</a>
     <span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Pop items from the head of the queue. If &gt; 1 items could be popped, some(seq[T]) will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
+Pop <tt class="docutils literal"><span class="pre">count</span></tt> items from the head of the queue. If &gt; 1 items could be popped, some(seq[T]) will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueuestatic.nim#L54"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueuestatic.nim#L68"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueuestatic.nim#L54" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueuestatic.nim#L68" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="capacity,SPSCQueueStatic[N,T]"></a>
@@ -223,9 +236,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Return the queue's capacity
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueuestatic.nim#L66"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueuestatic.nim#L80"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueuestatic.nim#L66" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueuestatic.nim#L80" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="state,SPSCQueueStatic[N,T]"></a>
@@ -235,9 +248,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Retrieve current state of the queue
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueuestatic.nim#L75"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueuestatic.nim#L89"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueuestatic.nim#L75" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueuestatic.nim#L89" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="move,SPSCQueueStatic[N,T],uint,uint"></a>
@@ -247,9 +260,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Move head and tail. Probably only useful for unit tests.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueuestatic.nim#L91"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueuestatic.nim#L105"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueuestatic.nim#L91" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueuestatic.nim#L105" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="reset,SPSCQueueStatic[N,T]"></a>
@@ -258,9 +271,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Resets the queue to its default state
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueuestatic.nim#L100"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueuestatic.nim#L114"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueuestatic.nim#L100" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueuestatic.nim#L114" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -273,7 +286,7 @@ class="link-seesrc" target="_blank">Source</a>
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-03 03:50:46 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-03 05:27:11 UTC</small>
       </div>
     </div>
   </div>
