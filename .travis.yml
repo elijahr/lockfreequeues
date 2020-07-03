@@ -5,6 +5,10 @@ dist: bionic
 
 language: c
 
+branches:
+  except:
+    - gh-pages
+
 cache:
   directories:
     - "$HOME/.nimble"
