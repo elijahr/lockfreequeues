@@ -235,7 +235,7 @@ proc push*[N: static int, T](
   self.push(storage, N, items, seq[T])
 
 
-template doPop(
+template popOne(
   self: var SPSCQueueInterface,
   storage: untyped,
   capacity: int,
@@ -270,7 +270,7 @@ proc pop*[T](
   ## Pop a single item from the head of the queue.
   ## If an item could be popped, some(T) will be returned.
   ## Otherwise, `none(T)` will be returned.
-  self.doPop(storage, capacity, T)
+  self.popOne(storage, capacity, T)
 
 
 proc pop*[N: static int, T](
@@ -281,10 +281,10 @@ proc pop*[N: static int, T](
   ## Pop a single item from the head of the queue.
   ## If an item could be popped, some(T) will be returned.
   ## Otherwise, `none(T)` will be returned.
-  self.doPop(storage, N, T)
+  self.popOne(storage, N, T)
 
 
-template pop(
+template popMany(
   self: var SPSCQueueInterface,
   storage: untyped,
   capacity: int,
@@ -349,7 +349,7 @@ proc pop*[T](
   ## Pop `count` items from the head of the queue.
   ## If > 1 items could be popped, some(seq[T]) will be returned.
   ## Otherwise, `none(seq[T])` will be returned.
-  self.pop(storage, capacity, count, seq[T])
+  self.popMany(storage, capacity, count, seq[T])
 
 
 proc pop*[N: static int, T](
@@ -361,7 +361,7 @@ proc pop*[N: static int, T](
   ## Pop `count` items from the head of the queue.
   ## If > 1 items could be popped, some(seq[T]) will be returned.
   ## Otherwise, `none(seq[T])` will be returned.
-  self.pop(storage, N, count, seq[T])
+  self.popMany(storage, N, count, seq[T])
 
 
 proc state*(
