@@ -218,12 +218,12 @@ template pop(
     var i = 0
     for j in headIndex..cap-1:
       res[i] = storage[j]
-      i += 1
+      inc i
     if newHeadIndex > 0:
       # request wraps
       for j in 0..newHeadIndex-1:
         res[i] = storage[j]
-        i += 1
+        inc i
 
   result = some(res)
 

@@ -91,7 +91,7 @@ proc consumerFunc(q: pointer) {.thread.} =
     if res.isSome:
       let msg = res.get()[0]
       channel.send(msg)
-      count += 1
+      inc count
     else:
       sleep(11)
 

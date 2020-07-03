@@ -19,4 +19,5 @@ before_script:
       export PATH=$HOME/.nimble/bin:$PATH
 
 script:
+  - nim -v
   - nimble test
