@@ -1,8 +1,16 @@
+![build status](https://travis-ci.org/elijahr/lockfreequeues.svg?branch=master)
+
 # lockfreequeues
 
-Single-producer, single-consumer, lock-free queue implementations for Nim.
+Single-producer, single-consumer, lock-free queue (aka ring buffer) implementations for Nim.
 
-API Index: https://elijahr.github.io/lockfreequeues/
+Two implementations are provided: [`SPSCQueueStatic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/spscqueuestatic.html) and [`SPSCQueueShared`](https://elijahr.github.io/lockfreequeues/lockfreequeues/spscqueueshared.html).
+
+`SPSCQueueStatic` should be used when your queue's maximum capacity is known at compile-time.
+
+`SPSCQueueShared` should be used when your queue's maximum capacity is only known at run-time.
+
+API documentation: https://elijahr.github.io/lockfreequeues/
 
 ## Examples
 
