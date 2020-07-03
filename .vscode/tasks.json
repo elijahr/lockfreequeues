@@ -17,5 +17,30 @@
                 "isDefault": true
             }
         },
+        {
+            "label": "Run tests",
+            "command": "tests/test",
+            "options": {
+                "cwd": "${workspaceRoot}"
+            },
+            "type": "shell",
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Build example 'spscqueuestatic'",
+            "command": "nim",
+            "args": [
+                "c",
+                "examples/spscqueuestatic.nim"
+            ],
+            "options": {
+                "cwd": "${workspaceRoot}"
+            },
+            "type": "shell",
+            "group": "build"
+        },
      ]
  }
