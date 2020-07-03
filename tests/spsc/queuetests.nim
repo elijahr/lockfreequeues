@@ -4,30 +4,15 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-## Single-producer, single-consumer, lock-free queue implementations for Nim.
-##
-## Based on the algorithm outlined by Juho Snellman at
-## https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/
-
 import unittest
-
-
-template testReset*(queue: untyped) =
-  discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
-  queue.reset()
-  require(queue.state == (
-    head: 0u,
-    tail: 0u,
-    storage: @[0, 0, 0, 0, 0, 0, 0, 0]
-  ))
 
 
 template testPush*(queue: untyped) =
   for i in 1..8:
     check(queue.push(i) == true)
   check(queue.state == (
-    head: 0u,
-    tail: 8u,
+    head: 0,
+    tail: 8,
     storage: @[1, 2, 3, 4, 5, 6, 7, 8]
   ))
 
@@ -37,8 +22,8 @@ template testPushOverflow*(queue: untyped) =
     discard queue.push(i)
   check(queue.push(9) == false)
   check(queue.state == (
-    head: 0u,
-    tail: 8u,
+    head: 0,
+    tail: 8,
     storage: @[1, 2, 3, 4, 5, 6, 7, 8]
   ))
 
@@ -51,8 +36,8 @@ template testPushWrap*(queue: untyped) =
   for i in 5..10:
     check(queue.push(i) == true)
   check(queue.state == (
-    head: 2u,
-    tail: 10u,
+    head: 2,
+    tail: 10,
     storage: @[9, 10, 3, 4, 5, 6, 7, 8]
   ))
 
@@ -60,8 +45,8 @@ template testPushWrap*(queue: untyped) =
 template testPushSeq*(queue: untyped) =
   check(queue.push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
   check(queue.state == (
-    head: 0u,
-    tail: 8u,
+    head: 0,
+    tail: 8,
     storage: @[1, 2, 3, 4, 5, 6, 7, 8]
   ))
 
@@ -73,8 +58,8 @@ template testPushSeqOverflow*(queue: untyped) =
   check(res.isSome)
   check(res.get() == @[9, 10, 11, 12, 13, 14, 15, 16])
   check(queue.state == (
-    head: 0u,
-    tail: 8u,
+    head: 0,
+    tail: 8,
     storage: @[1, 2, 3, 4, 5, 6, 7, 8]
   ))
 
@@ -85,8 +70,8 @@ template testPushSeqWrap*(queue: untyped) =
   var res = queue.push(@[5, 6, 7, 8, 9, 10])
   check(res.isNone)
   check(queue.state == (
-    head: 2u,
-    tail: 10u,
+    head: 2,
+    tail: 10,
     storage: @[9, 10, 3, 4, 5, 6, 7, 8]
   ))
 
@@ -97,8 +82,8 @@ template testPopOne*(queue: untyped) =
   check(res.isSome)
   check(res.get() == 1)
   check(queue.state == (
-    head: 1u,
-    tail: 8u,
+    head: 1,
+    tail: 8,
     storage: @[1, 2, 3, 4, 5, 6, 7, 8]
   ))
 
@@ -111,8 +96,8 @@ template testPopAll*(queue: untyped) =
     items.add(res.get())
   check(items == @[1, 2, 3, 4, 5, 6, 7, 8])
   check(queue.state == (
-    head: 8u,
-    tail: 8u,
+    head: 8,
+    tail: 8,
     storage: @[1, 2, 3, 4, 5, 6, 7, 8]
   ))
 
@@ -120,8 +105,8 @@ template testPopAll*(queue: untyped) =
 template testPopEmpty*(queue: untyped) =
   check(queue.pop().isNone)
   check(queue.state == (
-    head: 0u,
-    tail: 0u,
+    head: 0,
+    tail: 0,
     storage: @[0, 0, 0, 0, 0, 0, 0, 0]
   ))
 
@@ -132,8 +117,8 @@ template testPopTooMany*(queue: untyped) =
     discard queue.pop()
   check(queue.pop().isNone)
   check(queue.state == (
-    head: 8u,
-    tail: 8u,
+    head: 8,
+    tail: 8,
     storage: @[1, 2, 3, 4, 5, 6, 7, 8]
   ))
 
@@ -150,8 +135,8 @@ template testPopWrap*(queue: untyped) =
     items.add(res.get())
   check(items == @[5, 6, 7, 8, 9, 10, 11, 12])
   check(queue.state == (
-    head: 12u,
-    tail: 12u,
+    head: 12,
+    tail: 12,
     storage: @[9, 10, 11, 12, 5, 6, 7, 8]
   ))
 
@@ -163,8 +148,8 @@ template testPopCountOne*(queue: untyped) =
     check(popped.isSome)
     check(popped.get() == @[i])
   check(queue.state == (
-    head: 8u,
-    tail: 8u,
+    head: 8,
+    tail: 8,
     storage: @[1, 2, 3, 4, 5, 6, 7, 8]
   ))
 
@@ -175,8 +160,8 @@ template testPopCountAll*(queue: untyped) =
   check(popped.isSome)
   check(popped.get() == @[1, 2, 3, 4, 5, 6, 7, 8])
   check(queue.state == (
-    head: 8u,
-    tail: 8u,
+    head: 8,
+    tail: 8,
     storage: @[1, 2, 3, 4, 5, 6, 7, 8]
   ))
 
@@ -185,8 +170,8 @@ template testPopCountEmpty*(queue: untyped) =
   let popped = queue.pop(1)
   check(popped.isNone)
   check(queue.state == (
-    head: 0u,
-    tail: 0u,
+    head: 0,
+    tail: 0,
     storage: @[0, 0, 0, 0, 0, 0, 0, 0]
   ))
 
@@ -197,8 +182,8 @@ template testPopCountTooMany*(queue: untyped) =
   check(popped.isSome)
   check(popped.get() == @[1, 2, 3, 4, 5, 6, 7, 8])
   check(queue.state == (
-    head: 8u,
-    tail: 8u,
+    head: 8,
+    tail: 8,
     storage: @[1, 2, 3, 4, 5, 6, 7, 8]
   ))
 
@@ -211,8 +196,8 @@ template testPopCountWrap*(queue: untyped) =
   check(popped.isSome)
   check(popped.get() == @[5, 6, 7, 8, 9, 10, 11, 12])
   check(queue.state == (
-    head: 12u,
-    tail: 12u,
+    head: 12,
+    tail: 12,
     storage: @[9, 10, 11, 12, 5, 6, 7, 8]
   ))
 
@@ -221,25 +206,25 @@ template testCapacity*(queue: untyped) =
   check(queue.capacity == 8)
 
 
-template testResets*(queue: untyped) =
-  queue.move(high(uint), high(uint))
+template testHeadAndTailReset*(queue: untyped) =
+  queue.move(15, 15)
   check(queue.state == (
-    head: high(uint),
-    tail: high(uint),
+    head: 15,
+    tail: 15,
     storage: @[0, 0, 0, 0, 0, 0, 0, 0]
   ))
   check(queue.push(@[1]).isNone)
   check(queue.state == (
-    head: high(uint),
-    tail: 0'u,
+    head: 15,
+    tail: 0,
     storage: @[0, 0, 0, 0, 0, 0, 0, 1]
   ))
   let res = queue.pop(1)
   check(res.isSome)
   check(res.get == @[1])
   check(queue.state == (
-    head: 0u,
-    tail: 0u,
+    head: 0,
+    tail: 0,
     storage: @[0, 0, 0, 0, 0, 0, 0, 1]
   ))
 
@@ -253,23 +238,23 @@ template testWraps*(queue: untyped) =
   res = queue.push(@[9, 10, 11, 12])
   check(res.isNone)
   check(queue.state == (
-    head: 4u,
-    tail: 12u,
+    head: 4,
+    tail: 12,
     storage: @[9, 10, 11, 12, 5, 6, 7, 8]
   ))
   res = queue.pop(4)
   check(res.isSome)
   check(res.get() == @[5, 6, 7, 8])
   check(queue.state == (
-    head: 8u,
-    tail: 12u,
+    head: 8,
+    tail: 12,
     storage: @[9, 10, 11, 12, 5, 6, 7, 8]
   ))
   res = queue.pop(4)
   check(res.isSome)
   check(res.get() == @[9, 10, 11, 12])
   check(queue.state == (
-    head: 12u,
-    tail: 12u,
+    head: 12,
+    tail: 12,
     storage: @[9, 10, 11, 12, 5, 6, 7, 8]
   ))

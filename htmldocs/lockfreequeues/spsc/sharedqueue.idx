@@ -2,10 +2,6 @@ SharedQueue	lockfreequeues/spsc/sharedqueue.html#SharedQueue	sharedqueue: Shared
 newSPSCQueue	lockfreequeues/spsc/sharedqueue.html#newSPSCQueue,int	sharedqueue: newSPSCQueue[T](capacity: int): SharedQueue[T]	
 `=destroy`	lockfreequeues/spsc/sharedqueue.html#=destroy,SharedQueue[T]	sharedqueue: `=destroy`[T](self: var SharedQueue[T])	
 push	lockfreequeues/spsc/sharedqueue.html#push,SharedQueue[T],T	sharedqueue: push[T](self: var SharedQueue[T]; item: T): bool	
-push	lockfreequeues/spsc/sharedqueue.html#push,SharedQueue[T],seq[T]	sharedqueue: push[T](self: var SharedQueue[T]; items: seq[T]): Option[seq[T]]	
-push	lockfreequeues/spsc/sharedqueue.html#push,SharedQueue[T],ptr.array[N,T]	sharedqueue: push[N: static int; T](self: var SharedQueue[T]; items: ptr array[N, T]): Option[seq[T]]	
+push	lockfreequeues/spsc/sharedqueue.html#push,SharedQueue[T],openArray[T]	sharedqueue: push[T](self: var SharedQueue[T]; items: openArray[T]): Option[seq[T]]	
 pop	lockfreequeues/spsc/sharedqueue.html#pop,SharedQueue[T]	sharedqueue: pop[T](self: var SharedQueue[T]): Option[T]	
 pop	lockfreequeues/spsc/sharedqueue.html#pop,SharedQueue[T],int	sharedqueue: pop[T](self: var SharedQueue[T]; count: int): Option[seq[T]]	
-state	lockfreequeues/spsc/sharedqueue.html#state,SharedQueue[T]	sharedqueue: state[T](self: var SharedQueue[T]): tuple[head: uint, tail: uint, storage: seq[T]]	
-move	lockfreequeues/spsc/sharedqueue.html#move,SharedQueue[T],uint,uint	sharedqueue: move[T](self: var SharedQueue[T]; head: uint; tail: uint)	
-reset	lockfreequeues/spsc/sharedqueue.html#reset,SharedQueue[T]	sharedqueue: reset[T](self: var SharedQueue[T])	

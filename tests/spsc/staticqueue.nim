@@ -4,144 +4,158 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-## Single-producer, single-consumer, lock-free queue implementations for Nim.
-##
-## Based on the algorithm outlined by Juho Snellman at
-## https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/
-
+import atomics
 import options
 import os
 import unittest
 
+import lockfreequeues/spsc/queueinterface
 import lockfreequeues/spsc/staticqueue
-import ../testdefs
+import ./queuetests
 
 
-suite "StaticQueue: initialization":
+var queue = newSPSCQueue[8, int]()
 
-  test "newSPSCQueue[N, T]()":
-    var queue = newSPSCQueue[8, int]()
+
+proc reset[N: static int, T](
+  self: var StaticQueue[N, T]
+) {.inline.} =
+  ## Resets the queue to its default state.
+  ## Should only be used in single-threaded unit tests.
+  self.face.move(0, 0, N)
+  for i in 0..<N:
+    self.storage[i].reset()
+
+
+proc move[N: static int, T](
+  self: var StaticQueue[N, T],
+  head: int,
+  tail: int,
+) {.inline.} =
+  ## Move the queue's `head` and `tail`.
+  ## Should only be used in single-threaded unit tests.
+  self.face.move(head, tail, N)
+
+
+proc state[N: static int, T](
+  self: var StaticQueue[N, T],
+): tuple[
+    head: int,
+    tail: int,
+    storage: seq[T],
+  ] =
+  ## Retrieve current state of the queue
+  ## Should only be used in single-threaded unit tests,
+  ## as data may be torn.
+  return (
+    head: self.face.head.load(moRelaxed),
+    tail: self.face.tail.load(moRelaxed),
+    storage: self.storage[0..^1],
+  )
+
+
+suite "newSPSCQueue[N, T]()":
+
+  test "N <= 0 raises ValueError":
+    expect(ValueError):
+      discard newSPSCQueue[-1, int]()
+    expect(ValueError):
+      discard newSPSCQueue[0, int]()
+
+  test "basic":
     require(queue.state == (
-      head: 0u,
-      tail: 0u,
+      head: 0,
+      tail: 0,
       storage: @[0, 0, 0, 0, 0, 0, 0, 0]
     ))
 
-  test "newSPSCQueue[N, T]() without power of 2 throws ValueError":
-    expect(ValueError):
-      discard newSPSCQueue[1, int]()
-    expect(ValueError):
-      discard newSPSCQueue[3, int]()
-    expect(ValueError):
-      discard newSPSCQueue[13, int]()
 
-  test "reset()":
-    var queue = newSPSCQueue[8, int]()
-    testReset(queue)
-
-
-suite "StaticQueue: operations":
-  var queue = newSPSCQueue[8, int]()
+suite "push(StaticQueue[N, T], T)":
 
   setup:
     queue.reset()
 
-  test "push(int)":
+  test "basic":
     testPush(queue)
 
-  test "push(int) overflow":
+  test "overflow":
     testPushOverflow(queue)
 
-  test "push(int) wrap":
+  test "wrap":
     testPushWrap(queue)
 
-  test "push(seq[T])":
+
+suite "push(StaticQueue[N, T], seq[T])":
+
+  setup:
+    queue.reset()
+
+  test "basic":
     testPushSeq(queue)
 
-  test "push(seq[T]) overflow":
+  test "overflow":
     testPushSeqOverflow(queue)
 
-  test "push(seq[T]) wrap":
+  test "wrap":
     testPushSeqWrap(queue)
 
-  test "pop() one":
+
+suite "pop(StaticQueue[N, T])":
+
+  setup:
+    queue.reset()
+
+  test "one":
     testPopOne(queue)
 
-  test "pop() all":
+  test "all":
     testPopAll(queue)
 
-  test "pop() empty":
+  test "empty":
     testPopEmpty(queue)
 
-  test "pop() too many":
+  test "too many":
     testPopTooMany(queue)
 
-  test "pop() wrap":
+  test "wrap":
     testPopWrap(queue)
 
-  test "pop(int) one":
+
+suite "pop(StaticQueue[N, T], int)":
+
+  setup:
+    queue.reset()
+
+  test "one":
     testPopCountOne(queue)
 
-  test "pop(int) all":
+  test "all":
     testPopCountAll(queue)
 
-  test "pop(int) empty":
+  test "empty":
     testPopCountEmpty(queue)
 
-  test "pop(int) too many":
+  test "too many":
     testPopCountTooMany(queue)
 
-  test "pop(int) wrap":
+  test "wrap":
     testPopCountWrap(queue)
 
-  test "capacity":
+
+suite "capacity(StaticQueue[N, T])":
+
+  test "basic":
     testCapacity(queue)
 
-  test "head and tail reset to 0 on uint overflow":
-    testResets(queue)
+
+suite "StaticQueue[N, T] integration":
+
+  setup:
+    queue.reset()
+
+  test "head and tail reset":
+    testHeadAndTailReset(queue)
 
   test "wraps":
     testWraps(queue)
 
-
-var
-  channel: Channel[int]
-  queue = newSPSCQueue[8, int]()
-
-
-proc consumerFunc() {.thread.} =
-  var count = 0
-  while count < 128:
-    var res = queue.pop(1)
-    if res.isSome:
-      let msg = res.get()[0]
-      channel.send(msg)
-      inc count
-    else:
-      sleep(11)
-
-
-proc producerFunc() {.thread.} =
-  for i in 1..128:
-    while queue.push(@[i]).isSome:
-      sleep(10)
-
-
-suite "StaticQueue: threaded":
-  var
-    consumer: Thread[void]
-    producer: Thread[void]
-
-  setup:
-    queue.reset()
-    channel.open()
-    consumer.createThread(consumerFunc)
-    producer.createThread(producerFunc)
-
-  teardown:
-    joinThreads(consumer, producer)
-    channel.close()
-
-  test "works":
-    for i in 1..128:
-      check(channel.recv() == i)
