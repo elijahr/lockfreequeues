@@ -148,3 +148,15 @@ if isMainModule:
   main()
 
 ```
+
+## Contributing
+
+* Pull requests and feature requests are quite welcome!
+* Please file any issues you encounter.
+* For pull requests, please see the [contribution guidelines](https://github.com/elijahr/lockfreequeues/tree/master/CONTRIBUTING.md).
+
+## Release notes
+
+## v0.1.0 - 2020-07-02
+
+Initial release, containing `SPSCQueueShared` and `SPSCQueueStatic`.
