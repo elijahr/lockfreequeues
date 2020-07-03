@@ -8,7 +8,7 @@ Two implementations are provided: [`SPSCQueueStatic`](https://elijahr.github.io/
 
 `SPSCQueueStatic` should be used when your queue's maximum capacity is known at compile-time.
 
-`SPSCQueueShared` should be used when your queue's maximum capacity is only known at run-time.
+`SPSCQueueShared` should be used when your queue's maximum capacity is only known at run-time or when the queue should reside in shared memory.
 
 API documentation: https://elijahr.github.io/lockfreequeues/
 
