@@ -2,7 +2,8 @@
 .DS_Store
 nimcache/
 nimblecache/
-tests/tests.dSYM/*
-tests/tests
 tests/test
 *.dSYM
+examples/spscqueuestatic
+examples/spscqueueshared
+
