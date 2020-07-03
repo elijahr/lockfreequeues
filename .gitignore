@@ -1,0 +1,8 @@
+.vscode/tags
+.DS_Store
+nimcache/
+nimblecache/
+tests/tests.dSYM/*
+tests/tests
+tests/test
+*.dSYM
