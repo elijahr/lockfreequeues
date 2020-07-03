@@ -17,8 +17,8 @@ API documentation: https://elijahr.github.io/lockfreequeues/
 Examples are located in the [examples](https://github.com/elijahr/lockfreequeues/tree/master/examples) directory and can be compiled and run with:
 
 ```sh
-nim c examples/spscqueuestatic.nim; ./examples/spscqueuestatic
-nim c examples/spscqueueshared.nim; ./examples/spscqueueshared
+nim c -r examples/spscqueuestatic.nim
+nim c -r examples/spscqueueshared.nim
 ```
 
 ### Example usage for a statically allocated queue
