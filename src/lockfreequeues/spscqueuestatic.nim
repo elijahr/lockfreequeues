@@ -14,7 +14,7 @@ import math
 import options
 import strformat
 
-import ./SPSCQueueInterface
+import ./spscqueueinterface
 
 type
   SPSCQueueStatic*[N: static int, T] = object
