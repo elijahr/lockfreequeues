@@ -1,7 +1,10 @@
 os:
   - linux
-dist: trusty
+
+dist: bionic
+
 language: c
+
 cache:
   directories:
     - "$HOME/.nimble"
