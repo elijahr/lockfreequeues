@@ -7,7 +7,7 @@
 ## A single-producer, single-consumer, lock-free, wait-free queue.
 ##
 ## Based on the algorithm outlined by Juho Snellman at
-## https://www.snellman.net/blog/archive/2016-12-13-ring-queues/
+## https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/
 
 import atomics
 import math
@@ -56,9 +56,9 @@ proc push*[T](
 ):
   Option[seq[T]]
   {.inline.} =
-  ## Push items to the SPSCQueueShared.
-  ## If > 1 items could not be pushed, some(unpushed) will be returned.
-  ## Otherwise, none(seq[T]) will be returned.
+  ## Append items to the tail of the queue.
+  ## If > 1 items could not be pushed, `some(unpushed)` will be returned.
+  ## Otherwise, `none(seq[T])` will be returned.
   return self.face[].push(self.storage, self.capacity, data)
 
 
@@ -68,9 +68,9 @@ proc push*[N: static int, T](
 ):
   Option[seq[T]]
   {.inline.} =
-  ## Push items to the SPSCQueueShared.
-  ## If > 1 items could not be pushed, some(unpushed) will be returned.
-  ## Otherwise, none(seq[T]) will be returned.
+  ## Append items to the tail of the queue.
+  ## If > 1 items could not be pushed, `some(unpushed)` will be returned.
+  ## Otherwise, `none(seq[T])` will be returned.
   return self.face[].push(self.storage, self.capacity, data)
 
 
@@ -80,9 +80,9 @@ proc pop*[T](
 ):
   Option[seq[T]]
   {.inline.} =
-  ## Pop items to the SPSCQueueShared.
+  ## Pop items to the queue.
   ## If > 1 items could be popped, some(seq[T]) will be returned.
-  ## Otherwise, none(seq[T]) will be returned.
+  ## Otherwise, `none(seq[T])` will be returned.
   return self.face[].pop(self.storage, self.capacity, count)
 
 
@@ -93,7 +93,7 @@ proc state*[T](
     tail: uint,
     storage: seq[T],
   ] =
-  ## Retrieve current state of the SPSCQueueShared
+  ## Retrieve current state of the queue
   let faceState = self.face[].state
   var storage = newSeq[T](self.capacity)
   for i in 0..self.capacity-1:

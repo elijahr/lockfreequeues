@@ -7,12 +7,11 @@
 ## A single-producer, single-consumer, lock-free, wait-free queue.
 ##
 ## Based on the algorithm outlined by Juho Snellman at
-## https://www.snellman.net/blog/archive/2016-12-13-ring-queues/
+## https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/
 
 import atomics
 import bitops
 import options
-import sequtils
 
 
 # Size of cache line, used to prevent cache thrashing,
@@ -101,9 +100,9 @@ template push(
   items: untyped,
   rettype: typedesc,
 ) =
-  ## Push items to storage.
-  ## If > 1 items could not be pushed, some(unpushed) will be returned.
-  ## Otherwise, none(seq[T]) will be returned.
+  ## Append items to the tail of the queue.
+  ## If > 1 items could not be pushed, `some(unpushed)` will be returned.
+  ## Otherwise, `none(seq[T])` will be returned.
 
   let tail = self.tail.load(moRelaxed)
   let head = self.head.load(moAcquire)
@@ -160,9 +159,9 @@ proc push*[T](
   items: openArray[T],
 ):
   Option[seq[T]] =
-  ## Push items to storage.
-  ## If > 1 items could not be pushed, some(unpushed) will be returned.
-  ## Otherwise, none(seq[T]) will be returned.
+  ## Append items to the tail of the queue.
+  ## If > 1 items could not be pushed, `some(unpushed)` will be returned.
+  ## Otherwise, `none(seq[T])` will be returned.
   self.push(storage, capacity, items, seq[T])
 
 
@@ -172,9 +171,9 @@ proc push*[N: static int, T](
   items: openArray[T],
 ):
   Option[seq[T]] =
-  ## Push items to storage.
-  ## If > 1 items could not be pushed, some(unpushed) will be returned.
-  ## Otherwise, none(seq[T]) will be returned.
+  ## Append items to the tail of the queue.
+  ## If > 1 items could not be pushed, `some(unpushed)` will be returned.
+  ## Otherwise, `none(seq[T])` will be returned.
   self.push(storage, storage.len, items, seq[T])
 
 
@@ -185,9 +184,9 @@ template pop(
   count: int,
   rettype: typedesc,
 ) =
-  ## Pop items from storage.
+  ## Pop items from the front of the queue.
   ## If > 1 items could be popped, some(seq[T]) will be returned.
-  ## Otherwise, none(seq[T]) will be returned.
+  ## Otherwise, `none(seq[T])` will be returned.
   let tail = self.tail.load(moAcquire)
   let head = self.head.load(moRelaxed)
   let size = size(head, tail)
@@ -240,9 +239,9 @@ proc pop*[T](
   count: int,
 ):
   Option[seq[T]] =
-  ## Pop items from storage.
+  ## Pop items from the front of the queue.
   ## If > 1 items could be popped, some(seq[T]) will be returned.
-  ## Otherwise, none(seq[T]) will be returned.
+  ## Otherwise, `none(seq[T])` will be returned.
   self.pop(storage, capacity, count, seq[T])
 
 
@@ -252,9 +251,9 @@ proc pop*[N: static int, T](
   count: int,
 ):
   Option[seq[T]] =
-  ## Pop items from storage.
+  ## Pop items from the front of the queue.
   ## If > 1 items could be popped, some(seq[T]) will be returned.
-  ## Otherwise, none(seq[T]) will be returned.
+  ## Otherwise, `none(seq[T])` will be returned.
   self.pop(storage, storage.len, count, seq[T])
 
 
@@ -264,7 +263,7 @@ proc state*(
     head: uint,
     tail: uint,
   ] =
-  ## Retrieve current state of the SPSCQueueInterface.
+  ## Retrieve current state of the queue.
   ## Probably only useful for unit tests.
   return (
     head: self.head.load(moRelaxed),

@@ -7,7 +7,7 @@
 ## A single-producer, single-consumer, lock-free, wait-free queue.
 ##
 ## Based on the algorithm outlined by Juho Snellman at
-## https://www.snellman.net/blog/archive/2016-12-13-ring-queues/
+## https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/
 
 import atomics
 import math
@@ -45,9 +45,9 @@ proc push*[N: static int, T](
 ):
   Option[seq[T]]
   {.inline.} =
-  ## Push items to the SPSCQueueShared.
-  ## If > 1 items could not be pushed, some(unpushed) will be returned.
-  ## Otherwise, none(seq[T]) will be returned.
+  ## Append items to the tail of the queue.
+  ## If > 1 items could not be pushed, `some(unpushed)` will be returned.
+  ## Otherwise, `none(seq[T])` will be returned.
   return self.face[].push(self.storage, data)
 
 
@@ -57,9 +57,9 @@ proc pop*[N: static int, T](
 ):
   Option[seq[T]]
   {.inline.} =
-  ## Pop items to the SPSCQueueShared.
+  ## Pop items to the queue.
   ## If > 1 items could be popped, some(seq[T]) will be returned.
-  ## Otherwise, none(seq[T]) will be returned.
+  ## Otherwise, `none(seq[T])` will be returned.
   return self.face[].pop(self.storage, count)
 
 
@@ -68,7 +68,7 @@ proc capacity*[N: static int, T](
 ):
   int
   {.inline.} =
-  ## Return the SPSCQueueStatic's capacity
+  ## Return the queue's capacity
   return self.storage.len
 
 
@@ -79,7 +79,7 @@ proc state*[N: static int, T](
     tail: uint,
     storage: seq[T],
   ] =
-  ## Retrieve current state of the SPSCQueueStatic
+  ## Retrieve current state of the queue
   let faceState = self.face[].state
   return (
     head: faceState.head,
