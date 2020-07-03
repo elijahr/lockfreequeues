@@ -13,11 +13,11 @@ import options
 import os
 import unittest
 
-import lockfreequeues/spscqueuestatic
-import ./testdefs
+import lockfreequeues/spsc/staticqueue
+import ../testdefs
 
 
-suite "SPSCQueueStatic: initialization":
+suite "StaticQueue: initialization":
 
   test "newSPSCQueue[N, T]()":
     var queue = newSPSCQueue[8, int]()
@@ -40,7 +40,7 @@ suite "SPSCQueueStatic: initialization":
     testReset(queue)
 
 
-suite "SPSCQueueStatic: operations":
+suite "StaticQueue: operations":
   var queue = newSPSCQueue[8, int]()
 
   setup:
@@ -127,7 +127,7 @@ proc producerFunc() {.thread.} =
       sleep(10)
 
 
-suite "SPSCQueueStatic: threaded":
+suite "StaticQueue: threaded":
   var
     consumer: Thread[void]
     producer: Thread[void]

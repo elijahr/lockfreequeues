@@ -13,11 +13,11 @@ import options
 import os
 import unittest
 
-import lockfreequeues/spscqueueshared
-import ./testdefs
+import lockfreequeues/spsc/sharedqueue
+import ../testdefs
 
 
-suite "SPSCQueueShared: initialization":
+suite "SharedQueue: initialization":
 
   test "newSPSCQueue[T](n)":
     var queue = newSPSCQueue[int](8)
@@ -40,7 +40,7 @@ suite "SPSCQueueShared: initialization":
     testReset(queue)
 
 
-suite "SPSCQueueShared: operations":
+suite "SharedQueue: operations":
   var queue = newSPSCQueue[int](8)
 
   setup:
@@ -108,7 +108,7 @@ var channel: Channel[int]
 
 
 proc consumerFunc(q: pointer) {.thread.} =
-  let queuePtr = cast[ptr SPSCQueueShared[int]](q)
+  let queuePtr = cast[ptr SharedQueue[int]](q)
   var count = 0
   while count < 128:
     var res = queuePtr[].pop(1)
@@ -121,13 +121,13 @@ proc consumerFunc(q: pointer) {.thread.} =
 
 
 proc producerFunc(q: pointer) {.thread.} =
-  let queuePtr = cast[ptr SPSCQueueShared[int]](q)
+  let queuePtr = cast[ptr SharedQueue[int]](q)
   for i in 1..128:
     while queuePtr[].push(@[i]).isSome:
       sleep(10)
 
 
-suite "SPSCQueueShared: threaded":
+suite "SharedQueue: threaded":
   var
     queue = newSPSCQueue[int](8)
     consumer: Thread[pointer]

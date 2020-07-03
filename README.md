@@ -4,11 +4,11 @@
 
 Single-producer, single-consumer, lock-free queue (aka ring buffer) implementations for Nim.
 
-Two implementations are provided: [`SPSCQueueStatic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/spscqueuestatic.html) and [`SPSCQueueShared`](https://elijahr.github.io/lockfreequeues/lockfreequeues/spscqueueshared.html).
+Two implementations are provided: [`StaticQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/spscqueuestatic.html) and [`SharedQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/spscqueueshared.html).
 
-`SPSCQueueStatic` should be used when your queue's maximum capacity is known at compile-time.
+`StaticQueue` should be used when your queue's maximum capacity is known at compile-time.
 
-`SPSCQueueShared` should be used when your queue's maximum capacity is only known at run-time or when the queue should reside in shared memory.
+`SharedQueue` should be used when your queue's maximum capacity is only known at run-time or when the queue should reside in shared memory.
 
 API documentation: https://elijahr.github.io/lockfreequeues/
 
@@ -93,7 +93,7 @@ import lockfreequeues/spscqueueshared
 
 
 proc consumerFunc(q: pointer) {.thread.} =
-  var queuePtr = cast[ptr SPSCQueueShared[int]](q)
+  var queuePtr = cast[ptr SharedQueue[int]](q)
 
   # Pop 1..8 from the queue
   for expected in 1..8:
@@ -120,7 +120,7 @@ proc consumerFunc(q: pointer) {.thread.} =
 
 
 proc producerFunc(q: pointer) {.thread.} =
-  var queuePtr = cast[ptr SPSCQueueShared[int]](q)
+  var queuePtr = cast[ptr SharedQueue[int]](q)
 
   # Append 1..8 to the queue
   for item in 1..8:
@@ -159,4 +159,4 @@ if isMainModule:
 
 ## v0.1.0 - 2020-07-02
 
-Initial release, containing `SPSCQueueShared` and `SPSCQueueStatic`.
+Initial release, containing `SharedQueue` and `StaticQueue`.

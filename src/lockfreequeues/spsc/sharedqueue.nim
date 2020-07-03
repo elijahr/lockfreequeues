@@ -14,21 +14,22 @@ import math
 import options
 import strformat
 
-import ./spscqueueinterface
+import ./queueinterface
 
 type
-  SPSCQueueShared*[T] = object
-    ## A single-producer, single-consumer queue, suitable for capacity known at
-    ## runtime.
+  SharedQueue*[T] = object
+    ## A single-producer, single-consumer queue, suitable for when the max
+    ## capacity is known at run-time or when the queue should reside in shared
+    ## memory.
     capacity*: int
     face: ptr SPSCQueueInterface
     storage: ptr UncheckedArray[T]
 
 
 proc newSPSCQueue*[T](capacity: int):
-  SPSCQueueShared[T]
+  SharedQueue[T]
   {.raises: [ValueError].} =
-  ## Initialize new SPSCQueueShared with the specified capacity.
+  ## Initialize new SharedQueue with the specified capacity.
   if capacity < 2 or not isPowerOfTwo(capacity):
     raise newException(ValueError, fmt"{capacity} is not a power of two")
   result.capacity = capacity
@@ -41,7 +42,7 @@ proc newSPSCQueue*[T](capacity: int):
   result.move(0, 0)
 
 
-proc `=destroy`*[T](self: var SPSCQueueShared[T]) =
+proc `=destroy`*[T](self: var SharedQueue[T]) =
   if self.face != nil:
     deallocShared(self.face)
     self.face = nil
@@ -51,7 +52,7 @@ proc `=destroy`*[T](self: var SPSCQueueShared[T]) =
 
 
 proc push*[T](
-  self: var SPSCQueueShared[T],
+  self: var SharedQueue[T],
   item: T,
 ):
   bool =
@@ -62,7 +63,7 @@ proc push*[T](
 
 
 proc push*[T](
-  self: var SPSCQueueShared[T],
+  self: var SharedQueue[T],
   items: seq[T],
 ):
   Option[seq[T]]
@@ -74,7 +75,7 @@ proc push*[T](
 
 
 proc push*[N: static int, T](
-  self: var SPSCQueueShared[T],
+  self: var SharedQueue[T],
   items: ptr array[N, T],
 ):
   Option[seq[T]]
@@ -86,7 +87,7 @@ proc push*[N: static int, T](
 
 
 proc pop*[T](
-  self: var SPSCQueueShared[T],
+  self: var SharedQueue[T],
 ):
   Option[T]
   {.inline.} =
@@ -97,7 +98,7 @@ proc pop*[T](
 
 
 proc pop*[T](
-  self: var SPSCQueueShared[T],
+  self: var SharedQueue[T],
   count: int,
 ):
   Option[seq[T]]
@@ -109,7 +110,7 @@ proc pop*[T](
 
 
 proc state*[T](
-  self: var SPSCQueueShared[T],
+  self: var SharedQueue[T],
 ): tuple[
     head: uint,
     tail: uint,
@@ -128,7 +129,7 @@ proc state*[T](
 
 
 proc move*[T](
-  self: var SPSCQueueShared[T],
+  self: var SharedQueue[T],
   head: uint,
   tail: uint,
 ) {.inline.} =
@@ -137,7 +138,7 @@ proc move*[T](
 
 
 proc reset*[T](
-  self: var SPSCQueueShared[T]
+  self: var SharedQueue[T]
 ) {.inline.} =
   ## Resets the queue to its default state
   self.move(0'u, 0'u)

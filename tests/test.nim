@@ -1,3 +1,3 @@
 
-import ./spscqueueshared
-import ./spscqueuestatic
+import ./spsc/sharedqueue
+import ./spsc/staticqueue

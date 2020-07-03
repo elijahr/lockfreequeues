@@ -15,7 +15,7 @@ import lockfreequeues/spscqueueshared
 
 
 proc consumerFunc(q: pointer) {.thread.} =
-  var queuePtr = cast[ptr SPSCQueueShared[int]](q)
+  var queuePtr = cast[ptr SharedQueue[int]](q)
 
   # Pop 1..8 from the queue
   for expected in 1..8:
@@ -42,7 +42,7 @@ proc consumerFunc(q: pointer) {.thread.} =
 
 
 proc producerFunc(q: pointer) {.thread.} =
-  var queuePtr = cast[ptr SPSCQueueShared[int]](q)
+  var queuePtr = cast[ptr SharedQueue[int]](q)
 
   # Append 1..8 to the queue
   for item in 1..8:

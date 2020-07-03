@@ -14,25 +14,25 @@ import math
 import options
 import strformat
 
-import ./spscqueueinterface
+import ./queueinterface
 
 type
-  SPSCQueueStatic*[N: static int, T] = object
-    ## A single-producer, single-consumer queue, suitable for capacity known at
-    ## compile time.
+  StaticQueue*[N: static int, T] = object
+    ## A single-producer, single-consumer queue, suitable for when the max
+    ## is capacity known at compile time.
     face: SPSCQueueInterface
     storage: array[N, T]
 
 
-proc newSPSCQueue*[N: static int, T](): SPSCQueueStatic[N, T] =
-  ## Initialize new SPSCQueueStatic and validate capacity.
+proc newSPSCQueue*[N: static int, T](): StaticQueue[N, T] =
+  ## Initialize new StaticQueue and validate capacity.
   if N < 2 or not isPowerOfTwo(N):
     raise newException(ValueError, fmt"{N} is not a power of two")
   result.move(0, 0)
 
 
 proc push*[N: static int, T](
-  self: var SPSCQueueStatic[N, T],
+  self: var StaticQueue[N, T],
   item: T,
 ):
   bool =
@@ -43,7 +43,7 @@ proc push*[N: static int, T](
 
 
 proc push*[N: static int, T](
-  self: var SPSCQueueStatic[N, T],
+  self: var StaticQueue[N, T],
   items: openArray[T],
 ):
   Option[seq[T]]
@@ -55,7 +55,7 @@ proc push*[N: static int, T](
 
 
 proc pop*[N: static int, T](
-  self: var SPSCQueueStatic[N, T],
+  self: var StaticQueue[N, T],
 ):
   Option[T]
   {.inline.} =
@@ -66,7 +66,7 @@ proc pop*[N: static int, T](
 
 
 proc pop*[N: static int, T](
-  self: var SPSCQueueStatic[N, T],
+  self: var StaticQueue[N, T],
   count: int,
 ):
   Option[seq[T]]
@@ -78,7 +78,7 @@ proc pop*[N: static int, T](
 
 
 proc capacity*[N: static int, T](
-  self: var SPSCQueueStatic[N, T],
+  self: var StaticQueue[N, T],
 ):
   int
   {.inline.} =
@@ -87,7 +87,7 @@ proc capacity*[N: static int, T](
 
 
 proc state*[N: static int, T](
-  self: var SPSCQueueStatic[N, T],
+  self: var StaticQueue[N, T],
 ): tuple[
     head: uint,
     tail: uint,
@@ -103,7 +103,7 @@ proc state*[N: static int, T](
 
 
 proc move*[N: static int, T](
-  self: var SPSCQueueStatic[N, T],
+  self: var StaticQueue[N, T],
   head: uint,
   tail: uint,
 ) {.inline.} =
@@ -112,7 +112,7 @@ proc move*[N: static int, T](
 
 
 proc reset*[N: static int, T](
-  self: var SPSCQueueStatic[N, T]
+  self: var StaticQueue[N, T]
 ) {.inline.} =
   ## Resets the queue to its default state
   self.move(0'u, 0'u)
