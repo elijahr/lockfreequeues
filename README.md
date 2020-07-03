@@ -1,5 +1,5 @@
 # lockfreequeues
 
-A single-producer, single-consumer, lock-free, wait-free queue for Nim.
+Single-producer, single-consumer, lock-free queue implementations for Nim.
 
-[Documentation](https://elijahr.github.io/lockfreequeues/)
+API Index: https://elijahr.github.io/lockfreequeues/
