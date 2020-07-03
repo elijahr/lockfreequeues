@@ -23,7 +23,8 @@ template testReset*(queue: untyped) =
 
 
 template testPush*(queue: untyped) =
-  check(queue.push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
+  for i in 1..8:
+    check(queue.push(i) == true)
   check(queue.state == (
     head: 0u,
     tail: 8u,
@@ -32,6 +33,40 @@ template testPush*(queue: untyped) =
 
 
 template testPushOverflow*(queue: untyped) =
+  for i in 1..8:
+    discard queue.push(i)
+  check(queue.push(9) == false)
+  check(queue.state == (
+    head: 0u,
+    tail: 8u,
+    storage: @[1, 2, 3, 4, 5, 6, 7, 8]
+  ))
+
+
+template testPushWrap*(queue: untyped) =
+  for i in 1..4:
+    discard queue.push(i)
+  for i in 1..2:
+    discard queue.pop()
+  for i in 5..10:
+    check(queue.push(i) == true)
+  check(queue.state == (
+    head: 2u,
+    tail: 10u,
+    storage: @[9, 10, 3, 4, 5, 6, 7, 8]
+  ))
+
+
+template testPushSeq*(queue: untyped) =
+  check(queue.push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
+  check(queue.state == (
+    head: 0u,
+    tail: 8u,
+    storage: @[1, 2, 3, 4, 5, 6, 7, 8]
+  ))
+
+
+template testPushSeqOverflow*(queue: untyped) =
   let res = queue.push(
     @[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
   )
@@ -44,7 +79,7 @@ template testPushOverflow*(queue: untyped) =
   ))
 
 
-template testPushWrap*(queue: untyped) =
+template testPushSeqWrap*(queue: untyped) =
   discard queue.push(@[1, 2, 3, 4])
   discard queue.pop(2)
   var res = queue.push(@[5, 6, 7, 8, 9, 10])
@@ -58,6 +93,71 @@ template testPushWrap*(queue: untyped) =
 
 template testPopOne*(queue: untyped) =
   discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
+  let res = queue.pop()
+  check(res.isSome)
+  check(res.get() == 1)
+  check(queue.state == (
+    head: 1u,
+    tail: 8u,
+    storage: @[1, 2, 3, 4, 5, 6, 7, 8]
+  ))
+
+template testPopAll*(queue: untyped) =
+  discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
+  var items = newSeq[int]()
+  for i in 1..8:
+    let res = queue.pop()
+    check(res.isSome)
+    items.add(res.get())
+  check(items == @[1, 2, 3, 4, 5, 6, 7, 8])
+  check(queue.state == (
+    head: 8u,
+    tail: 8u,
+    storage: @[1, 2, 3, 4, 5, 6, 7, 8]
+  ))
+
+
+template testPopEmpty*(queue: untyped) =
+  check(queue.pop().isNone)
+  check(queue.state == (
+    head: 0u,
+    tail: 0u,
+    storage: @[0, 0, 0, 0, 0, 0, 0, 0]
+  ))
+
+
+template testPopTooMany*(queue: untyped) =
+  discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
+  for i in 1..8:
+    discard queue.pop()
+  check(queue.pop().isNone)
+  check(queue.state == (
+    head: 8u,
+    tail: 8u,
+    storage: @[1, 2, 3, 4, 5, 6, 7, 8]
+  ))
+
+
+template testPopWrap*(queue: untyped) =
+  discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
+  for i in 1..4:
+    discard queue.pop()
+  discard queue.push(@[9, 10, 11, 12])
+  var items = newSeq[int]()
+  for i in 1..8:
+    let res = queue.pop()
+    check(res.isSome)
+    items.add(res.get())
+  check(items == @[5, 6, 7, 8, 9, 10, 11, 12])
+  check(queue.state == (
+    head: 12u,
+    tail: 12u,
+    storage: @[9, 10, 11, 12, 5, 6, 7, 8]
+  ))
+
+
+template testPopCountOne*(queue: untyped) =
+  discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
   for i in 1..8:
     let popped = queue.pop(1)
     check(popped.isSome)
@@ -69,7 +169,7 @@ template testPopOne*(queue: untyped) =
   ))
 
 
-template testPopAll*(queue: untyped) =
+template testPopCountAll*(queue: untyped) =
   discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
   let popped = queue.pop(8)
   check(popped.isSome)
@@ -81,7 +181,7 @@ template testPopAll*(queue: untyped) =
   ))
 
 
-template testPopEmpty*(queue: untyped) =
+template testPopCountEmpty*(queue: untyped) =
   let popped = queue.pop(1)
   check(popped.isNone)
   check(queue.state == (
@@ -91,7 +191,7 @@ template testPopEmpty*(queue: untyped) =
   ))
 
 
-template testPopTooMany*(queue: untyped) =
+template testPopCountTooMany*(queue: untyped) =
   discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
   let popped = queue.pop(10)
   check(popped.isSome)
@@ -103,7 +203,7 @@ template testPopTooMany*(queue: untyped) =
   ))
 
 
-template testPopWrap*(queue: untyped) =
+template testPopCountWrap*(queue: untyped) =
   discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
   discard queue.pop(4)
   discard queue.push(@[9, 10, 11, 12])

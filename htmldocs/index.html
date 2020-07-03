@@ -77,8 +77,6 @@ function main() {
 <dl><dt><a name="%60%3Ddestroy%60" href="#%60%3Ddestroy%60"><span><b>=destroy</b>:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
           data-doc-search-tag="spscqueueshared: <b>=destroy</b>[T](self: var SPSCQueueShared[T])" href="lockfreequeues/spscqueueshared.html#%3Ddestroy%2CSPSCQueueShared%5BT%5D">spscqueueshared: <b>=destroy</b>[T](self: var SPSCQueueShared[T])</a></li>
-          <li><a class="reference external"
-          data-doc-search-tag="spscqueuestatic: <b>=destroy</b>[N: static int; T](self: var SPSCQueueStatic[N, T])" href="lockfreequeues/spscqueuestatic.html#%3Ddestroy%2CSPSCQueueStatic%5BN%2CT%5D">spscqueuestatic: <b>=destroy</b>[N: static int; T](self: var SPSCQueueStatic[N, T])</a></li>
           </ul></dd>
 <dt><a name="available" href="#available"><span>available:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
@@ -118,15 +116,25 @@ function main() {
           </ul></dd>
 <dt><a name="pop" href="#pop"><span>pop:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
+          data-doc-search-tag="spscqueueinterface: pop[N: static int; T](self: var SPSCQueueInterface; storage: var array[N, T]): Option[T]" href="lockfreequeues/spscqueueinterface.html#pop%2CSPSCQueueInterface%2Carray%5BN%2CT%5D">spscqueueinterface: pop[N: static int; T](self: var SPSCQueueInterface; storage: var array[N, T]): Option[T]</a></li>
+          <li><a class="reference external"
           data-doc-search-tag="spscqueueinterface: pop[N: static int; T](self: var SPSCQueueInterface; storage: var array[N, T]; count: int): Option[
     seq[T]]" href="lockfreequeues/spscqueueinterface.html#pop%2CSPSCQueueInterface%2Carray%5BN%2CT%5D%2Cint">spscqueueinterface: pop[N: static int; T](self: var SPSCQueueInterface; storage: var array[N, T]; count: int): Option[
     seq[T]]</a></li>
+          <li><a class="reference external"
+          data-doc-search-tag="spscqueueinterface: pop[T](self: var SPSCQueueInterface; storage: var ptr UncheckedArray[T]; capacity: int): Option[
+    T]" href="lockfreequeues/spscqueueinterface.html#pop%2CSPSCQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint">spscqueueinterface: pop[T](self: var SPSCQueueInterface; storage: var ptr UncheckedArray[T]; capacity: int): Option[
+    T]</a></li>
           <li><a class="reference external"
           data-doc-search-tag="spscqueueinterface: pop[T](self: var SPSCQueueInterface; storage: var ptr UncheckedArray[T]; capacity: int;
        count: int): Option[seq[T]]" href="lockfreequeues/spscqueueinterface.html#pop%2CSPSCQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2Cint">spscqueueinterface: pop[T](self: var SPSCQueueInterface; storage: var ptr UncheckedArray[T]; capacity: int;
        count: int): Option[seq[T]]</a></li>
           <li><a class="reference external"
+          data-doc-search-tag="spscqueueshared: pop[T](self: var SPSCQueueShared[T]): Option[T]" href="lockfreequeues/spscqueueshared.html#pop%2CSPSCQueueShared%5BT%5D">spscqueueshared: pop[T](self: var SPSCQueueShared[T]): Option[T]</a></li>
+          <li><a class="reference external"
           data-doc-search-tag="spscqueueshared: pop[T](self: var SPSCQueueShared[T]; count: int): Option[seq[T]]" href="lockfreequeues/spscqueueshared.html#pop%2CSPSCQueueShared%5BT%5D%2Cint">spscqueueshared: pop[T](self: var SPSCQueueShared[T]; count: int): Option[seq[T]]</a></li>
+          <li><a class="reference external"
+          data-doc-search-tag="spscqueuestatic: pop[N: static int; T](self: var SPSCQueueStatic[N, T]): Option[T]" href="lockfreequeues/spscqueuestatic.html#pop%2CSPSCQueueStatic%5BN%2CT%5D">spscqueuestatic: pop[N: static int; T](self: var SPSCQueueStatic[N, T]): Option[T]</a></li>
           <li><a class="reference external"
           data-doc-search-tag="spscqueuestatic: pop[N: static int; T](self: var SPSCQueueStatic[N, T]; count: int): Option[seq[T]]" href="lockfreequeues/spscqueuestatic.html#pop%2CSPSCQueueStatic%5BN%2CT%5D%2Cint">spscqueuestatic: pop[N: static int; T](self: var SPSCQueueStatic[N, T]; count: int): Option[seq[T]]</a></li>
           </ul></dd>
@@ -136,17 +144,29 @@ function main() {
                     items: openArray[T]): Option[seq[T]]" href="lockfreequeues/spscqueueinterface.html#push%2CSPSCQueueInterface%2Carray%5BN%2CT%5D%2CopenArray%5BT%5D">spscqueueinterface: push[N: static int; T](self: var SPSCQueueInterface; storage: var array[N, T];
                     items: openArray[T]): Option[seq[T]]</a></li>
           <li><a class="reference external"
+          data-doc-search-tag="spscqueueinterface: push[N: static int; T](self: var SPSCQueueInterface; storage: var array[N, T]; item: T): bool" href="lockfreequeues/spscqueueinterface.html#push%2CSPSCQueueInterface%2Carray%5BN%2CT%5D%2CT">spscqueueinterface: push[N: static int; T](self: var SPSCQueueInterface; storage: var array[N, T]; item: T): bool</a></li>
+          <li><a class="reference external"
           data-doc-search-tag="spscqueueinterface: push[T](self: var SPSCQueueInterface; storage: var ptr UncheckedArray[T];
         capacity: int; items: openArray[T]): Option[seq[T]]" href="lockfreequeues/spscqueueinterface.html#push%2CSPSCQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2CopenArray%5BT%5D">spscqueueinterface: push[T](self: var SPSCQueueInterface; storage: var ptr UncheckedArray[T];
         capacity: int; items: openArray[T]): Option[seq[T]]</a></li>
           <li><a class="reference external"
-          data-doc-search-tag="spscqueueshared: push[N: static int; T](self: var SPSCQueueShared[T]; data: ptr array[N, T]): Option[seq[T]]" href="lockfreequeues/spscqueueshared.html#push%2CSPSCQueueShared%5BT%5D%2Cptr.array%5BN%2CT%5D">spscqueueshared: push[N: static int; T](self: var SPSCQueueShared[T]; data: ptr array[N, T]): Option[seq[T]]</a></li>
+          data-doc-search-tag="spscqueueinterface: push[T](self: var SPSCQueueInterface; storage: var ptr UncheckedArray[T];
+        capacity: int; item: T): bool" href="lockfreequeues/spscqueueinterface.html#push%2CSPSCQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2CT">spscqueueinterface: push[T](self: var SPSCQueueInterface; storage: var ptr UncheckedArray[T];
+        capacity: int; item: T): bool</a></li>
           <li><a class="reference external"
-          data-doc-search-tag="spscqueueshared: push[T](self: var SPSCQueueShared[T]; data: seq[T]): Option[seq[T]]" href="lockfreequeues/spscqueueshared.html#push%2CSPSCQueueShared%5BT%5D%2Cseq%5BT%5D">spscqueueshared: push[T](self: var SPSCQueueShared[T]; data: seq[T]): Option[seq[T]]</a></li>
-          <li><a class="reference external"
-          data-doc-search-tag="spscqueuestatic: push[N: static int; T](self: var SPSCQueueStatic[N, T]; data: openArray[T]): Option[
-    seq[T]]" href="lockfreequeues/spscqueuestatic.html#push%2CSPSCQueueStatic%5BN%2CT%5D%2CopenArray%5BT%5D">spscqueuestatic: push[N: static int; T](self: var SPSCQueueStatic[N, T]; data: openArray[T]): Option[
+          data-doc-search-tag="spscqueueshared: push[N: static int; T](self: var SPSCQueueShared[T]; items: ptr array[N, T]): Option[
+    seq[T]]" href="lockfreequeues/spscqueueshared.html#push%2CSPSCQueueShared%5BT%5D%2Cptr.array%5BN%2CT%5D">spscqueueshared: push[N: static int; T](self: var SPSCQueueShared[T]; items: ptr array[N, T]): Option[
     seq[T]]</a></li>
+          <li><a class="reference external"
+          data-doc-search-tag="spscqueueshared: push[T](self: var SPSCQueueShared[T]; items: seq[T]): Option[seq[T]]" href="lockfreequeues/spscqueueshared.html#push%2CSPSCQueueShared%5BT%5D%2Cseq%5BT%5D">spscqueueshared: push[T](self: var SPSCQueueShared[T]; items: seq[T]): Option[seq[T]]</a></li>
+          <li><a class="reference external"
+          data-doc-search-tag="spscqueueshared: push[T](self: var SPSCQueueShared[T]; item: T): bool" href="lockfreequeues/spscqueueshared.html#push%2CSPSCQueueShared%5BT%5D%2CT">spscqueueshared: push[T](self: var SPSCQueueShared[T]; item: T): bool</a></li>
+          <li><a class="reference external"
+          data-doc-search-tag="spscqueuestatic: push[N: static int; T](self: var SPSCQueueStatic[N, T]; items: openArray[T]): Option[
+    seq[T]]" href="lockfreequeues/spscqueuestatic.html#push%2CSPSCQueueStatic%5BN%2CT%5D%2CopenArray%5BT%5D">spscqueuestatic: push[N: static int; T](self: var SPSCQueueStatic[N, T]; items: openArray[T]): Option[
+    seq[T]]</a></li>
+          <li><a class="reference external"
+          data-doc-search-tag="spscqueuestatic: push[N: static int; T](self: var SPSCQueueStatic[N, T]; item: T): bool" href="lockfreequeues/spscqueuestatic.html#push%2CSPSCQueueStatic%5BN%2CT%5D%2CT">spscqueuestatic: push[N: static int; T](self: var SPSCQueueStatic[N, T]; item: T): bool</a></li>
           </ul></dd>
 <dt><a name="reset" href="#reset"><span>reset:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
@@ -187,7 +207,7 @@ function main() {
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-03 03:50:46 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-03 05:27:11 UTC</small>
       </div>
     </div>
   </div>

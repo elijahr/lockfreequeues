@@ -62,7 +62,8 @@ proc available*(
   capacity: uint,
 ): uint
   {.inline.} =
-  ## Calculate how many slots are available in storage.
+  ## Determine how many slots are available given `head`, `tail`, and `capacity`
+  ## values.
   return capacity - (tail - head)
 
 
@@ -71,6 +72,8 @@ proc available*(
   capacity: uint,
 ): uint
   {.inline.} =
+  ## Determine how many slots are available in the given `SPSCQueueInterface`
+  ## for max `capacity` items.
   return capacity - self.size
 
 
@@ -80,7 +83,7 @@ proc full*(
   capacity: uint,
 ): bool
   {.inline.} =
-  ## Determine if storage is full.
+  ## Determine if storage is full given `head`, `tail`, and `capacity` values.
   return (tail - head) == capacity
 
 
@@ -89,8 +92,63 @@ proc empty*(
   tail: uint,
 ): bool
   {.inline.} =
-  ## Determine if storage is empty.
+  ## Determine if storage is empty given `head` and `tail` values.
   return head == tail
+
+
+template doPush(
+  self: var SPSCQueueInterface,
+  storage: untyped,
+  capacity: int,
+  item: untyped,
+) =
+  ## Append a single item to the tail of the queue.
+  ## If the item was appended, `true` is returned.
+  ## If the queue is full, `false` is returned.
+
+  let tail = self.tail.load(moRelaxed)
+  let head = self.head.load(moAcquire)
+  let cap = cast[uint](capacity)
+
+  if unlikely(full(head, tail, cap)):
+    # queue is full, return false
+    return false
+
+  let writeIndex = index(tail, cap)
+
+  storage[writeIndex] = item
+
+  result = true
+
+  # Values above high(uint) will overflow and reset from zero.
+  # This allows for an ever-increasing tail and removes the need for storing an
+  # additional "empty" or "full" state.
+  self.tail.store(tail + 1, moRelease)
+
+
+proc push*[T](
+  self: var SPSCQueueInterface,
+  storage: var ptr UncheckedArray[T],
+  capacity: int,
+  item: T,
+):
+  bool =
+  ## Append a single item to the tail of the queue.
+  ## If the item was appended, `true` is returned.
+  ## If the queue is full, `false` is returned.
+  self.doPush(storage, capacity, item)
+
+
+proc push*[N: static int, T](
+  self: var SPSCQueueInterface,
+  storage: var array[N, T],
+  item: T,
+):
+  bool =
+  ## Append a single item to the tail of the queue.
+  ## If the item was appended, `true` is returned.
+  ## If the queue is full, `false` is returned.
+  self.doPush(storage, N, item)
 
 
 template push(
@@ -101,7 +159,7 @@ template push(
   rettype: typedesc,
 ) =
   ## Append items to the tail of the queue.
-  ## If > 1 items could not be pushed, `some(unpushed)` will be returned.
+  ## If > 1 items could not be appended, `some(unpushed)` will be returned.
   ## Otherwise, `none(seq[T])` will be returned.
 
   let tail = self.tail.load(moRelaxed)
@@ -160,7 +218,7 @@ proc push*[T](
 ):
   Option[seq[T]] =
   ## Append items to the tail of the queue.
-  ## If > 1 items could not be pushed, `some(unpushed)` will be returned.
+  ## If > 1 items could not be appended, `some(unpushed)` will be returned.
   ## Otherwise, `none(seq[T])` will be returned.
   self.push(storage, capacity, items, seq[T])
 
@@ -172,9 +230,58 @@ proc push*[N: static int, T](
 ):
   Option[seq[T]] =
   ## Append items to the tail of the queue.
-  ## If > 1 items could not be pushed, `some(unpushed)` will be returned.
+  ## If > 1 items could not be appended, `some(unpushed)` will be returned.
   ## Otherwise, `none(seq[T])` will be returned.
-  self.push(storage, storage.len, items, seq[T])
+  self.push(storage, N, items, seq[T])
+
+
+template doPop(
+  self: var SPSCQueueInterface,
+  storage: untyped,
+  capacity: int,
+  rettype: typedesc,
+) =
+  ## Pop a single item from the head of the queue.
+  ## If an item could be popped, some(T) will be returned.
+  ## Otherwise, `none(T)` will be returned.
+  let tail = self.tail.load(moAcquire)
+  let head = self.head.load(moRelaxed)
+  let size = size(head, tail)
+
+  if unlikely(size == 0u or empty(head, tail)):
+    return none(T)
+
+  let headIndex = index(head, cast[uint](capacity))
+
+  result = some(storage[headIndex])
+
+  # Values above high(uint) will overflow and reset from zero.
+  # This allows for an ever-increasing head and removes the need for storing an
+  # additional "empty" or "full" state.
+  self.head.store(head + 1, moRelease)
+
+
+proc pop*[T](
+  self: var SPSCQueueInterface,
+  storage: var ptr UncheckedArray[T],
+  capacity: int,
+):
+  Option[T] =
+  ## Pop a single item from the head of the queue.
+  ## If an item could be popped, some(T) will be returned.
+  ## Otherwise, `none(T)` will be returned.
+  self.doPop(storage, capacity, T)
+
+
+proc pop*[N: static int, T](
+  self: var SPSCQueueInterface,
+  storage: var array[N, T],
+):
+  Option[T] =
+  ## Pop a single item from the head of the queue.
+  ## If an item could be popped, some(T) will be returned.
+  ## Otherwise, `none(T)` will be returned.
+  self.doPop(storage, N, T)
 
 
 template pop(
@@ -184,7 +291,7 @@ template pop(
   count: int,
   rettype: typedesc,
 ) =
-  ## Pop items from the head of the queue.
+  ## Pop `count` items from the head of the queue.
   ## If > 1 items could be popped, some(seq[T]) will be returned.
   ## Otherwise, `none(seq[T])` will be returned.
   let tail = self.tail.load(moAcquire)
@@ -239,7 +346,7 @@ proc pop*[T](
   count: int,
 ):
   Option[seq[T]] =
-  ## Pop items from the head of the queue.
+  ## Pop `count` items from the head of the queue.
   ## If > 1 items could be popped, some(seq[T]) will be returned.
   ## Otherwise, `none(seq[T])` will be returned.
   self.pop(storage, capacity, count, seq[T])
@@ -251,10 +358,10 @@ proc pop*[N: static int, T](
   count: int,
 ):
   Option[seq[T]] =
-  ## Pop items from the head of the queue.
+  ## Pop `count` items from the head of the queue.
   ## If > 1 items could be popped, some(seq[T]) will be returned.
   ## Otherwise, `none(seq[T])` will be returned.
-  self.pop(storage, storage.len, count, seq[T])
+  self.pop(storage, N, count, seq[T])
 
 
 proc state*(

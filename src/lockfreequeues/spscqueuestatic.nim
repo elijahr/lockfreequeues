@@ -20,7 +20,7 @@ type
   SPSCQueueStatic*[N: static int, T] = object
     ## A single-producer, single-consumer queue, suitable for capacity known at
     ## compile time.
-    face: ptr SPSCQueueInterface
+    face: SPSCQueueInterface
     storage: array[N, T]
 
 
@@ -28,27 +28,41 @@ proc newSPSCQueue*[N: static int, T](): SPSCQueueStatic[N, T] =
   ## Initialize new SPSCQueueStatic and validate capacity.
   if N < 2 or not isPowerOfTwo(N):
     raise newException(ValueError, fmt"{N} is not a power of two")
-  result.face = cast[ptr SPSCQueueInterface](
-    allocShared0(sizeof(SPSCQueueInterface))
-  )
   result.move(0, 0)
-
-
-proc `=destroy`*[N: static int, T](self: var SPSCQueueStatic[N, T]) =
-  if self.face != nil:
-    deallocShared(self.face)
 
 
 proc push*[N: static int, T](
   self: var SPSCQueueStatic[N, T],
-  data: openArray[T],
+  item: T,
+):
+  bool =
+  ## Append a single item to the tail of the queue.
+  ## If the item was appended, `true` is returned.
+  ## If the queue is full, `false` is returned.
+  self.face.push(self.storage, item)
+
+
+proc push*[N: static int, T](
+  self: var SPSCQueueStatic[N, T],
+  items: openArray[T],
 ):
   Option[seq[T]]
   {.inline.} =
   ## Append items to the tail of the queue.
-  ## If > 1 items could not be pushed, `some(unpushed)` will be returned.
+  ## If > 1 items could not be appended, `some(unpushed)` will be returned.
   ## Otherwise, `none(seq[T])` will be returned.
-  return self.face[].push(self.storage, data)
+  return self.face.push(self.storage, items)
+
+
+proc pop*[N: static int, T](
+  self: var SPSCQueueStatic[N, T],
+):
+  Option[T]
+  {.inline.} =
+  ## Pop a single item from the head of the queue.
+  ## If an item could be popped, some(T) will be returned.
+  ## Otherwise, `none(T)` will be returned.
+  return self.face.pop(self.storage)
 
 
 proc pop*[N: static int, T](
@@ -57,10 +71,10 @@ proc pop*[N: static int, T](
 ):
   Option[seq[T]]
   {.inline.} =
-  ## Pop items from the head of the queue.
+  ## Pop `count` items from the head of the queue.
   ## If > 1 items could be popped, some(seq[T]) will be returned.
   ## Otherwise, `none(seq[T])` will be returned.
-  return self.face[].pop(self.storage, count)
+  return self.face.pop(self.storage, count)
 
 
 proc capacity*[N: static int, T](
@@ -80,7 +94,7 @@ proc state*[N: static int, T](
     storage: seq[T],
   ] =
   ## Retrieve current state of the queue
-  let faceState = self.face[].state
+  let faceState = self.face.state
   return (
     head: faceState.head,
     tail: faceState.tail,
@@ -94,7 +108,7 @@ proc move*[N: static int, T](
   tail: uint,
 ) {.inline.} =
   ## Move head and tail. Probably only useful for unit tests.
-  self.face[].move(head, tail)
+  self.face.move(head, tail)
 
 
 proc reset*[N: static int, T](

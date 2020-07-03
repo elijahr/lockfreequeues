@@ -101,7 +101,7 @@ function main() {
 <li>
   <a class="reference reference-toplevel" href="#6" id="56">Imports</a>
   <ul class="simple simple-toc-section">
-
+    
   </ul>
 </li>
 <li>
@@ -119,10 +119,14 @@ function main() {
     ><wbr />new<wbr />SPSCQueue<span class="attachedType">SPSCQueueShared</span></a></li>
   <li><a class="reference" href="#%3Ddestroy%2CSPSCQueueShared%5BT%5D"
     ><wbr /><b>=destroy</b><span class="attachedType">SPSCQueueShared</span></a></li>
+  <li><a class="reference" href="#push%2CSPSCQueueShared%5BT%5D%2CT"
+    ><wbr />push<span class="attachedType">SPSCQueueShared</span></a></li>
   <li><a class="reference" href="#push%2CSPSCQueueShared%5BT%5D%2Cseq%5BT%5D"
     ><wbr />push<span class="attachedType">SPSCQueueShared</span></a></li>
   <li><a class="reference" href="#push%2CSPSCQueueShared%5BT%5D%2Cptr.array%5BN%2CT%5D"
     ><wbr />push<span class="attachedType">SPSCQueueShared</span></a></li>
+  <li><a class="reference" href="#pop%2CSPSCQueueShared%5BT%5D"
+    ><wbr />pop<span class="attachedType">SPSCQueueShared</span></a></li>
   <li><a class="reference" href="#pop%2CSPSCQueueShared%5BT%5D%2Cint"
     ><wbr />pop<span class="attachedType">SPSCQueueShared</span></a></li>
   <li><a class="reference" href="#state%2CSPSCQueueShared%5BT%5D"
@@ -140,7 +144,7 @@ function main() {
   </div>
   <div class="nine columns" id="content">
   <div id="tocRoot"></div>
-
+  
   <p class="module-desc"><p>A single-producer, single-consumer, lock-free, wait-free queue.</p>
 <p>Based on the algorithm outlined by Juho Snellman at <a class="reference external" href="https://www.snellman.net/blog/archive/2016-12-13-ring-buffers">https://www.snellman.net/blog/archive/2016-12-13-ring-buffers</a>/</p>
 </p>
@@ -194,38 +198,60 @@ class="link-seesrc" target="_blank">Source</a>
 <a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueueshared.nim#L44" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="push,SPSCQueueShared[T],seq[T]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#push%2CSPSCQueueShared%5BT%5D%2Cseq%5BT%5D"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="spscqueueshared.html#SPSCQueueShared"><span class="Identifier">SPSCQueueShared</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">data</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="push,SPSCQueueShared[T],T"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#push%2CSPSCQueueShared%5BT%5D%2CT"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="spscqueueshared.html#SPSCQueueShared"><span class="Identifier">SPSCQueueShared</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">item</span><span class="Other">:</span> <span class="Identifier">T</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span></pre></dt>
 <dd>
 
-Append items to the tail of the queue. If &gt; 1 items could not be pushed, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
+Append a single item to the tail of the queue. If the item was appended, <tt class="docutils literal"><span class="pre">true</span></tt> is returned. If the queue is full, <tt class="docutils literal"><span class="pre">false</span></tt> is returned.
 &nbsp;&nbsp;<a
 href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueueshared.nim#L53"
 class="link-seesrc" target="_blank">Source</a>
 <a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueueshared.nim#L53" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
+<a id="push,SPSCQueueShared[T],seq[T]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#push%2CSPSCQueueShared%5BT%5D%2Cseq%5BT%5D"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="spscqueueshared.html#SPSCQueueShared"><span class="Identifier">SPSCQueueShared</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">items</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+Append items to the tail of the queue. If &gt; 1 items could not be appended, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
+&nbsp;&nbsp;<a
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueueshared.nim#L64"
+class="link-seesrc" target="_blank">Source</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueueshared.nim#L64" class="link-seesrc" target="_blank" >Edit</a>
+
+</dd>
 <a id="push,SPSCQueueShared[T],ptr.array[N,T]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#push%2CSPSCQueueShared%5BT%5D%2Cptr.array%5BN%2CT%5D"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="spscqueueshared.html#SPSCQueueShared"><span class="Identifier">SPSCQueueShared</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">data</span><span class="Other">:</span> <span class="Keyword">ptr</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span>
+<dt><pre><span class="Keyword">proc</span> <a href="#push%2CSPSCQueueShared%5BT%5D%2Cptr.array%5BN%2CT%5D"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="spscqueueshared.html#SPSCQueueShared"><span class="Identifier">SPSCQueueShared</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">items</span><span class="Other">:</span> <span class="Keyword">ptr</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span>
     <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Append items to the tail of the queue. If &gt; 1 items could not be pushed, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
+Append items to the tail of the queue. If &gt; 1 items could not be appended, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueueshared.nim#L65"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueueshared.nim#L76"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueueshared.nim#L65" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueueshared.nim#L76" class="link-seesrc" target="_blank" >Edit</a>
+
+</dd>
+<a id="pop,SPSCQueueShared[T]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#pop%2CSPSCQueueShared%5BT%5D"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="spscqueueshared.html#SPSCQueueShared"><span class="Identifier">SPSCQueueShared</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+Pop a single item from the head of the queue. If an item could be popped, some(T) will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(T)</span></tt> will be returned.
+&nbsp;&nbsp;<a
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueueshared.nim#L88"
+class="link-seesrc" target="_blank">Source</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueueshared.nim#L88" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="pop,SPSCQueueShared[T],int"></a>
 <dt><pre><span class="Keyword">proc</span> <a href="#pop%2CSPSCQueueShared%5BT%5D%2Cint"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="spscqueueshared.html#SPSCQueueShared"><span class="Identifier">SPSCQueueShared</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">count</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Pop items from the head of the queue. If &gt; 1 items could be popped, some(seq[T]) will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
+Pop <tt class="docutils literal"><span class="pre">count</span></tt> items from the head of the queue. If &gt; 1 items could be popped, some(seq[T]) will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueueshared.nim#L77"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueueshared.nim#L99"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueueshared.nim#L77" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueueshared.nim#L99" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="state,SPSCQueueShared[T]"></a>
@@ -235,9 +261,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Retrieve current state of the queue
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueueshared.nim#L89"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueueshared.nim#L111"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueueshared.nim#L89" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueueshared.nim#L111" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="move,SPSCQueueShared[T],uint,uint"></a>
@@ -246,9 +272,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Move head and tail. Probably only useful for unit tests.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueueshared.nim#L108"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueueshared.nim#L130"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueueshared.nim#L108" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueueshared.nim#L130" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="reset,SPSCQueueShared[T]"></a>
@@ -257,9 +283,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Resets the queue to its default state
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueueshared.nim#L117"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spscqueueshared.nim#L139"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueueshared.nim#L117" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spscqueueshared.nim#L139" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -272,7 +298,7 @@ class="link-seesrc" target="_blank">Source</a>
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-03 03:50:46 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-03 05:27:11 UTC</small>
       </div>
     </div>
   </div>

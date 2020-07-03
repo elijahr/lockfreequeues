@@ -52,26 +52,48 @@ proc `=destroy`*[T](self: var SPSCQueueShared[T]) =
 
 proc push*[T](
   self: var SPSCQueueShared[T],
-  data: seq[T],
+  item: T,
+):
+  bool =
+  ## Append a single item to the tail of the queue.
+  ## If the item was appended, `true` is returned.
+  ## If the queue is full, `false` is returned.
+  self.face[].push(self.storage, self.capacity, item)
+
+
+proc push*[T](
+  self: var SPSCQueueShared[T],
+  items: seq[T],
 ):
   Option[seq[T]]
   {.inline.} =
   ## Append items to the tail of the queue.
-  ## If > 1 items could not be pushed, `some(unpushed)` will be returned.
+  ## If > 1 items could not be appended, `some(unpushed)` will be returned.
   ## Otherwise, `none(seq[T])` will be returned.
-  return self.face[].push(self.storage, self.capacity, data)
+  return self.face[].push(self.storage, self.capacity, items)
 
 
 proc push*[N: static int, T](
   self: var SPSCQueueShared[T],
-  data: ptr array[N, T],
+  items: ptr array[N, T],
 ):
   Option[seq[T]]
   {.inline.} =
   ## Append items to the tail of the queue.
-  ## If > 1 items could not be pushed, `some(unpushed)` will be returned.
+  ## If > 1 items could not be appended, `some(unpushed)` will be returned.
   ## Otherwise, `none(seq[T])` will be returned.
-  return self.face[].push(self.storage, self.capacity, data)
+  return self.face[].push(self.storage, self.capacity, items)
+
+
+proc pop*[T](
+  self: var SPSCQueueShared[T],
+):
+  Option[T]
+  {.inline.} =
+  ## Pop a single item from the head of the queue.
+  ## If an item could be popped, some(T) will be returned.
+  ## Otherwise, `none(T)` will be returned.
+  return self.face[].pop(self.storage, self.capacity)
 
 
 proc pop*[T](
@@ -80,7 +102,7 @@ proc pop*[T](
 ):
   Option[seq[T]]
   {.inline.} =
-  ## Pop items from the head of the queue.
+  ## Pop `count` items from the head of the queue.
   ## If > 1 items could be popped, some(seq[T]) will be returned.
   ## Otherwise, `none(seq[T])` will be returned.
   return self.face[].pop(self.storage, self.capacity, count)

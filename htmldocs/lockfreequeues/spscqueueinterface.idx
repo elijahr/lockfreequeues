@@ -6,8 +6,12 @@ available	lockfreequeues/spscqueueinterface.html#available,uint,uint,uint	spscqu
 available	lockfreequeues/spscqueueinterface.html#available,SPSCQueueInterface,uint	spscqueueinterface: available(self: var SPSCQueueInterface; capacity: uint): uint	
 full	lockfreequeues/spscqueueinterface.html#full,uint,uint,uint	spscqueueinterface: full(head: uint; tail: uint; capacity: uint): bool	
 empty	lockfreequeues/spscqueueinterface.html#empty,uint,uint	spscqueueinterface: empty(head: uint; tail: uint): bool	
+push	lockfreequeues/spscqueueinterface.html#push,SPSCQueueInterface,ptr.UncheckedArray[T],int,T	spscqueueinterface: push[T](self: var SPSCQueueInterface; storage: var ptr UncheckedArray[T];\n        capacity: int; item: T): bool	
+push	lockfreequeues/spscqueueinterface.html#push,SPSCQueueInterface,array[N,T],T	spscqueueinterface: push[N: static int; T](self: var SPSCQueueInterface; storage: var array[N, T]; item: T): bool	
 push	lockfreequeues/spscqueueinterface.html#push,SPSCQueueInterface,ptr.UncheckedArray[T],int,openArray[T]	spscqueueinterface: push[T](self: var SPSCQueueInterface; storage: var ptr UncheckedArray[T];\n        capacity: int; items: openArray[T]): Option[seq[T]]	
 push	lockfreequeues/spscqueueinterface.html#push,SPSCQueueInterface,array[N,T],openArray[T]	spscqueueinterface: push[N: static int; T](self: var SPSCQueueInterface; storage: var array[N, T];\n                    items: openArray[T]): Option[seq[T]]	
+pop	lockfreequeues/spscqueueinterface.html#pop,SPSCQueueInterface,ptr.UncheckedArray[T],int	spscqueueinterface: pop[T](self: var SPSCQueueInterface; storage: var ptr UncheckedArray[T]; capacity: int): Option[\n    T]	
+pop	lockfreequeues/spscqueueinterface.html#pop,SPSCQueueInterface,array[N,T]	spscqueueinterface: pop[N: static int; T](self: var SPSCQueueInterface; storage: var array[N, T]): Option[T]	
 pop	lockfreequeues/spscqueueinterface.html#pop,SPSCQueueInterface,ptr.UncheckedArray[T],int,int	spscqueueinterface: pop[T](self: var SPSCQueueInterface; storage: var ptr UncheckedArray[T]; capacity: int;\n       count: int): Option[seq[T]]	
 pop	lockfreequeues/spscqueueinterface.html#pop,SPSCQueueInterface,array[N,T],int	spscqueueinterface: pop[N: static int; T](self: var SPSCQueueInterface; storage: var array[N, T]; count: int): Option[\n    seq[T]]	
 state	lockfreequeues/spscqueueinterface.html#state,SPSCQueueInterface	spscqueueinterface: state(self: var SPSCQueueInterface): tuple[head: uint, tail: uint]	

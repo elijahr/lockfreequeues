@@ -46,14 +46,23 @@ suite "SPSCQueueStatic: operations":
   setup:
     queue.reset()
 
-  test "push()":
+  test "push(int)":
     testPush(queue)
 
-  test "push() overflow":
+  test "push(int) overflow":
     testPushOverflow(queue)
 
-  test "push() wrap":
+  test "push(int) wrap":
     testPushWrap(queue)
+
+  test "push(seq[T])":
+    testPushSeq(queue)
+
+  test "push(seq[T]) overflow":
+    testPushSeqOverflow(queue)
+
+  test "push(seq[T]) wrap":
+    testPushSeqWrap(queue)
 
   test "pop() one":
     testPopOne(queue)
@@ -70,6 +79,21 @@ suite "SPSCQueueStatic: operations":
   test "pop() wrap":
     testPopWrap(queue)
 
+  test "pop(int) one":
+    testPopCountOne(queue)
+
+  test "pop(int) all":
+    testPopCountAll(queue)
+
+  test "pop(int) empty":
+    testPopCountEmpty(queue)
+
+  test "pop(int) too many":
+    testPopCountTooMany(queue)
+
+  test "pop(int) wrap":
+    testPopCountWrap(queue)
+
   test "capacity":
     testCapacity(queue)
 
@@ -80,14 +104,15 @@ suite "SPSCQueueStatic: operations":
     testWraps(queue)
 
 
-var channel: Channel[int]
+var
+  channel: Channel[int]
+  queue = newSPSCQueue[8, int]()
 
 
-proc consumerFunc(q: pointer) {.thread.} =
-  let queuePtr = cast[ptr SPSCQueueStatic[8, int]](q)
+proc consumerFunc() {.thread.} =
   var count = 0
   while count < 128:
-    var res = queuePtr[].pop(1)
+    var res = queue.pop(1)
     if res.isSome:
       let msg = res.get()[0]
       channel.send(msg)
@@ -96,24 +121,22 @@ proc consumerFunc(q: pointer) {.thread.} =
       sleep(11)
 
 
-proc producerFunc(q: pointer) {.thread.} =
-  let queuePtr = cast[ptr SPSCQueueStatic[8, int]](q)
+proc producerFunc() {.thread.} =
   for i in 1..128:
-    while queuePtr[].push(@[i]).isSome:
+    while queue.push(@[i]).isSome:
       sleep(10)
 
 
 suite "SPSCQueueStatic: threaded":
   var
-    queue = newSPSCQueue[8, int]()
-    consumer: Thread[pointer]
-    producer: Thread[pointer]
+    consumer: Thread[void]
+    producer: Thread[void]
 
   setup:
     queue.reset()
     channel.open()
-    consumer.createThread(consumerFunc, addr(queue))
-    producer.createThread(producerFunc, addr(queue))
+    consumer.createThread(consumerFunc)
+    producer.createThread(producerFunc)
 
   teardown:
     joinThreads(consumer, producer)

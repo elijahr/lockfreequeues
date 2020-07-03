@@ -46,14 +46,23 @@ suite "SPSCQueueShared: operations":
   setup:
     queue.reset()
 
-  test "push()":
+  test "push(int)":
     testPush(queue)
 
-  test "push() overflow":
+  test "push(int) overflow":
     testPushOverflow(queue)
 
-  test "push() wrap":
+  test "push(int) wrap":
     testPushWrap(queue)
+
+  test "push(seq[T])":
+    testPushSeq(queue)
+
+  test "push(seq[T]) overflow":
+    testPushSeqOverflow(queue)
+
+  test "push(seq[T]) wrap":
+    testPushSeqWrap(queue)
 
   test "pop() one":
     testPopOne(queue)
@@ -69,6 +78,21 @@ suite "SPSCQueueShared: operations":
 
   test "pop() wrap":
     testPopWrap(queue)
+
+  test "pop(int) one":
+    testPopCountOne(queue)
+
+  test "pop(int) all":
+    testPopCountAll(queue)
+
+  test "pop(int) empty":
+    testPopCountEmpty(queue)
+
+  test "pop(int) too many":
+    testPopCountTooMany(queue)
+
+  test "pop(int) wrap":
+    testPopCountWrap(queue)
 
   test "capacity":
     testCapacity(queue)
