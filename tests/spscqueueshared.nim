@@ -125,7 +125,6 @@ proc producerFunc(q: pointer) {.thread.} =
   for i in 1..128:
     while queuePtr[].push(@[i]).isSome:
       sleep(10)
-  echo "producer: complete"
 
 
 suite "SPSCQueueShared: threaded":
