@@ -1,0 +1,9 @@
+SPSCQueueStatic	lockfreequeues/spscqueuestatic.html#SPSCQueueStatic	spscqueuestatic: SPSCQueueStatic	
+newSPSCQueue	lockfreequeues/spscqueuestatic.html#newSPSCQueue	spscqueuestatic: newSPSCQueue[N: static int; T](): SPSCQueueStatic[N, T]	
+`=destroy`	lockfreequeues/spscqueuestatic.html#=destroy,SPSCQueueStatic[N,T]	spscqueuestatic: `=destroy`[N: static int; T](self: var SPSCQueueStatic[N, T])	
+push	lockfreequeues/spscqueuestatic.html#push,SPSCQueueStatic[N,T],openArray[T]	spscqueuestatic: push[N: static int; T](self: var SPSCQueueStatic[N, T]; data: openArray[T]): Option[\n    seq[T]]	
+pop	lockfreequeues/spscqueuestatic.html#pop,SPSCQueueStatic[N,T],int	spscqueuestatic: pop[N: static int; T](self: var SPSCQueueStatic[N, T]; count: int): Option[seq[T]]	
+capacity	lockfreequeues/spscqueuestatic.html#capacity,SPSCQueueStatic[N,T]	spscqueuestatic: capacity[N: static int; T](self: var SPSCQueueStatic[N, T]): int	
+state	lockfreequeues/spscqueuestatic.html#state,SPSCQueueStatic[N,T]	spscqueuestatic: state[N: static int; T](self: var SPSCQueueStatic[N, T]): tuple[head: uint, tail: uint,\n    storage: seq[T]]	
+move	lockfreequeues/spscqueuestatic.html#move,SPSCQueueStatic[N,T],uint,uint	spscqueuestatic: move[N: static int; T](self: var SPSCQueueStatic[N, T]; head: uint; tail: uint)	
+reset	lockfreequeues/spscqueuestatic.html#reset,SPSCQueueStatic[N,T]	spscqueuestatic: reset[N: static int; T](self: var SPSCQueueStatic[N, T])	
