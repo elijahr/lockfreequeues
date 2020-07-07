@@ -4,11 +4,11 @@
 
 Single-producer, single-consumer, lock-free queue (aka ring buffer) implementations for Nim.
 
-Two implementations are provided: [`StaticQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/spscqueuestatic.html) and [`SharedQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/spscqueueshared.html).
+Two implementations are provided: [`StaticQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/spsc/staticqueue.html) and [`SharedQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/spsc/sharedqueue.html).
 
-`StaticQueue` should be used when your queue's maximum capacity is known at compile-time.
+`StaticQueue` should be used when your queue's capacity is known at compile-time.
 
-`SharedQueue` should be used when your queue's maximum capacity is only known at run-time or when the queue should reside in shared memory.
+`SharedQueue` should be used when your queue's capacity is only known at run-time or when the queue should reside in shared memory.
 
 API documentation: https://elijahr.github.io/lockfreequeues/
 
@@ -17,8 +17,8 @@ API documentation: https://elijahr.github.io/lockfreequeues/
 Examples are located in the [examples](https://github.com/elijahr/lockfreequeues/tree/master/examples) directory and can be compiled and run with:
 
 ```sh
-nim c -r examples/spscqueuestatic.nim
-nim c -r examples/spscqueueshared.nim
+nim c -r examples/spsc/staticqueue.nim
+nim c -r examples/spsc/sharedqueue.nim
 ```
 
 ### Example usage for a statically allocated queue
@@ -29,7 +29,8 @@ import os
 import sequtils
 import strformat
 
-import lockfreequeues/spscqueuestatic
+import lockfreequeues/spsc/staticqueue
+
 
 var
   queue = newSPSCQueue[16, int]() # A queue that can hold 16 ints.
@@ -89,7 +90,7 @@ import os
 import sequtils
 import strformat
 
-import lockfreequeues/spscqueueshared
+import lockfreequeues/spsc/sharedqueue
 
 
 proc consumerFunc(q: pointer) {.thread.} =
@@ -149,6 +150,14 @@ if isMainModule:
 
 ```
 
+## Reference
+
+* Juho Snellman's post ["I've been writing ring buffers wrong all these years"](https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/) ([alt](https://web.archive.org/web/20200530040210/https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/))
+* Mamy Ratsimbazafy's [research on SPSC channels](https://github.com/mratsim/weave/blob/master/weave/cross_thread_com/channels_spsc.md#litterature) for weave.
+* Henrique F Bucher's post ["Yes, You Have Been Writing SPSC Queues Wrong Your Entire Life"](http://www.vitorian.com/x1/archives/370) ([alt](https://web.archive.org/web/20191225164231/http://www.vitorian.com/x1/archives/370))
+
+Many thanks to Mamy Ratsimbazafy for reviewing this code and offering suggestions.
+
 ## Contributing
 
 * Pull requests and feature requests are quite welcome!
@@ -156,6 +165,13 @@ if isMainModule:
 * For pull requests, please see the [contribution guidelines](https://github.com/elijahr/lockfreequeues/tree/master/CONTRIBUTING.md).
 
 ## Release notes
+
+## v1.0.0 - 2020-07-6
+
+* Addresses feedback from [#1](https://github.com/elijahr/lockfreequeues/issues/1)
+* `head` and `tail` are now in the range `0 ..<2*capacity`
+* `capacity` doesn’t have to be a power of two
+* Use `align` pragma instead of padding array
 
 ## v0.1.0 - 2020-07-02
 

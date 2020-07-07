@@ -4,145 +4,161 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-## Single-producer, single-consumer, lock-free queue implementations for Nim.
-##
-## Based on the algorithm outlined by Juho Snellman at
-## https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/
-
+import atomics
 import options
 import os
 import unittest
 
+import lockfreequeues/spsc/queueinterface
 import lockfreequeues/spsc/sharedqueue
-import ../testdefs
+import ./queuetests
 
 
-suite "SharedQueue: initialization":
+var queue = newSPSCQueue[int](8)
 
-  test "newSPSCQueue[T](n)":
-    var queue = newSPSCQueue[int](8)
+
+proc reset[T](
+  self: var SharedQueue[T]
+) {.inline.} =
+  ## Resets the queue to its default state.
+  ## Should only be used in single-threaded unit tests.
+  self.face[].move(0, 0, self.capacity)
+  for i in 0..<self.capacity:
+    self.storage[i].reset()
+
+
+proc move[T](
+  self: var SharedQueue[T],
+  head: int,
+  tail: int,
+) {.inline.} =
+  ## Move the queue's `head` and `tail`.
+  ## Should only be used in single-threaded unit tests.
+  self.face[].move(head, tail, self.capacity)
+
+
+proc state[T](
+  self: var SharedQueue[T],
+): tuple[
+    head: int,
+    tail: int,
+    storage: seq[T],
+  ] =
+  ## Retrieve current state of the queue
+  ## Should only be used in single-threaded unit tests,
+  ## as data may be torn.
+  var storage = newSeq[T](self.capacity)
+  for i in 0..<self.capacity:
+    storage[i] = self.storage[i]
+  return (
+    head: self.face[].head.load(moRelaxed),
+    tail: self.face[].tail.load(moRelaxed),
+    storage: storage,
+  )
+
+
+suite "newSPSCQueue[T](n)":
+
+  test "n <= 0 raises ValueError":
+    expect(ValueError):
+      discard newSPSCQueue[int](-1)
+    expect(ValueError):
+      discard newSPSCQueue[int](0)
+
+  test "basic":
     require(queue.state == (
-      head: 0u,
-      tail: 0u,
+      head: 0,
+      tail: 0,
       storage: @[0, 0, 0, 0, 0, 0, 0, 0]
     ))
 
-  test "newSPSCQueue[T](n) without power of 2 throws ValueError":
-    expect(ValueError):
-      discard newSPSCQueue[int](1)
-    expect(ValueError):
-      discard newSPSCQueue[int](3)
-    expect(ValueError):
-      discard newSPSCQueue[int](13)
 
-  test "reset()":
-    var queue = newSPSCQueue[int](8)
-    testReset(queue)
-
-
-suite "SharedQueue: operations":
-  var queue = newSPSCQueue[int](8)
+suite "push(SharedQueue[T], T)":
 
   setup:
     queue.reset()
 
-  test "push(int)":
+  test "basic":
     testPush(queue)
 
-  test "push(int) overflow":
+  test "overflow":
     testPushOverflow(queue)
 
-  test "push(int) wrap":
+  test "wrap":
     testPushWrap(queue)
 
-  test "push(seq[T])":
+
+suite "push(SharedQueue[T], seq[T])":
+
+  setup:
+    queue.reset()
+
+  test "basic":
     testPushSeq(queue)
 
-  test "push(seq[T]) overflow":
+  test "overflow":
     testPushSeqOverflow(queue)
 
-  test "push(seq[T]) wrap":
+  test "wrap":
     testPushSeqWrap(queue)
 
-  test "pop() one":
+
+suite "pop(SharedQueue[T])":
+
+  setup:
+    queue.reset()
+
+  test "one":
     testPopOne(queue)
 
-  test "pop() all":
+  test "all":
     testPopAll(queue)
 
-  test "pop() empty":
+  test "empty":
     testPopEmpty(queue)
 
-  test "pop() too many":
+  test "too many":
     testPopTooMany(queue)
 
-  test "pop() wrap":
+  test "wrap":
     testPopWrap(queue)
 
-  test "pop(int) one":
+
+suite "pop(SharedQueue[T], int)":
+
+  setup:
+    queue.reset()
+
+  test "one":
     testPopCountOne(queue)
 
-  test "pop(int) all":
+  test "all":
     testPopCountAll(queue)
 
-  test "pop(int) empty":
+  test "empty":
     testPopCountEmpty(queue)
 
-  test "pop(int) too many":
+  test "too many":
     testPopCountTooMany(queue)
 
-  test "pop(int) wrap":
+  test "wrap":
     testPopCountWrap(queue)
 
-  test "capacity":
+
+suite "SharedQueue[T].capacity":
+
+  test "basic":
     testCapacity(queue)
 
-  test "head and tail reset to 0 on uint overflow":
-    testResets(queue)
+
+suite "SharedQueue[T] integration":
+
+  setup:
+    queue.reset()
+
+  test "head and tail reset":
+    testHeadAndTailReset(queue)
 
   test "wraps":
     testWraps(queue)
 
-
-var channel: Channel[int]
-
-
-proc consumerFunc(q: pointer) {.thread.} =
-  let queuePtr = cast[ptr SharedQueue[int]](q)
-  var count = 0
-  while count < 128:
-    var res = queuePtr[].pop(1)
-    if res.isSome:
-      let msg = res.get()[0]
-      channel.send(msg)
-      inc count
-    else:
-      sleep(11)
-
-
-proc producerFunc(q: pointer) {.thread.} =
-  let queuePtr = cast[ptr SharedQueue[int]](q)
-  for i in 1..128:
-    while queuePtr[].push(@[i]).isSome:
-      sleep(10)
-
-
-suite "SharedQueue: threaded":
-  var
-    queue = newSPSCQueue[int](8)
-    consumer: Thread[pointer]
-    producer: Thread[pointer]
-
-  setup:
-    queue.reset()
-    channel.open()
-    consumer.createThread(consumerFunc, addr(queue))
-    producer.createThread(producerFunc, addr(queue))
-
-  teardown:
-    joinThreads(consumer, producer)
-    channel.close()
-
-  test "works":
-    for i in 1..128:
-      check(channel.recv() == i)

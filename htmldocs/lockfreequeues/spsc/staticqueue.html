@@ -127,12 +127,6 @@ function main() {
     ><wbr />pop<span class="attachedType">StaticQueue</span></a></li>
   <li><a class="reference" href="#capacity%2CStaticQueue%5BN%2CT%5D"
     ><wbr />capacity<span class="attachedType">StaticQueue</span></a></li>
-  <li><a class="reference" href="#state%2CStaticQueue%5BN%2CT%5D"
-    ><wbr />state<span class="attachedType">StaticQueue</span></a></li>
-  <li><a class="reference" href="#move%2CStaticQueue%5BN%2CT%5D%2Cuint%2Cuint"
-    ><wbr />move<span class="attachedType">StaticQueue</span></a></li>
-  <li><a class="reference" href="#reset%2CStaticQueue%5BN%2CT%5D"
-    ><wbr />reset<span class="attachedType">StaticQueue</span></a></li>
 
   </ul>
 </li>
@@ -143,9 +137,7 @@ function main() {
   <div class="nine columns" id="content">
   <div id="tocRoot"></div>
   
-  <p class="module-desc"><p>Single-producer, single-consumer, lock-free queue implementations for Nim.</p>
-<p>Based on the algorithm outlined by Juho Snellman at <a class="reference external" href="https://www.snellman.net/blog/archive/2016-12-13-ring-buffers">https://www.snellman.net/blog/archive/2016-12-13-ring-buffers</a>/</p>
-</p>
+  <p class="module-desc">A single-producer, single-consumer queue, implemented as a ring buffer, suitable for when the capacity is known at compile-time.</p>
   <div class="section" id="6">
 <h1><a class="toc-backref" href="#6">Imports</a></h1>
 <dl class="item">
@@ -156,16 +148,20 @@ function main() {
 <dl class="item">
 <a id="StaticQueue"></a>
 <dt><pre><a href="staticqueue.html#StaticQueue"><span class="Identifier">StaticQueue</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span> <span class="Other">=</span> <span class="Keyword">object</span>
-  <span class="Identifier">face</span><span class="Other">:</span> <a href="queueinterface.html#SPSCQueueInterface"><span class="Identifier">SPSCQueueInterface</span></a>
-  <span class="Identifier">storage</span><span class="Other">:</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span>
-</pre></dt>
+  <span class="Identifier">face</span><span class="Operator">*</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">align</span><span class="Other">:</span> <span class="DecNumber">64</span></span><span class="Other">.}</span></span><span class="Other">:</span> <a href="queueinterface.html#QueueInterface"><span class="Identifier">QueueInterface</span></a><span class="Comment">## The queue's \</span>
+<span class="Comment">## <a href="queueinterface.html#QueueInterface">QueueInterface</a>.</span>
+<span class="Comment">## The size of a cache line (64 bytes on x86).</span>
+  <span class="Identifier">storage</span><span class="Operator">*</span><span class="Other">:</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Comment">## The queue's underlying storage.</span>
+  </pre></dt>
 <dd>
 
-A single-producer, single-consumer queue, suitable for when the max is capacity known at compile time.
+<p>A single-producer, single-consumer queue, implemented as a ring buffer, suitable for when the capacity is known at compile-time.</p>
+<p>A <tt class="docutils literal"><span class="pre">StaticQueue</span></tt> is aligned along a cache line, since arrays of queues are a common use-case.</p>
+
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/staticqueue.nim#L20"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/staticqueue.nim#L15"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/staticqueue.nim#L20" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/staticqueue.nim#L15" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -177,22 +173,22 @@ class="link-seesrc" target="_blank">Source</a>
 <dt><pre><span class="Keyword">proc</span> <a href="#newSPSCQueue"><span class="Identifier">newSPSCQueue</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Other">)</span><span class="Other">:</span> <a href="staticqueue.html#StaticQueue"><span class="Identifier">StaticQueue</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span></pre></dt>
 <dd>
 
-Initialize new StaticQueue and validate capacity.
+Initialize a new <tt class="docutils literal"><span class="pre">StaticQueue</span></tt> and validate its capacity.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/staticqueue.nim#L27"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/staticqueue.nim#L26"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/staticqueue.nim#L27" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/staticqueue.nim#L26" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="push,StaticQueue[N,T],T"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#push%2CStaticQueue%5BN%2CT%5D%2CT"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="staticqueue.html#StaticQueue"><span class="Identifier">StaticQueue</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">item</span><span class="Other">:</span> <span class="Identifier">T</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span></pre></dt>
+<dt><pre><span class="Keyword">proc</span> <a href="#push%2CStaticQueue%5BN%2CT%5D%2CT"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="staticqueue.html#StaticQueue"><span class="Identifier">StaticQueue</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">item</span><span class="Other">:</span> <span class="Identifier">T</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Append a single item to the tail of the queue. If the item was appended, <tt class="docutils literal"><span class="pre">true</span></tt> is returned. If the queue is full, <tt class="docutils literal"><span class="pre">false</span></tt> is returned.
+Append a single item to the queue. If the queue is full, <tt class="docutils literal"><span class="pre">false</span></tt> is returned. If <tt class="docutils literal"><span class="pre">item</span></tt> is appended, <tt class="docutils literal"><span class="pre">true</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/staticqueue.nim#L34"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/staticqueue.nim#L31"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/staticqueue.nim#L34" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/staticqueue.nim#L31" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="push,StaticQueue[N,T],openArray[T]"></a>
@@ -200,18 +196,18 @@ class="link-seesrc" target="_blank">Source</a>
     <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Append items to the tail of the queue. If &gt; 1 items could not be appended, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
+Append multiple items to the queue. If the queue is already full or is filled by this call, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> is returned, where <tt class="docutils literal"><span class="pre">unpushed</span></tt> is a <tt class="docutils literal"><span class="pre">seq[T]</span></tt> containing the items which cannot be appended. If all items are appended, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/staticqueue.nim#L45"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/staticqueue.nim#L43"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/staticqueue.nim#L45" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/staticqueue.nim#L43" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="pop,StaticQueue[N,T]"></a>
 <dt><pre><span class="Keyword">proc</span> <a href="#pop%2CStaticQueue%5BN%2CT%5D"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="staticqueue.html#StaticQueue"><span class="Identifier">StaticQueue</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Pop a single item from the head of the queue. If an item could be popped, some(T) will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(T)</span></tt> will be returned.
+Pop a single item from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre">none(T)</span></tt> is returned. If an item is popped, <tt class="docutils literal"><span class="pre">some(T)</span></tt> is returned.
 &nbsp;&nbsp;<a
 href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/staticqueue.nim#L57"
 class="link-seesrc" target="_blank">Source</a>
@@ -223,7 +219,7 @@ class="link-seesrc" target="_blank">Source</a>
     <span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Pop <tt class="docutils literal"><span class="pre">count</span></tt> items from the head of the queue. If &gt; 1 items could be popped, some(seq[T]) will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
+Pop <tt class="docutils literal"><span class="pre">count</span></tt> items from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> is returned. If &gt; 1 items are popped, <tt class="docutils literal"><span class="pre">some(seq[T])</span></tt> is returned.
 &nbsp;&nbsp;<a
 href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/staticqueue.nim#L68"
 class="link-seesrc" target="_blank">Source</a>
@@ -234,45 +230,11 @@ class="link-seesrc" target="_blank">Source</a>
 <dt><pre><span class="Keyword">proc</span> <a href="#capacity%2CStaticQueue%5BN%2CT%5D"><span class="Identifier">capacity</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="staticqueue.html#StaticQueue"><span class="Identifier">StaticQueue</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">int</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Return the queue's capacity
+Return the queue's capacity.
 &nbsp;&nbsp;<a
 href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/staticqueue.nim#L80"
 class="link-seesrc" target="_blank">Source</a>
 <a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/staticqueue.nim#L80" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
-<a id="state,StaticQueue[N,T]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#state%2CStaticQueue%5BN%2CT%5D"><span class="Identifier">state</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="staticqueue.html#StaticQueue"><span class="Identifier">StaticQueue</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Keyword">tuple</span><span class="Other">[</span><span class="Identifier">head</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">,</span> <span class="Identifier">tail</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">,</span>
-    <span class="Identifier">storage</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span></pre></dt>
-<dd>
-
-Retrieve current state of the queue
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/staticqueue.nim#L89"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/staticqueue.nim#L89" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
-<a id="move,StaticQueue[N,T],uint,uint"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#move%2CStaticQueue%5BN%2CT%5D%2Cuint%2Cuint"><span class="Identifier">move</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="staticqueue.html#StaticQueue"><span class="Identifier">StaticQueue</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">head</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">;</span> <span class="Identifier">tail</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
-<dd>
-
-Move head and tail. Probably only useful for unit tests.
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/staticqueue.nim#L105"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/staticqueue.nim#L105" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
-<a id="reset,StaticQueue[N,T]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#reset%2CStaticQueue%5BN%2CT%5D"><span class="Identifier">reset</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="staticqueue.html#StaticQueue"><span class="Identifier">StaticQueue</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
-<dd>
-
-Resets the queue to its default state
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/staticqueue.nim#L114"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/staticqueue.nim#L114" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -285,7 +247,7 @@ class="link-seesrc" target="_blank">Source</a>
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-03 08:56:16 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-07 02:37:36 UTC</small>
       </div>
     </div>
   </div>

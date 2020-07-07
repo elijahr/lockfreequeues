@@ -1,5 +1,5 @@
 # Package
-version       = "0.1.0"
+version       = "1.0.0"
 author        = "Elijah Shaw-Rutschman"
 description   = "Single-producer, single-consumer, lock-free queue implementations for Nim."
 license       = "MIT"
@@ -13,4 +13,4 @@ task make_docs, "Generate documentation":
   exec "sh bin/make_docs.sh"
 
 task test, "Runs the test suite":
-  exec "nim c -r tests/test"
+  exec "nim c -r tests/test.nim"

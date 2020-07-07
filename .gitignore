@@ -4,6 +4,5 @@ nimcache/
 nimblecache/
 tests/test
 *.dSYM
-examples/spscqueuestatic
-examples/spscqueueshared
-
+examples/spsc/sharedqueue
+examples/spsc/staticqueue

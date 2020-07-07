@@ -4,42 +4,42 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-## Single-producer, single-consumer, lock-free queue implementations for Nim.
-##
-## Based on the algorithm outlined by Juho Snellman at
-## https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/
+## A single-producer, single-consumer queue, implemented as a ring buffer,
+## suitable for when the capacity is known at compile-time.
 
-import atomics
-import math
 import options
-import strformat
 
+import ../constants
 import ./queueinterface
+
 
 type
   StaticQueue*[N: static int, T] = object
-    ## A single-producer, single-consumer queue, suitable for when the max
-    ## is capacity known at compile time.
-    face: SPSCQueueInterface
-    storage: array[N, T]
+    ## A single-producer, single-consumer queue, implemented as a ring buffer,
+    ## suitable for when the capacity is known at compile-time.
+    ##
+    ## A `StaticQueue` is aligned along a cache line, since arrays of queues are a
+    ## common use-case.
+    face* {.align: CACHELINE_BYTES.}: QueueInterface ## The queue's \
+      ## `QueueInterface <queueinterface.html#QueueInterface>`_.
+    storage*: array[N, T] ## The queue's underlying storage.
 
 
 proc newSPSCQueue*[N: static int, T](): StaticQueue[N, T] =
-  ## Initialize new StaticQueue and validate capacity.
-  if N < 2 or not isPowerOfTwo(N):
-    raise newException(ValueError, fmt"{N} is not a power of two")
-  result.move(0, 0)
+  ## Initialize a new `StaticQueue` and validate its capacity.
+  result.face.move(0, 0, N)
 
 
 proc push*[N: static int, T](
   self: var StaticQueue[N, T],
   item: T,
 ):
-  bool =
-  ## Append a single item to the tail of the queue.
-  ## If the item was appended, `true` is returned.
+  bool
+  {.inline.} =
+  ## Append a single item to the queue.
   ## If the queue is full, `false` is returned.
-  self.face.push(self.storage, item)
+  ## If `item` is appended, `true` is returned.
+  return self.face.push(self.storage, item)
 
 
 proc push*[N: static int, T](
@@ -48,9 +48,11 @@ proc push*[N: static int, T](
 ):
   Option[seq[T]]
   {.inline.} =
-  ## Append items to the tail of the queue.
-  ## If > 1 items could not be appended, `some(unpushed)` will be returned.
-  ## Otherwise, `none(seq[T])` will be returned.
+  ## Append multiple items to the queue.
+  ## If the queue is already full or is filled by this call, `some(unpushed)`
+  ## is returned, where `unpushed` is a `seq[T]` containing the items which
+  ## cannot be appended.
+  ## If all items are appended, `none(seq[T])` is returned.
   return self.face.push(self.storage, items)
 
 
@@ -59,9 +61,9 @@ proc pop*[N: static int, T](
 ):
   Option[T]
   {.inline.} =
-  ## Pop a single item from the head of the queue.
-  ## If an item could be popped, some(T) will be returned.
-  ## Otherwise, `none(T)` will be returned.
+  ## Pop a single item from the queue.
+  ## If the queue is empty, `none(T)` is returned.
+  ## If an item is popped, `some(T)` is returned.
   return self.face.pop(self.storage)
 
 
@@ -71,9 +73,9 @@ proc pop*[N: static int, T](
 ):
   Option[seq[T]]
   {.inline.} =
-  ## Pop `count` items from the head of the queue.
-  ## If > 1 items could be popped, some(seq[T]) will be returned.
-  ## Otherwise, `none(seq[T])` will be returned.
+  ## Pop `count` items from the queue.
+  ## If the queue is empty, `none(seq[T])` is returned.
+  ## If > 1 items are popped, `some(seq[T])` is returned.
   return self.face.pop(self.storage, count)
 
 
@@ -82,39 +84,6 @@ proc capacity*[N: static int, T](
 ):
   int
   {.inline.} =
-  ## Return the queue's capacity
-  return self.storage.len
+  ## Return the queue's capacity.
+  return N
 
-
-proc state*[N: static int, T](
-  self: var StaticQueue[N, T],
-): tuple[
-    head: uint,
-    tail: uint,
-    storage: seq[T],
-  ] =
-  ## Retrieve current state of the queue
-  let faceState = self.face.state
-  return (
-    head: faceState.head,
-    tail: faceState.tail,
-    storage: self.storage[0..^1],
-  )
-
-
-proc move*[N: static int, T](
-  self: var StaticQueue[N, T],
-  head: uint,
-  tail: uint,
-) {.inline.} =
-  ## Move head and tail. Probably only useful for unit tests.
-  self.face.move(head, tail)
-
-
-proc reset*[N: static int, T](
-  self: var StaticQueue[N, T]
-) {.inline.} =
-  ## Resets the queue to its default state
-  self.move(0'u, 0'u)
-  for i in 0..self.capacity-1:
-    self.storage[i].reset()
