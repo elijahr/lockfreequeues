@@ -6,6 +6,6 @@
 
 ## Single-producer, single-consumer, lock-free queue implementations for Nim.
 
-import ./lockfreequeues/constantsx
+import ./lockfreequeues/constants
 import ./lockfreequeues/spsc/sharedqueue
 import ./lockfreequeues/spsc/staticqueue
