@@ -1,4 +1,3 @@
-CACHELINE_BYTES	lockfreequeues/spsc/queueinterface.html#CACHELINE_BYTES	queueinterface: CACHELINE_BYTES	
 QueueInterface	lockfreequeues/spsc/queueinterface.html#QueueInterface	queueinterface: QueueInterface	
 push	lockfreequeues/spsc/queueinterface.html#push,QueueInterface,ptr.UncheckedArray[T],int,T	queueinterface: push[T](self: var QueueInterface; storage: var ptr UncheckedArray[T]; capacity: int;\n        item: T): bool	
 push	lockfreequeues/spsc/queueinterface.html#push,QueueInterface,array[N,T],T	queueinterface: push[N: static int; T](self: var QueueInterface; storage: var array[N, T]; item: T): bool	

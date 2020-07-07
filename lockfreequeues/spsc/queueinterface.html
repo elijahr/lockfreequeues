@@ -113,14 +113,6 @@ function main() {
   </ul>
 </li>
 <li>
-  <a class="reference reference-toplevel" href="#10" id="60">Consts</a>
-  <ul class="simple simple-toc-section">
-      <li><a class="reference" href="#CACHELINE_BYTES"
-    ><wbr />CACHELINE_<wbr />BYTES<span class="attachedType"></span></a></li>
-
-  </ul>
-</li>
-<li>
   <a class="reference reference-toplevel" href="#12" id="62">Procs</a>
   <ul class="simple simple-toc-section">
       <li><a class="reference" href="#push%2CQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2CT"
@@ -151,11 +143,13 @@ function main() {
   <div class="nine columns" id="content">
   <div id="tocRoot"></div>
   
-  <p class="module-desc">An interface for managing single-producer, single-consumer queue head/tail positions. Used internally by <a class="reference external" href="sharedqueue.html#SharedQueue">SharedQueue</a> and <a class="reference external" href="staticQueue.html#StaticQueue">StaticQueue</a>.</p>
+  <p class="module-desc"><p>An interface for managing single-producer, single-consumer queue head/tail positions.</p>
+<p>Used internally by <a class="reference external" href="sharedqueue.html#SharedQueue">SharedQueue</a> and <a class="reference external" href="staticqueue.html#StaticQueue">StaticQueue</a>.</p>
+</p>
   <div class="section" id="6">
 <h1><a class="toc-backref" href="#6">Imports</a></h1>
 <dl class="item">
-<a class="reference external" href="ops.html">ops</a>
+<a class="reference external" href="../constants.html">../constants</a>, <a class="reference external" href="ops.html">ops</a>
 </dl></div>
 <div class="section" id="7">
 <h1><a class="toc-backref" href="#7">Types</a></h1>
@@ -169,25 +163,9 @@ function main() {
 
 An interface for managing single-producer, single-consumer queue head/tail positions.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L28"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L23"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L28" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
-
-</dl></div>
-<div class="section" id="10">
-<h1><a class="toc-backref" href="#10">Consts</a></h1>
-<dl class="item">
-<a id="CACHELINE_BYTES"></a>
-<dt><pre><a href="queueinterface.html#CACHELINE_BYTES"><span class="Identifier">CACHELINE_BYTES</span></a> <span class="Other">=</span> <span class="DecNumber">64</span></pre></dt>
-<dd>
-
-The size of a cache line (64 bytes on x86).
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L21"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L21" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L23" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -202,9 +180,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Append a single item to the queue. If the queue is full, <tt class="docutils literal"><span class="pre">false</span></tt> is returned. If <tt class="docutils literal"><span class="pre">item</span></tt> is appended, <tt class="docutils literal"><span class="pre">true</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L64"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L59"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L64" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L59" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="push,QueueInterface,array[N,T],T"></a>
@@ -213,9 +191,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Append a single item to the queue. If the queue is full, <tt class="docutils literal"><span class="pre">false</span></tt> is returned. If <tt class="docutils literal"><span class="pre">item</span></tt> is appended, <tt class="docutils literal"><span class="pre">true</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L77"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L72"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L77" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L72" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="push,QueueInterface,ptr.UncheckedArray[T],int,openArray[T]"></a>
@@ -225,9 +203,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Append multiple items to the queue. If the queue is already full or is filled by this call, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> is returned, where <tt class="docutils literal"><span class="pre">unpushed</span></tt> is a <tt class="docutils literal"><span class="pre">seq[T]</span></tt> containing the items which cannot be appended. If all items are appended, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L145"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L140"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L145" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L140" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="push,QueueInterface,array[N,T],openArray[T]"></a>
@@ -237,9 +215,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Append multiple items to the queue. If the queue is already full or is filled by this call, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> is returned, where <tt class="docutils literal"><span class="pre">unpushed</span></tt> is a <tt class="docutils literal"><span class="pre">seq[T]</span></tt> containing the items which cannot be appended. If all items are appended, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L160"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L155"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L160" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L155" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="pop,QueueInterface,ptr.UncheckedArray[T],int"></a>
@@ -249,9 +227,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Pop a single item from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre">none(T)</span></tt> is returned. If an item is popped, <tt class="docutils literal"><span class="pre">some(T)</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L196"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L191"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L196" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L191" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="pop,QueueInterface,array[N,T]"></a>
@@ -260,9 +238,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Pop a single item from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre">none(T)</span></tt> is returned. If an item is popped, <tt class="docutils literal"><span class="pre">some(T)</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L208"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L203"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L208" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L203" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="pop,QueueInterface,ptr.UncheckedArray[T],int,int"></a>
@@ -272,9 +250,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Pop <tt class="docutils literal"><span class="pre">count</span></tt> items from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> is returned. If &gt; 1 items are popped, <tt class="docutils literal"><span class="pre">some(seq[T])</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L271"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L266"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L271" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L266" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="pop,QueueInterface,array[N,T],int"></a>
@@ -284,9 +262,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Pop <tt class="docutils literal"><span class="pre">count</span></tt> items from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> is returned. If &gt; 1 items are popped, <tt class="docutils literal"><span class="pre">some(seq[T])</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L284"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L279"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L284" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L279" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="move,QueueInterface,int,int,int"></a>
@@ -296,9 +274,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Move the queue's head and tail. Should only be called during queue initialization or in unit tests.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L296"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L291"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L296" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L291" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -311,7 +289,7 @@ class="link-seesrc" target="_blank">Source</a>
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-07 02:37:36 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-07 07:55:10 UTC</small>
       </div>
     </div>
   </div>

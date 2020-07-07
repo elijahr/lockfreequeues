@@ -141,7 +141,7 @@ function main() {
   <div class="section" id="6">
 <h1><a class="toc-backref" href="#6">Imports</a></h1>
 <dl class="item">
-<a class="reference external" href="queueinterface.html">queueinterface</a>
+<a class="reference external" href="../constants.html">../constants</a>, <a class="reference external" href="queueinterface.html">queueinterface</a>
 </dl></div>
 <div class="section" id="7">
 <h1><a class="toc-backref" href="#7">Types</a></h1>
@@ -160,9 +160,9 @@ function main() {
 <p>A <tt class="docutils literal"><span class="pre">SharedQueue</span></tt> is aligned along a cache line, since arrays of queues are a common use-case.</p>
 
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L16"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L18"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L16" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L18" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -176,9 +176,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Initialize a new <tt class="docutils literal"><span class="pre">SharedQueue</span></tt> and validate its capacity.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L29"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L31"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L29" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L31" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="=destroy,SharedQueue[T]"></a>
@@ -187,9 +187,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L42"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L44"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L42" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L44" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="push,SharedQueue[T],T"></a>
@@ -198,9 +198,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Append a single item to the queue. If the queue is full, <tt class="docutils literal"><span class="pre">false</span></tt> is returned. If <tt class="docutils literal"><span class="pre">item</span></tt> is appended, <tt class="docutils literal"><span class="pre">true</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L51"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L53"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L51" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L53" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="push,SharedQueue[T],openArray[T]"></a>
@@ -209,9 +209,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Append multiple items to the queue. If the queue is already full or is filled by this call, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> is returned, where <tt class="docutils literal"><span class="pre">unpushed</span></tt> is a <tt class="docutils literal"><span class="pre">seq[T]</span></tt> containing the items which cannot be appended. If all items are appended, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L63"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L65"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L63" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L65" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="pop,SharedQueue[T]"></a>
@@ -220,9 +220,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Pop a single item from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre">none(T)</span></tt> is returned. If an item is popped, <tt class="docutils literal"><span class="pre">some(T)</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L77"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L79"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L77" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L79" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="pop,SharedQueue[T],int"></a>
@@ -231,9 +231,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Pop <tt class="docutils literal"><span class="pre">count</span></tt> items from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> is returned. If &gt; 1 items are popped, <tt class="docutils literal"><span class="pre">some(seq[T])</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L88"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L90"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L88" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L90" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -246,7 +246,7 @@ class="link-seesrc" target="_blank">Source</a>
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-07 02:37:36 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-07 07:55:10 UTC</small>
       </div>
     </div>
   </div>
