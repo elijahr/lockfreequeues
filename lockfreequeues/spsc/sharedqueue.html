@@ -121,20 +121,12 @@ function main() {
     ><wbr /><b>=destroy</b><span class="attachedType">SharedQueue</span></a></li>
   <li><a class="reference" href="#push%2CSharedQueue%5BT%5D%2CT"
     ><wbr />push<span class="attachedType">SharedQueue</span></a></li>
-  <li><a class="reference" href="#push%2CSharedQueue%5BT%5D%2Cseq%5BT%5D"
-    ><wbr />push<span class="attachedType">SharedQueue</span></a></li>
-  <li><a class="reference" href="#push%2CSharedQueue%5BT%5D%2Cptr.array%5BN%2CT%5D"
+  <li><a class="reference" href="#push%2CSharedQueue%5BT%5D%2CopenArray%5BT%5D"
     ><wbr />push<span class="attachedType">SharedQueue</span></a></li>
   <li><a class="reference" href="#pop%2CSharedQueue%5BT%5D"
     ><wbr />pop<span class="attachedType">SharedQueue</span></a></li>
   <li><a class="reference" href="#pop%2CSharedQueue%5BT%5D%2Cint"
     ><wbr />pop<span class="attachedType">SharedQueue</span></a></li>
-  <li><a class="reference" href="#state%2CSharedQueue%5BT%5D"
-    ><wbr />state<span class="attachedType">SharedQueue</span></a></li>
-  <li><a class="reference" href="#move%2CSharedQueue%5BT%5D%2Cuint%2Cuint"
-    ><wbr />move<span class="attachedType">SharedQueue</span></a></li>
-  <li><a class="reference" href="#reset%2CSharedQueue%5BT%5D"
-    ><wbr />reset<span class="attachedType">SharedQueue</span></a></li>
 
   </ul>
 </li>
@@ -145,30 +137,32 @@ function main() {
   <div class="nine columns" id="content">
   <div id="tocRoot"></div>
   
-  <p class="module-desc"><p>Single-producer, single-consumer, lock-free queue implementations for Nim.</p>
-<p>Based on the algorithm outlined by Juho Snellman at <a class="reference external" href="https://www.snellman.net/blog/archive/2016-12-13-ring-buffers">https://www.snellman.net/blog/archive/2016-12-13-ring-buffers</a>/</p>
-</p>
+  <p class="module-desc">A single-producer, single-consumer queue, implemented as a ring buffer, suitable for when the capacity is only known at run-time or when the queue should reside in shared memory.</p>
   <div class="section" id="6">
 <h1><a class="toc-backref" href="#6">Imports</a></h1>
 <dl class="item">
-<a class="reference external" href="queueinterface.html">queueinterface</a>
+<a class="reference external" href="../constants.html">../constants</a>, <a class="reference external" href="queueinterface.html">queueinterface</a>
 </dl></div>
 <div class="section" id="7">
 <h1><a class="toc-backref" href="#7">Types</a></h1>
 <dl class="item">
 <a id="SharedQueue"></a>
 <dt><pre><a href="sharedqueue.html#SharedQueue"><span class="Identifier">SharedQueue</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span> <span class="Other">=</span> <span class="Keyword">object</span>
-  <span class="Identifier">capacity</span><span class="Operator">*</span><span class="Other">:</span> <span class="Identifier">int</span>
-  <span class="Identifier">face</span><span class="Other">:</span> <span class="Keyword">ptr</span> <a href="queueinterface.html#SPSCQueueInterface"><span class="Identifier">SPSCQueueInterface</span></a>
-  <span class="Identifier">storage</span><span class="Other">:</span> <span class="Keyword">ptr</span> <span class="Identifier">UncheckedArray</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span>
-</pre></dt>
+  <span class="Identifier">capacity</span><span class="Operator">*</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">align</span><span class="Other">:</span> <span class="DecNumber">64</span></span><span class="Other">.}</span></span><span class="Other">:</span> <span class="Identifier">int</span><span class="Comment">## The queue's capacity.</span>
+<span class="Comment">## The size of a cache line (64 bytes on x86).</span>
+  <span class="Identifier">face</span><span class="Operator">*</span><span class="Other">:</span> <span class="Keyword">ptr</span> <a href="queueinterface.html#QueueInterface"><span class="Identifier">QueueInterface</span></a><span class="Comment">## The queue's \</span>
+<span class="Comment">## <a href="queueinterface.html#QueueInterface">QueueInterface</a>.</span>
+  <span class="Identifier">storage</span><span class="Operator">*</span><span class="Other">:</span> <span class="Keyword">ptr</span> <span class="Identifier">UncheckedArray</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Comment">## The queue's underlying storage.</span>
+  </pre></dt>
 <dd>
 
-A single-producer, single-consumer queue, suitable for when the max capacity is known at run-time or when the queue should reside in shared memory.
+<p>A single-producer, single-consumer queue, implemented as a ring buffer, suitable for when the capacity is only known at run-time or when the queue should reside in shared memory.</p>
+<p>A <tt class="docutils literal"><span class="pre">SharedQueue</span></tt> is aligned along a cache line, since arrays of queues are a common use-case.</p>
+
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L20"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L18"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L20" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L18" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -177,14 +171,14 @@ class="link-seesrc" target="_blank">Source</a>
 <h1><a class="toc-backref" href="#12">Procs</a></h1>
 <dl class="item">
 <a id="newSPSCQueue,int"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#newSPSCQueue%2Cint"><span class="Identifier">newSPSCQueue</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">capacity</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span><span class="Other">:</span> <a href="sharedqueue.html#SharedQueue"><span class="Identifier">SharedQueue</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">ValueError</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dt><pre><span class="Keyword">proc</span> <a href="#newSPSCQueue%2Cint"><span class="Identifier">newSPSCQueue</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">capacity</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span><span class="Other">:</span> <a href="sharedqueue.html#SharedQueue"><span class="Identifier">SharedQueue</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span></pre></dt>
 <dd>
 
-Initialize new SharedQueue with the specified capacity.
+Initialize a new <tt class="docutils literal"><span class="pre">SharedQueue</span></tt> and validate its capacity.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L29"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L31"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L29" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L31" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="=destroy,SharedQueue[T]"></a>
@@ -193,98 +187,53 @@ class="link-seesrc" target="_blank">Source</a>
 
 
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L45"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L44"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L45" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L44" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="push,SharedQueue[T],T"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#push%2CSharedQueue%5BT%5D%2CT"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="sharedqueue.html#SharedQueue"><span class="Identifier">SharedQueue</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">item</span><span class="Other">:</span> <span class="Identifier">T</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span></pre></dt>
+<dt><pre><span class="Keyword">proc</span> <a href="#push%2CSharedQueue%5BT%5D%2CT"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="sharedqueue.html#SharedQueue"><span class="Identifier">SharedQueue</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">item</span><span class="Other">:</span> <span class="Identifier">T</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Append a single item to the tail of the queue. If the item was appended, <tt class="docutils literal"><span class="pre">true</span></tt> is returned. If the queue is full, <tt class="docutils literal"><span class="pre">false</span></tt> is returned.
+Append a single item to the queue. If the queue is full, <tt class="docutils literal"><span class="pre">false</span></tt> is returned. If <tt class="docutils literal"><span class="pre">item</span></tt> is appended, <tt class="docutils literal"><span class="pre">true</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L54"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L53"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L54" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L53" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="push,SharedQueue[T],seq[T]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#push%2CSharedQueue%5BT%5D%2Cseq%5BT%5D"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="sharedqueue.html#SharedQueue"><span class="Identifier">SharedQueue</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">items</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="push,SharedQueue[T],openArray[T]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#push%2CSharedQueue%5BT%5D%2CopenArray%5BT%5D"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="sharedqueue.html#SharedQueue"><span class="Identifier">SharedQueue</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">items</span><span class="Other">:</span> <span class="Identifier">openArray</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Append items to the tail of the queue. If &gt; 1 items could not be appended, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
+Append multiple items to the queue. If the queue is already full or is filled by this call, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> is returned, where <tt class="docutils literal"><span class="pre">unpushed</span></tt> is a <tt class="docutils literal"><span class="pre">seq[T]</span></tt> containing the items which cannot be appended. If all items are appended, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> is returned.
 &nbsp;&nbsp;<a
 href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L65"
 class="link-seesrc" target="_blank">Source</a>
 <a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L65" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="push,SharedQueue[T],ptr.array[N,T]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#push%2CSharedQueue%5BT%5D%2Cptr.array%5BN%2CT%5D"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="sharedqueue.html#SharedQueue"><span class="Identifier">SharedQueue</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">items</span><span class="Other">:</span> <span class="Keyword">ptr</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span>
-    <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
-<dd>
-
-Append items to the tail of the queue. If &gt; 1 items could not be appended, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L77"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L77" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
 <a id="pop,SharedQueue[T]"></a>
 <dt><pre><span class="Keyword">proc</span> <a href="#pop%2CSharedQueue%5BT%5D"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="sharedqueue.html#SharedQueue"><span class="Identifier">SharedQueue</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Pop a single item from the head of the queue. If an item could be popped, some(T) will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(T)</span></tt> will be returned.
+Pop a single item from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre">none(T)</span></tt> is returned. If an item is popped, <tt class="docutils literal"><span class="pre">some(T)</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L89"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L79"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L89" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L79" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="pop,SharedQueue[T],int"></a>
 <dt><pre><span class="Keyword">proc</span> <a href="#pop%2CSharedQueue%5BT%5D%2Cint"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="sharedqueue.html#SharedQueue"><span class="Identifier">SharedQueue</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">count</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Pop <tt class="docutils literal"><span class="pre">count</span></tt> items from the head of the queue. If &gt; 1 items could be popped, some(seq[T]) will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
+Pop <tt class="docutils literal"><span class="pre">count</span></tt> items from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> is returned. If &gt; 1 items are popped, <tt class="docutils literal"><span class="pre">some(seq[T])</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L100"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L90"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L100" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
-<a id="state,SharedQueue[T]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#state%2CSharedQueue%5BT%5D"><span class="Identifier">state</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="sharedqueue.html#SharedQueue"><span class="Identifier">SharedQueue</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Keyword">tuple</span><span class="Other">[</span><span class="Identifier">head</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">,</span> <span class="Identifier">tail</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">,</span> <span class="Identifier">storage</span><span class="Other">:</span> <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span></pre></dt>
-<dd>
-
-Retrieve current state of the queue
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L112"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L112" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
-<a id="move,SharedQueue[T],uint,uint"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#move%2CSharedQueue%5BT%5D%2Cuint%2Cuint"><span class="Identifier">move</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="sharedqueue.html#SharedQueue"><span class="Identifier">SharedQueue</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">head</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">;</span> <span class="Identifier">tail</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
-<dd>
-
-Move head and tail. Probably only useful for unit tests.
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L131"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L131" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
-<a id="reset,SharedQueue[T]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#reset%2CSharedQueue%5BT%5D"><span class="Identifier">reset</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="sharedqueue.html#SharedQueue"><span class="Identifier">SharedQueue</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
-<dd>
-
-Resets the queue to its default state
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/sharedqueue.nim#L140"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L140" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/sharedqueue.nim#L90" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -297,7 +246,7 @@ class="link-seesrc" target="_blank">Source</a>
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-03 08:56:16 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-07 07:55:10 UTC</small>
       </div>
     </div>
   </div>

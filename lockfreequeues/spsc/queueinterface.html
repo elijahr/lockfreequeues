@@ -99,50 +99,40 @@ function main() {
   </div>
   <ul class="simple simple-toc" id="toc-list">
 <li>
+  <a class="reference reference-toplevel" href="#6" id="56">Imports</a>
+  <ul class="simple simple-toc-section">
+    
+  </ul>
+</li>
+<li>
   <a class="reference reference-toplevel" href="#7" id="57">Types</a>
   <ul class="simple simple-toc-section">
-      <li><a class="reference" href="#SPSCQueueInterface"
-    ><wbr />SPSCQueue<wbr />Interface<span class="attachedType"></span></a></li>
+      <li><a class="reference" href="#QueueInterface"
+    ><wbr />Queue<wbr />Interface<span class="attachedType"></span></a></li>
 
   </ul>
 </li>
 <li>
   <a class="reference reference-toplevel" href="#12" id="62">Procs</a>
   <ul class="simple simple-toc-section">
-      <li><a class="reference" href="#index%2Cuint%2Cuint"
-    ><wbr />index<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#size%2Cuint%2Cuint"
-    ><wbr />size<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#size%2CSPSCQueueInterface"
-    ><wbr />size<span class="attachedType">SPSCQueueInterface</span></a></li>
-  <li><a class="reference" href="#available%2Cuint%2Cuint%2Cuint"
-    ><wbr />available<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#available%2CSPSCQueueInterface%2Cuint"
-    ><wbr />available<span class="attachedType">SPSCQueueInterface</span></a></li>
-  <li><a class="reference" href="#full%2Cuint%2Cuint%2Cuint"
-    ><wbr />full<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#empty%2Cuint%2Cuint"
-    ><wbr />empty<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#push%2CSPSCQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2CT"
-    ><wbr />push<span class="attachedType">SPSCQueueInterface</span></a></li>
-  <li><a class="reference" href="#push%2CSPSCQueueInterface%2Carray%5BN%2CT%5D%2CT"
-    ><wbr />push<span class="attachedType">SPSCQueueInterface</span></a></li>
-  <li><a class="reference" href="#push%2CSPSCQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2CopenArray%5BT%5D"
-    ><wbr />push<span class="attachedType">SPSCQueueInterface</span></a></li>
-  <li><a class="reference" href="#push%2CSPSCQueueInterface%2Carray%5BN%2CT%5D%2CopenArray%5BT%5D"
-    ><wbr />push<span class="attachedType">SPSCQueueInterface</span></a></li>
-  <li><a class="reference" href="#pop%2CSPSCQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint"
-    ><wbr />pop<span class="attachedType">SPSCQueueInterface</span></a></li>
-  <li><a class="reference" href="#pop%2CSPSCQueueInterface%2Carray%5BN%2CT%5D"
-    ><wbr />pop<span class="attachedType">SPSCQueueInterface</span></a></li>
-  <li><a class="reference" href="#pop%2CSPSCQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2Cint"
-    ><wbr />pop<span class="attachedType">SPSCQueueInterface</span></a></li>
-  <li><a class="reference" href="#pop%2CSPSCQueueInterface%2Carray%5BN%2CT%5D%2Cint"
-    ><wbr />pop<span class="attachedType">SPSCQueueInterface</span></a></li>
-  <li><a class="reference" href="#state%2CSPSCQueueInterface"
-    ><wbr />state<span class="attachedType">SPSCQueueInterface</span></a></li>
-  <li><a class="reference" href="#move%2CSPSCQueueInterface%2Cuint%2Cuint"
-    ><wbr />move<span class="attachedType">SPSCQueueInterface</span></a></li>
+      <li><a class="reference" href="#push%2CQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2CT"
+    ><wbr />push<span class="attachedType">QueueInterface</span></a></li>
+  <li><a class="reference" href="#push%2CQueueInterface%2Carray%5BN%2CT%5D%2CT"
+    ><wbr />push<span class="attachedType">QueueInterface</span></a></li>
+  <li><a class="reference" href="#push%2CQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2CopenArray%5BT%5D"
+    ><wbr />push<span class="attachedType">QueueInterface</span></a></li>
+  <li><a class="reference" href="#push%2CQueueInterface%2Carray%5BN%2CT%5D%2CopenArray%5BT%5D"
+    ><wbr />push<span class="attachedType">QueueInterface</span></a></li>
+  <li><a class="reference" href="#pop%2CQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint"
+    ><wbr />pop<span class="attachedType">QueueInterface</span></a></li>
+  <li><a class="reference" href="#pop%2CQueueInterface%2Carray%5BN%2CT%5D"
+    ><wbr />pop<span class="attachedType">QueueInterface</span></a></li>
+  <li><a class="reference" href="#pop%2CQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2Cint"
+    ><wbr />pop<span class="attachedType">QueueInterface</span></a></li>
+  <li><a class="reference" href="#pop%2CQueueInterface%2Carray%5BN%2CT%5D%2Cint"
+    ><wbr />pop<span class="attachedType">QueueInterface</span></a></li>
+  <li><a class="reference" href="#move%2CQueueInterface%2Cint%2Cint%2Cint"
+    ><wbr />move<span class="attachedType">QueueInterface</span></a></li>
 
   </ul>
 </li>
@@ -153,25 +143,29 @@ function main() {
   <div class="nine columns" id="content">
   <div id="tocRoot"></div>
   
-  <p class="module-desc"><p>Single-producer, single-consumer, lock-free queue implementations for Nim.</p>
-<p>Based on the algorithm outlined by Juho Snellman at <a class="reference external" href="https://www.snellman.net/blog/archive/2016-12-13-ring-buffers">https://www.snellman.net/blog/archive/2016-12-13-ring-buffers</a>/</p>
+  <p class="module-desc"><p>An interface for managing single-producer, single-consumer queue head/tail positions.</p>
+<p>Used internally by <a class="reference external" href="sharedqueue.html#SharedQueue">SharedQueue</a> and <a class="reference external" href="staticqueue.html#StaticQueue">StaticQueue</a>.</p>
 </p>
-  <div class="section" id="7">
+  <div class="section" id="6">
+<h1><a class="toc-backref" href="#6">Imports</a></h1>
+<dl class="item">
+<a class="reference external" href="../constants.html">../constants</a>, <a class="reference external" href="ops.html">ops</a>
+</dl></div>
+<div class="section" id="7">
 <h1><a class="toc-backref" href="#7">Types</a></h1>
 <dl class="item">
-<a id="SPSCQueueInterface"></a>
-<dt><pre><a href="queueinterface.html#SPSCQueueInterface"><span class="Identifier">SPSCQueueInterface</span></a> <span class="Other">=</span> <span class="Keyword">object</span>
-  <span class="Identifier">head</span><span class="Operator">*</span><span class="Other">:</span> <span class="Identifier">Atomic</span><span class="Other">[</span><span class="Identifier">uint</span><span class="Other">]</span>
-  <span class="Identifier">padding</span><span class="Other">:</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">CACHELINE_BYTES</span><span class="Other">,</span> <span class="Identifier">char</span><span class="Other">]</span>
-  <span class="Identifier">tail</span><span class="Operator">*</span><span class="Other">:</span> <span class="Identifier">Atomic</span><span class="Other">[</span><span class="Identifier">uint</span><span class="Other">]</span>
-</pre></dt>
+<a id="QueueInterface"></a>
+<dt><pre><a href="queueinterface.html#QueueInterface"><span class="Identifier">QueueInterface</span></a> <span class="Other">=</span> <span class="Keyword">object</span>
+  <span class="Identifier">head</span><span class="Operator">*</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">align</span><span class="Other">:</span> <span class="DecNumber">64</span></span><span class="Other">.}</span></span><span class="Other">:</span> <span class="Identifier">Atomic</span><span class="Other">[</span><span class="Identifier">int</span><span class="Other">]</span><span class="Comment">## The size of a cache line (64 bytes on x86).</span>
+  <span class="Identifier">tail</span><span class="Operator">*</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">align</span><span class="Other">:</span> <span class="DecNumber">64</span></span><span class="Other">.}</span></span><span class="Other">:</span> <span class="Identifier">Atomic</span><span class="Other">[</span><span class="Identifier">int</span><span class="Other">]</span><span class="Comment">## The size of a cache line (64 bytes on x86).</span>
+  </pre></dt>
 <dd>
 
-
+An interface for managing single-producer, single-consumer queue head/tail positions.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L26"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L23"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L26" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L23" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -179,200 +173,110 @@ class="link-seesrc" target="_blank">Source</a>
 <div class="section" id="12">
 <h1><a class="toc-backref" href="#12">Procs</a></h1>
 <dl class="item">
-<a id="index,uint,uint"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#index%2Cuint%2Cuint"><span class="Identifier">index</span></a><span class="Other">(</span><span class="Identifier">value</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">;</span> <span class="Identifier">capacity</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">uint</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span><span class="Other">,</span> <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="push,QueueInterface,ptr.UncheckedArray[T],int,T"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#push%2CQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2CT"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#QueueInterface"><span class="Identifier">QueueInterface</span></a><span class="Other">;</span> <span class="Identifier">storage</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Keyword">ptr</span> <span class="Identifier">UncheckedArray</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span>
+            <span class="Identifier">capacity</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">item</span><span class="Other">:</span> <span class="Identifier">T</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span></pre></dt>
 <dd>
 
-Convert a head or tail value to its index in storage.
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L33"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L33" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
-<a id="size,uint,uint"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#size%2Cuint%2Cuint"><span class="Identifier">size</span></a><span class="Other">(</span><span class="Identifier">head</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">;</span> <span class="Identifier">tail</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">uint</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span><span class="Other">,</span> <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
-<dd>
-
-
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L42"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L42" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
-<a id="size,SPSCQueueInterface"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#size%2CSPSCQueueInterface"><span class="Identifier">size</span></a><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#SPSCQueueInterface"><span class="Identifier">SPSCQueueInterface</span></a><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">uint</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span><span class="Other">,</span> <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
-<dd>
-
-
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L50"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L50" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
-<a id="available,uint,uint,uint"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#available%2Cuint%2Cuint%2Cuint"><span class="Identifier">available</span></a><span class="Other">(</span><span class="Identifier">head</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">;</span> <span class="Identifier">tail</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">;</span> <span class="Identifier">capacity</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">uint</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span><span class="Other">,</span> <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
-<dd>
-
-Determine how many slots are available given <tt class="docutils literal"><span class="pre">head</span></tt>, <tt class="docutils literal"><span class="pre">tail</span></tt>, and <tt class="docutils literal"><span class="pre">capacity</span></tt> values.
+Append a single item to the queue. If the queue is full, <tt class="docutils literal"><span class="pre">false</span></tt> is returned. If <tt class="docutils literal"><span class="pre">item</span></tt> is appended, <tt class="docutils literal"><span class="pre">true</span></tt> is returned.
 &nbsp;&nbsp;<a
 href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L59"
 class="link-seesrc" target="_blank">Source</a>
 <a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L59" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="available,SPSCQueueInterface,uint"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#available%2CSPSCQueueInterface%2Cuint"><span class="Identifier">available</span></a><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#SPSCQueueInterface"><span class="Identifier">SPSCQueueInterface</span></a><span class="Other">;</span> <span class="Identifier">capacity</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">uint</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span><span class="Other">,</span> <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span>
-    <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="push,QueueInterface,array[N,T],T"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#push%2CQueueInterface%2Carray%5BN%2CT%5D%2CT"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#QueueInterface"><span class="Identifier">QueueInterface</span></a><span class="Other">;</span> <span class="Identifier">storage</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">item</span><span class="Other">:</span> <span class="Identifier">T</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span></pre></dt>
 <dd>
 
-Determine how many slots are available in the given <tt class="docutils literal"><span class="pre">SPSCQueueInterface</span></tt> for max <tt class="docutils literal"><span class="pre">capacity</span></tt> items.
+Append a single item to the queue. If the queue is full, <tt class="docutils literal"><span class="pre">false</span></tt> is returned. If <tt class="docutils literal"><span class="pre">item</span></tt> is appended, <tt class="docutils literal"><span class="pre">true</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L70"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L72"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L70" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L72" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="full,uint,uint,uint"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#full%2Cuint%2Cuint%2Cuint"><span class="Identifier">full</span></a><span class="Other">(</span><span class="Identifier">head</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">;</span> <span class="Identifier">tail</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">;</span> <span class="Identifier">capacity</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span><span class="Other">,</span> <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
-<dd>
-
-Determine if storage is full given <tt class="docutils literal"><span class="pre">head</span></tt>, <tt class="docutils literal"><span class="pre">tail</span></tt>, and <tt class="docutils literal"><span class="pre">capacity</span></tt> values.
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L80"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L80" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
-<a id="empty,uint,uint"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#empty%2Cuint%2Cuint"><span class="Identifier">empty</span></a><span class="Other">(</span><span class="Identifier">head</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">;</span> <span class="Identifier">tail</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span><span class="Other">,</span> <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
-<dd>
-
-Determine if storage is empty given <tt class="docutils literal"><span class="pre">head</span></tt> and <tt class="docutils literal"><span class="pre">tail</span></tt> values.
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L90"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L90" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
-<a id="push,SPSCQueueInterface,ptr.UncheckedArray[T],int,T"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#push%2CSPSCQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2CT"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#SPSCQueueInterface"><span class="Identifier">SPSCQueueInterface</span></a><span class="Other">;</span> <span class="Identifier">storage</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Keyword">ptr</span> <span class="Identifier">UncheckedArray</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span>
-            <span class="Identifier">capacity</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">item</span><span class="Other">:</span> <span class="Identifier">T</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span></pre></dt>
-<dd>
-
-Append a single item to the tail of the queue. If the item was appended, <tt class="docutils literal"><span class="pre">true</span></tt> is returned. If the queue is full, <tt class="docutils literal"><span class="pre">false</span></tt> is returned.
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L129"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L129" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
-<a id="push,SPSCQueueInterface,array[N,T],T"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#push%2CSPSCQueueInterface%2Carray%5BN%2CT%5D%2CT"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#SPSCQueueInterface"><span class="Identifier">SPSCQueueInterface</span></a><span class="Other">;</span> <span class="Identifier">storage</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">item</span><span class="Other">:</span> <span class="Identifier">T</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span></pre></dt>
-<dd>
-
-Append a single item to the tail of the queue. If the item was appended, <tt class="docutils literal"><span class="pre">true</span></tt> is returned. If the queue is full, <tt class="docutils literal"><span class="pre">false</span></tt> is returned.
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L142"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L142" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
-<a id="push,SPSCQueueInterface,ptr.UncheckedArray[T],int,openArray[T]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#push%2CSPSCQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2CopenArray%5BT%5D"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#SPSCQueueInterface"><span class="Identifier">SPSCQueueInterface</span></a><span class="Other">;</span> <span class="Identifier">storage</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Keyword">ptr</span> <span class="Identifier">UncheckedArray</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span>
+<a id="push,QueueInterface,ptr.UncheckedArray[T],int,openArray[T]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#push%2CQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2CopenArray%5BT%5D"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#QueueInterface"><span class="Identifier">QueueInterface</span></a><span class="Other">;</span> <span class="Identifier">storage</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Keyword">ptr</span> <span class="Identifier">UncheckedArray</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span>
             <span class="Identifier">capacity</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">items</span><span class="Other">:</span> <span class="Identifier">openArray</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span></pre></dt>
 <dd>
 
-Append items to the tail of the queue. If &gt; 1 items could not be appended, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
+Append multiple items to the queue. If the queue is already full or is filled by this call, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> is returned, where <tt class="docutils literal"><span class="pre">unpushed</span></tt> is a <tt class="docutils literal"><span class="pre">seq[T]</span></tt> containing the items which cannot be appended. If all items are appended, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L213"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L140"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L213" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L140" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="push,SPSCQueueInterface,array[N,T],openArray[T]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#push%2CSPSCQueueInterface%2Carray%5BN%2CT%5D%2CopenArray%5BT%5D"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#SPSCQueueInterface"><span class="Identifier">SPSCQueueInterface</span></a><span class="Other">;</span> <span class="Identifier">storage</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span>
+<a id="push,QueueInterface,array[N,T],openArray[T]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#push%2CQueueInterface%2Carray%5BN%2CT%5D%2CopenArray%5BT%5D"><span class="Identifier">push</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#QueueInterface"><span class="Identifier">QueueInterface</span></a><span class="Other">;</span> <span class="Identifier">storage</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span>
                         <span class="Identifier">items</span><span class="Other">:</span> <span class="Identifier">openArray</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span></pre></dt>
 <dd>
 
-Append items to the tail of the queue. If &gt; 1 items could not be appended, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
+Append multiple items to the queue. If the queue is already full or is filled by this call, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> is returned, where <tt class="docutils literal"><span class="pre">unpushed</span></tt> is a <tt class="docutils literal"><span class="pre">seq[T]</span></tt> containing the items which cannot be appended. If all items are appended, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L226"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L155"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L226" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L155" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="pop,SPSCQueueInterface,ptr.UncheckedArray[T],int"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#pop%2CSPSCQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#SPSCQueueInterface"><span class="Identifier">SPSCQueueInterface</span></a><span class="Other">;</span> <span class="Identifier">storage</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Keyword">ptr</span> <span class="Identifier">UncheckedArray</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span>
-           <span class="Identifier">capacity</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span></pre></dt>
-<dd>
-
-Pop a single item from the head of the queue. If an item could be popped, some(T) will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(T)</span></tt> will be returned.
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L264"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L264" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
-<a id="pop,SPSCQueueInterface,array[N,T]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#pop%2CSPSCQueueInterface%2Carray%5BN%2CT%5D"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#SPSCQueueInterface"><span class="Identifier">SPSCQueueInterface</span></a><span class="Other">;</span> <span class="Identifier">storage</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span>
+<a id="pop,QueueInterface,ptr.UncheckedArray[T],int"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#pop%2CQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#QueueInterface"><span class="Identifier">QueueInterface</span></a><span class="Other">;</span> <span class="Identifier">storage</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Keyword">ptr</span> <span class="Identifier">UncheckedArray</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">capacity</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span>
     <span class="Identifier">T</span><span class="Other">]</span></pre></dt>
 <dd>
 
-Pop a single item from the head of the queue. If an item could be popped, some(T) will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(T)</span></tt> will be returned.
+Pop a single item from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre">none(T)</span></tt> is returned. If an item is popped, <tt class="docutils literal"><span class="pre">some(T)</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L276"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L191"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L276" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L191" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="pop,SPSCQueueInterface,ptr.UncheckedArray[T],int,int"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#pop%2CSPSCQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2Cint"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#SPSCQueueInterface"><span class="Identifier">SPSCQueueInterface</span></a><span class="Other">;</span> <span class="Identifier">storage</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Keyword">ptr</span> <span class="Identifier">UncheckedArray</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span>
-           <span class="Identifier">capacity</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">count</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span></pre></dt>
+<a id="pop,QueueInterface,array[N,T]"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#pop%2CQueueInterface%2Carray%5BN%2CT%5D"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#QueueInterface"><span class="Identifier">QueueInterface</span></a><span class="Other">;</span> <span class="Identifier">storage</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span></pre></dt>
 <dd>
 
-Pop <tt class="docutils literal"><span class="pre">count</span></tt> items from the head of the queue. If &gt; 1 items could be popped, some(seq[T]) will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
+Pop a single item from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre">none(T)</span></tt> is returned. If an item is popped, <tt class="docutils literal"><span class="pre">some(T)</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L342"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L203"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L342" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L203" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="pop,SPSCQueueInterface,array[N,T],int"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#pop%2CSPSCQueueInterface%2Carray%5BN%2CT%5D%2Cint"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#SPSCQueueInterface"><span class="Identifier">SPSCQueueInterface</span></a><span class="Other">;</span> <span class="Identifier">storage</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span>
-                       <span class="Identifier">count</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span></pre></dt>
+<a id="pop,QueueInterface,ptr.UncheckedArray[T],int,int"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#pop%2CQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2Cint"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#QueueInterface"><span class="Identifier">QueueInterface</span></a><span class="Other">;</span> <span class="Identifier">storage</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Keyword">ptr</span> <span class="Identifier">UncheckedArray</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">capacity</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">;</span>
+           <span class="Identifier">count</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span></pre></dt>
 <dd>
 
-Pop <tt class="docutils literal"><span class="pre">count</span></tt> items from the head of the queue. If &gt; 1 items could be popped, some(seq[T]) will be returned. Otherwise, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> will be returned.
+Pop <tt class="docutils literal"><span class="pre">count</span></tt> items from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> is returned. If &gt; 1 items are popped, <tt class="docutils literal"><span class="pre">some(seq[T])</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L355"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L266"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L355" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L266" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="state,SPSCQueueInterface"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#state%2CSPSCQueueInterface"><span class="Identifier">state</span></a><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#SPSCQueueInterface"><span class="Identifier">SPSCQueueInterface</span></a><span class="Other">)</span><span class="Other">:</span> <span class="Keyword">tuple</span><span class="Other">[</span><span class="Identifier">head</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">,</span> <span class="Identifier">tail</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span>
-    <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="pop,QueueInterface,array[N,T],int"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#pop%2CQueueInterface%2Carray%5BN%2CT%5D%2Cint"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#QueueInterface"><span class="Identifier">QueueInterface</span></a><span class="Other">;</span> <span class="Identifier">storage</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">count</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span>
+    <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span></pre></dt>
 <dd>
 
-Retrieve current state of the queue. Probably only useful for unit tests.
+Pop <tt class="docutils literal"><span class="pre">count</span></tt> items from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> is returned. If &gt; 1 items are popped, <tt class="docutils literal"><span class="pre">some(seq[T])</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L367"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L279"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L367" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L279" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="move,SPSCQueueInterface,uint,uint"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#move%2CSPSCQueueInterface%2Cuint%2Cuint"><span class="Identifier">move</span></a><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#SPSCQueueInterface"><span class="Identifier">SPSCQueueInterface</span></a><span class="Other">;</span> <span class="Identifier">head</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">;</span> <span class="Identifier">tail</span><span class="Other">:</span> <span class="Identifier">uint</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="move,QueueInterface,int,int,int"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#move%2CQueueInterface%2Cint%2Cint%2Cint"><span class="Identifier">move</span></a><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="queueinterface.html#QueueInterface"><span class="Identifier">QueueInterface</span></a><span class="Other">;</span> <span class="Identifier">head</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">tail</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">capacity</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma">
+    <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">ValueError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
-Move head and tail. Probably only useful for unit tests.
+Move the queue's head and tail. Should only be called during queue initialization or in unit tests.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L381"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/spsc/queueinterface.nim#L291"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L381" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/spsc/queueinterface.nim#L291" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -385,7 +289,7 @@ class="link-seesrc" target="_blank">Source</a>
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-03 08:56:16 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-07 07:55:10 UTC</small>
       </div>
     </div>
   </div>
