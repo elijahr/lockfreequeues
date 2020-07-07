@@ -6,22 +6,17 @@
 
 ## An interface for managing single-producer, single-consumer queue head/tail
 ## positions.
+##
 ## Used internally by `SharedQueue <sharedqueue.html#SharedQueue>`_ and
-## `StaticQueue <staticQueue.html#StaticQueue>`_.
+## `StaticQueue <staticqueue.html#StaticQueue>`_.
 
 
 import atomics
 import options
 import strformat
 
-
+import ../constants
 import ./ops
-
-
-const CACHELINE_BYTES* = when defined(powerpc):
-  128 ## The size of a cache line (128 bytes on PowerPC)
-else:
-  64 ## The size of a cache line (64 bytes on x86).
 
 
 type
@@ -310,12 +305,12 @@ proc move*(
   if head < 0 or head >= 2 * capacity:
     raise newException(
       ValueError,
-      fmt"head ({head}) must be in the range [0, 2 * capacity)"
+      fmt"head ({head}) must be in the range 0..<2*capacity"
     )
   if tail < 0 or tail >= 2 * capacity:
     raise newException(
       ValueError,
-      fmt"tail ({tail}) must be in the range [0, 2 * capacity)"
+      fmt"tail ({tail}) must be in the range 0..<2*capacity"
     )
   self.head.store(head, moRelease)
   self.tail.store(tail, moRelease)

@@ -4,14 +4,14 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-## Operation used internally by
+## Operations used internally by
 ## `QueueInterface <queueinterface.html#QueueInterface>`_.
 
 template assertHeadOrTail(
   value: int,
   capacity: int,
 ) =
-  ## Assert that the given `value` is in the range `[0, 2 * capacity)`.
+  ## Assert that the given `value` is in the range `0..<2*capacity`.
   assert(value >= 0)
   assert(value < 2 * capacity)
 
@@ -21,8 +21,8 @@ proc index*(
   capacity: int,
 ): int
   {.inline.} =
-  ## Given a head or tail `value` in the range `[0, 2 * capacity)`, determine
-  ## its actual index in storage.
+  ## Given a head or tail `value` in the range `0..<2*capacity`, determine its
+  ## actual index in storage.
   assertHeadOrTail(value, capacity)
   result =
     if value >= capacity:
@@ -40,8 +40,7 @@ proc incOrReset*(
   ## Given an `original` head or tail value and an `amount` to increment, either
   ## increment `original` by `amount`, or reset from zero if
   ## `original + amount >= 2 * capacity`.
-  assert(original >= 0)
-  assert(original < 2 * capacity)
+  assertHeadOrTail(original, capacity)
   assert(amount >= 0)
   assert(amount <= capacity)
   result = original + amount

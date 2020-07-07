@@ -9,7 +9,9 @@
 
 import options
 
+import ../constants
 import ./queueinterface
+
 
 type
   StaticQueue*[N: static int, T] = object

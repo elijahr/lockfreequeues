@@ -10,7 +10,9 @@
 
 import options
 
+import ../constants
 import ./queueinterface
+
 
 type
   SharedQueue*[T] = object
