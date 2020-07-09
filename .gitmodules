@@ -1,4 +1,4 @@
 [submodule "htmldocs"]
 	path = htmldocs
-	url = git@github.com:elijahr/lockfreequeues.git
+	url = ./
 	branch = gh-pages
