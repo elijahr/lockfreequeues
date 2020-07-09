@@ -1,6 +1,0 @@
-index	lockfreequeues/spsc/ops.html#index,int,int	ops: index(value: int; capacity: int): int	
-incOrReset	lockfreequeues/spsc/ops.html#incOrReset,int,int,int	ops: incOrReset(original: int; amount: int; capacity: int): int	
-used	lockfreequeues/spsc/ops.html#used,int,int,int	ops: used(head: int; tail: int; capacity: int): int	
-available	lockfreequeues/spsc/ops.html#available,int,int,int	ops: available(head: int; tail: int; capacity: int): int	
-full	lockfreequeues/spsc/ops.html#full,int,int,int	ops: full(head: int; tail: int; capacity: int): bool	
-empty	lockfreequeues/spsc/ops.html#empty,int,int	ops: empty(head: int; tail: int): bool	

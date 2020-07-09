@@ -1,7 +1,0 @@
-StaticQueue	lockfreequeues/spsc/staticqueue.html#StaticQueue	staticqueue: StaticQueue	
-newSPSCQueue	lockfreequeues/spsc/staticqueue.html#newSPSCQueue	staticqueue: newSPSCQueue[N: static int; T](): StaticQueue[N, T]	
-push	lockfreequeues/spsc/staticqueue.html#push,StaticQueue[N,T],T	staticqueue: push[N: static int; T](self: var StaticQueue[N, T]; item: T): bool	
-push	lockfreequeues/spsc/staticqueue.html#push,StaticQueue[N,T],openArray[T]	staticqueue: push[N: static int; T](self: var StaticQueue[N, T]; items: openArray[T]): Option[seq[T]]	
-pop	lockfreequeues/spsc/staticqueue.html#pop,StaticQueue[N,T]	staticqueue: pop[N: static int; T](self: var StaticQueue[N, T]): Option[T]	
-pop	lockfreequeues/spsc/staticqueue.html#pop,StaticQueue[N,T],int	staticqueue: pop[N: static int; T](self: var StaticQueue[N, T]; count: int): Option[seq[T]]	
-capacity	lockfreequeues/spsc/staticqueue.html#capacity,StaticQueue[N,T]	staticqueue: capacity[N: static int; T](self: var StaticQueue[N, T]): int	

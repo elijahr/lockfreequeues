@@ -1,7 +1,0 @@
-SharedQueue	lockfreequeues/spsc/sharedqueue.html#SharedQueue	sharedqueue: SharedQueue	
-newSPSCQueue	lockfreequeues/spsc/sharedqueue.html#newSPSCQueue,int	sharedqueue: newSPSCQueue[T](capacity: int): SharedQueue[T]	
-`=destroy`	lockfreequeues/spsc/sharedqueue.html#=destroy,SharedQueue[T]	sharedqueue: `=destroy`[T](self: var SharedQueue[T])	
-push	lockfreequeues/spsc/sharedqueue.html#push,SharedQueue[T],T	sharedqueue: push[T](self: var SharedQueue[T]; item: T): bool	
-push	lockfreequeues/spsc/sharedqueue.html#push,SharedQueue[T],openArray[T]	sharedqueue: push[T](self: var SharedQueue[T]; items: openArray[T]): Option[seq[T]]	
-pop	lockfreequeues/spsc/sharedqueue.html#pop,SharedQueue[T]	sharedqueue: pop[T](self: var SharedQueue[T]): Option[T]	
-pop	lockfreequeues/spsc/sharedqueue.html#pop,SharedQueue[T],int	sharedqueue: pop[T](self: var SharedQueue[T]; count: int): Option[seq[T]]	
