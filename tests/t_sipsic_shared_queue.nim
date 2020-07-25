@@ -6,39 +6,31 @@
 
 import atomics
 import options
-import os
+import sequtils
 import unittest
 
-import lockfreequeues/spsc/queueinterface
-import lockfreequeues/spsc/sharedqueue
-import ./queuetests
+import lockfreequeues
+import ./t_integration
+import ./t_sic
+import ./t_sip
 
 
-var queue = newSPSCQueue[int](8)
+var queue = newSipsicQueue[int](8)
 
 
 proc reset[T](
-  self: var SharedQueue[T]
+  self: ref SipsicSharedQueue[T]
 ) {.inline.} =
   ## Resets the queue to its default state.
   ## Should only be used in single-threaded unit tests.
-  self.face[].move(0, 0, self.capacity)
+  self.head.release(0)
+  self.tail.release(0)
   for i in 0..<self.capacity:
     self.storage[i].reset()
 
 
-proc move[T](
-  self: var SharedQueue[T],
-  head: int,
-  tail: int,
-) {.inline.} =
-  ## Move the queue's `head` and `tail`.
-  ## Should only be used in single-threaded unit tests.
-  self.face[].move(head, tail, self.capacity)
-
-
 proc state[T](
-  self: var SharedQueue[T],
+  self: ref SipsicSharedQueue[T],
 ): tuple[
     head: int,
     tail: int,
@@ -51,107 +43,105 @@ proc state[T](
   for i in 0..<self.capacity:
     storage[i] = self.storage[i]
   return (
-    head: self.face[].head.load(moRelaxed),
-    tail: self.face[].tail.load(moRelaxed),
+    head: self.head.acquire,
+    tail: self.tail.acquire,
     storage: storage,
   )
 
 
-suite "newSPSCQueue[T](n)":
+suite "newSipsicQueue[T](n)":
 
-  test "n <= 0 raises ValueError":
+  test "n == 0 raises ValueError":
     expect(ValueError):
-      discard newSPSCQueue[int](-1)
-    expect(ValueError):
-      discard newSPSCQueue[int](0)
+      discard newSipsicQueue[int](0)
 
   test "basic":
     require(queue.state == (
       head: 0,
       tail: 0,
-      storage: @[0, 0, 0, 0, 0, 0, 0, 0]
+      storage: repeat(0, 8)
     ))
 
 
-suite "push(SharedQueue[T], T)":
+suite "push(SipsicSharedQueue[T], T)":
 
   setup:
     queue.reset()
 
   test "basic":
-    testPush(queue)
+    testSipPush(queue)
 
   test "overflow":
-    testPushOverflow(queue)
+    testSipPushOverflow(queue)
 
   test "wrap":
-    testPushWrap(queue)
+    testSipPushWrap(queue)
 
 
-suite "push(SharedQueue[T], seq[T])":
+suite "push(SipsicSharedQueue[T], seq[T])":
 
   setup:
     queue.reset()
 
   test "basic":
-    testPushSeq(queue)
+    testSipPushSeq(queue)
 
   test "overflow":
-    testPushSeqOverflow(queue)
+    testSipPushSeqOverflow(queue)
 
   test "wrap":
-    testPushSeqWrap(queue)
+    testSipPushSeqWrap(queue)
 
 
-suite "pop(SharedQueue[T])":
+suite "pop(SipsicSharedQueue[T])":
 
   setup:
     queue.reset()
 
   test "one":
-    testPopOne(queue)
+    testSicPopOne(queue)
 
   test "all":
-    testPopAll(queue)
+    testSicPopAll(queue)
 
   test "empty":
-    testPopEmpty(queue)
+    testSicPopEmpty(queue)
 
   test "too many":
-    testPopTooMany(queue)
+    testSicPopTooMany(queue)
 
   test "wrap":
-    testPopWrap(queue)
+    testSicPopWrap(queue)
 
 
-suite "pop(SharedQueue[T], int)":
+suite "pop(SipsicSharedQueue[T], int)":
 
   setup:
     queue.reset()
 
   test "one":
-    testPopCountOne(queue)
+    testSicPopCountOne(queue)
 
   test "all":
-    testPopCountAll(queue)
+    testSicPopCountAll(queue)
 
   test "empty":
-    testPopCountEmpty(queue)
+    testSicPopCountEmpty(queue)
 
   test "too many":
-    testPopCountTooMany(queue)
+    testSicPopCountTooMany(queue)
 
   test "wrap":
-    testPopCountWrap(queue)
+    testSicPopCountWrap(queue)
 
 
-suite "SharedQueue[T].capacity":
+suite "SipsicSharedQueue[T].capacity":
 
   test "basic":
     testCapacity(queue)
 
 
-suite "SharedQueue[T] integration":
+suite "SipsicSharedQueue[T] integration":
 
   setup:
     queue.reset()

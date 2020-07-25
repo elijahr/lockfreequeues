@@ -6,14 +6,10 @@
 
 import unittest
 
-import lockfreequeues/spsc/ops
+import lockfreequeues/ops
 
 
-suite "index(value, capacity)":
-
-  test "value < 0 raises AssertionError":
-    expect(AssertionError):
-      discard index(-1, 4)
+suite "ops.index(value, capacity)":
 
   test "value >= 2 * capacity raises AssertionError":
     expect(AssertionError):
@@ -26,19 +22,11 @@ suite "index(value, capacity)":
       check(index(value, 4) == value - 4)
 
 
-suite "incOrReset(original, amount, capacity)":
-
-  test "original < 0 raises AssertionError":
-    expect(AssertionError):
-      discard incOrReset(-1, 1, 4)
+suite "ops.incOrReset(original, amount, capacity)":
 
   test "original >= 2 * capacity raises AssertionError":
     expect(AssertionError):
       discard incOrReset(16, 1, 4)
-
-  test "amount < 0 raises AssertionError":
-    expect(AssertionError):
-      discard incOrReset(0, -1, 4)
 
   test "amount >= capacity raises AssertionError":
     expect(AssertionError):
@@ -55,19 +43,11 @@ suite "incOrReset(original, amount, capacity)":
         check(incOrReset(original, amount, 4) == expected)
 
 
-suite "used(head, tail, capacity)":
-
-  test "head < 0 raises AssertionError":
-    expect(AssertionError):
-      discard used(-1, 0, 4)
+suite "ops.used(head, tail, capacity)":
 
   test "head >= 2 * capacity raises AssertionError":
     expect(AssertionError):
       discard used(8, 0, 4)
-
-  test "tail < 0 raises AssertionError":
-    expect(AssertionError):
-      discard used(0, -1, 4)
 
   test "tail >= 2 * capacity raises AssertionError":
     expect(AssertionError):
@@ -81,22 +61,14 @@ suite "used(head, tail, capacity)":
             (tail - head) + 8
           else:
             tail - head
-        check(used(head, tail, 4) == expected)
+        check(used(head.int, tail.int, 4) == expected.int)
 
 
-suite "available(head, tail, capacity)":
-
-  test "head < 0 raises AssertionError":
-    expect(AssertionError):
-      discard available(-1, 0, 4)
+suite "ops.available(head, tail, capacity)":
 
   test "head >= 2 * capacity raises AssertionError":
     expect(AssertionError):
       discard available(8, 0, 4)
-
-  test "tail < 0 raises AssertionError":
-    expect(AssertionError):
-      discard available(0, -1, 4)
 
   test "tail >= 2 * capacity raises AssertionError":
     expect(AssertionError):
@@ -110,23 +82,15 @@ suite "available(head, tail, capacity)":
             (tail - head) + 8
           else:
             tail - head
-        let expected = 4 - used
-        check(available(head, tail, 4) == expected)
+        let expected = (4 - used).int
+        check(available(head.int, tail.int, 4) == expected)
 
 
-suite "full(head, tail, capacity)":
-
-  test "head < 0 raises AssertionError":
-    expect(AssertionError):
-      discard full(-1, 0, 4)
+suite "ops.full(head, tail, capacity)":
 
   test "head >= 2 * capacity raises AssertionError":
     expect(AssertionError):
       discard full(8, 0, 4)
-
-  test "tail < 0 raises AssertionError":
-    expect(AssertionError):
-      discard full(0, -1, 4)
 
   test "tail >= 2 * capacity raises AssertionError":
     expect(AssertionError):
@@ -141,10 +105,10 @@ suite "full(head, tail, capacity)":
           else:
             tail - head
         let expected = used == 4
-        check(full(head, tail, 4) == expected)
+        check(full(head.int, tail.int, 4) == expected)
 
 
-suite "empty(head, tail)":
+suite "ops.empty(head, tail)":
 
   test "basic":
     for head in 0..<8:

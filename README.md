@@ -4,11 +4,11 @@
 
 Single-producer, single-consumer, lock-free queue (aka ring buffer) implementations for Nim.
 
-Two implementations are provided: [`StaticQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/spsc/staticqueue.html) and [`SharedQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/spsc/sharedqueue.html).
+Two implementations are provided: [`SipsicStaticQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/sipsic/staticqueue.html) and [`SipsicSharedQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/sipsic/sharedqueue.html).
 
-`StaticQueue` should be used when your queue's capacity is known at compile-time.
+`SipsicStaticQueue` should be used when your queue's capacity is known at compile-time.
 
-`SharedQueue` should be used when your queue's capacity is only known at run-time or when the queue should reside in shared memory.
+`SipsicSharedQueue` should be used when your queue's capacity is only known at run-time or when the queue should reside in shared memory.
 
 API documentation: https://elijahr.github.io/lockfreequeues/
 
@@ -17,8 +17,8 @@ API documentation: https://elijahr.github.io/lockfreequeues/
 Examples are located in the [examples](https://github.com/elijahr/lockfreequeues/tree/master/examples) directory and can be compiled and run with:
 
 ```sh
-nim c -r examples/spsc/staticqueue.nim
-nim c -r examples/spsc/sharedqueue.nim
+nim c -r examples/sipsic/staticqueue.nim
+nim c -r examples/sipsic/sharedqueue.nim
 ```
 
 ### Example usage for a statically allocated queue
@@ -29,11 +29,11 @@ import os
 import sequtils
 import strformat
 
-import lockfreequeues/spsc/staticqueue
+import lockfreequeues/sipsic/staticqueue
 
 
 var
-  queue = newSPSCQueue[16, int]() # A queue that can hold 16 ints.
+  queue = initSipsicQueue[16, int]() # A queue that can hold 16 ints.
   consumer: Thread[void]
   producer: Thread[void]
 
@@ -90,11 +90,11 @@ import os
 import sequtils
 import strformat
 
-import lockfreequeues/spsc/sharedqueue
+import lockfreequeues/sipsic/sharedqueue
 
 
 proc consumerFunc(q: pointer) {.thread.} =
-  var queuePtr = cast[ptr SharedQueue[int]](q)
+  var queuePtr = cast[ptr SipsicSharedQueue[int]](q)
 
   # Pop 1..8 from the queue
   for expected in 1..8:
@@ -121,7 +121,7 @@ proc consumerFunc(q: pointer) {.thread.} =
 
 
 proc producerFunc(q: pointer) {.thread.} =
-  var queuePtr = cast[ptr SharedQueue[int]](q)
+  var queuePtr = cast[ptr SipsicSharedQueue[int]](q)
 
   # Append 1..8 to the queue
   for item in 1..8:
@@ -137,7 +137,7 @@ proc producerFunc(q: pointer) {.thread.} =
 
 proc main =
   var
-    queue = newSPSCQueue[int](16) # A queue that can hold 16 ints.
+    queue = newSipsicQueue[int](16) # A queue that can hold 16 ints.
     consumer: Thread[pointer]
     producer: Thread[pointer]
   consumer.createThread(consumerFunc, addr(queue))
@@ -153,8 +153,8 @@ if isMainModule:
 ## Reference
 
 * Juho Snellman's post ["I've been writing ring buffers wrong all these years"](https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/) ([alt](https://web.archive.org/web/20200530040210/https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/))
-* Mamy Ratsimbazafy's [research on SPSC channels](https://github.com/mratsim/weave/blob/master/weave/cross_thread_com/channels_spsc.md#litterature) for weave.
-* Henrique F Bucher's post ["Yes, You Have Been Writing SPSC Queues Wrong Your Entire Life"](http://www.vitorian.com/x1/archives/370) ([alt](https://web.archive.org/web/20191225164231/http://www.vitorian.com/x1/archives/370))
+* Mamy Ratsimbazafy's [research on Sipsic channels](https://github.com/mratsim/weave/blob/master/weave/cross_thread_com/channels_sipsic.md#litterature) for weave.
+* Henrique F Bucher's post ["Yes, You Have Been Writing Sipsic Queues Wrong Your Entire Life"](http://www.vitorian.com/x1/archives/370) ([alt](https://web.archive.org/web/20191225164231/http://www.vitorian.com/x1/archives/370))
 
 Many thanks to Mamy Ratsimbazafy for reviewing this code and offering suggestions.
 
@@ -175,4 +175,4 @@ Many thanks to Mamy Ratsimbazafy for reviewing this code and offering suggestion
 
 ## v0.1.0 - 2020-07-02
 
-Initial release, containing `SharedQueue` and `StaticQueue`.
+Initial release, containing `SipsicSharedQueue` and `SipsicStaticQueue`.

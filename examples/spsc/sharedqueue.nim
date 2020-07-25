@@ -11,11 +11,11 @@ import os
 import sequtils
 import strformat
 
-import lockfreequeues/spsc/sharedqueue
+import lockfreequeues/sipsic/sharedqueue
 
 
 proc consumerFunc(q: pointer) {.thread.} =
-  var queuePtr = cast[ptr SharedQueue[int]](q)
+  var queuePtr = cast[ptr SipsicSharedQueue[int]](q)
 
   # Pop 1..8 from the queue
   for expected in 1..8:
@@ -42,7 +42,7 @@ proc consumerFunc(q: pointer) {.thread.} =
 
 
 proc producerFunc(q: pointer) {.thread.} =
-  var queuePtr = cast[ptr SharedQueue[int]](q)
+  var queuePtr = cast[ptr SipsicSharedQueue[int]](q)
 
   # Append 1..8 to the queue
   for item in 1..8:
@@ -58,7 +58,7 @@ proc producerFunc(q: pointer) {.thread.} =
 
 proc main =
   var
-    queue = newSPSCQueue[int](16) # A queue that can hold 16 ints.
+    queue = newSipsicQueue[int](16) # A queue that can hold 16 ints.
     consumer: Thread[pointer]
     producer: Thread[pointer]
   consumer.createThread(consumerFunc, addr(queue))

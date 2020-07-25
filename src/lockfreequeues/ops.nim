@@ -5,15 +5,15 @@
 # copyright.
 
 ## Operations used internally by
-## `QueueInterface <queueinterface.html#QueueInterface>`_.
+## `SipsicQueueInterface <queueinterface.html#SipsicQueueInterface>`_.
+
 
 template assertHeadOrTail(
   value: int,
   capacity: int,
 ) =
   ## Assert that the given `value` is in the range `0..<2*capacity`.
-  assert(value >= 0)
-  assert(value < 2 * capacity)
+  assert(value in 0..<(2 * capacity))
 
 
 proc index*(
@@ -41,7 +41,6 @@ proc incOrReset*(
   ## increment `original` by `amount`, or reset from zero if
   ## `original + amount >= 2 * capacity`.
   assertHeadOrTail(original, capacity)
-  assert(amount >= 0)
   assert(amount <= capacity)
   result = original + amount
   if unlikely(result >= 2 * capacity):
@@ -95,4 +94,3 @@ proc empty*(
   {.inline.} =
   ## Determine if storage is empty given `head` and `tail` values.
   return head == tail
-

@@ -8,12 +8,12 @@ import options
 import os
 import unittest
 
-import lockfreequeues/spsc/staticqueue
+import lockfreequeues
 
 
 var
   channel: Channel[int]
-  queue = newSPSCQueue[8, int]()
+  queue = initSipsicQueue[8, int]()
 
 
 proc consumerFunc() {.thread.} =
@@ -34,7 +34,7 @@ proc producerFunc() {.thread.} =
       sleep(10)
 
 
-suite "StaticQueue[N, T] threaded":
+suite "SipsicStaticQueue[N, T] threaded":
 
   test "basic":
     var

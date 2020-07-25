@@ -6,6 +6,19 @@
 
 ## Single-producer, single-consumer, lock-free queue implementations for Nim.
 
-import ./lockfreequeues/constants
-import ./lockfreequeues/spsc/sharedqueue
-import ./lockfreequeues/spsc/staticqueue
+import ./lockfreequeues/[
+  atomic_dsl,
+  concepts,
+  constants,
+  sipsic_shared_queue,
+  mupsic_static_queue,
+  sipsic_static_queue,
+]
+
+export
+  atomic_dsl,
+  concepts,
+  constants,
+  sipsic_shared_queue,
+  mupsic_static_queue,
+  sipsic_static_queue

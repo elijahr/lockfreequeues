@@ -30,11 +30,11 @@
             }
         },
         {
-            "label": "Build example 'spscqueuestatic'",
+            "label": "Build example 'sipsicqueuestatic'",
             "command": "nim",
             "args": [
                 "c",
-                "examples/spscqueuestatic.nim"
+                "examples/sipsicqueuestatic.nim"
             ],
             "options": {
                 "cwd": "${workspaceRoot}"

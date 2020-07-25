@@ -7,31 +7,41 @@
 ## A single-producer, single-consumer queue, implemented as a ring buffer,
 ## suitable for when the capacity is known at compile-time.
 
+import atomics
 import options
+import strformat
 
-import ../constants
-import ./queueinterface
+import ./constants
+import ./sic_ops
+import ./sip_ops
 
 
 type
-  StaticQueue*[N: static int, T] = object
+  SipsicStaticQueue*[N: static int, T] = object
     ## A single-producer, single-consumer queue, implemented as a ring buffer,
     ## suitable for when the capacity is known at compile-time.
     ##
-    ## A `StaticQueue` is aligned along a cache line, since arrays of queues are a
-    ## common use-case.
-    face* {.align: CACHELINE_BYTES.}: QueueInterface ## The queue's \
-      ## `QueueInterface <queueinterface.html#QueueInterface>`_.
+    ## A `SipsicStaticQueue` is aligned along a cache line, since arrays of queues
+    ## are a common use-case.
+    # Align head/tail on different cache lines to prevent thrashing,
+    # since reads/writes to each will be on different threads.
+    head* {.align: CacheLineBytes.}: Atomic[int]
+    tail* {.align: CacheLineBytes.}: Atomic[int]
+
     storage*: array[N, T] ## The queue's underlying storage.
 
 
-proc newSPSCQueue*[N: static int, T](): StaticQueue[N, T] =
-  ## Initialize a new `StaticQueue` and validate its capacity.
-  result.face.move(0, 0, N)
+template itemType*(Q: typedesc[SipsicStaticQueue]): typedesc = Q.T
+
+
+proc initSipsicQueue*[N: static int, T](): SipsicStaticQueue[N, T] =
+  ## Initialize a new `SipsicStaticQueue` and validate its capacity.
+  if N == 0:
+    raise newException(ValueError, fmt"N ({N}) must be > 0")
 
 
 proc push*[N: static int, T](
-  self: var StaticQueue[N, T],
+  self: var SipsicStaticQueue[N, T],
   item: T,
 ):
   bool
@@ -39,11 +49,11 @@ proc push*[N: static int, T](
   ## Append a single item to the queue.
   ## If the queue is full, `false` is returned.
   ## If `item` is appended, `true` is returned.
-  return self.face.push(self.storage, item)
+  result = sipStaticPushOne(self, item)
 
 
 proc push*[N: static int, T](
-  self: var StaticQueue[N, T],
+  self: var SipsicStaticQueue[N, T],
   items: openArray[T],
 ):
   Option[seq[T]]
@@ -53,37 +63,29 @@ proc push*[N: static int, T](
   ## is returned, where `unpushed` is a `seq[T]` containing the items which
   ## cannot be appended.
   ## If all items are appended, `none(seq[T])` is returned.
-  return self.face.push(self.storage, items)
+  result = sipStaticPushMany(self, items)
 
 
 proc pop*[N: static int, T](
-  self: var StaticQueue[N, T],
+  self: var SipsicStaticQueue[N, T],
 ):
   Option[T]
   {.inline.} =
   ## Pop a single item from the queue.
   ## If the queue is empty, `none(T)` is returned.
   ## If an item is popped, `some(T)` is returned.
-  return self.face.pop(self.storage)
+  result = sicStaticPopOne(self)
 
 
 proc pop*[N: static int, T](
-  self: var StaticQueue[N, T],
-  count: int,
+  self: var SipsicStaticQueue[N, T],
+  count: SomeInteger,
 ):
   Option[seq[T]]
   {.inline.} =
   ## Pop `count` items from the queue.
   ## If the queue is empty, `none(seq[T])` is returned.
   ## If > 1 items are popped, `some(seq[T])` is returned.
-  return self.face.pop(self.storage, count)
+  result = sicStaticPopMany(self, count)
 
-
-proc capacity*[N: static int, T](
-  self: var StaticQueue[N, T],
-):
-  int
-  {.inline.} =
-  ## Return the queue's capacity.
-  return N
 

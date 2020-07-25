@@ -11,11 +11,11 @@ import os
 import sequtils
 import strformat
 
-import lockfreequeues/spsc/staticqueue
+import lockfreequeues/sipsic/staticqueue
 
 
 var
-  queue = newSPSCQueue[16, int]() # A queue that can hold 16 ints.
+  queue = initSipsicQueue[16, int]() # A queue that can hold 16 ints.
   consumer: Thread[void]
   producer: Thread[void]
 
