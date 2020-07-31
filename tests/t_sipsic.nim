@@ -7,109 +7,86 @@
 import atomics
 import options
 import sequtils
-import sugar
 import unittest
 
 import lockfreequeues
-import lockfreequeues/producer
 import ./t_integration
-import ./t_mup
 import ./t_sic
+import ./t_sip
 
 
-var queue = initMupsicQueue[8, 4, int]()
+var queue: Sipsic[8, int]
 
 
-proc reset[N, P: static int, T](
-  self: var MupsicStaticQueue[N, P, T]
+proc reset[N: static int, T](
+  self: var Sipsic[N, T]
 ) {.inline.} =
   ## Resets the queue to its default state.
   ## Should only be used in single-threaded unit tests.
   self.head.release(0)
   self.tail.release(0)
-  self.prevPid.release(0)
-  for n in 0..<N:
-    self.storage[n].reset()
-  for p in 0..<P:
-    self.producers[p].reset()
+  for i in 0..<N:
+    self.storage[i].reset()
 
 
-proc state[N, P: static int, T](
-  self: var MupsicStaticQueue[N, P, T],
+proc state[N: static int, T](
+  self: var Sipsic[N, T],
 ): tuple[
     head: int,
     tail: int,
-    prevPid: int,
     storage: seq[T],
-    producers: seq[Producer],
   ] =
   ## Retrieve current state of the queue
   ## Should only be used in single-threaded unit tests,
   ## as data may be torn.
-  let producers = collect(newSeq):
-    for i in self.producers:
-      var item = i
-      item.acquire
   return (
-    head: self.head.acquire.int,
-    tail: self.tail.acquire.int,
-    prevPid: self.prevPid.acquire.int,
+    head: self.head.acquire,
+    tail: self.tail.acquire,
     storage: self.storage[0..^1],
-    producers: producers
   )
 
 
-suite "initMupsicQueue[N, P, T]()":
+suite "Sipsic[N, T]":
 
-  test "N == 0 raises ValueError":
-    expect(ValueError):
-      discard initMupsicQueue[0, 1, int]()
-
-  test "P == 0 raises ValueError":
-    expect(ValueError):
-      discard initMupsicQueue[1, 0, int]()
-
-  test "basic":
-    check(queue.state == (
+  test "initial state":
+    require(queue.state == (
       head: 0,
       tail: 0,
-      prevPid: 0,
-      storage: repeat(0, 8),
-      producers: repeat(initialProducer, 4)
+      storage: repeat(0, 8)
     ))
 
 
-suite "push(MupsicStaticQueue[N, T], T)":
+suite "push(Sipsic[N, T], T)":
 
   setup:
     queue.reset()
 
   test "basic":
-    testMupPush(queue)
+    testSipPush(queue)
 
   test "overflow":
-    testMupPushOverflow(queue)
+    testSipPushOverflow(queue)
 
   test "wrap":
-    testMupPushWrap(queue)
+    testSipPushWrap(queue)
 
 
-suite "push(MupsicStaticQueue[N, T], seq[T])":
+suite "push(Sipsic[N, T], seq)":
 
   setup:
     queue.reset()
 
   test "basic":
-    testMupPushSeq(queue)
+    testSipPushSeq(queue)
 
   test "overflow":
-    testMupPushSeqOverflow(queue)
+    testSipPushSeqOverflow(queue)
 
   test "wrap":
-    testMupPushSeqWrap(queue)
+    testSipPushSeqWrap(queue)
 
 
-suite "pop(MupsicStaticQueue[N, T])":
+suite "pop(Sipsic)":
 
   setup:
     queue.reset()
@@ -130,7 +107,7 @@ suite "pop(MupsicStaticQueue[N, T])":
     testSicPopWrap(queue)
 
 
-suite "pop(MupsicStaticQueue[N, T], int)":
+suite "pop(Sipsic, int)":
 
   setup:
     queue.reset()
@@ -151,13 +128,13 @@ suite "pop(MupsicStaticQueue[N, T], int)":
     testSicPopCountWrap(queue)
 
 
-suite "capacity(MupsicStaticQueue[N, T])":
+suite "capacity(Sipsic)":
 
   test "basic":
     testCapacity(queue)
 
 
-suite "MupsicStaticQueue[N, T] integration":
+suite "Sipsic integration":
 
   setup:
     queue.reset()

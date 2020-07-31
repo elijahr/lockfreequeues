@@ -1,4 +1,8 @@
-
+# lockfreequeues
+# © Copyright 2020 Elijah Shaw-Rutschman
+#
+# See the file "LICENSE", included in this distribution for details about the
+# copyright.
 
 template testCapacity*(queue: untyped) =
   check(queue.capacity == 8)
@@ -7,7 +11,7 @@ template testCapacity*(queue: untyped) =
 template testHeadAndTailReset*(queue: untyped) =
   queue.head.release(15)
   queue.tail.release(15)
-  when queue is MupStaticQueue:
+  when queue is Mupsic:
     queue.producers[0].release(Producer(
       tail: 15,
       state: Synchronized,
@@ -53,7 +57,7 @@ template testHeadAndTailReset*(queue: untyped) =
   let res = queue.pop(1)
   check(res.isSome)
   check(res.get == @[1])
-  when queue is MupStaticQueue:
+  when queue is Mupsic:
     check(queue.state == (
       head: 0,
       tail: 0,
@@ -75,19 +79,19 @@ template testHeadAndTailReset*(queue: untyped) =
 
 
 template testWraps*(queue: untyped) =
-  when queue is MupStaticQueue:
+  when queue is Mupsic:
     check(queue.push(0, @[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
   else:
     check(queue.push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
   var  res = queue.pop(4)
   check(res.isSome)
   check(res.get() == @[1, 2, 3, 4])
-  when queue is MupStaticQueue:
+  when queue is Mupsic:
    res = queue.push(0, @[9, 10, 11, 12])
   else:
    res = queue.push(@[9, 10, 11, 12])
   check(res.isNone)
-  when queue is MupStaticQueue:
+  when queue is Mupsic:
     check(queue.state == (
       head: 4,
       tail: 12,
@@ -109,7 +113,7 @@ template testWraps*(queue: untyped) =
   res = queue.pop(4)
   check(res.isSome)
   check(res.get() == @[5, 6, 7, 8])
-  when queue is MupStaticQueue:
+  when queue is Mupsic:
     check(queue.state == (
       head: 8,
       tail: 12,
@@ -131,7 +135,7 @@ template testWraps*(queue: untyped) =
   res = queue.pop(4)
   check(res.isSome)
   check(res.get() == @[9, 10, 11, 12])
-  when queue is MupStaticQueue:
+  when queue is Mupsic:
     check(queue.state == (
       head: 12,
       tail: 12,

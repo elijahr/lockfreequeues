@@ -13,7 +13,7 @@ import lockfreequeues
 
 var
   channel: Channel[int]
-  queue = initSipsicQueue[8, int]()
+  queue: Sipsic[8, int]
 
 
 proc consumerFunc() {.thread.} =
@@ -34,7 +34,7 @@ proc producerFunc() {.thread.} =
       sleep(10)
 
 
-suite "SipsicStaticQueue[N, T] threaded":
+suite "Sipsic[N, T] threaded":
 
   test "basic":
     var

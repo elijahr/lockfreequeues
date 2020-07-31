@@ -2,13 +2,14 @@
 
 # lockfreequeues
 
-Single-producer, single-consumer, lock-free queue (aka ring buffer) implementations for Nim.
+Lock-free queue (aka ring buffer) implementations for Nim.
 
-Two implementations are provided: [`SipsicStaticQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/sipsic/staticqueue.html) and [`SipsicSharedQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/sipsic/sharedqueue.html).
+Four implementations are provided:
 
-`SipsicStaticQueue` should be used when your queue's capacity is known at compile-time.
-
-`SipsicSharedQueue` should be used when your queue's capacity is only known at run-time or when the queue should reside in shared memory.
+- [`SipsicStaticQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/sipsic_static_queue.html) is a single-producer, single-consumer queue for when your queue's capacity is known at compile-time.
+- [`SipsicSharedQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/sipsic_shared_queue.html) is a single-producer, single-consumer queue for when your queue's capacity is only known at run-time, or when the queue should reside in shared memory.
+- [`MupsicStaticQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupsic_static_queue.html) is a multi-producer, single-consumer queue for when your queue's capacity and number of producers are known at compile-time.
+- [`MupsicSharedQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupsic_shared_queue.html) is a multi-producer, single-consumer queue for when your queue's capacity or number of producers are only known at run-time, or when the queue should reside in shared memory.
 
 API documentation: https://elijahr.github.io/lockfreequeues/
 
@@ -17,137 +18,32 @@ API documentation: https://elijahr.github.io/lockfreequeues/
 Examples are located in the [examples](https://github.com/elijahr/lockfreequeues/tree/master/examples) directory and can be compiled and run with:
 
 ```sh
-nim c -r examples/sipsic/staticqueue.nim
-nim c -r examples/sipsic/sharedqueue.nim
+nim c -r examples/sipsic_static_queue.nim
+nim c -r examples/sipsic_shared_queue.nim
+nim c -r examples/mupsic_static_queue.nim
+nim c -r examples/mupsic_shared_queue.nim
 ```
 
-### Example usage for a statically allocated queue
+### SipsicStaticQueue
 ```nim
-
-import options
-import os
-import sequtils
-import strformat
-
-import lockfreequeues/sipsic/staticqueue
-
-
-var
-  queue = initSipsicQueue[16, int]() # A queue that can hold 16 ints.
-  consumer: Thread[void]
-  producer: Thread[void]
-
-
-proc consumerFunc() {.thread.} =
-  # Pop 1..8 from the queue
-  for expected in 1..8:
-    while true:
-      let popped = queue.pop()
-      if popped.isSome:
-        let item = popped.get()
-        echo fmt"[consumer] popped {item}"
-        assert item == expected
-        break
-      else:
-        echo "[consumer] queue empty, waiting for producer..."
-        sleep(1)
-
-  # Wait for producer to complete
-  sleep(10)
-
-  # Pop 9..16 from the queue in a single call
-  let expected = toSeq(9..16)
-  let popped = queue.pop(8)
-  let items = popped.get()
-  echo fmt"[consumer] popped {items}"
-  assert items == expected
-
-
-proc producerFunc() {.thread.} =
-  # Append 1..8 to the queue
-  for item in 1..8:
-    assert queue.push(item)
-    echo fmt"[producer] pushed {item}"
-
-  # Append 9..16 to the queue in a single call
-  let items = toSeq(9..16)
-  let unpushed = queue.push(items)
-  echo fmt"[producer] pushed {items}"
-  assert unpushed.isNone, fmt"[producer] could not push {unpushed.get()}"
-
-
-consumer.createThread(consumerFunc)
-producer.createThread(producerFunc)
-joinThreads(consumer, producer)
+TODO
 ```
 
-### Example usage for a dynamically-allocated shared-memory queue
+### SipsicSharedQueue
 
 ```nim
+TODO
+```
 
-import options
-import os
-import sequtils
-import strformat
+### MupsicStaticQueue
+```nim
+TODO
+```
 
-import lockfreequeues/sipsic/sharedqueue
+### MupsicSharedQueue
 
-
-proc consumerFunc(q: pointer) {.thread.} =
-  var queuePtr = cast[ptr SipsicSharedQueue[int]](q)
-
-  # Pop 1..8 from the queue
-  for expected in 1..8:
-    while true:
-      let popped = queuePtr[].pop()
-      if popped.isSome:
-        let item = popped.get()
-        echo fmt"[consumer] popped {item}"
-        assert item == expected
-        break
-      else:
-        echo "[consumer] queue empty, waiting for producer..."
-        sleep(1)
-
-  # Wait for producer to complete
-  sleep(10)
-
-  # Pop 9..16 from the queue in a single call
-  let expected = toSeq(9..16)
-  let popped = queuePtr[].pop(8)
-  let items = popped.get()
-  echo fmt"[consumer] popped {items}"
-  assert items == expected
-
-
-proc producerFunc(q: pointer) {.thread.} =
-  var queuePtr = cast[ptr SipsicSharedQueue[int]](q)
-
-  # Append 1..8 to the queue
-  for item in 1..8:
-    assert queuePtr[].push(item)
-    echo fmt"[producer] pushed {item}"
-
-  # Append 9..16 to the queue in a single call
-  let items = toSeq(9..16)
-  let unpushed = queuePtr[].push(items)
-  echo fmt"[producer] pushed {items}"
-  assert unpushed.isNone, fmt"[producer] could not push {unpushed.get()}"
-
-
-proc main =
-  var
-    queue = newSipsicQueue[int](16) # A queue that can hold 16 ints.
-    consumer: Thread[pointer]
-    producer: Thread[pointer]
-  consumer.createThread(consumerFunc, addr(queue))
-  producer.createThread(producerFunc, addr(queue))
-  joinThreads(consumer, producer)
-
-
-if isMainModule:
-  main()
-
+```nim
+TODO
 ```
 
 ## Reference
@@ -156,7 +52,7 @@ if isMainModule:
 * Mamy Ratsimbazafy's [research on Sipsic channels](https://github.com/mratsim/weave/blob/master/weave/cross_thread_com/channels_sipsic.md#litterature) for weave.
 * Henrique F Bucher's post ["Yes, You Have Been Writing Sipsic Queues Wrong Your Entire Life"](http://www.vitorian.com/x1/archives/370) ([alt](https://web.archive.org/web/20191225164231/http://www.vitorian.com/x1/archives/370))
 
-Many thanks to Mamy Ratsimbazafy for reviewing this code and offering suggestions.
+Many thanks to Mamy Ratsimbazafy for reviewing the initial release and offering suggestions.
 
 ## Contributing
 
@@ -165,6 +61,11 @@ Many thanks to Mamy Ratsimbazafy for reviewing this code and offering suggestion
 * For pull requests, please see the [contribution guidelines](https://github.com/elijahr/lockfreequeues/tree/master/CONTRIBUTING.md).
 
 ## Release notes
+
+## v2.0.0 - 2020-07-29
+
+* Refactor, rename SPSC to Sipsic; it's much easier for my eyes and brain.
+* Implement multi-producer, single-consumer (Mupsic) queues.
 
 ## v1.0.0 - 2020-07-6
 

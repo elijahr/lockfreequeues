@@ -1,7 +1,7 @@
 # Package
-version       = "1.0.0"
+version       = "2.0.0"
 author        = "Elijah Shaw-Rutschman"
-description   = "Single-producer, single-consumer, lock-free queue implementations for Nim."
+description   = "Lock-free queue implementations for Nim."
 license       = "MIT"
 srcDir        = "src"
 
