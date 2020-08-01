@@ -61,7 +61,7 @@ suite "ops.used(head, tail, capacity)":
             (tail - head) + 8
           else:
             tail - head
-        check(used(head.int, tail.int, 4) == expected.int)
+        check(used(head, tail, 4) == expected)
 
 
 suite "ops.available(head, tail, capacity)":
@@ -82,8 +82,8 @@ suite "ops.available(head, tail, capacity)":
             (tail - head) + 8
           else:
             tail - head
-        let expected = (4 - used).int
-        check(available(head.int, tail.int, 4) == expected)
+        let expected = (4 - used)
+        check(available(head, tail, 4) == expected)
 
 
 suite "ops.full(head, tail, capacity)":
@@ -105,7 +105,7 @@ suite "ops.full(head, tail, capacity)":
           else:
             tail - head
         let expected = used == 4
-        check(full(head.int, tail.int, 4) == expected)
+        check(full(head, tail, 4) == expected)
 
 
 suite "ops.empty(head, tail)":

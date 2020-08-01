@@ -26,8 +26,7 @@ type
     prevPid*: Atomic[int] ## \
       ## The ID of the most recent Producer
 
-    producers*: array[P, Atomic[Producer]] ## \
-      ## Producers packed into int64, for atomic reading/writing
+    producers*: array[P, Atomic[Producer]]
 
 
 proc checkPid[N, P: static int, T](
@@ -46,6 +45,9 @@ proc push*[N, P: static int, T](
   pid: int,
   item: T,
 ): bool =
+  ## Append a single item to the queue.
+  ## If the queue is full, `false` is returned.
+  ## If `item` is appended, `true` is returned.
   self.checkPid(pid)
 
   var prevPid = self.prevPid.relaxed
@@ -56,8 +58,8 @@ proc push*[N, P: static int, T](
   producer.state = Reserved
   self.producers[pid].release(producer)
 
-  var head = self.head.acquire.int
-  var tail = self.producers[prevPid].relaxed.tail.int
+  var head = self.head.acquire
+  var tail = self.producers[prevPid].relaxed.tail
 
   # spin until reservation is acquired
   while true:
@@ -79,12 +81,13 @@ proc push*[N, P: static int, T](
       break
     else:
       cpuRelax()
-      head = self.head.acquire.int
-      tail = self.producers[prevPid].relaxed.tail.int
+      head = self.head.acquire
+      tail = self.producers[prevPid].relaxed.tail
 
   result = true
 
   let writeIndex = index(tail, N)
+
   self.storage[writeIndex] = item
 
   # Mark reservation pending for synchronization
@@ -95,9 +98,6 @@ proc push*[N, P: static int, T](
 
   # Spin until preceding reservation is synchronized, unless this producer
   # was the previous one.
-
-  # TODO: Or not? what else can be done? Perhaps a queue for tails?
-  # Or storing head on Producer as well?
   if pid != prevPid:
     while true:
       if self.producers[prevPid].relaxed.state == Synchronized:
@@ -127,7 +127,7 @@ proc push*[N, P: static int, T](
 
   if unlikely(items.len == 0):
     # items is empty, return nothing
-    return
+    return none(seq[T])
 
   var prevPid = self.prevPid.relaxed
   var producer = self.producers[pid].relaxed
@@ -137,8 +137,8 @@ proc push*[N, P: static int, T](
   producer.state = Reserved
   self.producers[pid].release(producer)
 
-  var head = self.head.acquire.int
-  var tail = self.producers[prevPid].relaxed.tail.int
+  var head = self.head.acquire
+  var tail = self.producers[prevPid].relaxed.tail
   var count: int
   var avail: int
 
@@ -170,8 +170,8 @@ proc push*[N, P: static int, T](
       break
     else:
       cpuRelax()
-      head = self.head.acquire.int
-      tail = self.producers[prevPid].relaxed.tail.int
+      head = self.head.acquire
+      tail = self.producers[prevPid].relaxed.tail
 
   if count < items.len:
     # give back remainder
@@ -215,4 +215,3 @@ proc push*[N, P: static int, T](
   # Mark synchronized
   producer.state = Synchronized
   self.producers[pid].release(producer)
-

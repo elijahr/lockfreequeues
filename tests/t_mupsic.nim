@@ -50,9 +50,9 @@ proc state[N, P: static int, T](
       var item = i
       item.acquire
   return (
-    head: self.head.acquire.int,
-    tail: self.tail.acquire.int,
-    prevPid: self.prevPid.acquire.int,
+    head: self.head.acquire,
+    tail: self.tail.acquire,
+    prevPid: self.prevPid.acquire,
     storage: self.storage[0..^1],
     producers: producers
   )
