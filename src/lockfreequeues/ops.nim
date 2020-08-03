@@ -4,7 +4,7 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-## Operations used internally by various Queue implementations.
+## Operations used internally by various queue implementations.
 
 proc validateHeadOrTail(
   value: int,

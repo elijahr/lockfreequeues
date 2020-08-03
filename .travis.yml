@@ -1,9 +1,8 @@
-os:
-  - linux
+os: linux
 
 dist: bionic
 
-language: c
+language: cpp
 
 branches:
   except:
@@ -13,6 +12,12 @@ cache:
   directories:
     - "$HOME/.nimble"
     - "$HOME/.choosenim"
+
+matrix:
+  include:
+    - os: linux
+    - os: linux
+      env: TEST_CPP=1
 
 install:
   - |
@@ -26,5 +31,8 @@ before_script:
       export PATH=$HOME/.nimble/bin:$PATH
 
 script:
-  - nim -v
-  - nimble test
+  - |
+    nim -v;
+    [ $TEST_CPP == 1 ] \
+      && nimble testcpp \
+      || nimble test;

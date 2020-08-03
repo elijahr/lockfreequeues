@@ -9,8 +9,6 @@ import ./lockfreequeues/[
   constants,
   mupsic,
   ops,
-  producer,
-  queue,
   sipsic,
 ]
 
@@ -19,6 +17,4 @@ export
   constants,
   mupsic,
   ops,
-  producer,
-  queue,
   sipsic

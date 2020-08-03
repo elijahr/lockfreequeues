@@ -7,70 +7,35 @@
 import atomics
 import options
 import sequtils
-import sugar
 import unittest
 
 import lockfreequeues
-import lockfreequeues/producer
 import ./t_integration
 import ./t_sic
 
 
-var queue: Mupsic[8, 4, int]
-
-
-proc reset[N, P: static int, T](
-  self: var Mupsic[N, P, T]
-) {.inline.} =
-  ## Resets the queue to its default state.
-  ## Should only be used in single-threaded unit tests.
-  self.head.release(0)
-  self.tail.release(0)
-  self.prevPid.release(0)
-  for n in 0..<N:
-    self.storage[n].reset()
-  for p in 0..<P:
-    self.producers[p].reset()
-
-
-proc state[N, P: static int, T](
-  self: var Mupsic[N, P, T],
-): tuple[
-    head: int,
-    tail: int,
-    prevPid: int,
-    storage: seq[T],
-    producers: seq[Producer],
-  ] =
-  ## Retrieve current state of the queue
-  ## Should only be used in single-threaded unit tests,
-  ## as data may be torn.
-  let producers = collect(newSeq):
-    for i in self.producers:
-      var item = i
-      item.acquire
-  return (
-    head: self.head.acquire,
-    tail: self.tail.acquire,
-    prevPid: self.prevPid.acquire,
-    storage: self.storage[0..^1],
-    producers: producers
-  )
+var queue = initMupsic[8, 4, int]()
 
 
 suite "Mupsic[N, P, T]":
+
+  test "capacity":
+    check(queue.capacity == 8)
+
+  test "producerCount":
+    check(queue.producerCount == 4)
 
   test "initial state":
     check(queue.state == (
       head: 0,
       tail: 0,
-      prevPid: 0,
+      prevPid: -1,
       storage: repeat(0, 8),
-      producers: repeat(initialProducer, 4)
+      producers: repeat(0, 4)
     ))
 
 
-suite "push(Mupsic, T)":
+suite "push(Mupsic[N, P, T], int, T)":
 
   setup:
     queue.reset()
@@ -84,10 +49,10 @@ suite "push(Mupsic, T)":
       prevPid: 0,
       storage: @[1, 2, 0, 0, 0, 0, 0, 0],
       producers: @[
-        Producer(tail: 2, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
-        initialProducer,
+        2,
+        0,
+        0,
+        0,
       ],
     ))
     check(queue.push(1, 3) == true)
@@ -98,10 +63,10 @@ suite "push(Mupsic, T)":
       prevPid: 1,
       storage: @[1, 2, 3, 4, 0, 0, 0, 0],
       producers: @[
-        Producer(tail: 2, state: Synchronized, prevPid: 0),
-        Producer(tail: 4, state: Synchronized, prevPid: 1),
-        initialProducer,
-        initialProducer,
+        2,
+        4,
+        0,
+        0,
       ]
     ))
     check(queue.push(2, 5) == true)
@@ -112,10 +77,10 @@ suite "push(Mupsic, T)":
       prevPid: 2,
       storage: @[1, 2, 3, 4, 5, 6, 0, 0],
       producers: @[
-        Producer(tail: 2, state: Synchronized, prevPid: 0),
-        Producer(tail: 4, state: Synchronized, prevPid: 1),
-        Producer(tail: 6, state: Synchronized, prevPid: 2),
-        initialProducer,
+        2,
+        4,
+        6,
+        0,
       ]
     ))
     check(queue.push(3, 7) == true)
@@ -126,13 +91,12 @@ suite "push(Mupsic, T)":
       prevPid: 3,
       storage: @[1, 2, 3, 4, 5, 6, 7, 8],
       producers: @[
-        Producer(tail: 2, state: Synchronized, prevPid: 0),
-        Producer(tail: 4, state: Synchronized, prevPid: 1),
-        Producer(tail: 6, state: Synchronized, prevPid: 2),
-        Producer(tail: 8, state: Synchronized, prevPid: 3),
+        2,
+        4,
+        6,
+        8,
       ]
     ))
-
 
   test "overflow":
     for i in 1..8:
@@ -144,10 +108,10 @@ suite "push(Mupsic, T)":
       prevPid: 0,
       storage: @[1, 2, 3, 4, 5, 6, 7, 8],
       producers: @[
-        Producer(tail: 8, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
-        initialProducer,
+        8,
+        0,
+        0,
+        0,
       ]
     ))
 
@@ -164,15 +128,19 @@ suite "push(Mupsic, T)":
       prevPid: 0,
       storage: @[9, 10, 3, 4, 5, 6, 7, 8],
       producers: @[
-        Producer(tail: 10, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
-        initialProducer,
+        10,
+        0,
+        0,
+        0,
       ]
     ))
 
+  test "invalid pid":
+    expect IndexDefect:
+      discard queue.push(9, 1)
 
-suite "push(Mupsic, seq)":
+
+suite "push(Mupsic[N, P, T], int, seq[T])":
 
   setup:
     queue.reset()
@@ -185,10 +153,10 @@ suite "push(Mupsic, seq)":
       prevPid: 0,
       storage: @[1, 2, 3, 4, 5, 6, 7, 8],
       producers: @[
-        Producer(tail: 8, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
-        initialProducer,
+        8,
+        0,
+        0,
+        0,
       ]
     ))
 
@@ -198,17 +166,17 @@ suite "push(Mupsic, seq)":
       @[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
     )
     check(res.isSome)
-    check(res.get() == @[9, 10, 11, 12, 13, 14, 15, 16])
+    check(res.get == 8..15)
     check(queue.state == (
       head: 0,
       tail: 8,
       prevPid: 0,
       storage: @[1, 2, 3, 4, 5, 6, 7, 8],
       producers: @[
-        Producer(tail: 8, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
-        initialProducer,
+        8,
+        0,
+        0,
+        0,
       ]
     ))
 
@@ -224,15 +192,19 @@ suite "push(Mupsic, seq)":
       prevPid: 0,
       storage: @[9, 10, 3, 4, 5, 6, 7, 8],
       producers: @[
-        Producer(tail: 10, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
-        initialProducer,
+        10,
+        0,
+        0,
+        0,
       ]
     ))
 
+  test "invalid pid":
+    expect IndexDefect:
+      discard queue.push(9, @[1])
 
-suite "pop(Mupsic)":
+
+suite "pop(Mupsic[N, P, T])":
 
   setup:
     queue.reset()
@@ -253,7 +225,7 @@ suite "pop(Mupsic)":
     testSicPopWrap(queue)
 
 
-suite "pop(Mupsic, int)":
+suite "pop(Mupsic[N, P, T], int)":
 
   setup:
     queue.reset()
@@ -274,7 +246,7 @@ suite "pop(Mupsic, int)":
     testSicPopCountWrap(queue)
 
 
-suite "capacity(Mupsic)":
+suite "capacity(Mupsic[N, P, T])":
 
   test "basic":
     testCapacity(queue)

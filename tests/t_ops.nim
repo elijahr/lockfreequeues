@@ -11,8 +11,8 @@ import lockfreequeues/ops
 
 suite "ops.index(value, capacity)":
 
-  test "value >= 2 * capacity raises AssertionError":
-    expect(AssertionError):
+  test "value >= 2 * capacity raises AssertionDefect":
+    expect(AssertionDefect):
       discard index(8, 4)
 
   test "basic":
@@ -24,12 +24,12 @@ suite "ops.index(value, capacity)":
 
 suite "ops.incOrReset(original, amount, capacity)":
 
-  test "original >= 2 * capacity raises AssertionError":
-    expect(AssertionError):
+  test "original >= 2 * capacity raises AssertionDefect":
+    expect(AssertionDefect):
       discard incOrReset(16, 1, 4)
 
-  test "amount >= capacity raises AssertionError":
-    expect(AssertionError):
+  test "amount >= capacity raises AssertionDefect":
+    expect(AssertionDefect):
       discard incOrReset(0, 5, 4)
 
   test "basic":
@@ -45,12 +45,12 @@ suite "ops.incOrReset(original, amount, capacity)":
 
 suite "ops.used(head, tail, capacity)":
 
-  test "head >= 2 * capacity raises AssertionError":
-    expect(AssertionError):
+  test "head >= 2 * capacity raises AssertionDefect":
+    expect(AssertionDefect):
       discard used(8, 0, 4)
 
-  test "tail >= 2 * capacity raises AssertionError":
-    expect(AssertionError):
+  test "tail >= 2 * capacity raises AssertionDefect":
+    expect(AssertionDefect):
       discard used(0, 8, 4)
 
   test "basic":
@@ -66,12 +66,12 @@ suite "ops.used(head, tail, capacity)":
 
 suite "ops.available(head, tail, capacity)":
 
-  test "head >= 2 * capacity raises AssertionError":
-    expect(AssertionError):
+  test "head >= 2 * capacity raises AssertionDefect":
+    expect(AssertionDefect):
       discard available(8, 0, 4)
 
-  test "tail >= 2 * capacity raises AssertionError":
-    expect(AssertionError):
+  test "tail >= 2 * capacity raises AssertionDefect":
+    expect(AssertionDefect):
       discard available(0, 8, 4)
 
   test "basic":
@@ -88,12 +88,12 @@ suite "ops.available(head, tail, capacity)":
 
 suite "ops.full(head, tail, capacity)":
 
-  test "head >= 2 * capacity raises AssertionError":
-    expect(AssertionError):
+  test "head >= 2 * capacity raises AssertionDefect":
+    expect(AssertionDefect):
       discard full(8, 0, 4)
 
-  test "tail >= 2 * capacity raises AssertionError":
-    expect(AssertionError):
+  test "tail >= 2 * capacity raises AssertionDefect":
+    expect(AssertionDefect):
       discard full(0, 8, 4)
 
   test "basic":

@@ -12,21 +12,18 @@ template testHeadAndTailReset*(queue: untyped) =
   queue.head.release(15)
   queue.tail.release(15)
   when queue is Mupsic:
-    queue.producers[0].release(Producer(
-      tail: 15,
-      state: Synchronized,
-      prevPid: 0,
-    ))
+    queue.prevPid.release(0)
+    queue.producers[0].release(15)
     check(queue.state == (
       head: 15,
       tail: 15,
       prevPid: 0,
       storage: repeat(0, 8),
       producers: @[
-        Producer(tail: 15, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
-        initialProducer,
+        15,
+        0,
+        0,
+        0,
       ],
     ))
     check(queue.push(0, @[1]).isNone)
@@ -36,10 +33,10 @@ template testHeadAndTailReset*(queue: untyped) =
       prevPid: 0,
       storage: @[0, 0, 0, 0, 0, 0, 0, 1],
       producers: @[
-        Producer(tail: 0, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
-        initialProducer,
+        0,
+        0,
+        0,
+        0,
       ],
     ))
   else:
@@ -64,10 +61,10 @@ template testHeadAndTailReset*(queue: untyped) =
       prevPid: 0,
       storage: @[0, 0, 0, 0, 0, 0, 0, 1],
       producers: @[
-        Producer(tail: 0, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
-        initialProducer,
+        0,
+        0,
+        0,
+        0,
       ],
     ))
   else:
@@ -83,14 +80,15 @@ template testWraps*(queue: untyped) =
     check(queue.push(0, @[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
   else:
     check(queue.push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
-  var  res = queue.pop(4)
-  check(res.isSome)
-  check(res.get() == @[1, 2, 3, 4])
+  var popRes = queue.pop(4)
+  check(popRes.isSome)
+  check(popRes.get == @[1, 2, 3, 4])
+  var pushRes: Option[HSlice[int, int]]
   when queue is Mupsic:
-   res = queue.push(0, @[9, 10, 11, 12])
+   pushRes = queue.push(0, @[9, 10, 11, 12])
   else:
-   res = queue.push(@[9, 10, 11, 12])
-  check(res.isNone)
+   pushRes = queue.push(@[9, 10, 11, 12])
+  check(pushRes.isNone)
   when queue is Mupsic:
     check(queue.state == (
       head: 4,
@@ -98,10 +96,10 @@ template testWraps*(queue: untyped) =
       prevPid: 0,
       storage: @[9, 10, 11, 12, 5, 6, 7, 8],
       producers: @[
-        Producer(tail: 12, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
-        initialProducer,
+        12,
+        0,
+        0,
+        0,
       ],
     ))
   else:
@@ -110,9 +108,9 @@ template testWraps*(queue: untyped) =
       tail: 12,
       storage: @[9, 10, 11, 12, 5, 6, 7, 8]
     ))
-  res = queue.pop(4)
-  check(res.isSome)
-  check(res.get() == @[5, 6, 7, 8])
+  popRes = queue.pop(4)
+  check(popRes.isSome)
+  check(popRes.get == @[5, 6, 7, 8])
   when queue is Mupsic:
     check(queue.state == (
       head: 8,
@@ -120,10 +118,10 @@ template testWraps*(queue: untyped) =
       prevPid: 0,
       storage: @[9, 10, 11, 12, 5, 6, 7, 8],
       producers: @[
-        Producer(tail: 12, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
-        initialProducer,
+        12,
+        0,
+        0,
+        0,
       ],
     ))
   else:
@@ -132,9 +130,9 @@ template testWraps*(queue: untyped) =
       tail: 12,
       storage: @[9, 10, 11, 12, 5, 6, 7, 8]
     ))
-  res = queue.pop(4)
-  check(res.isSome)
-  check(res.get() == @[9, 10, 11, 12])
+  popRes = queue.pop(4)
+  check(popRes.isSome)
+  check(popRes.get == @[9, 10, 11, 12])
   when queue is Mupsic:
     check(queue.state == (
       head: 12,
@@ -142,10 +140,10 @@ template testWraps*(queue: untyped) =
       prevPid: 0,
       storage: @[9, 10, 11, 12, 5, 6, 7, 8],
       producers: @[
-        Producer(tail: 12, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
-        initialProducer,
+        12,
+        0,
+        0,
+        0,
       ],
     ))
   else:

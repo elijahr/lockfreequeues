@@ -4,11 +4,12 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-## A single-producer, single-consumer queue, implemented as a ring buffer,
-## suitable for when the capacity is known at compile-time.
+## A bounded, single-producer, single-consumer queue implemented as a ring
+## buffer.
 
 import atomics
 import options
+import sequtils
 
 import ./constants
 import ./ops
@@ -16,11 +17,14 @@ import ./ops
 
 type
   Sipsic*[N: static int, T] = object of RootObj
-    ## A single-producer, single-consumer queue, implemented as a ring buffer,
-    ## suitable for when the capacity is known at compile-time.
-
-    # Align head/tail on different cache lines to prevent thrashing,
-    # since reads/writes to each will be on different threads.
+    ## A bounded, single-producer, single-consumer queue implemented as a ring
+    ## buffer.
+    ##
+    ## * `N` is the capacity of the queue.
+    ## * `T` is the type of data the queue will hold.
+    ##
+    ## `head` and `tail` are aligned on different cache lines to prevent
+    ## thrashing, since reads/writes to each will be on different threads.
     head* {.align: CacheLineBytes.}: Atomic[int]
     tail* {.align: CacheLineBytes.}: Atomic[int]
 
@@ -53,32 +57,33 @@ proc push*[N: static int, T](
 proc push*[N: static int, T](
   self: var Sipsic[N, T],
   items: openArray[T],
-): Option[seq[T]] =
+): Option[HSlice[int, int]] =
   ## Append multiple items to the queue.
   ## If the queue is already full or is filled by this call, `some(unpushed)`
-  ## is returned, where `unpushed` is a `seq[T]` containing the items which
-  ## cannot be appended.
-  ## If all items are appended, `none(seq[T])` is returned.
+  ## is returned, where `unpushed` is an `HSlice` corresponding to the
+  ## chunk of items which could not be pushed.
+  ## If all items are appended, `none(HSlice[int, int])` is returned.
   if unlikely(items.len == 0):
-    # items is empty, return nothing
-    return none(seq[T])
+    # items is empty, return none
+    return none(HSlice[int, int])
 
   let tail = self.tail.relaxed
   let head = self.head.acquire
 
   if unlikely(full(head, tail, N)):
     # queue is full, return everything
-    return some(items[0..^1])
+    return some(0..items.len - 1)
 
   let avail = available(head, tail, N)
   var count: int
 
   if likely(avail >= items.len):
     # enough room to push all items, return nothing
+    result = none(HSlice[int, int])
     count = items.len
   else:
     # not enough room to push all items, return remainder
-    result = some(items[avail..^1])
+    result = some(avail..items.len - 1)
     count = avail
 
   let writeStartIndex = index(tail, N)
@@ -175,4 +180,36 @@ proc capacity*[N: static int, T](
   self: var Sipsic[N, T],
 ): int
   {.inline.} =
+  ## Returns the queue's storage capacity (`N`).
   result = N
+
+
+proc reset*[N: static int, T](
+  self: var Sipsic[N, T]
+) {.inline.} =
+  ## Resets the queue to its default state.
+  ## Proably only useful in single-threaded unit tests.
+  doAssert(defined(testing))
+
+  self.head.release(0)
+  self.tail.release(0)
+  self.storage[0..<N] = repeat(0, N)
+
+
+proc state*[N: static int, T](
+  self: var Sipsic[N, T],
+): tuple[
+    head: int,
+    tail: int,
+    storage: seq[T],
+  ] =
+  ## Retrieve current state of the queue
+  ## Proably only useful in single-threaded unit tests,
+  ## as data may be torn.
+  doAssert(defined(testing))
+
+  return (
+    head: self.head.acquire,
+    tail: self.tail.acquire,
+    storage: self.storage[0..^1],
+  )

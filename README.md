@@ -6,10 +6,8 @@ Lock-free queue (aka ring buffer) implementations for Nim.
 
 Four implementations are provided:
 
-- [`SipsicStaticQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/sipsic_static_queue.html) is a single-producer, single-consumer queue for when your queue's capacity is known at compile-time.
-- [`SipsicSharedQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/sipsic_shared_queue.html) is a single-producer, single-consumer queue for when your queue's capacity is only known at run-time, or when the queue should reside in shared memory.
-- [`MupsicStaticQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupsic_static_queue.html) is a multi-producer, single-consumer queue for when your queue's capacity and number of producers are known at compile-time.
-- [`MupsicSharedQueue`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupsic_shared_queue.html) is a multi-producer, single-consumer queue for when your queue's capacity or number of producers are only known at run-time, or when the queue should reside in shared memory.
+- [`Sipsic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/sipsic.html) is a single-producer, single-consumer queue.
+- [`Mupsic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupsic.html) is a multi-producer, single-consumer queue.
 
 API documentation: https://elijahr.github.io/lockfreequeues/
 
@@ -18,29 +16,16 @@ API documentation: https://elijahr.github.io/lockfreequeues/
 Examples are located in the [examples](https://github.com/elijahr/lockfreequeues/tree/master/examples) directory and can be compiled and run with:
 
 ```sh
-nim c -r examples/sipsic_static_queue.nim
-nim c -r examples/sipsic_shared_queue.nim
-nim c -r examples/mupsic_static_queue.nim
-nim c -r examples/mupsic_shared_queue.nim
+nim c -r examples/sipsic.nim
+nim c -r examples/mupsic.nim
 ```
 
-### SipsicStaticQueue
+### Sipsic
 ```nim
 TODO
 ```
 
-### SipsicSharedQueue
-
-```nim
-TODO
-```
-
-### MupsicStaticQueue
-```nim
-TODO
-```
-
-### MupsicSharedQueue
+### Mupsic
 
 ```nim
 TODO
@@ -60,12 +45,12 @@ Many thanks to Mamy Ratsimbazafy for reviewing the initial release and offering 
 * Please file any issues you encounter.
 * For pull requests, please see the [contribution guidelines](https://github.com/elijahr/lockfreequeues/tree/master/CONTRIBUTING.md).
 
-## Release notes
+## Changelog
 
-## v2.0.0 - 2020-07-29
+## v2.0.0 - 2020-07-31
 
-* Refactor, rename SPSC to Sipsic; it's much easier for my eyes and brain.
-* Implement multi-producer, single-consumer (Mupsic) queues.
+* Implement multi-producer, single-consumer queue.
+* Refactor, remove shared memory queues.
 
 ## v1.0.0 - 2020-07-6
 

@@ -4,7 +4,6 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-import atomics
 import options
 import sequtils
 import unittest
@@ -18,35 +17,10 @@ import ./t_sip
 var queue: Sipsic[8, int]
 
 
-proc reset[N: static int, T](
-  self: var Sipsic[N, T]
-) {.inline.} =
-  ## Resets the queue to its default state.
-  ## Should only be used in single-threaded unit tests.
-  self.head.release(0)
-  self.tail.release(0)
-  for i in 0..<N:
-    self.storage[i].reset()
-
-
-proc state[N: static int, T](
-  self: var Sipsic[N, T],
-): tuple[
-    head: int,
-    tail: int,
-    storage: seq[T],
-  ] =
-  ## Retrieve current state of the queue
-  ## Should only be used in single-threaded unit tests,
-  ## as data may be torn.
-  return (
-    head: self.head.acquire,
-    tail: self.tail.acquire,
-    storage: self.storage[0..^1],
-  )
-
-
 suite "Sipsic[N, T]":
+
+  test "capacity":
+    check(queue.capacity == 8)
 
   test "initial state":
     require(queue.state == (
@@ -71,7 +45,7 @@ suite "push(Sipsic[N, T], T)":
     testSipPushWrap(queue)
 
 
-suite "push(Sipsic[N, T], seq)":
+suite "push(Sipsic[N, T], seq[T])":
 
   setup:
     queue.reset()

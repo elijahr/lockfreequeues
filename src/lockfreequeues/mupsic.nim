@@ -4,40 +4,38 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-## A multi-producer, single-consumer queue, implemented as a ring buffer,
-## suitable for when the capacity and producer count are known at
-## compile-time.
+## A bounded, multi-producer, single-consumer queue implemented as a ring
+## buffer.
 
 import atomics
 import options
-import strformat
+import sequtils
+import sugar
 
 import ./ops
-import ./producer
 import ./sipsic
+
+
+const FirstProduction = -1
+const NoSlice = none(HSlice[int, int])
 
 
 type
   Mupsic*[N, P: static int, T] = object of Sipsic[N, T]
-    ## A multi-producer, single-consumer queue, implemented as a ring buffer,
-    ## suitable for when the capacity and producer count are known at
-    ## compile-time.
+    ## A bounded, multi-producer, single-consumer queue implemented as a ring
+    ## buffer.
+    ##
+    ## * `N` is the capacity of the queue.
+    ## * `P` is the number of producer threads.
+    ## * `T` is the type of data the queue will hold.
 
-    prevPid*: Atomic[int] ## \
-      ## The ID of the most recent Producer
+    prevPid*: Atomic[int] ## The ID of the most recent Producer
 
-    producers*: array[P, Atomic[Producer]]
+    producers*: array[P, Atomic[int]] ## Array of producer tails
 
 
-proc checkPid[N, P: static int, T](
-  self: var Mupsic[N, P, T],
-  pid: int,
-) {.inline.} =
-  # pid must be be in the range [0, P)
-  if pid >= P:
-    raise newException(
-      ValueError,
-      fmt"pid ({pid}) must be in range 0..<{P}")
+proc initMupsic*[N, P: static int, T](): Mupsic[N, P, T] =
+  result.prevPid.release(FirstProduction)
 
 
 proc push*[N, P: static int, T](
@@ -48,170 +46,202 @@ proc push*[N, P: static int, T](
   ## Append a single item to the queue.
   ## If the queue is full, `false` is returned.
   ## If `item` is appended, `true` is returned.
-  self.checkPid(pid)
 
-  var prevPid = self.prevPid.relaxed
-  var producer = self.producers[pid].relaxed
-  assert producer.state == Synchronized
-
-  # Mark this producer reserved
-  producer.state = Reserved
-  self.producers[pid].release(producer)
-
-  var head = self.head.acquire
-  var tail = self.producers[prevPid].relaxed.tail
+  var prevTail: int
+  var newTail: int
+  var prevPid: int
+  var isFirstProduction: bool
 
   # spin until reservation is acquired
   while true:
-    if unlikely(full(head, tail, N)):
-      # Queue is full, reset state to Synchronized and return
-      producer.state = Synchronized
-      self.producers[pid].release(producer)
-      return false
-    else:
-      # Propagate previous tail to this producer so it is visible to other
-      # producers when the below compareExchange() is successful.
-      producer.tail = tail
-      self.producers[pid].release(producer)
+    prevPid = self.prevPid.acquire
+    isFirstProduction = prevPid == FirstProduction
+    var head = self.head.acquire
+    prevTail =
+      if isFirstProduction:
+        0
+      else:
+        self.producers[prevPid].acquire
 
-    if self.prevPid.compareExchangeWeakReleaseRelaxed(
+    if unlikely(full(head, prevTail, N)):
+      return false
+
+    newTail = incOrReset(prevTail, 1, N)
+    self.producers[pid].release(newTail)
+
+    if self.prevPid.compareExchangeWeak(
       prevPid,
       pid,
+      moAcquire,
+      moRelaxed,
     ):
       break
-    else:
-      cpuRelax()
-      head = self.head.acquire
-      tail = self.producers[prevPid].relaxed.tail
+
+    cpuRelax()
 
   result = true
 
-  let writeIndex = index(tail, N)
+  self.storage[index(prevTail, N)] = item
 
-  self.storage[writeIndex] = item
-
-  # Mark reservation pending for synchronization
-  producer.state = Pending
-  producer.tail = incOrReset(tail, 1, N)
-  producer.prevPid = prevPid
-  self.producers[pid].release(producer)
-
-  # Spin until preceding reservation is synchronized, unless this producer
-  # was the previous one.
-  if pid != prevPid:
+  # Wait for prev producer to update tail, then update tail
+  if not isFirstProduction:
     while true:
-      if self.producers[prevPid].relaxed.state == Synchronized:
+      var expectedTail = prevTail
+      if self.tail.compareExchangeWeak(
+        expectedTail,
+        newTail,
+        moAcquire,
+        moRelaxed,
+      ):
         break
-      else:
-        cpuRelax()
-
-  # Update tail
-  self.tail.release(producer.tail)
-
-  # Mark synchronized
-  producer.state = Synchronized
-  self.producers[pid].release(producer)
+      cpuRelax()
+  elif isFirstProduction:
+    self.tail.release(newTail)
 
 
 proc push*[N, P: static int, T](
   self: var Mupsic[N, P, T],
   pid: int,
   items: openArray[T],
-): Option[seq[T]] =
+): Option[HSlice[int, int]] =
   ## Append multiple items to the queue.
   ## If the queue is already full or is filled by this call, `some(unpushed)`
-  ## is returned, where `unpushed` is a `seq[T]` containing the items which
-  ## cannot be appended.
-  ## If all items are appended, `none(seq[T])` is returned.
-  self.checkPid(pid)
-
+  ## is returned, where `unpushed` is an `HSlice` corresponding to the
+  ## chunk of items which could not be pushed.
+  ## If all items are appended, `none(HSlice[int, int])` is returned.
   if unlikely(items.len == 0):
-    # items is empty, return nothing
-    return none(seq[T])
+    # items is empty, nothing unpushed
+    return NoSlice
 
-  var prevPid = self.prevPid.relaxed
-  var producer = self.producers[pid].relaxed
-  assert producer.state == Synchronized
-
-  # Mark this producer reserved
-  producer.state = Reserved
-  self.producers[pid].release(producer)
-
-  var head = self.head.acquire
-  var tail = self.producers[prevPid].relaxed.tail
   var count: int
   var avail: int
+  var prevTail: int
+  var newTail: int
+  var prevPid: int
+  var isFirstProduction: bool
 
   # spin until reservation is acquired
   while true:
-    avail = available(head, tail, N)
+    prevPid = self.prevPid.acquire
+    isFirstProduction = prevPid == FirstProduction
+    var head = self.head.acquire
+    prevTail =
+      if isFirstProduction:
+        0
+      else:
+        self.producers[prevPid].acquire
+
+    avail = available(head, prevTail, N)
     if likely(avail >= items.len):
       # enough room to push all items
       count = items.len
     else:
       if avail == 0:
-        # Queue is full, reset state to Synchronized and return
-        producer.state = Synchronized
-        self.producers[pid].release(producer)
-        return some(items[0..^1])
+        # Queue is full, return
+        return some(0..items.len - 1)
       else:
         # not enough room to push all items
         count = avail
 
-    # Propagate previous tail to this producer so it is visible to other
-    # producers when the below compareExchange() is successful.
-    producer.tail = tail
-    self.producers[pid].release(producer)
+    newTail = incOrReset(prevTail, count, N)
+    self.producers[pid].release(newTail)
 
-    if self.prevPid.compareExchangeWeakReleaseRelaxed(
+    if self.prevPid.compareExchangeWeak(
       prevPid,
       pid,
+      moAcquire,
+      moRelaxed,
     ):
       break
-    else:
-      cpuRelax()
-      head = self.head.acquire
-      tail = self.producers[prevPid].relaxed.tail
+
+    cpuRelax()
 
   if count < items.len:
     # give back remainder
-    result = some(items[avail..^1])
+    result = some(avail..items.len - 1)
+  else:
+    result = NoSlice
 
-  let writeStartIndex = index(tail, N)
-  var writeEndIndex = index((tail + count) - 1, N)
+  let start = index(prevTail, N)
+  var stop = index((prevTail + count) - 1, N)
 
-  if writeStartIndex > writeEndIndex:
+  if start > stop:
     # data may wrap
-    let itemsPivotIndex = (N-1) - writeStartIndex
-    for i in 0..itemsPivotIndex:
-      self.storage[writeStartIndex+i] = items[i]
-    if writeEndIndex > 0:
+    let pivot = (N-1) - start
+    self.storage[start..start+pivot] = items[0..pivot]
+    if stop > 0:
       # data wraps
-      for i in 0..writeEndIndex:
-        self.storage[i] = items[itemsPivotIndex+1+i]
+      self.storage[0..stop] = items[pivot+1..pivot+1+stop]
   else:
     # data does not wrap
-    for i in 0..writeEndIndex-writeStartIndex:
-      self.storage[writeStartIndex+i] = items[i]
+    self.storage[start..stop] = items[0..stop-start]
 
-  # Mark reservation pending for synchronization
-  producer.state = Pending
-  producer.tail = incOrReset(tail, count, N)
-  producer.prevPid = prevPid
-  self.producers[pid].release(producer)
-
-  # Spin until preceding reservation is synchronized, unless this producer
-  # was the previous one.
-  if pid != prevPid:
+  # Wait for prev producer to update tail, then update tail
+  if not isFirstProduction:
     while true:
-      if self.producers[prevPid].relaxed.state == Synchronized:
+      var expectedTail = prevTail
+      if self.tail.compareExchangeWeak(
+        expectedTail,
+        newTail,
+        moAcquire,
+        moRelaxed,
+      ):
         break
-      else:
-        cpuRelax()
+      cpuRelax()
+  elif isFirstProduction:
+    self.tail.release(newTail)
 
-  # Update tail
-  self.tail.release(producer.tail)
 
-  # Mark synchronized
-  producer.state = Synchronized
-  self.producers[pid].release(producer)
+proc capacity*[N, P: static int, T](
+  self: var Mupsic[N, P, T],
+): int
+  {.inline.} =
+  ## Returns the queue's storage capacity (`N`).
+  result = N
+
+
+proc producerCount*[N, P: static int, T](
+  self: var Mupsic[N, P, T],
+): int
+  {.inline.} =
+  ## Returns the queue's number of producers (`P`).
+  result = P
+
+
+proc reset*[N, P: static int, T](
+  self: var Mupsic[N, P, T]
+) {.inline.} =
+  ## Resets the queue to its default state.
+  ## Proably only useful in single-threaded unit tests.
+  doAssert(defined(testing))
+  self.head.release(0)
+  self.tail.release(0)
+  self.prevPid.release(FirstProduction)
+  self.storage[0..<N] = repeat(0, N)
+  for p in 0..<P:
+    self.producers[p].release(0)
+
+
+proc state*[N, P: static int, T](
+  self: var Mupsic[N, P, T],
+): tuple[
+    head: int,
+    tail: int,
+    prevPid: int,
+    storage: seq[T],
+    producers: seq[int],
+  ] =
+  ## Retrieve current state of the queue.
+  ## Proably only useful in single-threaded unit tests,
+  ## as data may be torn.
+  doAssert(defined(testing))
+  let producers = collect(newSeq):
+    for p in 0..<P:
+      self.producers[p].acquire
+  return (
+    head: self.head.acquire,
+    tail: self.tail.acquire,
+    prevPid: self.prevPid.acquire,
+    storage: self.storage[0..^1],
+    producers: producers
+  )

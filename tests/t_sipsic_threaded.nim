@@ -16,22 +16,23 @@ var
   queue: Sipsic[8, int]
 
 
+
 proc consumerFunc() {.thread.} =
   var count = 0
   while count < 128:
-    var res = queue.pop(1)
+    let res = queue.pop()
     if res.isSome:
-      let msg = res.get()[0]
+      let msg = res.get
       channel.send(msg)
       inc count
     else:
-      sleep(11)
+      cpuRelax()
 
 
 proc producerFunc() {.thread.} =
   for i in 1..128:
-    while queue.push(@[i]).isSome:
-      sleep(10)
+    while not queue.push(i):
+      cpuRelax()
 
 
 suite "Sipsic[N, T] threaded":

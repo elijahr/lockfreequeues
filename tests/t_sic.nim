@@ -4,11 +4,6 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-import lockfreequeues/producer
-
-
-let initialProducer* = Producer(tail: 0, state: Synchronized, prevPid: 0)
-
 
 template testSicPopOne*(queue: untyped) =
   when queue is Mupsic:
@@ -18,7 +13,7 @@ template testSicPopOne*(queue: untyped) =
 
   let res = queue.pop()
   check(res.isSome)
-  check(res.get() == 1)
+  check(res.get == 1)
 
   when queue is Mupsic:
     check(queue.state == (
@@ -27,10 +22,10 @@ template testSicPopOne*(queue: untyped) =
       prevPid: 0,
       storage: @[1, 2, 3, 4, 5, 6, 7, 8],
       producers: @[
-        Producer(tail: 8, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
-        initialProducer,
+        8,
+        0,
+        0,
+        0,
       ],
     ))
   else:
@@ -51,7 +46,7 @@ template testSicPopAll*(queue: untyped) =
   for i in 1..8:
     let res = queue.pop()
     check(res.isSome)
-    items.add(res.get())
+    items.add(res.get)
 
   check(items == @[1, 2, 3, 4, 5, 6, 7, 8])
 
@@ -62,10 +57,10 @@ template testSicPopAll*(queue: untyped) =
       prevPid: 0,
       storage: @[1, 2, 3, 4, 5, 6, 7, 8],
       producers: @[
-        Producer(tail: 8, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
-        initialProducer,
+        8,
+        0,
+        0,
+        0,
       ],
     ))
   else:
@@ -83,9 +78,9 @@ template testSicPopEmpty*(queue: untyped) =
     check(queue.state == (
       head: 0,
       tail: 0,
-      prevPid: 0,
+      prevPid: -1,
       storage: repeat(0, 8),
-      producers: repeat(initialProducer, 4),
+      producers: repeat(0, 4),
     ))
   else:
     check(queue.state == (
@@ -113,10 +108,10 @@ template testSicPopTooMany*(queue: untyped) =
       prevPid: 0,
       storage: @[1, 2, 3, 4, 5, 6, 7, 8],
       producers: @[
-        Producer(tail: 8, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
-        initialProducer,
+        8,
+        0,
+        0,
+        0,
       ],
     ))
   else:
@@ -145,7 +140,7 @@ template testSicPopWrap*(queue: untyped) =
   for i in 1..8:
     let res = queue.pop()
     check(res.isSome)
-    items.add(res.get())
+    items.add(res.get)
 
   check(items == @[5, 6, 7, 8, 9, 10, 11, 12])
 
@@ -156,10 +151,10 @@ template testSicPopWrap*(queue: untyped) =
       prevPid: 1,
       storage: @[9, 10, 11, 12, 5, 6, 7, 8],
       producers: @[
-        Producer(tail: 8, state: Synchronized, prevPid: 0),
-        Producer(tail: 12, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
+        8,
+        12,
+        0,
+        0,
       ],
     ))
   else:
@@ -186,10 +181,10 @@ template testSicPopCountOne*(queue: untyped) =
       prevPid: 0,
       storage: @[1, 2, 3, 4, 5, 6, 7, 8],
       producers: @[
-        Producer(tail: 8, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
-        initialProducer,
+        8,
+        0,
+        0,
+        0,
       ],
     ))
   else:
@@ -215,10 +210,10 @@ template testSicPopCountAll*(queue: untyped) =
       prevPid: 0,
       storage: @[1, 2, 3, 4, 5, 6, 7, 8],
       producers: @[
-        Producer(tail: 8, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
-        initialProducer,
+        8,
+        0,
+        0,
+        0,
       ],
     ))
   else:
@@ -236,9 +231,9 @@ template testSicPopCountEmpty*(queue: untyped) =
     check(queue.state == (
       head: 0,
       tail: 0,
-      prevPid: 0,
+      prevPid: -1,
       storage: repeat(0, 8),
-      producers: repeat(initialProducer, 4),
+      producers: repeat(0, 4),
     ))
   else:
     check(queue.state == (
@@ -265,10 +260,10 @@ template testSicPopCountTooMany*(queue: untyped) =
       prevPid: 0,
       storage: @[1, 2, 3, 4, 5, 6, 7, 8],
       producers: @[
-        Producer(tail: 8, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
-        initialProducer,
+        8,
+        0,
+        0,
+        0,
       ],
     ))
   else:
@@ -303,10 +298,10 @@ template testSicPopCountWrap*(queue: untyped) =
       prevPid: 1,
       storage: @[9, 10, 11, 12, 5, 6, 7, 8],
       producers: @[
-        Producer(tail: 8, state: Synchronized, prevPid: 0),
-        Producer(tail: 12, state: Synchronized, prevPid: 0),
-        initialProducer,
-        initialProducer,
+        8,
+        12,
+        0,
+        0,
       ],
     ))
   else:
