@@ -16,8 +16,26 @@ cache:
 matrix:
   include:
     - os: linux
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=1.2.4
     - os: linux
-      env: TEST_CPP=1
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=1.2.4
+        - TEST_CPP=1
+    - os: linux
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=stable
+    - os: linux
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=stable
+        - TEST_CPP=1
+    - os: linux
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=devel
+    - os: linux
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=devel
+        - TEST_CPP=1
 
 install:
   - |

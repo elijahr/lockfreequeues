@@ -14,6 +14,10 @@ import ./t_integration
 import ./t_sic
 
 
+when (NimMajor, NimMinor) < (1, 3):
+  type IndexDefect = IndexError
+
+
 var queue = initMupsic[8, 4, int]()
 
 

@@ -9,6 +9,10 @@ import unittest
 import lockfreequeues/ops
 
 
+when (NimMajor, NimMinor) < (1, 3):
+  type AssertionDefect = AssertionError
+
+
 suite "ops.index(value, capacity)":
 
   test "value >= 2 * capacity raises AssertionDefect":
