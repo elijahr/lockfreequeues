@@ -6,8 +6,8 @@ Lock-free queue (aka ring buffer) implementations for Nim.
 
 Four implementations are provided:
 
-- [`Sipsic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/sipsic.html) is a single-producer, single-consumer queue.
-- [`Mupsic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupsic.html) is a multi-producer, single-consumer queue.
+- [`Sipsic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/sipsic.html) is a single-producer, single-consumer bounded queue.
+- [`Mupsic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupsic.html) is a multi-producer, single-consumer bounded queue.
 
 API documentation: https://elijahr.github.io/lockfreequeues/
 
@@ -22,13 +22,120 @@ nim c -r examples/mupsic.nim
 
 ### Sipsic
 ```nim
-TODO
+import atomics
+import options
+import random
+import sequtils
+import threadpool
+
+import lockfreequeues
+
+const
+  itemCount = 30
+
+var
+  # Queue that can hold 8 ints
+  queue = initSipsic[8, int]()
+
+
+proc consumerFunc(): seq[int] {.gcsafe.} =
+  result = @[]
+  while result.len < itemCount:
+
+    # Pop many items from the queue
+    let items = queue.pop(itemCount)
+    if items.isSome:
+      result.insert(items.get, result.len)
+
+    # Pop a single item from the queue
+    let item = queue.pop()
+    if item.isSome:
+      result.add(item.get)
+    cpuRelax()
+
+
+proc producerFunc() {.gcsafe.} =
+  for i in 0..<itemCount:
+    let item = rand(100)
+
+    if i mod 2 == 0:
+      # Push a single item to the queue
+      while not queue.push(item):
+        cpuRelax()
+
+    else:
+      # Push a sequence to the queue
+      while queue.push(@[item]).isSome:
+        cpuRelax()
+
+    echo "Pushed item: ", item
+
+
+let consumedFlow = spawn consumerFunc()
+spawn producerFunc()
+sync()
+echo "Popped items: ", ^consumedFlow
 ```
 
 ### Mupsic
 
 ```nim
-TODO
+import atomics
+import options
+import random
+import sequtils
+import threadpool
+
+import lockfreequeues
+
+const
+  producerCount = 30
+
+var
+  # Queue that can hold 8 ints, with 30 producerTails
+  queue = initMupsic[8, producerCount, int]()
+
+
+proc consumerFunc(): seq[int] {.gcsafe.} =
+  result = @[]
+  while result.len < producerCount:
+
+    # Pop many items from the queue
+    let items = queue.pop(producerCount)
+    if items.isSome:
+      result.insert(items.get, result.len)
+
+    # Pop a single item from the queue
+    let item = queue.pop()
+    if item.isSome:
+      result.add(item.get)
+    cpuRelax()
+
+
+proc producerFunc(producer: int) {.gcsafe.} =
+  let item = rand(100)
+
+  if producer mod 2 == 0:
+    # Push a single item to the queue
+    while not queue.push(producer, item):
+      cpuRelax()
+
+  else:
+    # Push a sequence to the queue
+    while queue.push(producer, @[item]).isSome:
+      cpuRelax()
+
+  echo "Pushed item: ", item
+
+
+let consumedFlow = spawn consumerFunc()
+
+for producer in 0..<producerCount:
+  spawn producerFunc(producer)
+
+sync()
+
+echo "Popped items: ", ^consumedFlow
 ```
 
 ## Reference

@@ -31,13 +31,14 @@ proc consumerFunc() {.thread.} =
       inc count
 
 
-proc producerFunc(pid: int) {.thread.} =
+proc producerFunc(i: int) {.thread.} =
+  var producer = queue.getProducer()
   while true:
-    if pid mod 2 == 0:
-      if queue.push(pid, pid):
+    if i mod 2 == 0:
+      if producer.push(i):
         break
     else:
-      if queue.push(pid, @[pid]).isNone:
+      if producer.push(@[i]).isNone:
         break
 
 
@@ -46,17 +47,17 @@ suite "Mupsic[N, P, T] threaded":
   test "basic":
     var
       consumer: Thread[void]
-      producers: array[producerCount, Thread[int]]
+      producerThreads: array[producerCount, Thread[int]]
 
     channel.open()
     consumer.createThread(consumerFunc)
     for i in 0..<producerCount:
-      producers[i].createThread(producerFunc, i)
+      producerThreads[i].createThread(producerFunc, i)
     var received = newSeq[int]()
     for i in 0..<producerCount:
       received.add(channel.recv())
     joinThread(consumer)
-    joinThreads(producers)
+    joinThreads(producerThreads)
     channel.close()
     received.sort()
     check(received == (0..<producerCount).toSeq)

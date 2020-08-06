@@ -10,23 +10,8 @@
             "MIMode": "lldb",
             "request": "launch",
             "program": "${workspaceRoot}/tests/test",
-            // "args": ["ops.available(head, tail, capacity)::"],
+            "args": ["zzpush(Producer[N, P, T], T)::"],
             "cwd": "${workspaceRoot}",
-            // "preLaunchTask": "Build tests"
-        },
-        {
-            "name": "Debug compile (cppdbg)",
-            "type": "cppdbg",
-            "MIMode": "lldb",
-            "request": "launch",
-            "program": "/Users/elijahrutschman/Development/Nim/bin/nim",
-            "args": [
-                "c",
-                "--nimcache:/Users/elijahrutschman/.nim/cache",
-                "-r",
-                "tests/test.nim",
-            ],
-            "cwd": "${workspaceRoot}",
-        },
+        }
     ]
 }

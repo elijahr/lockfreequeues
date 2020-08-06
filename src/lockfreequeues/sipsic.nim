@@ -4,20 +4,22 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-## A bounded, single-producer, single-consumer queue implemented as a ring
+## A single-producer, single-consumer bounded queue implemented as a ring
 ## buffer.
 
 import atomics
 import options
-import sequtils
 
 import ./constants
 import ./ops
 
 
+const NoSlice* = none(HSlice[int, int])
+
+
 type
   Sipsic*[N: static int, T] = object of RootObj
-    ## A bounded, single-producer, single-consumer queue implemented as a ring
+    ## A single-producer, single-consumer bounded queue implemented as a ring
     ## buffer.
     ##
     ## * `N` is the capacity of the queue.
@@ -29,6 +31,20 @@ type
     tail* {.align: CacheLineBytes.}: Atomic[int]
 
     storage*: array[N, T] ## The underlying storage.
+
+
+proc clear[N: static int, T](
+  self: var Sipsic[N, T]
+) =
+  self.head.release(0)
+  self.tail.release(0)
+  for n in 0..<N:
+    self.storage[n].reset()
+
+
+proc initSipsic*[N: static int, T](): Sipsic[N, T] =
+  ## Initialize a new Sipsic queue.
+  result.clear()
 
 
 proc push*[N: static int, T](
@@ -62,10 +78,10 @@ proc push*[N: static int, T](
   ## If the queue is already full or is filled by this call, `some(unpushed)`
   ## is returned, where `unpushed` is an `HSlice` corresponding to the
   ## chunk of items which could not be pushed.
-  ## If all items are appended, `none(HSlice[int, int])` is returned.
+  ## If all items are appended, `NoSlice` is returned.
   if unlikely(items.len == 0):
     # items is empty, return none
-    return none(HSlice[int, int])
+    return NoSlice
 
   let tail = self.tail.relaxed
   let head = self.head.acquire
@@ -79,29 +95,26 @@ proc push*[N: static int, T](
 
   if likely(avail >= items.len):
     # enough room to push all items, return nothing
-    result = none(HSlice[int, int])
+    result = NoSlice
     count = items.len
   else:
     # not enough room to push all items, return remainder
     result = some(avail..items.len - 1)
     count = avail
 
-  let writeStartIndex = index(tail, N)
-  var writeEndIndex = index((tail + count) - 1, N)
+  let start = index(tail, N)
+  var stop = index((tail + count) - 1, N)
 
-  if writeStartIndex > writeEndIndex:
+  if start > stop:
     # data may wrap
-    let itemsPivotIndex = (N-1) - writeStartIndex
-    for i in 0..itemsPivotIndex:
-      self.storage[writeStartIndex+i] = items[i]
-    if writeEndIndex > 0:
+    let pivot = (N-1) - start
+    self.storage[start..start+pivot] = items[0..pivot]
+    if stop > 0:
       # data wraps
-      for i in 0..writeEndIndex:
-        self.storage[i] = items[itemsPivotIndex+1+i]
+      self.storage[0..stop] = items[pivot+1..pivot+1+stop]
   else:
     # data does not wrap
-    for i in 0..writeEndIndex-writeStartIndex:
-      self.storage[writeStartIndex+i] = items[i]
+    self.storage[start..stop] = items[0..stop-start]
 
   self.tail.release(incOrReset(tail, count, N))
 
@@ -111,7 +124,7 @@ proc pop*[N: static int, T](
 ): Option[T] =
   ## Pop a single item from the queue.
   ## If the queue is empty, `none(T)` is returned.
-  ## If an item is popped, `some(T)` is returned.
+  ## Otherwise an item is popped, `some(T)` is returned.
   let tail = self.tail.acquire
   let head = self.head.relaxed
 
@@ -133,7 +146,7 @@ proc pop*[N: static int, T](
 ): Option[seq[T]] =
   ## Pop `count` items from the queue.
   ## If the queue is empty, `none(seq[T])` is returned.
-  ## If > 1 items are popped, `some(seq[T])` is returned.
+  ## Otherwise > 1 items are popped and `some(seq[T])` is returned.
   let tail = self.tail.acquire
   let head = self.head.relaxed
 
@@ -184,32 +197,23 @@ proc capacity*[N: static int, T](
   result = N
 
 
-proc reset*[N: static int, T](
-  self: var Sipsic[N, T]
-) {.inline.} =
-  ## Resets the queue to its default state.
-  ## Proably only useful in single-threaded unit tests.
-  doAssert(defined(testing))
+when defined(testing):
+  from unittest import check
 
-  self.head.release(0)
-  self.tail.release(0)
-  self.storage[0..<N] = repeat(0, N)
+  proc reset*[N: static int, T](
+    self: var Sipsic[N, T]
+  ) =
+    ## Resets the queue to its default state.
+    ## Probably only useful in single-threaded unit tests.
+    self.clear()
 
 
-proc state*[N: static int, T](
-  self: var Sipsic[N, T],
-): tuple[
+  proc checkState*[N: static int, T](
+    self: var Sipsic[N, T],
     head: int,
     tail: int,
     storage: seq[T],
-  ] =
-  ## Retrieve current state of the queue
-  ## Proably only useful in single-threaded unit tests,
-  ## as data may be torn.
-  doAssert(defined(testing))
-
-  return (
-    head: self.head.acquire,
-    tail: self.tail.acquire,
-    storage: self.storage[0..^1],
-  )
+  ) =
+    check(self.head.acquire == head)
+    check(self.tail.acquire == tail)
+    check(self.storage[0..^1] == storage)

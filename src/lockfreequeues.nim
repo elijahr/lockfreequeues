@@ -7,6 +7,7 @@
 import ./lockfreequeues/[
   atomic_dsl,
   constants,
+  mupmuc,
   mupsic,
   ops,
   sipsic,
@@ -15,6 +16,7 @@ import ./lockfreequeues/[
 export
   atomic_dsl,
   constants,
+  mupmuc,
   mupsic,
   ops,
   sipsic

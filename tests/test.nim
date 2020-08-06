@@ -5,6 +5,7 @@
 # copyright.
 
 import ./t_atomic_dsl
+import ./t_mupmuc
 import ./t_mupsic
 import ./t_mupsic_threaded
 import ./t_ops
@@ -13,6 +14,7 @@ import ./t_sipsic_threaded
 
 export
   t_atomic_dsl,
+  t_mupmuc,
   t_mupsic,
   t_mupsic_threaded,
   t_ops,

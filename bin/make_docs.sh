@@ -14,12 +14,14 @@ rm -r htmldocs/lockfreequeues* || true
 nim doc --project \
     --index:on \
     --out:htmldocs \
+    --threads:on \
     --git.url:https://github.com/elijahr/lockfreequeues \
     --git.commit:master \
     src/lockfreequeues.nim
 
 nim buildIndex \
     --out:htmldocs/index.html \
+    --threads:on \
     --git.url:https://github.com/elijahr/lockfreequeues \
     --git.commit:master \
     htmldocs

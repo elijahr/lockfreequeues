@@ -10,22 +10,22 @@ import unittest
 template testSipPush*(queue: untyped) =
   for i in 1..8:
     check(queue.push(i) == true)
-  check(queue.state == (
-    head: 0,
-    tail: 8,
-    storage: @[1, 2, 3, 4, 5, 6, 7, 8]
-  ))
+  queue.checkState(
+    head=0,
+    tail=8,
+    storage=(@[1, 2, 3, 4, 5, 6, 7, 8]),
+  )
 
 
 template testSipPushOverflow*(queue: untyped) =
   for i in 1..8:
     discard queue.push(i)
   check(queue.push(9) == false)
-  check(queue.state == (
-    head: 0,
-    tail: 8,
-    storage: @[1, 2, 3, 4, 5, 6, 7, 8]
-  ))
+  queue.checkState(
+    head=0,
+    tail=8,
+    storage=(@[1, 2, 3, 4, 5, 6, 7, 8]),
+  )
 
 
 template testSipPushWrap*(queue: untyped) =
@@ -35,20 +35,20 @@ template testSipPushWrap*(queue: untyped) =
     discard queue.pop()
   for i in 5..10:
     check(queue.push(i) == true)
-  check(queue.state == (
-    head: 2,
-    tail: 10,
-    storage: @[9, 10, 3, 4, 5, 6, 7, 8]
-  ))
+  queue.checkState(
+    head=2,
+    tail=10,
+    storage=(@[9, 10, 3, 4, 5, 6, 7, 8]),
+  )
 
 
 template testSipPushSeq*(queue: untyped) =
   check(queue.push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
-  check(queue.state == (
-    head: 0,
-    tail: 8,
-    storage: @[1, 2, 3, 4, 5, 6, 7, 8]
-  ))
+  queue.checkState(
+    head=0,
+    tail=8,
+    storage=(@[1, 2, 3, 4, 5, 6, 7, 8]),
+  )
 
 
 template testSipPushSeqOverflow*(queue: untyped) =
@@ -57,11 +57,11 @@ template testSipPushSeqOverflow*(queue: untyped) =
   )
   check(res.isSome)
   check(res.get == 8..15)
-  check(queue.state == (
-    head: 0,
-    tail: 8,
-    storage: @[1, 2, 3, 4, 5, 6, 7, 8]
-  ))
+  queue.checkState(
+    head=0,
+    tail=8,
+    storage=(@[1, 2, 3, 4, 5, 6, 7, 8]),
+  )
 
 
 template testSipPushSeqWrap*(queue: untyped) =
@@ -70,8 +70,8 @@ template testSipPushSeqWrap*(queue: untyped) =
     discard queue.pop()
   var res = queue.push(@[5, 6, 7, 8, 9, 10])
   check(res.isNone)
-  check(queue.state == (
-    head: 2,
-    tail: 10,
-    storage: @[9, 10, 3, 4, 5, 6, 7, 8]
-  ))
+  queue.checkState(
+    head=2,
+    tail=10,
+    storage=(@[9, 10, 3, 4, 5, 6, 7, 8]),
+  )

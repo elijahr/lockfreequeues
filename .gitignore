@@ -1,8 +1,9 @@
 .vscode/tags
 .DS_Store
+*.dSYM
+
 nimcache/
 nimblecache/
-tests/test
-*.dSYM
-examples/sipsic/sharedqueue
-examples/sipsic/staticqueue
+/tests/test
+/examples/mupsic
+/examples/sipsic

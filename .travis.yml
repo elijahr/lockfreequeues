@@ -60,8 +60,9 @@ before_script:
       export PATH=$HOME/.nimble/bin:$PATH
 
 script:
+  - nim -v;
   - |
-    nim -v;
     [ "x$TEST_CPP" == "x1" ] \
       && nimble testcpp \
       || nimble test;
+  - nimble examples

@@ -17,3 +17,8 @@ task test, "Runs the test suite (C)":
 
 task testcpp, "Runs the test suite (C++)":
   exec "nim cpp -r tests/test.nim"
+
+task examples, "Runs the examples":
+  exec "nim c -r examples/mupmuc.nim"
+  exec "nim c -r examples/mupsic.nim"
+  exec "nim c -r examples/sipsic.nim"

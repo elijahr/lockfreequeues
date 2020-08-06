@@ -11,8 +11,8 @@ import unittest
 
 import lockfreequeues
 import ./t_integration
+import ./t_muc
 import ./t_mup
-import ./t_sic
 
 
 when (NimMajor, NimMinor) < (1, 3):
@@ -20,10 +20,10 @@ when (NimMajor, NimMinor) < (1, 3):
   type AssertionDefect = AssertionError
 
 
-var queue = initMupsic[8, 4, int]()
+var queue = initMupmuc[8, 4, 4, int]()
 
 
-suite "Mupsic[N, P, T]":
+suite "Mupmuc[N, P, C, T]":
   test "capacity":
     check(queue.capacity == 8)
 
@@ -42,7 +42,7 @@ suite "Mupsic[N, P, T]":
     )
 
 
-suite "getProducer(Mupsic[N, P, T])":
+suite "getProducer(Mupmuc[N, P, C, T])":
   setup:
     queue.reset()
 
@@ -59,7 +59,7 @@ suite "getProducer(Mupsic[N, P, T])":
     testMupGetProducerThrowsNoProducersAvailable(queue)
 
 
-suite "push(Mupsic[N, P, T])":
+suite "push(Mupmuc[N, P, C, T])":
   setup:
     queue.reset()
 
@@ -100,52 +100,52 @@ suite "push(Producer[N, P, T], seq[T])":
     testMupPushSeqWrap(queue)
 
 
-suite "pop(Mupsic[N, P, T])":
+suite "pop(Mupmuc[N, P, C, T])":
   setup:
     queue.reset()
 
   test "one":
-    testSicPopOne(queue)
+    testMucPopOne(queue)
 
   test "all":
-    testSicPopAll(queue)
+    testMucPopAll(queue)
 
   test "empty":
-    testSicPopEmpty(queue)
+    testMucPopEmpty(queue)
 
   test "too many":
-    testSicPopTooMany(queue)
+    testMucPopTooMany(queue)
 
   test "wrap":
-    testSicPopWrap(queue)
+    testMucPopWrap(queue)
 
 
-suite "pop(Mupsic[N, P, T], int)":
+suite "pop(Mupmuc[N, P, C, T], int)":
   setup:
     queue.reset()
 
   test "one":
-    testSicPopCountOne(queue)
+    testMucPopCountOne(queue)
 
   test "all":
-    testSicPopCountAll(queue)
+    testMucPopCountAll(queue)
 
   test "empty":
-    testSicPopCountEmpty(queue)
+    testMucPopCountEmpty(queue)
 
   test "too many":
-    testSicPopCountTooMany(queue)
+    testMucPopCountTooMany(queue)
 
   test "wrap":
-    testSicPopCountWrap(queue)
+    testMucPopCountWrap(queue)
 
 
-suite "capacity(Mupsic[N, P, T])":
+suite "capacity(Mupmuc[N, P, C, T])":
   test "basic":
     testCapacity(queue)
 
 
-suite "Mupsic integration":
+suite "Mupmuc integration":
   setup:
     queue.reset()
 

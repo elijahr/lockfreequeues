@@ -5,7 +5,6 @@
 # copyright.
 
 import options
-import os
 import unittest
 
 import lockfreequeues
@@ -13,8 +12,7 @@ import lockfreequeues
 
 var
   channel: Channel[int]
-  queue: Sipsic[8, int]
-
+  queue = initSipsic[8, int]()
 
 
 proc consumerFunc() {.thread.} =

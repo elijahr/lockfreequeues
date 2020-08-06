@@ -14,7 +14,7 @@ import ./t_sic
 import ./t_sip
 
 
-var queue: Sipsic[8, int]
+var queue = initSipsic[8, int]()
 
 
 suite "Sipsic[N, T]":
@@ -23,11 +23,11 @@ suite "Sipsic[N, T]":
     check(queue.capacity == 8)
 
   test "initial state":
-    require(queue.state == (
-      head: 0,
-      tail: 0,
-      storage: repeat(0, 8)
-    ))
+    queue.checkState(
+      head=0,
+      tail=0,
+      storage=repeat(0, 8),
+    )
 
 
 suite "push(Sipsic[N, T], T)":
