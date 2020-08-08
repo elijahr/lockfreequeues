@@ -6,7 +6,6 @@
 
 ## Example usage of Sipsic, a single-producer, single-consumer bounded queue.
 
-import atomics
 import options
 import random
 import sequtils

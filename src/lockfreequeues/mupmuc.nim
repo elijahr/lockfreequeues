@@ -11,11 +11,9 @@ when not compileOption("threads"):
 
 import atomics
 import options
-import sugar
 
 import ./ops
 import ./mupsic
-import ./sipsic
 
 
 const NoConsumerIdx* = -1 ## The initial value of `Mupmuc.prevConsumerIdx`.
@@ -284,6 +282,7 @@ proc consumerCount*[N, P, C: static int, T](
 
 
 when defined(testing):
+  import sugar
   from unittest import check
 
   proc reset*[N, P, C: static int, T](

@@ -11,7 +11,6 @@ when not compileOption("threads"):
 
 import atomics
 import options
-import sugar
 
 import ./ops
 import ./sipsic
@@ -298,6 +297,7 @@ proc producerCount*[N, P: static int, T](
   result = P
 
 when defined(testing):
+  import sugar
   from unittest import check
 
   proc reset*[N, P: static int, T](

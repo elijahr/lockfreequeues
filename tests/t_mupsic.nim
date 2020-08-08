@@ -4,7 +4,6 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-import atomics
 import options
 import sequtils
 import unittest
@@ -13,11 +12,6 @@ import lockfreequeues
 import ./t_integration
 import ./t_mup
 import ./t_sic
-
-
-when (NimMajor, NimMinor) < (1, 3):
-  type IndexDefect = IndexError
-  type AssertionDefect = AssertionError
 
 
 var queue = initMupsic[8, 4, int]()

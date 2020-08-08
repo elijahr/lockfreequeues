@@ -15,11 +15,6 @@ import ./t_muc
 import ./t_mup
 
 
-when (NimMajor, NimMinor) < (1, 3):
-  type IndexDefect = IndexError
-  type AssertionDefect = AssertionError
-
-
 var queue = initMupmuc[8, 4, 4, int]()
 
 

@@ -6,7 +6,6 @@
 
 ## Example usage of Mupsic, a multi-producer, single-consumer bounded queue.
 
-import atomics
 import options
 import random
 import sequtils

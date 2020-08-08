@@ -5,7 +5,6 @@
 # copyright.
 
 import algorithm
-import atomics
 import options
 import sequtils
 import unittest
