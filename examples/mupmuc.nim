@@ -4,7 +4,7 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-## Example usage of Mupsic, a multi-producer, single-consumer bounded queue.
+## Example usage of Mupmuc, a multi-producer, multi-consumer bounded queue.
 
 import options
 import random
