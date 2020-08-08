@@ -20,7 +20,7 @@ const NoSlice* = none(HSlice[int, int])
 type
   Sipsic*[N: static int, T] = object of RootObj
     ## A single-producer, single-consumer bounded queue implemented as a ring
-    ## buffer.
+    ## buffer. Pushing and popping are both wait-free.
     ##
     ## * `N` is the capacity of the queue.
     ## * `T` is the type of data the queue will hold.
@@ -146,7 +146,7 @@ proc pop*[N: static int, T](
 ): Option[seq[T]] =
   ## Pop `count` items from the queue.
   ## If the queue is empty, `none(seq[T])` is returned.
-  ## Otherwise > 1 items are popped and `some(seq[T])` is returned.
+  ## Otherwise `some(seq[T])` is returned containing at least one item.
   let tail = self.tail.acquire
   let head = self.head.relaxed
 

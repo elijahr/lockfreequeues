@@ -152,11 +152,16 @@ Many thanks to Mamy Ratsimbazafy for reviewing the initial release and offering 
 * Please file any issues you encounter.
 * For pull requests, please see the [contribution guidelines](https://github.com/elijahr/lockfreequeues/tree/master/CONTRIBUTING.md).
 
+## Running tests
+
+[Travis](https://travis-ci.org/elijahr/lockfreequeues) runs the test suite for both C and C++ targets on Linux and macOS. Tests can be run locally with `nimble test`.
+
 ## Changelog
 
-## v2.0.0 - 2020-07-31
+## v2.0.0 - 2020-08-07
 
-* Implement multi-producer, single-consumer queue.
+* Implement multi-producer, single-consumer queue (Mupsic).
+* Implement multi-producer, multi-consumer queue (Mupmuc).
 * Refactor, remove shared memory queues.
 
 ## v1.0.0 - 2020-07-6

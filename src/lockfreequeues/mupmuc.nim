@@ -37,8 +37,8 @@ type
       ## Array of consumer thread IDs by index
 
   Consumer*[N, P, C: static int, T] = object
-    idx: int
-    queue: ptr Mupmuc[N, P, C, T]
+    idx*: int
+    queue*: ptr Mupmuc[N, P, C, T]
 
 
 proc clear[N, P, C: static int, T](
@@ -77,6 +77,7 @@ proc getConsumer*[N, P, C: static int, T](
     result.idx = idx
     return
 
+  # getThreadId will be undeclared unless compiled with --threads:on
   let threadId = getThreadId()
 
   # Try to find existing mapping of threadId -> consumerIdx
@@ -100,7 +101,8 @@ proc getConsumer*[N, P, C: static int, T](
   # Consumers are all spoken for by another thread
   raise newException(
     NoConsumersAvailableDefect,
-    "All consumers have been assigned")
+    "All consumers have been assigned. " &
+    "Increase your consumer count (C) or setMaxPoolSize(min(C, P)).")
 
 
 proc pop*[N, P, C: static int, T](
@@ -165,8 +167,8 @@ proc pop*[N, P, C: static int, T](
 ): Option[seq[T]] =
   ## Pop `count` items from the queue.
   ## If the queue is empty, `none(seq[T])` is returned.
-  ## Otherwise > 1 items are popped and `some(seq[T])` is returned.
-  ##
+  ## Otherwise `some(seq[T])` is returned containing at least one item.
+
   if unlikely(count == 0):
     return none(seq[T])
 

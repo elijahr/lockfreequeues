@@ -19,6 +19,11 @@ proc acquire*[T](location: var Atomic[T]): T {.inline.} =
   result = location.load(moAcquire)
 
 
+proc sequential*[T](location: var Atomic[T]): T {.inline.} =
+  ## Load the value from location using moSequentiallyConsistent
+  result = location.load(moSequentiallyConsistent)
+
+
 proc release*[T](location: var Atomic[T], value: T) {.inline.} =
   ## Store the value in location using moRelease
   location.store(value, moRelease)

@@ -14,17 +14,14 @@ import threadpool
 
 import lockfreequeues
 
-const
-  producerCount = 30
-
 var
-  # Queue that can hold 8 ints, with 30 producerTails
-  queue = initMupsic[8, producerCount, int]()
+  # Queue that can hold 8 ints, with MaxThreadPoolSize maximum producer threads
+  queue = initMupsic[8, MaxThreadPoolSize, int]()
 
 
 proc consumerFunc(): seq[int] {.gcsafe.} =
   result = @[]
-  while result.len < producerCount:
+  while result.len < MaxThreadPoolSize:
 
     # Pop many items from the queue
     let items = queue.pop(producerCount)
@@ -38,17 +35,18 @@ proc consumerFunc(): seq[int] {.gcsafe.} =
     cpuRelax()
 
 
-proc producerFunc(producer: int) {.gcsafe.} =
+proc producerFunc() {.gcsafe.} =
+  # Get a unique producer for this thread
+  var producer = queue.getProducer()
+
   let item = rand(100)
-
-  if producer mod 2 == 0:
-    # Push a single item to the queue
-    while not queue.push(producer, item):
+  if producer.idx mod 2 == 0:
+    # Half the time, push a single item to the queue
+    while not producer.push(item):
       cpuRelax()
-
   else:
-    # Push a sequence to the queue
-    while queue.push(producer, @[item]).isSome:
+    # Half the time, push a sequence to the queue
+    while producer.push(@[item]).isSome:
       cpuRelax()
 
   echo "Pushed item: ", item
@@ -56,9 +54,10 @@ proc producerFunc(producer: int) {.gcsafe.} =
 
 let consumedFlow = spawn consumerFunc()
 
-for producer in 0..<producerCount:
-  spawn producerFunc(producer)
+for producer in 0..<MaxThreadPoolSize:
+  spawn producerFunc()
 
 sync()
 
-echo "Popped items: ", ^consumedFlow
+# ^ waits for consumer flow var to return
+echo "Popped items: ", repr(^consumedFlow)

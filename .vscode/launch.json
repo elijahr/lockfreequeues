@@ -10,7 +10,7 @@
             "MIMode": "lldb",
             "request": "launch",
             "program": "${workspaceRoot}/tests/test",
-            "args": ["zzpush(Producer[N, P, T], T)::"],
+            // "args": ["ops.used(head, tail, capacity)::"],
             "cwd": "${workspaceRoot}",
         }
     ]

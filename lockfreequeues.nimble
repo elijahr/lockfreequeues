@@ -12,7 +12,11 @@ requires "nim >= 1.2.0"
 task make_docs, "Generate documentation":
   exec "sh bin/make_docs.sh"
 
-task test, "Runs the test suite (C)":
+task test, "Runs the test suite (C & C++)":
+  exec "nim c -r tests/test.nim"
+  exec "nim cpp -r tests/test.nim"
+
+task testc, "Runs the test suite (C)":
   exec "nim c -r tests/test.nim"
 
 task testcpp, "Runs the test suite (C++)":

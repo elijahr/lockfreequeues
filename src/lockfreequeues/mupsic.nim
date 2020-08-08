@@ -24,7 +24,7 @@ type InvalidCallDefect* = object of Defect
 type
   Mupsic*[N, P: static int, T] = object of Sipsic[N, T]
     ## A multi-producer, single-consumer bounded queue implemented as a ring
-    ## buffer.
+    ## buffer. Popping is wait-free.
     ##
     ## * `N` is the capacity of the queue.
     ## * `P` is the number of producer threads.
@@ -71,11 +71,12 @@ proc getProducer*[N, P: static int, T](
     result.idx = idx
     return
 
+  # getThreadId will be undeclared unless compiled with --threads:on
   let threadId = getThreadId()
 
   # Try to find existing mapping of threadId -> producerIdx
   for idx in 0..<P:
-    if self.producerThreadIds[idx].relaxed == threadId:
+    if self.producerThreadIds[idx].acquire == threadId:
       result.idx = idx
       return
 
@@ -94,7 +95,8 @@ proc getProducer*[N, P: static int, T](
   # Producers are all spoken for by another thread
   raise newException(
     NoProducersAvailableDefect,
-    "All producers have been assigned")
+    "All producers have been assigned. " &
+    "Increase your producer count (P) or setMaxPoolSize(P).")
 
 
 proc push*[N, P: static int, T](
@@ -176,11 +178,13 @@ proc push*[N, P: static int, T](
   var prevProducerIdx: int
   var isFirstProduction: bool
 
+  var head: int
+
   # spin until reservation is acquired
   while true:
     prevProducerIdx = self.queue.prevProducerIdx.acquire
     isFirstProduction = prevProducerIdx == NoProducerIdx
-    var head = self.queue.head.acquire
+    head = self.queue.head.acquire
     prevTail =
       if isFirstProduction:
         0
