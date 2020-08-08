@@ -18,7 +18,7 @@ API documentation: https://elijahr.github.io/lockfreequeues/
 nimble install lockfreequeues
 ```
 
-Note: when your project is compiled with `--threads:off`, only `Sipsic` is exported.
+Note: when your project is compiled with `--threads:off`, only `Sipsic` is available.
 
 ## Examples
 

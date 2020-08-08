@@ -29,7 +29,13 @@ matrix:
         - CHOOSENIM_CHOOSE_VERSION=devel
     - os: osx
       env:
+        - CHOOSENIM_CHOOSE_VERSION=1.2.4
+    - os: osx
+      env:
         - CHOOSENIM_CHOOSE_VERSION=stable
+    - os: osx
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=devel
 
 install:
   - |
