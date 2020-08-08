@@ -7,10 +7,18 @@ Lock-free queues for Nim, implemented as ring buffers.
 Three implementations are provided:
 
 - [`Sipsic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/sipsic.html) is a single-producer, single-consumer bounded queue. Pushing and popping are wait-free.
-- [`Mupsic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupsic.html) is a multi-producer, single-consumer bounded queue. Popping is wait-free. Compile with `--threads:on`.
-- [`Mupmuc`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupmuc.html) is a multi-producer, multi-consumer bounded queue. Compile with `--threads:on`.
+- [`Mupsic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupsic.html) is a multi-producer, single-consumer bounded queue. Popping is wait-free.
+- [`Mupmuc`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupmuc.html) is a multi-producer, multi-consumer bounded queue.
 
 API documentation: https://elijahr.github.io/lockfreequeues/
+
+## Installation
+
+```sh
+nimble install lockfreequeues
+```
+
+Note: when your project is compiled with `--threads:off`, only `Sipsic` is exported.
 
 ## Examples
 
