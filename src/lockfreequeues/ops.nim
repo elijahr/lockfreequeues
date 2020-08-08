@@ -4,15 +4,14 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-## Operations used internally by
-## `QueueInterface <queueinterface.html#QueueInterface>`_.
+## Operations used internally by various queue implementations.
 
-template assertHeadOrTail(
+proc validateHeadOrTail(
   value: int,
   capacity: int,
-) =
+): void
+  {.inline.} =
   ## Assert that the given `value` is in the range `0..<2*capacity`.
-  assert(value >= 0)
   assert(value < 2 * capacity)
 
 
@@ -23,12 +22,14 @@ proc index*(
   {.inline.} =
   ## Given a head or tail `value` in the range `0..<2*capacity`, determine its
   ## actual index in storage.
-  assertHeadOrTail(value, capacity)
+  let val = value
+  let capacity = capacity
+  validateHeadOrTail(val, capacity)
   result =
-    if value >= capacity:
-      value - capacity
+    if val >= capacity:
+      val - capacity
     else:
-      value
+      val
 
 
 proc incOrReset*(
@@ -40,8 +41,7 @@ proc incOrReset*(
   ## Given an `original` head or tail value and an `amount` to increment, either
   ## increment `original` by `amount`, or reset from zero if
   ## `original + amount >= 2 * capacity`.
-  assertHeadOrTail(original, capacity)
-  assert(amount >= 0)
+  validateHeadOrTail(original, capacity)
   assert(amount <= capacity)
   result = original + amount
   if unlikely(result >= 2 * capacity):
@@ -56,8 +56,8 @@ proc used*(
   {.inline.} =
   ## Determine how many slots are taken in storage given `head`, `tail`, and
   ## `capacity` values.
-  assertHeadOrTail(head, capacity)
-  assertHeadOrTail(tail, capacity)
+  validateHeadOrTail(head, capacity)
+  validateHeadOrTail(tail, capacity)
 
   result = tail - head
 
@@ -73,7 +73,7 @@ proc available*(
   {.inline.} =
   ## Determine how many slots are available in storage given `head`, `tail`, and
   ## `capacity` values.
-  return capacity - used(head, tail, capacity)
+  result = capacity - used(head, tail, capacity)
 
 
 proc full*(
@@ -82,9 +82,9 @@ proc full*(
   capacity: int,
 ): bool
   {.inline.} =
-  assertHeadOrTail(head, capacity)
-  assertHeadOrTail(tail, capacity)
   ## Determine if storage is full given `head`, `tail`, and `capacity` values.
+  validateHeadOrTail(head, capacity)
+  validateHeadOrTail(tail, capacity)
   return abs(tail - head) == capacity
 
 

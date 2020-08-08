@@ -6,7 +6,8 @@
 
 ## Constants used by lockfreequeues
 
-const CACHELINE_BYTES* = when defined(powerpc):
-  128 ## The size of a cache line (128 bytes on PowerPC)
+# The size of a cache line (128 bytes on PowerPC, 64 bytes elsewhere)
+const CacheLineBytes* = when defined(powerpc):
+  128
 else:
-  64 ## The size of a cache line (64 bytes on x86).
+  64

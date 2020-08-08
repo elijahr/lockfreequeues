@@ -1,9 +1,11 @@
-os:
-  - linux
+os: linux
 
 dist: bionic
 
 language: c
+
+git:
+  submodules: false
 
 branches:
   except:
@@ -13,6 +15,41 @@ cache:
   directories:
     - "$HOME/.nimble"
     - "$HOME/.choosenim"
+
+matrix:
+  include:
+    - os: linux
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=1.2.4
+    - os: linux
+      language: cpp
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=1.2.4
+        - TEST_CPP=1
+    - os: linux
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=stable
+    - os: linux
+      language: cpp
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=stable
+        - TEST_CPP=1
+    - os: linux
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=devel
+    - os: linux
+      language: cpp
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=devel
+        - TEST_CPP=1
+    - os: osx
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=stable
+    - os: osx
+      language: cpp
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=stable
+        - TEST_CPP=1
 
 install:
   - |
@@ -26,5 +63,8 @@ before_script:
       export PATH=$HOME/.nimble/bin:$PATH
 
 script:
-  - nim -v
-  - nimble test
+  - nim -v;
+  - |
+    [ "x$TEST_CPP" == "x1" ] \
+      && nimble testcpp \
+      || nimble test;

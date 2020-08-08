@@ -29,18 +29,31 @@
                 "isDefault": true
             }
         },
-        {
-            "label": "Build example 'spscqueuestatic'",
-            "command": "nim",
-            "args": [
-                "c",
-                "examples/spscqueuestatic.nim"
-            ],
-            "options": {
-                "cwd": "${workspaceRoot}"
-            },
-            "type": "shell",
-            "group": "build"
-        },
+        // {
+        //     "label": "Build example 'sipsicqueuestatic'",
+        //     "command": "nim",
+        //     "args": [
+        //         "c",
+        //         "examples/sipsicqueuestatic.nim"
+        //     ],
+        //     "options": {
+        //         "cwd": "${workspaceRoot}"
+        //     },
+        //     "type": "shell",
+        //     "group": "build"
+        // },
+        // {
+        //     "label": "Build mupsic_static_queue",
+        //     "command": "nim",
+        //     "args": [
+        //         "c",
+        //         "src/lockfreequeues/mupsic_static_queue.nim"
+        //     ],
+        //     "options": {
+        //         "cwd": "${workspaceRoot}"
+        //     },
+        //     "type": "shell",
+        //     "group": "build"
+        // },
      ]
  }

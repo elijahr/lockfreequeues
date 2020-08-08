@@ -4,8 +4,34 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-## Single-producer, single-consumer, lock-free queue implementations for Nim.
+when compileOption("threads"):
+  import ./lockfreequeues/[
+    atomic_dsl,
+    constants,
+    mupmuc,
+    mupsic,
+    ops,
+    sipsic,
+  ]
 
-import ./lockfreequeues/constants
-import ./lockfreequeues/spsc/sharedqueue
-import ./lockfreequeues/spsc/staticqueue
+  export
+    atomic_dsl,
+    constants,
+    mupmuc,
+    mupsic,
+    ops,
+    sipsic
+else:
+  # threading off, only provide sipsic
+  import ./lockfreequeues/[
+    atomic_dsl,
+    constants,
+    ops,
+    sipsic,
+  ]
+
+  export
+    atomic_dsl,
+    constants,
+    ops,
+    sipsic

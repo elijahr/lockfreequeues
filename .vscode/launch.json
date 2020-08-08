@@ -10,8 +10,8 @@
             "MIMode": "lldb",
             "request": "launch",
             "program": "${workspaceRoot}/tests/test",
+            // "args": ["ops.used(head, tail, capacity)::"],
             "cwd": "${workspaceRoot}",
-            // "preLaunchTask": "Build tests"
-        },
+        }
     ]
 }
