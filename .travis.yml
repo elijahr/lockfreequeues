@@ -47,4 +47,4 @@ script:
   - nimble test
   - |
     # examples timeout in 1.2.4
-    [ "x$CHOOSENIM_CHOOSE_VERSION" != "x1.2.4"] && nimble examples
+    [ "v$CHOOSENIM_CHOOSE_VERSION" != "v1.2.4" ] && nimble examples
