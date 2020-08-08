@@ -4,6 +4,9 @@ dist: bionic
 
 language: c
 
+git:
+  submodules: false
+
 branches:
   except:
     - gh-pages
