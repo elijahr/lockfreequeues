@@ -37,6 +37,7 @@ proc consumerFunc() {.thread.} =
       if item.isSome:
         channel.send(item.get)
         counter += 1
+    cpuRelax()
 
 
 proc producerFunc(p: int) {.thread.} =
@@ -49,6 +50,7 @@ proc producerFunc(p: int) {.thread.} =
     else:
       if producer.push(@[p]).isNone:
         break
+    cpuRelax()
 
 
 suite "Mupmuc[N, P, C, T] threaded":

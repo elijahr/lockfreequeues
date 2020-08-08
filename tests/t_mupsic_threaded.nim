@@ -28,6 +28,7 @@ proc consumerFunc() {.thread.} =
       let msg = res.get
       channel.send(msg)
       inc count
+    cpuRelax()
 
 
 proc producerFunc(i: int) {.thread.} =
@@ -39,6 +40,7 @@ proc producerFunc(i: int) {.thread.} =
     else:
       if producer.push(@[i]).isNone:
         break
+    cpuRelax()
 
 
 suite "Mupsic[N, P, T] threaded":
