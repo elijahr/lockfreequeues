@@ -24,7 +24,7 @@ proc consumerFunc(): seq[int] {.gcsafe.} =
   while result.len < MaxThreadPoolSize:
 
     # Pop many items from the queue
-    let items = queue.pop(producerCount)
+    let items = queue.pop(queue.producerCount)
     if items.isSome:
       result.insert(items.get, result.len)
 
