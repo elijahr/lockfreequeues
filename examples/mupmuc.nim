@@ -27,7 +27,6 @@ proc consumerFunc() {.gcsafe.} =
     if item.isSome:
       echo "Popped item: ", item.get
       break
-    echo "queue empty..."
     cpuRelax()
 
 
@@ -37,7 +36,6 @@ proc producerFunc() {.gcsafe.} =
 
   let item = rand(100)
   while not producer.push(item):
-    echo "queue full..."
     cpuRelax()
 
   echo "Pushed item: ", item
