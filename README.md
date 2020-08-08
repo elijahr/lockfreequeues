@@ -2,12 +2,13 @@
 
 # lockfreequeues
 
-Lock-free queue (aka ring buffer) implementations for Nim.
+Lock-free queues for Nim, implemented as ring buffers.
 
 Four implementations are provided:
 
-- [`Sipsic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/sipsic.html) is a single-producer, single-consumer bounded queue.
-- [`Mupsic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupsic.html) is a multi-producer, single-consumer bounded queue.
+- [`Sipsic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/sipsic.html) is a single-producer, single-consumer bounded queue. Pushes and pops are wait-free.
+- [`Mupsic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupsic.html) is a multi-producer, single-consumer bounded queue. Pops are wait-free.
+- [`Mupmuc`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupmuc.html) is a multi-producer, multi-consumer bounded queue.
 
 API documentation: https://elijahr.github.io/lockfreequeues/
 
@@ -16,11 +17,11 @@ API documentation: https://elijahr.github.io/lockfreequeues/
 Examples are located in the [examples](https://github.com/elijahr/lockfreequeues/tree/master/examples) directory and can be compiled and run with:
 
 ```sh
-nim c -r examples/sipsic.nim
-nim c -r examples/mupsic.nim
+nimble examples
 ```
 
-### Sipsic
+### Single-producer, single-consumer
+
 ```nim
 import atomics
 import options
@@ -77,7 +78,7 @@ sync()
 echo "Popped items: ", ^consumedFlow
 ```
 
-### Mupsic
+### Multi-producer, single-consumer
 
 ```nim
 import atomics
@@ -88,20 +89,17 @@ import threadpool
 
 import lockfreequeues
 
-const
-  producerCount = 30
-
 var
-  # Queue that can hold 8 ints, with 30 producerTails
-  queue = initMupsic[8, producerCount, int]()
+  # Queue that can hold 8 ints, with MaxThreadPoolSize maximum producer threads
+  queue = initMupsic[8, MaxThreadPoolSize, int]()
 
 
 proc consumerFunc(): seq[int] {.gcsafe.} =
   result = @[]
-  while result.len < producerCount:
+  while result.len < MaxThreadPoolSize:
 
     # Pop many items from the queue
-    let items = queue.pop(producerCount)
+    let items = queue.pop(queue.producerCount)
     if items.isSome:
       result.insert(items.get, result.len)
 
@@ -112,17 +110,18 @@ proc consumerFunc(): seq[int] {.gcsafe.} =
     cpuRelax()
 
 
-proc producerFunc(producer: int) {.gcsafe.} =
+proc producerFunc() {.gcsafe.} =
+  # Get a unique producer for this thread
+  var producer = queue.getProducer()
+
   let item = rand(100)
-
-  if producer mod 2 == 0:
-    # Push a single item to the queue
-    while not queue.push(producer, item):
+  if producer.idx mod 2 == 0:
+    # Half the time, push a single item to the queue
+    while not producer.push(item):
       cpuRelax()
-
   else:
-    # Push a sequence to the queue
-    while queue.push(producer, @[item]).isSome:
+    # Half the time, push a sequence to the queue
+    while producer.push(@[item]).isSome:
       cpuRelax()
 
   echo "Pushed item: ", item
@@ -130,12 +129,61 @@ proc producerFunc(producer: int) {.gcsafe.} =
 
 let consumedFlow = spawn consumerFunc()
 
-for producer in 0..<producerCount:
-  spawn producerFunc(producer)
+for producer in 0..<MaxThreadPoolSize:
+  spawn producerFunc()
 
 sync()
 
-echo "Popped items: ", ^consumedFlow
+# ^ waits for consumer flow var to return
+echo "Popped items: ", repr(^consumedFlow)
+```
+
+### Multi-producer, multi-consumer
+
+```nim
+import atomics
+import options
+import random
+import sequtils
+import threadpool
+
+import lockfreequeues
+
+var
+  # Queue that can hold 8 ints, with MaxThreadPoolSize producer/consumer threads
+  queue = initMupmuc[8, MaxThreadPoolSize, MaxThreadPoolSize, int]()
+
+
+proc consumerFunc() {.gcsafe.} =
+  # Get a unique consumer for this thread
+  var consumer = queue.getConsumer()
+
+  while true:
+    # Pop a single item from the queue
+    let item = consumer.pop()
+    if item.isSome:
+      echo "Popped item: ", item.get
+      break
+    echo "queue empty..."
+    cpuRelax()
+
+
+proc producerFunc() {.gcsafe.} =
+  # Get a unique producer for this thread
+  var producer = queue.getProducer()
+
+  let item = rand(100)
+  while not producer.push(item):
+    echo "queue full..."
+    cpuRelax()
+
+  echo "Pushed item: ", item
+
+for i in 0..<MaxThreadPoolSize:
+  spawn producerFunc()
+  spawn consumerFunc()
+
+sync()
 ```
 
 ## Reference

@@ -59,4 +59,3 @@ let consumedFlow = spawn consumerFunc()
 spawn producerFunc()
 sync()
 echo "Popped items: ", ^consumedFlow
-

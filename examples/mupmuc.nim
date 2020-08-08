@@ -49,4 +49,3 @@ for i in 0..<MaxThreadPoolSize:
   spawn consumerFunc()
 
 sync()
-
