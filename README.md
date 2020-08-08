@@ -4,7 +4,7 @@
 
 Lock-free queues for Nim, implemented as ring buffers.
 
-Four implementations are provided:
+Three implementations are provided:
 
 - [`Sipsic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/sipsic.html) is a single-producer, single-consumer bounded queue. Pushing and popping are wait-free.
 - [`Mupsic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupsic.html) is a multi-producer, single-consumer bounded queue. Popping is wait-free. Compile with `--threads:on`.
