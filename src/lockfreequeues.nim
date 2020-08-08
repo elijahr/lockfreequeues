@@ -4,19 +4,34 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-import ./lockfreequeues/[
-  atomic_dsl,
-  constants,
-  mupmuc,
-  mupsic,
-  ops,
-  sipsic,
-]
+when compileOption("threads"):
+  import ./lockfreequeues/[
+    atomic_dsl,
+    constants,
+    mupmuc,
+    mupsic,
+    ops,
+    sipsic,
+  ]
 
-export
-  atomic_dsl,
-  constants,
-  mupmuc,
-  mupsic,
-  ops,
-  sipsic
+  export
+    atomic_dsl,
+    constants,
+    mupmuc,
+    mupsic,
+    ops,
+    sipsic
+else:
+  # threading off, only provide sipsic
+  import ./lockfreequeues/[
+    atomic_dsl,
+    constants,
+    ops,
+    sipsic,
+  ]
+
+  export
+    atomic_dsl,
+    constants,
+    ops,
+    sipsic

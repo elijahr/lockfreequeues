@@ -6,6 +6,9 @@
 
 ## A multi-producer, single-consumer bounded queue implemented as a ring buffer.
 
+when not compileOption("threads"):
+  {.error: "lockfreequeues/mupsic requires --threads:on option.".}
+
 import atomics
 import options
 import sugar
@@ -14,12 +17,16 @@ import ./ops
 import ./sipsic
 
 
-const NoProducerIdx* = -1
+const NoProducerIdx* = -1 ## The initial value of `Mupsic.prevProducerIdx`.
 
 
-type NoProducersAvailableDefect* = object of Defect
-type InvalidCallDefect* = object of Defect
+type NoProducersAvailableDefect* = object of Defect ## \
+  ## Raised by `getProducer()` if all producers have been assigned to other
+  ## threads.
 
+type InvalidCallDefect* = object of Defect ## \
+  ## Raised by `Mupsic.push()`, `Mupmuc.push()`, and `Mupmuc.pop()` because
+  ## those should happen via `Producer.push()` or `Consumer.pop()`.
 
 type
   Mupsic*[N, P: static int, T] = object of Sipsic[N, T]
@@ -36,8 +43,10 @@ type
       ## Array of producer thread IDs by index
 
   Producer*[N, P: static int, T] = object
-    idx*: int
-    queue*: ptr Mupsic[N, P, T]
+    ## A per-thread interface for pushing items to a queue.
+    ## Retrieved via a call to `Mupsic.getProducer()`
+    idx*: int ## The producer's unique identifier.
+    queue*: ptr Mupsic[N, P, T] ## A reference to the producer's queue.
 
 
 proc clear[N, P: static int, T](
@@ -65,6 +74,7 @@ proc getProducer*[N, P: static int, T](
   idx: int = NoProducerIdx,
 ): Producer[N, P, T]
   {.raises: [NoProducersAvailableDefect].} =
+  ## Assigns and returns a `Producer` instance for the current thread.
   result.queue = addr(self)
 
   if idx >= 0:
@@ -257,7 +267,8 @@ proc push*[N, P: static int, T](
   item: T,
 ): bool
   {.raises: [InvalidCallDefect].} =
-  # Overload Sipsic.push() to ensure pushes go through a producer.
+  ## Overload of `Sipsic.push()` that simply raises `InvalidCallDefect`.
+  ## Pushes should happen via `Producer.push()`.
   raise newException(InvalidCallDefect, "Use Producer.push()")
 
 
@@ -266,7 +277,8 @@ proc push*[N, P: static int, T](
   items: openArray[T],
 ): Option[HSlice[int, int]]
   {.raises: [InvalidCallDefect].} =
-  # Overload Sipsic.push() to ensure pushes go through a producer.
+  ## Overload of `Sipsic.push()` that simply raises `InvalidCallDefect`.
+  ## Pushes should happen via `Producer.push()`.
   raise newException(InvalidCallDefect, "Use Producer.push()")
 
 

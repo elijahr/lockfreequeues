@@ -6,6 +6,9 @@
 
 ## A multi-producer, single-consumer bounded queue implemented as a ring buffer.
 
+when not compileOption("threads"):
+  {.error: "lockfreequeues/mupmuc requires --threads:on option.".}
+
 import atomics
 import options
 import sugar
@@ -15,10 +18,12 @@ import ./mupsic
 import ./sipsic
 
 
-const NoConsumerIdx* = -1
+const NoConsumerIdx* = -1 ## The initial value of `Mupmuc.prevConsumerIdx`.
 
 
-type NoConsumersAvailableDefect* = object of Defect
+type NoConsumersAvailableDefect* = object of Defect ## \
+  ## Raised by `getConsumer()` if all consumers have been assigned to other
+  ## threads.
 
 
 type
@@ -37,8 +42,10 @@ type
       ## Array of consumer thread IDs by index
 
   Consumer*[N, P, C: static int, T] = object
-    idx*: int
-    queue*: ptr Mupmuc[N, P, C, T]
+    ## A per-thread interface for popping items from a queue.
+    ## Retrieved via a call to `Mupmuc.getConsumer()`
+    idx*: int ## The consumer's unique identifier.
+    queue*: ptr Mupmuc[N, P, C, T] ## A reference to the consumer's queue.
 
 
 proc clear[N, P, C: static int, T](
@@ -71,6 +78,7 @@ proc getConsumer*[N, P, C: static int, T](
   idx: int = NoConsumerIdx,
 ): Consumer[N, P, C, T]
   {.raises: [NoConsumersAvailableDefect].} =
+  ## Assigns and returns a `Consumer` instance for the current thread.
   result.queue = addr(self)
 
   if idx >= 0:
@@ -252,7 +260,8 @@ proc pop*[N, P, C: static int, T](
   self: var Mupmuc[N, P, C, T],
 ): bool
   {.raises: [InvalidCallDefect].} =
-  # Overload Mupsic.pop() to ensure pops go through a consumer.
+  ## Overload of `Sipsic.pop()` that simply raises `InvalidCallDefect`.
+  ## Pops should happen via `Consumer.pop()`.
   raise newException(InvalidCallDefect, "Use Consumer.pop()")
 
 
@@ -261,7 +270,8 @@ proc pop*[N, P, C: static int, T](
   count: int,
 ): Option[seq[T]]
   {.raises: [InvalidCallDefect].} =
-  # Overload Mupsic.pop() to ensure pops go through a consumer.
+  ## Overload of `Sipsic.pop()` that simply raises `InvalidCallDefect`.
+  ## Pops should happen via `Consumer.pop()`.
   raise newException(InvalidCallDefect, "Use Consumer.pop()")
 
 
