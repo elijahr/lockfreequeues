@@ -65,4 +65,3 @@ script:
     [ "x$TEST_CPP" == "x1" ] \
       && nimble testcpp \
       || nimble test;
-  - nimble examples
