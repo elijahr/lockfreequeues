@@ -73,119 +73,173 @@ function main() {
 <div class="document" id="documentId">
   <div class="container">
     <h1 class="title">Index</h1>
-    Modules: <a href="lockfreequeues/constants.html">lockfreequeues/constants</a>, <a href="lockfreequeues/spsc/ops.html">lockfreequeues/spsc/ops</a>, <a href="lockfreequeues/spsc/queueinterface.html">lockfreequeues/spsc/queueinterface</a>, <a href="lockfreequeues/spsc/sharedqueue.html">lockfreequeues/spsc/sharedqueue</a>, <a href="lockfreequeues/spsc/staticqueue.html">lockfreequeues/spsc/staticqueue</a>.<br/><p /><h2>API symbols</h2>
-<dl><dt><a name="%60%3Ddestroy%60" href="#%60%3Ddestroy%60"><span><b>=destroy</b>:</span></a></dt><dd><ul class="simple">
+    Modules: <a href="lockfreequeues/atomic_dsl.html">lockfreequeues/atomic_dsl</a>, <a href="lockfreequeues/constants.html">lockfreequeues/constants</a>, <a href="lockfreequeues/mupmuc.html">lockfreequeues/mupmuc</a>, <a href="lockfreequeues/mupsic.html">lockfreequeues/mupsic</a>, <a href="lockfreequeues/ops.html">lockfreequeues/ops</a>, <a href="lockfreequeues/sipsic.html">lockfreequeues/sipsic</a>.<br/><p /><h2>API symbols</h2>
+<dl><dt><a name="acquire" href="#acquire"><span>acquire:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="sharedqueue: <b>=destroy</b>[T](self: var SharedQueue[T])" href="lockfreequeues/spsc/sharedqueue.html#%3Ddestroy%2CSharedQueue%5BT%5D">sharedqueue: <b>=destroy</b>[T](self: var SharedQueue[T])</a></li>
+          data-doc-search-tag="atomic_dsl: acquire[T](location: var Atomic[T]): T" href="lockfreequeues/atomic_dsl.html#acquire%2CAtomic%5BT%5D">atomic_dsl: acquire[T](location: var Atomic[T]): T</a></li>
           </ul></dd>
 <dt><a name="available" href="#available"><span>available:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="ops: available(head: int; tail: int; capacity: int): int" href="lockfreequeues/spsc/ops.html#available%2Cint%2Cint%2Cint">ops: available(head: int; tail: int; capacity: int): int</a></li>
+          data-doc-search-tag="ops: available(head: int; tail: int; capacity: int): int" href="lockfreequeues/ops.html#available%2Cint%2Cint%2Cint">ops: available(head: int; tail: int; capacity: int): int</a></li>
           </ul></dd>
-<dt><a name="CACHELINE_BYTES" href="#CACHELINE_BYTES"><span>CACHELINE_BYTES:</span></a></dt><dd><ul class="simple">
+<dt><a name="CacheLineBytes" href="#CacheLineBytes"><span>CacheLineBytes:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="constants: CACHELINE_BYTES" href="lockfreequeues/constants.html#CACHELINE_BYTES">constants: CACHELINE_BYTES</a></li>
+          data-doc-search-tag="constants: CacheLineBytes" href="lockfreequeues/constants.html#CacheLineBytes">constants: CacheLineBytes</a></li>
           </ul></dd>
 <dt><a name="capacity" href="#capacity"><span>capacity:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="staticqueue: capacity[N: static int; T](self: var StaticQueue[N, T]): int" href="lockfreequeues/spsc/staticqueue.html#capacity%2CStaticQueue%5BN%2CT%5D">staticqueue: capacity[N: static int; T](self: var StaticQueue[N, T]): int</a></li>
+          data-doc-search-tag="mupsic: capacity[N, P: static int; T](self: var Mupsic[N, P, T]): int" href="lockfreequeues/mupsic.html#capacity%2CMupsic%5BN%2CP%2CT%5D">mupsic: capacity[N, P: static int; T](self: var Mupsic[N, P, T]): int</a></li>
+          <li><a class="reference external"
+          data-doc-search-tag="sipsic: capacity[N: static int; T](self: var Sipsic[N, T]): int" href="lockfreequeues/sipsic.html#capacity%2CSipsic%5BN%2CT%5D">sipsic: capacity[N: static int; T](self: var Sipsic[N, T]): int</a></li>
+          </ul></dd>
+<dt><a name="Consumer" href="#Consumer"><span>Consumer:</span></a></dt><dd><ul class="simple">
+<li><a class="reference external"
+          data-doc-search-tag="mupmuc: Consumer" href="lockfreequeues/mupmuc.html#Consumer">mupmuc: Consumer</a></li>
+          </ul></dd>
+<dt><a name="consumerCount" href="#consumerCount"><span>consumerCount:</span></a></dt><dd><ul class="simple">
+<li><a class="reference external"
+          data-doc-search-tag="mupmuc: consumerCount[N, P, C: static int; T](self: var Mupmuc[N, P, C, T]): int" href="lockfreequeues/mupmuc.html#consumerCount%2CMupmuc%5BN%2CP%2CC%2CT%5D">mupmuc: consumerCount[N, P, C: static int; T](self: var Mupmuc[N, P, C, T]): int</a></li>
           </ul></dd>
 <dt><a name="empty" href="#empty"><span>empty:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="ops: empty(head: int; tail: int): bool" href="lockfreequeues/spsc/ops.html#empty%2Cint%2Cint">ops: empty(head: int; tail: int): bool</a></li>
+          data-doc-search-tag="ops: empty(head: int; tail: int): bool" href="lockfreequeues/ops.html#empty%2Cint%2Cint">ops: empty(head: int; tail: int): bool</a></li>
           </ul></dd>
 <dt><a name="full" href="#full"><span>full:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="ops: full(head: int; tail: int; capacity: int): bool" href="lockfreequeues/spsc/ops.html#full%2Cint%2Cint%2Cint">ops: full(head: int; tail: int; capacity: int): bool</a></li>
+          data-doc-search-tag="ops: full(head: int; tail: int; capacity: int): bool" href="lockfreequeues/ops.html#full%2Cint%2Cint%2Cint">ops: full(head: int; tail: int; capacity: int): bool</a></li>
+          </ul></dd>
+<dt><a name="getConsumer" href="#getConsumer"><span>getConsumer:</span></a></dt><dd><ul class="simple">
+<li><a class="reference external"
+          data-doc-search-tag="mupmuc: getConsumer[N, P, C: static int; T](self: var Mupmuc[N, P, C, T]; idx: int = NoConsumerIdx): Consumer[
+    N, P, C, T]" href="lockfreequeues/mupmuc.html#getConsumer%2CMupmuc%5BN%2CP%2CC%2CT%5D%2Cint">mupmuc: getConsumer[N, P, C: static int; T](self: var Mupmuc[N, P, C, T]; idx: int = NoConsumerIdx): Consumer[
+    N, P, C, T]</a></li>
+          </ul></dd>
+<dt><a name="getProducer" href="#getProducer"><span>getProducer:</span></a></dt><dd><ul class="simple">
+<li><a class="reference external"
+          data-doc-search-tag="mupsic: getProducer[N, P: static int; T](self: var Mupsic[N, P, T]; idx: int = NoProducerIdx): Producer[
+    N, P, T]" href="lockfreequeues/mupsic.html#getProducer%2CMupsic%5BN%2CP%2CT%5D%2Cint">mupsic: getProducer[N, P: static int; T](self: var Mupsic[N, P, T]; idx: int = NoProducerIdx): Producer[
+    N, P, T]</a></li>
           </ul></dd>
 <dt><a name="incOrReset" href="#incOrReset"><span>incOrReset:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="ops: incOrReset(original: int; amount: int; capacity: int): int" href="lockfreequeues/spsc/ops.html#incOrReset%2Cint%2Cint%2Cint">ops: incOrReset(original: int; amount: int; capacity: int): int</a></li>
+          data-doc-search-tag="ops: incOrReset(original: int; amount: int; capacity: int): int" href="lockfreequeues/ops.html#incOrReset%2Cint%2Cint%2Cint">ops: incOrReset(original: int; amount: int; capacity: int): int</a></li>
           </ul></dd>
 <dt><a name="index" href="#index"><span>index:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="ops: index(value: int; capacity: int): int" href="lockfreequeues/spsc/ops.html#index%2Cint%2Cint">ops: index(value: int; capacity: int): int</a></li>
+          data-doc-search-tag="ops: index(value: int; capacity: int): int" href="lockfreequeues/ops.html#index%2Cint%2Cint">ops: index(value: int; capacity: int): int</a></li>
           </ul></dd>
-<dt><a name="move" href="#move"><span>move:</span></a></dt><dd><ul class="simple">
+<dt><a name="initMupmuc" href="#initMupmuc"><span>initMupmuc:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="queueinterface: move(self: var QueueInterface; head: int; tail: int; capacity: int)" href="lockfreequeues/spsc/queueinterface.html#move%2CQueueInterface%2Cint%2Cint%2Cint">queueinterface: move(self: var QueueInterface; head: int; tail: int; capacity: int)</a></li>
+          data-doc-search-tag="mupmuc: initMupmuc[N, P, C: static int; T](): Mupmuc[N, P, C, T]" href="lockfreequeues/mupmuc.html#initMupmuc">mupmuc: initMupmuc[N, P, C: static int; T](): Mupmuc[N, P, C, T]</a></li>
           </ul></dd>
-<dt><a name="newSPSCQueue" href="#newSPSCQueue"><span>newSPSCQueue:</span></a></dt><dd><ul class="simple">
+<dt><a name="initMupsic" href="#initMupsic"><span>initMupsic:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="sharedqueue: newSPSCQueue[T](capacity: int): SharedQueue[T]" href="lockfreequeues/spsc/sharedqueue.html#newSPSCQueue%2Cint">sharedqueue: newSPSCQueue[T](capacity: int): SharedQueue[T]</a></li>
-          <li><a class="reference external"
-          data-doc-search-tag="staticqueue: newSPSCQueue[N: static int; T](): StaticQueue[N, T]" href="lockfreequeues/spsc/staticqueue.html#newSPSCQueue">staticqueue: newSPSCQueue[N: static int; T](): StaticQueue[N, T]</a></li>
+          data-doc-search-tag="mupsic: initMupsic[N, P: static int; T](): Mupsic[N, P, T]" href="lockfreequeues/mupsic.html#initMupsic">mupsic: initMupsic[N, P: static int; T](): Mupsic[N, P, T]</a></li>
+          </ul></dd>
+<dt><a name="initSipsic" href="#initSipsic"><span>initSipsic:</span></a></dt><dd><ul class="simple">
+<li><a class="reference external"
+          data-doc-search-tag="sipsic: initSipsic[N: static int; T](): Sipsic[N, T]" href="lockfreequeues/sipsic.html#initSipsic">sipsic: initSipsic[N: static int; T](): Sipsic[N, T]</a></li>
+          </ul></dd>
+<dt><a name="InvalidCallDefect" href="#InvalidCallDefect"><span>InvalidCallDefect:</span></a></dt><dd><ul class="simple">
+<li><a class="reference external"
+          data-doc-search-tag="mupsic: InvalidCallDefect" href="lockfreequeues/mupsic.html#InvalidCallDefect">mupsic: InvalidCallDefect</a></li>
+          </ul></dd>
+<dt><a name="Mupmuc" href="#Mupmuc"><span>Mupmuc:</span></a></dt><dd><ul class="simple">
+<li><a class="reference external"
+          data-doc-search-tag="mupmuc: Mupmuc" href="lockfreequeues/mupmuc.html#Mupmuc">mupmuc: Mupmuc</a></li>
+          </ul></dd>
+<dt><a name="Mupsic" href="#Mupsic"><span>Mupsic:</span></a></dt><dd><ul class="simple">
+<li><a class="reference external"
+          data-doc-search-tag="mupsic: Mupsic" href="lockfreequeues/mupsic.html#Mupsic">mupsic: Mupsic</a></li>
+          </ul></dd>
+<dt><a name="NoConsumerIdx" href="#NoConsumerIdx"><span>NoConsumerIdx:</span></a></dt><dd><ul class="simple">
+<li><a class="reference external"
+          data-doc-search-tag="mupmuc: NoConsumerIdx" href="lockfreequeues/mupmuc.html#NoConsumerIdx">mupmuc: NoConsumerIdx</a></li>
+          </ul></dd>
+<dt><a name="NoConsumersAvailableDefect" href="#NoConsumersAvailableDefect"><span>NoConsumersAvailableDefect:</span></a></dt><dd><ul class="simple">
+<li><a class="reference external"
+          data-doc-search-tag="mupmuc: NoConsumersAvailableDefect" href="lockfreequeues/mupmuc.html#NoConsumersAvailableDefect">mupmuc: NoConsumersAvailableDefect</a></li>
+          </ul></dd>
+<dt><a name="NoProducerIdx" href="#NoProducerIdx"><span>NoProducerIdx:</span></a></dt><dd><ul class="simple">
+<li><a class="reference external"
+          data-doc-search-tag="mupsic: NoProducerIdx" href="lockfreequeues/mupsic.html#NoProducerIdx">mupsic: NoProducerIdx</a></li>
+          </ul></dd>
+<dt><a name="NoProducersAvailableDefect" href="#NoProducersAvailableDefect"><span>NoProducersAvailableDefect:</span></a></dt><dd><ul class="simple">
+<li><a class="reference external"
+          data-doc-search-tag="mupsic: NoProducersAvailableDefect" href="lockfreequeues/mupsic.html#NoProducersAvailableDefect">mupsic: NoProducersAvailableDefect</a></li>
+          </ul></dd>
+<dt><a name="NoSlice" href="#NoSlice"><span>NoSlice:</span></a></dt><dd><ul class="simple">
+<li><a class="reference external"
+          data-doc-search-tag="sipsic: NoSlice" href="lockfreequeues/sipsic.html#NoSlice">sipsic: NoSlice</a></li>
           </ul></dd>
 <dt><a name="pop" href="#pop"><span>pop:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="queueinterface: pop[N: static int; T](self: var QueueInterface; storage: var array[N, T]): Option[T]" href="lockfreequeues/spsc/queueinterface.html#pop%2CQueueInterface%2Carray%5BN%2CT%5D">queueinterface: pop[N: static int; T](self: var QueueInterface; storage: var array[N, T]): Option[T]</a></li>
+          data-doc-search-tag="mupmuc: pop[N, P, C: static int; T](self: Consumer[N, P, C, T]): Option[T]" href="lockfreequeues/mupmuc.html#pop%2CConsumer%5BN%2CP%2CC%2CT%5D">mupmuc: pop[N, P, C: static int; T](self: Consumer[N, P, C, T]): Option[T]</a></li>
           <li><a class="reference external"
-          data-doc-search-tag="queueinterface: pop[N: static int; T](self: var QueueInterface; storage: var array[N, T]; count: int): Option[
-    seq[T]]" href="lockfreequeues/spsc/queueinterface.html#pop%2CQueueInterface%2Carray%5BN%2CT%5D%2Cint">queueinterface: pop[N: static int; T](self: var QueueInterface; storage: var array[N, T]; count: int): Option[
-    seq[T]]</a></li>
+          data-doc-search-tag="mupmuc: pop[N, P, C: static int; T](self: Consumer[N, P, C, T]; count: int): Option[seq[T]]" href="lockfreequeues/mupmuc.html#pop%2CConsumer%5BN%2CP%2CC%2CT%5D%2Cint">mupmuc: pop[N, P, C: static int; T](self: Consumer[N, P, C, T]; count: int): Option[seq[T]]</a></li>
           <li><a class="reference external"
-          data-doc-search-tag="queueinterface: pop[T](self: var QueueInterface; storage: var ptr UncheckedArray[T]; capacity: int): Option[
-    T]" href="lockfreequeues/spsc/queueinterface.html#pop%2CQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint">queueinterface: pop[T](self: var QueueInterface; storage: var ptr UncheckedArray[T]; capacity: int): Option[
-    T]</a></li>
+          data-doc-search-tag="mupmuc: pop[N, P, C: static int; T](self: var Mupmuc[N, P, C, T]): bool" href="lockfreequeues/mupmuc.html#pop%2CMupmuc%5BN%2CP%2CC%2CT%5D">mupmuc: pop[N, P, C: static int; T](self: var Mupmuc[N, P, C, T]): bool</a></li>
           <li><a class="reference external"
-          data-doc-search-tag="queueinterface: pop[T](self: var QueueInterface; storage: var ptr UncheckedArray[T]; capacity: int;
-       count: int): Option[seq[T]]" href="lockfreequeues/spsc/queueinterface.html#pop%2CQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2Cint">queueinterface: pop[T](self: var QueueInterface; storage: var ptr UncheckedArray[T]; capacity: int;
-       count: int): Option[seq[T]]</a></li>
+          data-doc-search-tag="mupmuc: pop[N, P, C: static int; T](self: var Mupmuc[N, P, C, T]; count: int): Option[seq[T]]" href="lockfreequeues/mupmuc.html#pop%2CMupmuc%5BN%2CP%2CC%2CT%5D%2Cint">mupmuc: pop[N, P, C: static int; T](self: var Mupmuc[N, P, C, T]; count: int): Option[seq[T]]</a></li>
           <li><a class="reference external"
-          data-doc-search-tag="sharedqueue: pop[T](self: var SharedQueue[T]): Option[T]" href="lockfreequeues/spsc/sharedqueue.html#pop%2CSharedQueue%5BT%5D">sharedqueue: pop[T](self: var SharedQueue[T]): Option[T]</a></li>
+          data-doc-search-tag="sipsic: pop[N: static int; T](self: var Sipsic[N, T]): Option[T]" href="lockfreequeues/sipsic.html#pop%2CSipsic%5BN%2CT%5D">sipsic: pop[N: static int; T](self: var Sipsic[N, T]): Option[T]</a></li>
           <li><a class="reference external"
-          data-doc-search-tag="sharedqueue: pop[T](self: var SharedQueue[T]; count: int): Option[seq[T]]" href="lockfreequeues/spsc/sharedqueue.html#pop%2CSharedQueue%5BT%5D%2Cint">sharedqueue: pop[T](self: var SharedQueue[T]; count: int): Option[seq[T]]</a></li>
-          <li><a class="reference external"
-          data-doc-search-tag="staticqueue: pop[N: static int; T](self: var StaticQueue[N, T]): Option[T]" href="lockfreequeues/spsc/staticqueue.html#pop%2CStaticQueue%5BN%2CT%5D">staticqueue: pop[N: static int; T](self: var StaticQueue[N, T]): Option[T]</a></li>
-          <li><a class="reference external"
-          data-doc-search-tag="staticqueue: pop[N: static int; T](self: var StaticQueue[N, T]; count: int): Option[seq[T]]" href="lockfreequeues/spsc/staticqueue.html#pop%2CStaticQueue%5BN%2CT%5D%2Cint">staticqueue: pop[N: static int; T](self: var StaticQueue[N, T]; count: int): Option[seq[T]]</a></li>
+          data-doc-search-tag="sipsic: pop[N: static int; T](self: var Sipsic[N, T]; count: int): Option[seq[T]]" href="lockfreequeues/sipsic.html#pop%2CSipsic%5BN%2CT%5D%2Cint">sipsic: pop[N: static int; T](self: var Sipsic[N, T]; count: int): Option[seq[T]]</a></li>
+          </ul></dd>
+<dt><a name="Producer" href="#Producer"><span>Producer:</span></a></dt><dd><ul class="simple">
+<li><a class="reference external"
+          data-doc-search-tag="mupsic: Producer" href="lockfreequeues/mupsic.html#Producer">mupsic: Producer</a></li>
+          </ul></dd>
+<dt><a name="producerCount" href="#producerCount"><span>producerCount:</span></a></dt><dd><ul class="simple">
+<li><a class="reference external"
+          data-doc-search-tag="mupsic: producerCount[N, P: static int; T](self: var Mupsic[N, P, T]): int" href="lockfreequeues/mupsic.html#producerCount%2CMupsic%5BN%2CP%2CT%5D">mupsic: producerCount[N, P: static int; T](self: var Mupsic[N, P, T]): int</a></li>
           </ul></dd>
 <dt><a name="push" href="#push"><span>push:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="queueinterface: push[N: static int; T](self: var QueueInterface; storage: var array[N, T];
-                    items: openArray[T]): Option[seq[T]]" href="lockfreequeues/spsc/queueinterface.html#push%2CQueueInterface%2Carray%5BN%2CT%5D%2CopenArray%5BT%5D">queueinterface: push[N: static int; T](self: var QueueInterface; storage: var array[N, T];
-                    items: openArray[T]): Option[seq[T]]</a></li>
+          data-doc-search-tag="mupsic: push[N, P: static int; T](self: var Mupsic[N, P, T]; items: openArray[T]): Option[
+    HSlice[int, int]]" href="lockfreequeues/mupsic.html#push%2CMupsic%5BN%2CP%2CT%5D%2CopenArray%5BT%5D">mupsic: push[N, P: static int; T](self: var Mupsic[N, P, T]; items: openArray[T]): Option[
+    HSlice[int, int]]</a></li>
           <li><a class="reference external"
-          data-doc-search-tag="queueinterface: push[N: static int; T](self: var QueueInterface; storage: var array[N, T]; item: T): bool" href="lockfreequeues/spsc/queueinterface.html#push%2CQueueInterface%2Carray%5BN%2CT%5D%2CT">queueinterface: push[N: static int; T](self: var QueueInterface; storage: var array[N, T]; item: T): bool</a></li>
+          data-doc-search-tag="mupsic: push[N, P: static int; T](self: var Mupsic[N, P, T]; item: T): bool" href="lockfreequeues/mupsic.html#push%2CMupsic%5BN%2CP%2CT%5D%2CT">mupsic: push[N, P: static int; T](self: var Mupsic[N, P, T]; item: T): bool</a></li>
           <li><a class="reference external"
-          data-doc-search-tag="queueinterface: push[T](self: var QueueInterface; storage: var ptr UncheckedArray[T]; capacity: int;
-        items: openArray[T]): Option[seq[T]]" href="lockfreequeues/spsc/queueinterface.html#push%2CQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2CopenArray%5BT%5D">queueinterface: push[T](self: var QueueInterface; storage: var ptr UncheckedArray[T]; capacity: int;
-        items: openArray[T]): Option[seq[T]]</a></li>
+          data-doc-search-tag="mupsic: push[N, P: static int; T](self: Producer[N, P, T]; items: openArray[T]): Option[
+    HSlice[int, int]]" href="lockfreequeues/mupsic.html#push%2CProducer%5BN%2CP%2CT%5D%2CopenArray%5BT%5D">mupsic: push[N, P: static int; T](self: Producer[N, P, T]; items: openArray[T]): Option[
+    HSlice[int, int]]</a></li>
           <li><a class="reference external"
-          data-doc-search-tag="queueinterface: push[T](self: var QueueInterface; storage: var ptr UncheckedArray[T]; capacity: int;
-        item: T): bool" href="lockfreequeues/spsc/queueinterface.html#push%2CQueueInterface%2Cptr.UncheckedArray%5BT%5D%2Cint%2CT">queueinterface: push[T](self: var QueueInterface; storage: var ptr UncheckedArray[T]; capacity: int;
-        item: T): bool</a></li>
+          data-doc-search-tag="mupsic: push[N, P: static int; T](self: Producer[N, P, T]; item: T): bool" href="lockfreequeues/mupsic.html#push%2CProducer%5BN%2CP%2CT%5D%2CT">mupsic: push[N, P: static int; T](self: Producer[N, P, T]; item: T): bool</a></li>
           <li><a class="reference external"
-          data-doc-search-tag="sharedqueue: push[T](self: var SharedQueue[T]; items: openArray[T]): Option[seq[T]]" href="lockfreequeues/spsc/sharedqueue.html#push%2CSharedQueue%5BT%5D%2CopenArray%5BT%5D">sharedqueue: push[T](self: var SharedQueue[T]; items: openArray[T]): Option[seq[T]]</a></li>
+          data-doc-search-tag="sipsic: push[N: static int; T](self: var Sipsic[N, T]; items: openArray[T]): Option[
+    HSlice[int, int]]" href="lockfreequeues/sipsic.html#push%2CSipsic%5BN%2CT%5D%2CopenArray%5BT%5D">sipsic: push[N: static int; T](self: var Sipsic[N, T]; items: openArray[T]): Option[
+    HSlice[int, int]]</a></li>
           <li><a class="reference external"
-          data-doc-search-tag="sharedqueue: push[T](self: var SharedQueue[T]; item: T): bool" href="lockfreequeues/spsc/sharedqueue.html#push%2CSharedQueue%5BT%5D%2CT">sharedqueue: push[T](self: var SharedQueue[T]; item: T): bool</a></li>
-          <li><a class="reference external"
-          data-doc-search-tag="staticqueue: push[N: static int; T](self: var StaticQueue[N, T]; items: openArray[T]): Option[seq[T]]" href="lockfreequeues/spsc/staticqueue.html#push%2CStaticQueue%5BN%2CT%5D%2CopenArray%5BT%5D">staticqueue: push[N: static int; T](self: var StaticQueue[N, T]; items: openArray[T]): Option[seq[T]]</a></li>
-          <li><a class="reference external"
-          data-doc-search-tag="staticqueue: push[N: static int; T](self: var StaticQueue[N, T]; item: T): bool" href="lockfreequeues/spsc/staticqueue.html#push%2CStaticQueue%5BN%2CT%5D%2CT">staticqueue: push[N: static int; T](self: var StaticQueue[N, T]; item: T): bool</a></li>
+          data-doc-search-tag="sipsic: push[N: static int; T](self: var Sipsic[N, T]; item: T): bool" href="lockfreequeues/sipsic.html#push%2CSipsic%5BN%2CT%5D%2CT">sipsic: push[N: static int; T](self: var Sipsic[N, T]; item: T): bool</a></li>
           </ul></dd>
-<dt><a name="QueueInterface" href="#QueueInterface"><span>QueueInterface:</span></a></dt><dd><ul class="simple">
+<dt><a name="relaxed" href="#relaxed"><span>relaxed:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="queueinterface: QueueInterface" href="lockfreequeues/spsc/queueinterface.html#QueueInterface">queueinterface: QueueInterface</a></li>
+          data-doc-search-tag="atomic_dsl: relaxed[T](location: var Atomic[T]): T" href="lockfreequeues/atomic_dsl.html#relaxed%2CAtomic%5BT%5D">atomic_dsl: relaxed[T](location: var Atomic[T]): T</a></li>
           </ul></dd>
-<dt><a name="SharedQueue" href="#SharedQueue"><span>SharedQueue:</span></a></dt><dd><ul class="simple">
+<dt><a name="release" href="#release"><span>release:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="sharedqueue: SharedQueue" href="lockfreequeues/spsc/sharedqueue.html#SharedQueue">sharedqueue: SharedQueue</a></li>
+          data-doc-search-tag="atomic_dsl: release[T](location: var Atomic[T]; value: T)" href="lockfreequeues/atomic_dsl.html#release%2CAtomic%5BT%5D%2CT">atomic_dsl: release[T](location: var Atomic[T]; value: T)</a></li>
           </ul></dd>
-<dt><a name="StaticQueue" href="#StaticQueue"><span>StaticQueue:</span></a></dt><dd><ul class="simple">
+<dt><a name="sequential" href="#sequential"><span>sequential:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="staticqueue: StaticQueue" href="lockfreequeues/spsc/staticqueue.html#StaticQueue">staticqueue: StaticQueue</a></li>
+          data-doc-search-tag="atomic_dsl: sequential[T](location: var Atomic[T]): T" href="lockfreequeues/atomic_dsl.html#sequential%2CAtomic%5BT%5D">atomic_dsl: sequential[T](location: var Atomic[T]): T</a></li>
+          </ul></dd>
+<dt><a name="Sipsic" href="#Sipsic"><span>Sipsic:</span></a></dt><dd><ul class="simple">
+<li><a class="reference external"
+          data-doc-search-tag="sipsic: Sipsic" href="lockfreequeues/sipsic.html#Sipsic">sipsic: Sipsic</a></li>
           </ul></dd>
 <dt><a name="used" href="#used"><span>used:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="ops: used(head: int; tail: int; capacity: int): int" href="lockfreequeues/spsc/ops.html#used%2Cint%2Cint%2Cint">ops: used(head: int; tail: int; capacity: int): int</a></li>
+          data-doc-search-tag="ops: used(head: int; tail: int; capacity: int): int" href="lockfreequeues/ops.html#used%2Cint%2Cint%2Cint">ops: used(head: int; tail: int; capacity: int): int</a></li>
           </ul></dd>
 </dl>
     <div class="row">
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-07-07 07:55:10 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-08-08 19:12:43 UTC</small>
       </div>
     </div>
   </div>
