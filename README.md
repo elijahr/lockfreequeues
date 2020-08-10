@@ -10,15 +10,15 @@ Three implementations are provided:
 - [`Mupsic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupsic.html) is a multi-producer, single-consumer bounded queue. Popping is wait-free.
 - [`Mupmuc`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupmuc.html) is a multi-producer, multi-consumer bounded queue.
 
-API documentation: https://elijahr.github.io/lockfreequeues/
+API documentation: https://elijahr.github.io/lockfreequeues
+
+Note: if your project is compiled with `--threads:off`, only `Sipsic` is available.
 
 ## Installation
 
 ```sh
 nimble install lockfreequeues
 ```
-
-Note: when your project is compiled with `--threads:off`, only `Sipsic` is available.
 
 ## Examples
 
@@ -48,7 +48,7 @@ Many thanks to Mamy Ratsimbazafy for reviewing the initial release and offering 
 
 ## Changelog
 
-## v2.0.4 - 2020-08-10
+### v2.0.4 - 2020-08-10
 
 * Implement multi-producer, single-consumer queue (Mupsic)
 * Implement multi-producer, multi-consumer queue (Mupmuc)
@@ -56,13 +56,13 @@ Many thanks to Mamy Ratsimbazafy for reviewing the initial release and offering 
 * Fix wrap-around bug, improve test coverage
 * Nicer examples
 
-## v1.0.0 - 2020-07-06
+### v1.0.0 - 2020-07-06
 
 * Addresses feedback from [#1](https://github.com/elijahr/lockfreequeues/issues/1)
 * `head` and `tail` are now in the range `0 ..<2*capacity`
 * `capacity` doesn’t have to be a power of two
 * Use `align` pragma instead of padding array
 
-## v0.1.0 - 2020-07-02
+### v0.1.0 - 2020-07-02
 
-Initial release, containing `SipsicSharedQueue` and `SipsicStaticQueue`.
+Initial release, containing `SipsicSharedQueue` and `SipsicStaticQueue`
