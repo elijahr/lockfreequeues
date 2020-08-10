@@ -48,11 +48,13 @@ Many thanks to Mamy Ratsimbazafy for reviewing the initial release and offering 
 
 ## Changelog
 
-## v2.0.3 - 2020-08-08
+## v2.0.4 - 2020-08-10
 
 * Implement multi-producer, single-consumer queue (Mupsic).
 * Implement multi-producer, multi-consumer queue (Mupmuc).
 * Refactor, remove shared memory queues.
+* Fix wrap-around bug, improve test coverage
+* Nicer examples
 
 ## v1.0.0 - 2020-07-6
 
