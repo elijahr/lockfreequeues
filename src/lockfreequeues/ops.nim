@@ -13,8 +13,6 @@ proc validateHeadOrTail*(
 ): void
   {.inline.} =
   ## Assert that the given `value` is in the range `0..<2*capacity`.
-  if (value notin 0..<2*capacity):
-    echo "value=", value, " capacity=", capacity
   assert(value in 0..<2*capacity)
 
 
@@ -33,26 +31,6 @@ proc index*(
       val - capacity
     else:
       val
-
-
-# proc validateHeadAndTail*(
-#   head: int,
-#   tail: int,
-#   capacity: int,
-# ): void
-#   {.inline.} =
-#   ## Assert that the given `head` and `tail` values represent a valid queue
-#   ## state.
-#   validateHeadOrTail(head, capacity)
-#   validateHeadOrTail(tail, capacity)
-#   # if head <= tail:
-#   #   if tail - head notin 0..capacity:
-#   #     echo "tail=",  tail, ", head=", head, " capacity=", capacity
-#   #   assert(tail - head in 0..capacity)
-#   # else:
-#   #   if head - tail < capacity:
-#   #     echo "tail=",  tail, ", head=", head, " capacity=", capacity
-#   #   assert(head - tail >= capacity)
 
 
 proc incOrReset*(
