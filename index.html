@@ -102,7 +102,7 @@ function main() {
           </ul></dd>
 <dt><a name="empty" href="#empty"><span>empty:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
-          data-doc-search-tag="ops: empty(head: int; tail: int): bool" href="lockfreequeues/ops.html#empty%2Cint%2Cint">ops: empty(head: int; tail: int): bool</a></li>
+          data-doc-search-tag="ops: empty(head: int; tail: int; capacity: int): bool" href="lockfreequeues/ops.html#empty%2Cint%2Cint%2Cint">ops: empty(head: int; tail: int; capacity: int): bool</a></li>
           </ul></dd>
 <dt><a name="full" href="#full"><span>full:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
@@ -217,6 +217,8 @@ function main() {
 <dt><a name="relaxed" href="#relaxed"><span>relaxed:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
           data-doc-search-tag="atomic_dsl: relaxed[T](location: var Atomic[T]): T" href="lockfreequeues/atomic_dsl.html#relaxed%2CAtomic%5BT%5D">atomic_dsl: relaxed[T](location: var Atomic[T]): T</a></li>
+          <li><a class="reference external"
+          data-doc-search-tag="atomic_dsl: relaxed[T](location: var Atomic[T]; value: T)" href="lockfreequeues/atomic_dsl.html#relaxed%2CAtomic%5BT%5D%2CT">atomic_dsl: relaxed[T](location: var Atomic[T]; value: T)</a></li>
           </ul></dd>
 <dt><a name="release" href="#release"><span>release:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
@@ -225,6 +227,8 @@ function main() {
 <dt><a name="sequential" href="#sequential"><span>sequential:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
           data-doc-search-tag="atomic_dsl: sequential[T](location: var Atomic[T]): T" href="lockfreequeues/atomic_dsl.html#sequential%2CAtomic%5BT%5D">atomic_dsl: sequential[T](location: var Atomic[T]): T</a></li>
+          <li><a class="reference external"
+          data-doc-search-tag="atomic_dsl: sequential[T](location: var Atomic[T]; value: T)" href="lockfreequeues/atomic_dsl.html#sequential%2CAtomic%5BT%5D%2CT">atomic_dsl: sequential[T](location: var Atomic[T]; value: T)</a></li>
           </ul></dd>
 <dt><a name="Sipsic" href="#Sipsic"><span>Sipsic:</span></a></dt><dd><ul class="simple">
 <li><a class="reference external"
@@ -234,12 +238,16 @@ function main() {
 <li><a class="reference external"
           data-doc-search-tag="ops: used(head: int; tail: int; capacity: int): int" href="lockfreequeues/ops.html#used%2Cint%2Cint%2Cint">ops: used(head: int; tail: int; capacity: int): int</a></li>
           </ul></dd>
+<dt><a name="validateHeadOrTail" href="#validateHeadOrTail"><span>validateHeadOrTail:</span></a></dt><dd><ul class="simple">
+<li><a class="reference external"
+          data-doc-search-tag="ops: validateHeadOrTail(value: int; capacity: int): void" href="lockfreequeues/ops.html#validateHeadOrTail%2Cint%2Cint">ops: validateHeadOrTail(value: int; capacity: int): void</a></li>
+          </ul></dd>
 </dl>
     <div class="row">
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-08-08 19:12:43 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-08-10 06:40:14 UTC</small>
       </div>
     </div>
   </div>

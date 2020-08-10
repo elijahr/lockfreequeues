@@ -101,7 +101,9 @@ function main() {
 <li>
   <a class="reference reference-toplevel" href="#12" id="62">Procs</a>
   <ul class="simple simple-toc-section">
-      <li><a class="reference" href="#index%2Cint%2Cint"
+      <li><a class="reference" href="#validateHeadOrTail%2Cint%2Cint"
+    ><wbr />validate<wbr />Head<wbr />Or<wbr />Tail<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#index%2Cint%2Cint"
     ><wbr />index<span class="attachedType"></span></a></li>
   <li><a class="reference" href="#incOrReset%2Cint%2Cint%2Cint"
     ><wbr />inc<wbr />Or<wbr />Reset<span class="attachedType"></span></a></li>
@@ -111,7 +113,7 @@ function main() {
     ><wbr />available<span class="attachedType"></span></a></li>
   <li><a class="reference" href="#full%2Cint%2Cint%2Cint"
     ><wbr />full<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#empty%2Cint%2Cint"
+  <li><a class="reference" href="#empty%2Cint%2Cint%2Cint"
     ><wbr />empty<span class="attachedType"></span></a></li>
 
   </ul>
@@ -127,15 +129,26 @@ function main() {
   <div class="section" id="12">
 <h1><a class="toc-backref" href="#12">Procs</a></h1>
 <dl class="item">
+<a id="validateHeadOrTail,int,int"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#validateHeadOrTail%2Cint%2Cint"><span class="Identifier">validateHeadOrTail</span></a><span class="Other">(</span><span class="Identifier">value</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">capacity</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">void</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span><span class="Other">,</span> <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+Assert that the given <tt class="docutils literal"><span class="pre">value</span></tt> is in the range <tt class="docutils literal"><span class="pre">0..&lt;2*capacity</span></tt>.
+&nbsp;&nbsp;<a
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/ops.nim#L10"
+class="link-seesrc" target="_blank">Source</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/ops.nim#L10" class="link-seesrc" target="_blank" >Edit</a>
+
+</dd>
 <a id="index,int,int"></a>
 <dt><pre><span class="Keyword">proc</span> <a href="#index%2Cint%2Cint"><span class="Identifier">index</span></a><span class="Other">(</span><span class="Identifier">value</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">capacity</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">int</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span><span class="Other">,</span> <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 Given a head or tail <tt class="docutils literal"><span class="pre">value</span></tt> in the range <tt class="docutils literal"><span class="pre">0..&lt;2*capacity</span></tt>, determine its actual index in storage.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/ops.nim#L18"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/ops.nim#L19"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/ops.nim#L18" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/ops.nim#L19" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="incOrReset,int,int,int"></a>
@@ -145,9 +158,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Given an <tt class="docutils literal"><span class="pre">original</span></tt> head or tail value and an <tt class="docutils literal"><span class="pre">amount</span></tt> to increment, either increment <tt class="docutils literal"><span class="pre">original</span></tt> by <tt class="docutils literal"><span class="pre">amount</span></tt>, or reset from zero if <tt class="docutils literal"><span class="pre">original + amount &gt;= 2 * capacity</span></tt>.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/ops.nim#L35"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/ops.nim#L36"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/ops.nim#L35" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/ops.nim#L36" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="used,int,int,int"></a>
@@ -156,9 +169,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Determine how many slots are taken in storage given <tt class="docutils literal"><span class="pre">head</span></tt>, <tt class="docutils literal"><span class="pre">tail</span></tt>, and <tt class="docutils literal"><span class="pre">capacity</span></tt> values.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/ops.nim#L51"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/ops.nim#L52"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/ops.nim#L51" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/ops.nim#L52" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="available,int,int,int"></a>
@@ -167,9 +180,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Determine how many slots are available in storage given <tt class="docutils literal"><span class="pre">head</span></tt>, <tt class="docutils literal"><span class="pre">tail</span></tt>, and <tt class="docutils literal"><span class="pre">capacity</span></tt> values.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/ops.nim#L68"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/ops.nim#L70"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/ops.nim#L68" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/ops.nim#L70" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="full,int,int,int"></a>
@@ -178,20 +191,20 @@ class="link-seesrc" target="_blank">Source</a>
 
 Determine if storage is full given <tt class="docutils literal"><span class="pre">head</span></tt>, <tt class="docutils literal"><span class="pre">tail</span></tt>, and <tt class="docutils literal"><span class="pre">capacity</span></tt> values.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/ops.nim#L79"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/ops.nim#L81"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/ops.nim#L79" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/ops.nim#L81" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="empty,int,int"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#empty%2Cint%2Cint"><span class="Identifier">empty</span></a><span class="Other">(</span><span class="Identifier">head</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">tail</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span><span class="Other">,</span> <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<a id="empty,int,int,int"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#empty%2Cint%2Cint%2Cint"><span class="Identifier">empty</span></a><span class="Other">(</span><span class="Identifier">head</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">tail</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">capacity</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span><span class="Other">,</span> <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 Determine if storage is empty given <tt class="docutils literal"><span class="pre">head</span></tt> and <tt class="docutils literal"><span class="pre">tail</span></tt> values.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/ops.nim#L91"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/ops.nim#L93"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/ops.nim#L91" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/ops.nim#L93" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -204,7 +217,7 @@ class="link-seesrc" target="_blank">Source</a>
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-08-08 19:12:43 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-08-10 06:40:14 UTC</small>
       </div>
     </div>
   </div>

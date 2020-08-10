@@ -107,8 +107,12 @@ function main() {
     ><wbr />acquire<span class="attachedType"></span></a></li>
   <li><a class="reference" href="#sequential%2CAtomic%5BT%5D"
     ><wbr />sequential<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#relaxed%2CAtomic%5BT%5D%2CT"
+    ><wbr />relaxed<span class="attachedType"></span></a></li>
   <li><a class="reference" href="#release%2CAtomic%5BT%5D%2CT"
     ><wbr />release<span class="attachedType"></span></a></li>
+  <li><a class="reference" href="#sequential%2CAtomic%5BT%5D%2CT"
+    ><wbr />sequential<span class="attachedType"></span></a></li>
 
   </ul>
 </li>
@@ -156,15 +160,37 @@ class="link-seesrc" target="_blank">Source</a>
 <a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/atomic_dsl.nim#L22" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
+<a id="relaxed,Atomic[T],T"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#relaxed%2CAtomic%5BT%5D%2CT"><span class="Identifier">relaxed</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">location</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">Atomic</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">value</span><span class="Other">:</span> <span class="Identifier">T</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+Store the value in location using moRelaxed
+&nbsp;&nbsp;<a
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/atomic_dsl.nim#L27"
+class="link-seesrc" target="_blank">Source</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/atomic_dsl.nim#L27" class="link-seesrc" target="_blank" >Edit</a>
+
+</dd>
 <a id="release,Atomic[T],T"></a>
 <dt><pre><span class="Keyword">proc</span> <a href="#release%2CAtomic%5BT%5D%2CT"><span class="Identifier">release</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">location</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">Atomic</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">value</span><span class="Other">:</span> <span class="Identifier">T</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 Store the value in location using moRelease
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/atomic_dsl.nim#L27"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/atomic_dsl.nim#L32"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/atomic_dsl.nim#L27" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/atomic_dsl.nim#L32" class="link-seesrc" target="_blank" >Edit</a>
+
+</dd>
+<a id="sequential,Atomic[T],T"></a>
+<dt><pre><span class="Keyword">proc</span> <a href="#sequential%2CAtomic%5BT%5D%2CT"><span class="Identifier">sequential</span></a><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">location</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">Atomic</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">value</span><span class="Other">:</span> <span class="Identifier">T</span><span class="Other">)</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
+<dd>
+
+Store the value in location using moSequentiallyConsistent
+&nbsp;&nbsp;<a
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/atomic_dsl.nim#L37"
+class="link-seesrc" target="_blank">Source</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/atomic_dsl.nim#L37" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -177,7 +203,7 @@ class="link-seesrc" target="_blank">Source</a>
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-08-08 19:12:43 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-08-10 06:40:14 UTC</small>
       </div>
     </div>
   </div>

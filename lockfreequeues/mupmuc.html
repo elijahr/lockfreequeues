@@ -155,7 +155,7 @@ function main() {
   <div class="section" id="6">
 <h1><a class="toc-backref" href="#6">Imports</a></h1>
 <dl class="item">
-<a class="reference external" href="ops.html">ops</a>, <a class="reference external" href="mupsic.html">mupsic</a>, <a class="reference external" href="sipsic.html">sipsic</a>
+<a class="reference external" href="ops.html">ops</a>, <a class="reference external" href="mupsic.html">mupsic</a>
 </dl></div>
 <div class="section" id="7">
 <h1><a class="toc-backref" href="#7">Types</a></h1>
@@ -167,9 +167,9 @@ function main() {
 
 Raised by <tt class="docutils literal"><span class="pre">getConsumer()</span></tt> if all consumers have been assigned to other threads.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L24"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L22"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L24" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L22" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="Mupmuc"></a>
@@ -188,9 +188,9 @@ A multi-producer, multi-consumer bounded queue implemented as a ring buffer.<ul 
 </ul>
 
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L30"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L28"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L30" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L28" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="Consumer"></a>
@@ -202,9 +202,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 A per-thread interface for popping items from a queue. Retrieved via a call to <tt class="docutils literal"><span class="pre">Mupmuc.getConsumer()</span></tt>
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L44"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L42"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L44" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L42" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -218,9 +218,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 The initial value of <tt class="docutils literal"><span class="pre">Mupmuc.prevConsumerIdx</span></tt>.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L21"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L19"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L21" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L19" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -234,9 +234,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Initialize a new Mupmuc queue.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L71"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L69"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L71" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L69" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="getConsumer,Mupmuc[N,P,C,T],int"></a>
@@ -247,9 +247,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Assigns and returns a <tt class="docutils literal"><span class="pre">Consumer</span></tt> instance for the current thread.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L76"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L74"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L76" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L74" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="pop,Consumer[N,P,C,T]"></a>
@@ -258,9 +258,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Pop a single item from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre">none(T)</span></tt> is returned. Otherwise an item is popped, <tt class="docutils literal"><span class="pre">some(T)</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L116"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L114"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L116" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L114" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="pop,Consumer[N,P,C,T],int"></a>
@@ -269,9 +269,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Pop <tt class="docutils literal"><span class="pre">count</span></tt> items from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> is returned. Otherwise <tt class="docutils literal"><span class="pre">some(seq[T])</span></tt> is returned containing at least one item.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L172"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L170"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L172" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L170" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="pop,Mupmuc[N,P,C,T]"></a>
@@ -319,7 +319,7 @@ class="link-seesrc" target="_blank">Source</a>
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-08-08 19:12:43 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-08-10 06:40:14 UTC</small>
       </div>
     </div>
   </div>

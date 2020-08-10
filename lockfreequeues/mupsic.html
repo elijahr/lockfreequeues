@@ -171,9 +171,9 @@ function main() {
 
 Raised by <tt class="docutils literal"><span class="pre">getProducer()</span></tt> if all producers have been assigned to other threads.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L23"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L22"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L23" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L22" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="InvalidCallDefect"></a>
@@ -183,9 +183,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Raised by <tt class="docutils literal"><span class="pre">Mupsic.push()</span></tt>, <tt class="docutils literal"><span class="pre">Mupmuc.push()</span></tt>, and <tt class="docutils literal"><span class="pre">Mupmuc.pop()</span></tt> because those should happen via <tt class="docutils literal"><span class="pre">Producer.push()</span></tt> or <tt class="docutils literal"><span class="pre">Consumer.pop()</span></tt>.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L27"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L26"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L27" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L26" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="Mupsic"></a>
@@ -203,9 +203,9 @@ A multi-producer, single-consumer bounded queue implemented as a ring buffer. Po
 </ul>
 
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L32"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L31"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L32" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L31" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="Producer"></a>
@@ -217,9 +217,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 A per-thread interface for pushing items to a queue. Retrieved via a call to <tt class="docutils literal"><span class="pre">Mupsic.getProducer()</span></tt>
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L45"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L44"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L45" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L44" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -233,9 +233,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 The initial value of <tt class="docutils literal"><span class="pre">Mupsic.prevProducerIdx</span></tt>.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L20"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L19"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L20" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L19" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -249,9 +249,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Initialize a new Mupsic queue.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L67"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L66"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L67" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L66" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="getProducer,Mupsic[N,P,T],int"></a>
@@ -261,9 +261,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Assigns and returns a <tt class="docutils literal"><span class="pre">Producer</span></tt> instance for the current thread.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L72"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L71"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L72" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L71" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="push,Producer[N,P,T],T"></a>
@@ -272,9 +272,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Append a single item to the queue. If the queue is full, <tt class="docutils literal"><span class="pre">false</span></tt> is returned. If <tt class="docutils literal"><span class="pre">item</span></tt> is appended, <tt class="docutils literal"><span class="pre">true</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L112"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L111"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L112" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L111" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="push,Producer[N,P,T],openArray[T]"></a>
@@ -296,9 +296,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Overload of <tt class="docutils literal"><span class="pre">Sipsic.push()</span></tt> that simply raises <tt class="docutils literal"><span class="pre">InvalidCallDefect</span></tt>. Pushes should happen via <tt class="docutils literal"><span class="pre">Producer.push()</span></tt>.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L265"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L267"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L265" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L267" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="push,Mupsic[N,P,T],openArray[T]"></a>
@@ -308,9 +308,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Overload of <tt class="docutils literal"><span class="pre">Sipsic.push()</span></tt> that simply raises <tt class="docutils literal"><span class="pre">InvalidCallDefect</span></tt>. Pushes should happen via <tt class="docutils literal"><span class="pre">Producer.push()</span></tt>.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L275"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L277"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L275" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L277" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="capacity,Mupsic[N,P,T]"></a>
@@ -319,9 +319,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Returns the queue's storage capacity (<tt class="docutils literal"><span class="pre">N</span></tt>).
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L285"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L287"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L285" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L287" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="producerCount,Mupsic[N,P,T]"></a>
@@ -330,9 +330,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Returns the queue's number of producers (<tt class="docutils literal"><span class="pre">P</span></tt>).
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L293"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L295"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L293" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L295" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -345,7 +345,7 @@ class="link-seesrc" target="_blank">Source</a>
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-08-08 19:12:43 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2020-08-10 06:40:14 UTC</small>
       </div>
     </div>
   </div>
