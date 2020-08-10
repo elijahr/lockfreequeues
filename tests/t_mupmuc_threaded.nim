@@ -5,71 +5,73 @@
 # copyright.
 
 import algorithm
-import atomics
 import options
-import os
 import sequtils
+import threadpool
 import unittest
 
 import lockfreequeues
 
 
-const producerCount = 100
-const consumerCount = 50
+const producerCount = MaxDistinguishedThread
+const consumerCount = MaxDistinguishedThread
 
 var
   channel: Channel[int]
   queue = initMupmuc[8, producerCount, consumerCount, int]()
-  counter: Atomic[int]
+  consumerThreads: array[consumerCount, Thread[void]]
+  producerThreads: array[producerCount, Thread[int]]
 
 
 proc consumerFunc() {.thread.} =
   var consumer = queue.getConsumer()
-  while counter.sequential < producerCount:
-    sleep(11)
+  while true:
     if consumer.idx mod 2 == 0:
-      var items: Option[seq[int]] = consumer.pop(1)
+      var items = consumer.pop(1)
       if items.isSome:
         channel.send(items.get[0])
-        counter += 1
+        break
     else:
-      var item: Option[int] = consumer.pop()
+      var item = consumer.pop()
       if item.isSome:
         channel.send(item.get)
-        counter += 1
-    cpuRelax()
+        break
 
 
 proc producerFunc(p: int) {.thread.} =
   var producer = queue.getProducer()
   while true:
-    sleep(10)
     if p mod 2 == 0:
       if producer.push(p):
         break
     else:
       if producer.push(@[p]).isNone:
         break
-    cpuRelax()
 
 
 suite "Mupmuc[N, P, C, T] threaded":
 
-  test "basic":
-    var
-      consumerThreads: array[consumerCount, Thread[void]]
-      producerThreads: array[producerCount, Thread[int]]
+  channel.open()
 
-    channel.open()
-    for c in 0..<consumerCount:
-      consumerThreads[c].createThread(consumerFunc)
-    for p in 0..<producerCount:
-      producerThreads[p].createThread(producerFunc, p)
-    var received = newSeq[int]()
-    for i in 0..<producerCount:
-      received.add(channel.recv())
-    joinThreads(producerThreads)
-    joinThreads(consumerThreads)
-    channel.close()
-    received.sort()
-    check(received == (0..<producerCount).toSeq)
+  test "basic":
+    for i in 1..25:
+      queue.reset()
+
+      for c in 0..<consumerCount:
+        consumerThreads[c].createThread(consumerFunc)
+
+      for p in 0..<producerCount:
+        producerThreads[p].createThread(producerFunc, p)
+
+      var received = newSeq[int]()
+      for i in 0..<producerCount:
+        received.add(channel.recv())
+
+      joinThreads(producerThreads)
+      joinThreads(consumerThreads)
+
+      received.sort()
+
+      check(received == (0..<producerCount).toSeq)
+
+  channel.close()

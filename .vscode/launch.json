@@ -10,6 +10,15 @@
             "MIMode": "lldb",
             "request": "launch",
             "program": "${workspaceRoot}/tests/test",
+            // "args": ["Mupmuc[N, P, C, T] threaded::"],
+            "cwd": "${workspaceRoot}",
+        },
+        {
+            "name": "Debug examples (cppdbg)",
+            "type": "cppdbg",
+            "MIMode": "lldb",
+            "request": "launch",
+            "program": "${workspaceRoot}/examples/mupsic",
             // "args": ["ops.used(head, tail, capacity)::"],
             "cwd": "${workspaceRoot}",
         }

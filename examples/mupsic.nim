@@ -8,55 +8,60 @@
 
 import options
 import random
-import sequtils
-import threadpool
 
 import lockfreequeues
 
 var
-  # Queue that can hold 8 ints, with MaxThreadPoolSize maximum producer threads
-  queue = initMupsic[8, MaxThreadPoolSize, int]()
+  # Queue that can hold 8 ints at a time,
+  # with 32 producer workers
+  queue = initMupsic[8, 32, int]()
 
 
-proc consumerFunc(): seq[int] {.gcsafe.} =
-  result = @[]
-  while result.len < MaxThreadPoolSize:
-
-    # Pop many items from the queue
-    let items = queue.pop(queue.producerCount)
-    if items.isSome:
-      result.insert(items.get, result.len)
-
-    # Pop a single item from the queue
+proc consumerFunc() {.thread.} =
+  for i in 0..32:
+    # Try to pop a single item from the queue; pop() returns Option[int]
     let item = queue.pop()
-    if item.isSome:
-      result.add(item.get)
-    cpuRelax()
+
+    echo "[consumer] popped item: ", item
+
+    # Try to pop four items from the queue; pop(int) returns Option[seq[int]]
+    let items = queue.pop(4)
+
+    echo "[consumer] popped items: ", items
 
 
-proc producerFunc() {.gcsafe.} =
+proc producerFunc() {.thread.} =
   # Get a unique producer for this thread
   var producer = queue.getProducer()
 
   let item = rand(100)
-  if producer.idx mod 2 == 0:
-    # Half the time, push a single item to the queue
-    while not producer.push(item):
-      cpuRelax()
+
+  # Try to push a single item; push will return false when queue is full
+  echo "[producer ", producer.idx, "] pushed item: ", item, "? ", producer.push(item)
+
+  let items = @[
+    rand(100),
+    rand(100),
+    rand(100),
+    rand(100),
+  ]
+
+  # Try to push the items. If not all items could be pushed,
+  # the remainder is returned as an Option[HSlice[int, int]] suitable for
+  # slicing the sequence.
+  let remainder = producer.push(items)
+
+  if remainder.isSome:
+    echo "[producer ", producer.idx, "] pushed items: ", items[0..<remainder.get.a], ", unpushed items: ", items[remainder.get]
   else:
-    # Half the time, push a sequence to the queue
-    while producer.push(@[item]).isSome:
-      cpuRelax()
-
-  echo "Pushed item: ", item
+    echo "[producer ", producer.idx, "] pushed all items: ", items
 
 
-let consumedFlow = spawn consumerFunc()
+var threads: array[33, Thread[void]]
 
-for producer in 0..<MaxThreadPoolSize:
-  spawn producerFunc()
+threads[0].createThread(consumerFunc)
 
-sync()
+for p in 1..32:
+  threads[p].createThread(producerFunc)
 
-# ^ waits for consumer flow var to return
-echo "Popped items: ", repr(^consumedFlow)
+joinThreads(threads)

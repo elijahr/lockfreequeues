@@ -36,8 +36,8 @@ type
 proc clear[N: static int, T](
   self: var Sipsic[N, T]
 ) =
-  self.head.release(0)
-  self.tail.release(0)
+  self.head.relaxed(0)
+  self.tail.relaxed(0)
   for n in 0..<N:
     self.storage[n].reset()
 
@@ -55,7 +55,7 @@ proc push*[N: static int, T](
   ## If the queue is full, `false` is returned.
   ## If `item` is appended, `true` is returned.
   let tail = self.tail.relaxed
-  let head = self.head.acquire
+  let head = self.head.relaxed
 
   if unlikely(full(head, tail, N)):
     # queue is full, return false
@@ -67,7 +67,9 @@ proc push*[N: static int, T](
 
   result = true
 
-  self.tail.release(incOrReset(tail, 1, N))
+  let newTail = incOrReset(tail, 1, N)
+
+  self.tail.relaxed(newTail)
 
 
 proc push*[N: static int, T](
@@ -84,7 +86,7 @@ proc push*[N: static int, T](
     return NoSlice
 
   let tail = self.tail.relaxed
-  let head = self.head.acquire
+  let head = self.head.relaxed
 
   if unlikely(full(head, tail, N)):
     # queue is full, return everything
@@ -100,10 +102,11 @@ proc push*[N: static int, T](
   else:
     # not enough room to push all items, return remainder
     result = some(avail..items.len - 1)
-    count = avail
+    count = min(avail, N)
 
   let start = index(tail, N)
-  var stop = index((tail + count) - 1, N)
+  var stop = incOrReset(tail, count - 1, N)
+  stop = index(stop, N)
 
   if start > stop:
     # data may wrap
@@ -116,7 +119,9 @@ proc push*[N: static int, T](
     # data does not wrap
     self.storage[start..stop] = items[0..stop-start]
 
-  self.tail.release(incOrReset(tail, count, N))
+  let newTail = incOrReset(tail, count, N)
+
+  self.tail.relaxed(newTail)
 
 
 proc pop*[N: static int, T](
@@ -125,10 +130,10 @@ proc pop*[N: static int, T](
   ## Pop a single item from the queue.
   ## If the queue is empty, `none(T)` is returned.
   ## Otherwise an item is popped, `some(T)` is returned.
-  let tail = self.tail.acquire
+  let tail = self.tail.relaxed
   let head = self.head.relaxed
 
-  if unlikely(empty(head, tail)):
+  if unlikely(empty(head, tail, N)):
     return
 
   let headIndex = index(head, N)
@@ -137,7 +142,7 @@ proc pop*[N: static int, T](
 
   let newHead = incOrReset(head, 1, N)
 
-  self.head.release(newHead)
+  self.head.relaxed(newHead)
 
 
 proc pop*[N: static int, T](
@@ -147,30 +152,31 @@ proc pop*[N: static int, T](
   ## Pop `count` items from the queue.
   ## If the queue is empty, `none(seq[T])` is returned.
   ## Otherwise `some(seq[T])` is returned containing at least one item.
-  let tail = self.tail.acquire
+  let tail = self.tail.relaxed
   let head = self.head.relaxed
 
-  if unlikely(empty(head, tail)):
+  let used = used(head, tail, N)
+  var actualCount: int
+
+  if likely(used >= count):
+    # Enough items to fulfill request
+    actualCount = count
+  elif used <= 0:
+    # Queue is empty, return nothing
     return none(seq[T])
+  else:
+    # Not enough items to fulfill request
+    actualCount = min(used, N)
 
-  let size = used(head, tail, N)
-
-  let itemCount =
-    if likely(size >= count):
-      # enough data to pop count
-      count
-    else:
-      # not enough data to pop count
-      size
-
-  var res = newSeq[T](itemCount)
+  var res = newSeq[T](actualCount)
   let headIndex = index(head, N)
-  let newHead = incOrReset(head, itemCount, N)
+  let newHead = incOrReset(head, actualCount, N)
+
   let newHeadIndex = index(newHead, N)
 
   if headIndex < newHeadIndex:
     # request does not wrap
-    for i in 0..<itemCount:
+    for i in 0..<actualCount:
       res[i] = self.storage[headIndex+i]
   else:
     # request may wrap
@@ -186,7 +192,7 @@ proc pop*[N: static int, T](
 
   result = some(res)
 
-  self.head.release(newHead)
+  self.head.relaxed(newHead)
 
 
 proc capacity*[N: static int, T](
@@ -214,6 +220,6 @@ when defined(testing):
     tail: int,
     storage: seq[T],
   ) =
-    check(self.head.acquire == head)
-    check(self.tail.acquire == tail)
+    check(self.head.relaxed == head)
+    check(self.tail.relaxed == tail)
     check(self.storage[0..^1] == storage)

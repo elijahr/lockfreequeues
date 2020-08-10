@@ -23,14 +23,12 @@ proc consumerFunc() {.thread.} =
       let msg = res.get
       channel.send(msg)
       inc count
-    else:
-      cpuRelax()
 
 
 proc producerFunc() {.thread.} =
   for i in 1..128:
     while not queue.push(i):
-      cpuRelax()
+      discard
 
 
 suite "Sipsic[N, T] threaded":

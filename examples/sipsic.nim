@@ -8,53 +8,56 @@
 
 import options
 import random
-import sequtils
-import threadpool
 
 import lockfreequeues
 
-const
-  itemCount = 30
-
 var
-  # Queue that can hold 8 ints
+  # Queue that can hold 8 ints at a time
   queue = initSipsic[8, int]()
 
 
-proc consumerFunc(): seq[int] {.gcsafe.} =
-  result = @[]
-  while result.len < itemCount:
-
-    # Pop many items from the queue
-    let items = queue.pop(itemCount)
-    if items.isSome:
-      result.insert(items.get, result.len)
-
-    # Pop a single item from the queue
+proc consumerFunc() {.thread.} =
+  for i in 0..32:
+    # Try to pop a single item from the queue; pop() returns Option[int]
     let item = queue.pop()
-    if item.isSome:
-      result.add(item.get)
-    cpuRelax()
+
+    echo "[consumer] popped item: ", item
+
+    # Try to pop four items from the queue; pop(int) returns Option[seq[int]]
+    let items = queue.pop(4)
+
+    echo "[consumer] popped items: ", items
 
 
-proc producerFunc() {.gcsafe.} =
-  for i in 0..<itemCount:
+proc producerFunc() {.thread.} =
+
+  for i in 0..32:
     let item = rand(100)
 
-    if i mod 2 == 0:
-      # Push a single item to the queue
-      while not queue.push(item):
-        cpuRelax()
+    # Try to push a single item; push will return false when queue is full
+    echo "[producer] pushed item: ", item, "? ", queue.push(item)
 
+    let items = @[
+      rand(100),
+      rand(100),
+      rand(100),
+      rand(100),
+    ]
+
+    # Try to push the items. If not all items could be pushed,
+    # the remainder is returned as an Option[HSlice[int, int]] suitable for
+    # slicing the sequence.
+    let remainder = queue.push(items)
+
+    if remainder.isSome:
+      echo "[producer] pushed items: ", items[0..<remainder.get.a], ", unpushed items: ", items[remainder.get]
     else:
-      # Push a sequence to the queue
-      while queue.push(@[item]).isSome:
-        cpuRelax()
-
-    echo "Pushed item: ", item
+      echo "[producer] pushed all items: ", items
 
 
-let consumedFlow = spawn consumerFunc()
-spawn producerFunc()
-sync()
-echo "Popped items: ", ^consumedFlow
+var threads: array[2, Thread[void]]
+
+threads[0].createThread(consumerFunc)
+threads[1].createThread(producerFunc)
+
+joinThreads(threads)

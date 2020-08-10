@@ -14,7 +14,7 @@ suite "atomic_dsl":
   var atom: Atomic[int]
 
   test "integration":
-    atom.release(1)
+    atom.relaxed(1)
     assert(atom.relaxed == 1)
-    atom.release(2)
+    atom.relaxed(2)
     assert(atom.acquire == 2)

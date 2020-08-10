@@ -24,6 +24,16 @@ proc sequential*[T](location: var Atomic[T]): T {.inline.} =
   result = location.load(moSequentiallyConsistent)
 
 
+proc relaxed*[T](location: var Atomic[T], value: T) {.inline.} =
+  ## Store the value in location using moRelaxed
+  location.store(value, moRelaxed)
+
+
 proc release*[T](location: var Atomic[T], value: T) {.inline.} =
   ## Store the value in location using moRelease
   location.store(value, moRelease)
+
+
+proc sequential*[T](location: var Atomic[T], value: T) {.inline.} =
+  ## Store the value in location using moSequentiallyConsistent
+  location.store(value, moSequentiallyConsistent)

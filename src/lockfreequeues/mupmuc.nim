@@ -49,21 +49,21 @@ type
 proc clear[N, P, C: static int, T](
   self: var Mupmuc[N, P, C, T]
 ) =
-  self.head.release(0)
-  self.tail.release(0)
+  self.head.relaxed(0)
+  self.tail.relaxed(0)
 
   for n in 0..<N:
     self.storage[n].reset()
 
-  self.prevProducerIdx.release(NoConsumerIdx)
+  self.prevProducerIdx.relaxed(NoConsumerIdx)
   for p in 0..<P:
-    self.producerTails[p].release(0)
-    self.producerThreadIds[p].release(0)
+    self.producerTails[p].relaxed(0)
+    self.producerThreadIds[p].relaxed(0)
 
-  self.prevConsumerIdx.release(NoConsumerIdx)
+  self.prevConsumerIdx.relaxed(NoConsumerIdx)
   for c in 0..<C:
-    self.consumerHeads[c].release(0)
-    self.consumerThreadIds[c].release(0)
+    self.consumerHeads[c].relaxed(0)
+    self.consumerThreadIds[c].relaxed(0)
 
 
 proc initMupmuc*[N, P, C: static int, T](): Mupmuc[N, P, C, T] =
@@ -98,7 +98,7 @@ proc getConsumer*[N, P, C: static int, T](
     if self.consumerThreadIds[idx].compareExchangeWeak(
       expected,
       threadId,
-      moRelease,
+      moRelaxed,
       moRelaxed,
     ):
       result.idx = idx
@@ -125,25 +125,25 @@ proc pop*[N, P, C: static int, T](
 
   # spin until reservation is acquired
   while true:
-    prevConsumerIdx = self.queue.prevConsumerIdx.acquire
+    prevConsumerIdx = self.queue.prevConsumerIdx.relaxed
     isFirstConsumption = prevConsumerIdx == NoConsumerIdx
-    var tail = self.queue.tail.acquire
+    var tail = self.queue.tail.relaxed
     prevHead =
       if isFirstConsumption:
         0
       else:
-        self.queue.consumerHeads[prevConsumerIdx].acquire
+        self.queue.consumerHeads[prevConsumerIdx].relaxed
 
-    if unlikely(empty(prevHead, tail)):
+    if unlikely(empty(prevHead, tail, N)):
       return none(T)
 
     newHead = incOrReset(prevHead, 1, N)
-    self.queue.consumerHeads[self.idx].release(newHead)
+    self.queue.consumerHeads[self.idx].relaxed(newHead)
 
     if self.queue.prevConsumerIdx.compareExchangeWeak(
       prevConsumerIdx,
       self.idx,
-      moAcquire,
+      moRelaxed,
       moRelaxed,
     ):
       break
@@ -158,13 +158,13 @@ proc pop*[N, P, C: static int, T](
       if self.queue.head.compareExchangeWeak(
         expectedHead,
         newHead,
-        moAcquire,
+        moRelaxed,
         moRelaxed,
       ):
         break
       cpuRelax()
   else:
-    self.queue.head.release(newHead)
+    self.queue.head.relaxed(newHead)
 
 
 proc pop*[N, P, C: static int, T](
@@ -175,7 +175,7 @@ proc pop*[N, P, C: static int, T](
   ## If the queue is empty, `none(seq[T])` is returned.
   ## Otherwise `some(seq[T])` is returned containing at least one item.
 
-  if unlikely(count == 0):
+  if unlikely(count <= 0):
     return none(seq[T])
 
   var actualCount: int
@@ -184,43 +184,45 @@ proc pop*[N, P, C: static int, T](
   var newHead: int
   var prevConsumerIdx: int
   var isFirstConsumption: bool
+  var tail: int
 
   # spin until reservation is acquired
   while true:
-    prevConsumerIdx = self.queue.prevConsumerIdx.acquire
+    prevConsumerIdx = self.queue.prevConsumerIdx.relaxed
     isFirstConsumption = prevConsumerIdx == NoConsumerIdx
-    var tail = self.queue.tail.acquire
+    tail = self.queue.tail.relaxed
     prevHead =
       if isFirstConsumption:
         0
       else:
-        self.queue.consumerHeads[prevConsumerIdx].acquire
+        self.queue.consumerHeads[prevConsumerIdx].relaxed
 
     used = used(prevHead, tail, N)
     if likely(used >= count):
       # Enough items to fulfill request
       actualCount = count
-    elif used == 0:
-      # Queue is empty, return nothin
+    elif used <= 0:
+      # Queue is empty, return nothing
       return none(seq[T])
     else:
       # Not enough items to fulfill request
-      actualCount = used
+      actualCount = min(used, N)
 
     newHead = incOrReset(prevHead, actualCount, N)
-    self.queue.consumerHeads[self.idx].release(newHead)
+    self.queue.consumerHeads[self.idx].relaxed(newHead)
 
     if self.queue.prevConsumerIdx.compareExchangeWeak(
       prevConsumerIdx,
       self.idx,
-      moAcquire,
+      moRelaxed,
       moRelaxed,
     ):
       break
     cpuRelax()
 
   let start = index(prevHead, N)
-  var stop = index((prevHead + actualCount) - 1, N)
+  var stop = incOrReset(prevHead, actualCount - 1, N)
+  stop = index(stop, N)
 
   var items = newSeq[T](actualCount)
 
@@ -244,14 +246,14 @@ proc pop*[N, P, C: static int, T](
       if self.queue.head.compareExchangeWeak(
         expectedHead,
         newHead,
-        moAcquire,
+        moRelaxed,
         moRelaxed,
       ):
         break
       cpuRelax()
 
   elif isFirstConsumption:
-    self.queue.head.release(newHead)
+    self.queue.head.relaxed(newHead)
 
 
 proc pop*[N, P, C: static int, T](
@@ -296,9 +298,9 @@ when defined(testing):
     prevConsumerIdx: int,
     consumerHeads: seq[int],
   ) =
-    check(self.prevConsumerIdx.acquire == prevConsumerIdx)
+    check(self.prevConsumerIdx.relaxed == prevConsumerIdx)
     let heads = collect(newSeq):
       for c in 0..<C:
-        self.consumerHeads[c].acquire
+        self.consumerHeads[c].relaxed
     check(heads == consumerHeads)
 

@@ -51,16 +51,16 @@ type
 proc clear[N, P: static int, T](
   self: var Mupsic[N, P, T]
 ) =
-  self.head.release(0)
-  self.tail.release(0)
+  self.head.relaxed(0)
+  self.tail.relaxed(0)
 
   for n in 0..<N:
     self.storage[n].reset()
 
-  self.prevProducerIdx.release(NoProducerIdx)
+  self.prevProducerIdx.relaxed(NoProducerIdx)
   for p in 0..<P:
-    self.producerTails[p].release(0)
-    self.producerThreadIds[p].release(0)
+    self.producerTails[p].relaxed(0)
+    self.producerThreadIds[p].relaxed(0)
 
 
 proc initMupsic*[N, P: static int, T](): Mupsic[N, P, T] =
@@ -95,7 +95,7 @@ proc getProducer*[N, P: static int, T](
     if self.producerThreadIds[idx].compareExchangeWeak(
       expected,
       threadId,
-      moRelease,
+      moRelaxed,
       moRelaxed,
     ):
       result.idx = idx
@@ -123,25 +123,26 @@ proc push*[N, P: static int, T](
 
   # spin until reservation is acquired
   while true:
-    prevProducerIdx = self.queue.prevProducerIdx.acquire
+    prevProducerIdx = self.queue.prevProducerIdx.relaxed
     isFirstProduction = prevProducerIdx == NoProducerIdx
-    var head = self.queue.head.acquire
+    var head = self.queue.head.relaxed
     prevTail =
       if isFirstProduction:
         0
       else:
-        self.queue.producerTails[prevProducerIdx].acquire
+        self.queue.producerTails[prevProducerIdx].relaxed
 
     if unlikely(full(head, prevTail, N)):
       return false
 
     newTail = incOrReset(prevTail, 1, N)
-    self.queue.producerTails[self.idx].release(newTail)
+    # validateHeadAndTail(head, newTail, N)
+    self.queue.producerTails[self.idx].relaxed(newTail)
 
     if self.queue.prevProducerIdx.compareExchangeWeak(
       prevProducerIdx,
       self.idx,
-      moAcquire,
+      moRelaxed,
       moRelaxed,
     ):
       break
@@ -158,13 +159,13 @@ proc push*[N, P: static int, T](
       if self.queue.tail.compareExchangeWeak(
         expectedTail,
         newTail,
-        moAcquire,
+        moRelaxed,
         moRelaxed,
       ):
         break
       cpuRelax()
   else:
-    self.queue.tail.release(newTail)
+    self.queue.tail.relaxed(newTail)
 
 
 proc push*[N, P: static int, T](
@@ -191,21 +192,21 @@ proc push*[N, P: static int, T](
 
   # spin until reservation is acquired
   while true:
-    prevProducerIdx = self.queue.prevProducerIdx.acquire
+    prevProducerIdx = self.queue.prevProducerIdx.relaxed
     isFirstProduction = prevProducerIdx == NoProducerIdx
-    head = self.queue.head.acquire
+    head = self.queue.head.relaxed
     prevTail =
       if isFirstProduction:
         0
       else:
-        self.queue.producerTails[prevProducerIdx].acquire
+        self.queue.producerTails[prevProducerIdx].relaxed
 
     avail = available(head, prevTail, N)
     if likely(avail >= items.len):
       # enough room to push all items
       count = items.len
     else:
-      if avail == 0:
+      if avail <= 0:
         # Queue is full, return
         return some(0..items.len - 1)
       else:
@@ -213,12 +214,13 @@ proc push*[N, P: static int, T](
         count = avail
 
     newTail = incOrReset(prevTail, count, N)
-    self.queue.producerTails[self.idx].release(newTail)
+    #  validateHeadAndTail(head, newTail, N)
+    self.queue.producerTails[self.idx].relaxed(newTail)
 
     if self.queue.prevProducerIdx.compareExchangeWeak(
       prevProducerIdx,
       self.idx,
-      moAcquire,
+      moRelaxed,
       moRelaxed,
     ):
       break
@@ -231,7 +233,8 @@ proc push*[N, P: static int, T](
     result = NoSlice
 
   let start = index(prevTail, N)
-  var stop = index((prevTail + count) - 1, N)
+  var stop = incOrReset(prevTail, count - 1, N)
+  stop = index(stop, N)
 
   if start > stop:
     # data may wrap
@@ -251,14 +254,14 @@ proc push*[N, P: static int, T](
       if self.queue.tail.compareExchangeWeak(
         expectedTail,
         newTail,
-        moAcquire,
+        moRelaxed,
         moRelaxed,
       ):
         break
       cpuRelax()
 
   elif isFirstProduction:
-    self.queue.tail.release(newTail)
+    self.queue.tail.relaxed(newTail)
 
 
 proc push*[N, P: static int, T](
