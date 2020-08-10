@@ -7,23 +7,20 @@
 import algorithm
 import options
 import sequtils
-import threadpool
 import unittest
 
 import lockfreequeues
 
 
-const producerCount = MaxDistinguishedThread
-
 var
   channel: Channel[int]
-  queue = initMupsic[8, producerCount, int]()
+  queue = initMupsic[8, 32, int]()
   consumerThread: Thread[void]
-  producerThreads: array[producerCount, Thread[int]]
+  producerThreads: array[32, Thread[int]]
 
 
 proc consumerFunc() {.thread.} =
-  for idx in 0..<producerCount:
+  for idx in 0..<32:
     while true:
       if idx mod 2 == 0:
         var items = queue.pop(1)
@@ -58,11 +55,11 @@ suite "Mupmuc[N, P, C, T] threaded":
 
       consumerThread.createThread(consumerFunc)
 
-      for p in 0..<producerCount:
+      for p in 0..<32:
         producerThreads[p].createThread(producerFunc, p)
 
       var received = newSeq[int]()
-      for i in 0..<producerCount:
+      for i in 0..<32:
         received.add(channel.recv())
 
       joinThreads(producerThreads)
@@ -70,6 +67,6 @@ suite "Mupmuc[N, P, C, T] threaded":
 
       received.sort()
 
-      check(received == (0..<producerCount).toSeq)
+      check(received == (0..<32).toSeq)
 
   channel.close()
