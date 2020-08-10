@@ -50,13 +50,13 @@ Many thanks to Mamy Ratsimbazafy for reviewing the initial release and offering 
 
 ## v2.0.4 - 2020-08-10
 
-* Implement multi-producer, single-consumer queue (Mupsic).
-* Implement multi-producer, multi-consumer queue (Mupmuc).
-* Refactor, remove shared memory queues.
+* Implement multi-producer, single-consumer queue (Mupsic)
+* Implement multi-producer, multi-consumer queue (Mupmuc)
+* Refactor, remove shared memory queues
 * Fix wrap-around bug, improve test coverage
 * Nicer examples
 
-## v1.0.0 - 2020-07-6
+## v1.0.0 - 2020-07-06
 
 * Addresses feedback from [#1](https://github.com/elijahr/lockfreequeues/issues/1)
 * `head` and `tail` are now in the range `0 ..<2*capacity`
