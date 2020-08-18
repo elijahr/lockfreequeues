@@ -87,8 +87,10 @@ install:
         amd64 )
           export CHOOSENIM_CHOOSE_VERSION=$NIM_VERSION
           export CHOOSENIM_NO_ANALYTICS=1
+          pushd ~
           curl https://nim-lang.org/choosenim/init.sh -sSf > init.sh
           sh init.sh -y
+          popd
           ;;
         * )
           case $NIM_VERSION in
@@ -102,9 +104,12 @@ install:
               ref="v$NIM_VERSION"
               ;;
           esac
+          pushd ~
           git clone -b $ref --single-branch https://github.com/nim-lang/Nim.git
-          cd Nim
+          pushd Nim
           sh build_all.sh
+          popd
+          popd
           ;;
       esac
 
