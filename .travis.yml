@@ -58,19 +58,6 @@ matrix:
       env:
         - NIM_VERSION=devel
 
-    - os: linux
-      arch: s390x
-      env:
-        - NIM_VERSION=1.2.4
-    - os: linux
-      arch: s390x
-      env:
-        - NIM_VERSION=stable
-    - os: linux
-      arch: s390x
-      env:
-        - NIM_VERSION=devel
-
     - os: osx
       env:
         - NIM_VERSION=1.2.4
@@ -121,7 +108,7 @@ before_script:
 
 script:
   - nim -v
-  - nimble test
+  - travis_wait 30 nimble test
   - |
     # examples timeout in 1.2.4
     if [ "v$NIM_VERSION" != "v1.2.4" ]; then
