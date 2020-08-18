@@ -82,6 +82,7 @@ matrix:
         - NIM_VERSION=devel
 
 install:
+  - uname -m
   - |
       case $TRAVIS_CPU_ARCH in
         amd64 )
