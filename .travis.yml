@@ -18,75 +18,106 @@ cache:
 
 matrix:
   include:
+
     - os: linux
+      arch: amd64
       env:
-        - CHOOSENIM_CHOOSE_VERSION=1.2.4
+        - NIM_VERSION=1.2.4
     - os: linux
+      arch: amd64
       env:
-        - CHOOSENIM_CHOOSE_VERSION=stable
+        - NIM_VERSION=stable
     - os: linux
+      arch: amd64
       env:
-        - CHOOSENIM_CHOOSE_VERSION=devel
+        - NIM_VERSION=devel
+
+    - os: linux
+      arch: arm64
+      env:
+        - NIM_VERSION=1.2.4
     - os: linux
       arch: arm64
       env:
-        - CHOOSENIM_CHOOSE_VERSION=1.2.4
+        - NIM_VERSION=stable
     - os: linux
       arch: arm64
       env:
-        - CHOOSENIM_CHOOSE_VERSION=stable
-    - os: linux
-      arch: arm64
-    - os: linux
-      arch: ppc64le
-      env:
-        - CHOOSENIM_CHOOSE_VERSION=1.2.4
+        - NIM_VERSION=devel
+
     - os: linux
       arch: ppc64le
       env:
-        - CHOOSENIM_CHOOSE_VERSION=stable
+        - NIM_VERSION=1.2.4
     - os: linux
       arch: ppc64le
       env:
-        - CHOOSENIM_CHOOSE_VERSION=devel
+        - NIM_VERSION=stable
+    - os: linux
+      arch: ppc64le
+      env:
+        - NIM_VERSION=devel
+
     - os: linux
       arch: s390x
       env:
-        - CHOOSENIM_CHOOSE_VERSION=1.2.4
+        - NIM_VERSION=1.2.4
     - os: linux
       arch: s390x
       env:
-        - CHOOSENIM_CHOOSE_VERSION=stable
+        - NIM_VERSION=stable
     - os: linux
       arch: s390x
       env:
-        - CHOOSENIM_CHOOSE_VERSION=devel
+        - NIM_VERSION=devel
+
     - os: osx
       env:
-        - CHOOSENIM_CHOOSE_VERSION=1.2.4
+        - NIM_VERSION=1.2.4
     - os: osx
       env:
-        - CHOOSENIM_CHOOSE_VERSION=stable
+        - NIM_VERSION=stable
     - os: osx
       env:
-        - CHOOSENIM_CHOOSE_VERSION=devel
+        - NIM_VERSION=devel
 
 install:
   - |
-      curl https://nim-lang.org/choosenim/init.sh -sSf > init.sh
-      sh init.sh -y
+      case $TRAVIS_CPU_ARCH in
+        amd64 )
+          export CHOOSENIM_CHOOSE_VERSION=$NIM_VERSION
+          export CHOOSENIM_NO_ANALYTICS=1
+          curl https://nim-lang.org/choosenim/init.sh -sSf > init.sh
+          sh init.sh -y
+          ;;
+        * )
+          case $NIM_VERSION in
+            stable )
+              ref=`git ls-remote https://github.com/nim-lang/Nim.git | grep refs/tags | tail -n 2 | head -n 1 | sed 's/^.*tags\///'`
+              ;;
+            devel )
+              ref=devel
+              ;;
+            * )
+              ref="v$NIM_VERSION"
+              ;;
+          esac
+          git clone -b $ref --single-branch https://github.com/nim-lang/Nim.git
+          cd Nim
+          sh build_all.sh
+          ;;
+      esac
 
 before_script:
   - |
       set -ex
-      export CHOOSENIM_NO_ANALYTICS=1
-      export PATH=$HOME/.nimble/bin:$PATH
+      export PATH=$HOME/.nimble/bin:$HOME/Nim/bin:$PATH
 
 script:
   - nim -v
   - nimble test
   - |
     # examples timeout in 1.2.4
-    if [ "v$CHOOSENIM_CHOOSE_VERSION" != "v1.2.4" ]; then
+    if [ "v$NIM_VERSION" != "v1.2.4" ]; then
       nimble examples
     fi
