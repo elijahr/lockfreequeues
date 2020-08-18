@@ -27,6 +27,40 @@ matrix:
     - os: linux
       env:
         - CHOOSENIM_CHOOSE_VERSION=devel
+    - os: linux
+      arch: arm64
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=1.2.4
+    - os: linux
+      arch: arm64
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=stable
+    - os: linux
+      arch: arm64
+    - os: linux
+      arch: ppc64le
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=1.2.4
+    - os: linux
+      arch: ppc64le
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=stable
+    - os: linux
+      arch: ppc64le
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=devel
+    - os: linux
+      arch: s390x
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=1.2.4
+    - os: linux
+      arch: s390x
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=stable
+    - os: linux
+      arch: s390x
+      env:
+        - CHOOSENIM_CHOOSE_VERSION=devel
     - os: osx
       env:
         - CHOOSENIM_CHOOSE_VERSION=1.2.4
