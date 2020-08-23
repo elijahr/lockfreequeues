@@ -1,20 +1,22 @@
 os: linux
 dist: bionic
-language: c
+language: cpp
+
+git:
+  submodules: false
 
 matrix:
   include:
     # Linux - amd64
-    - env: BRANCH=1.2.6
-    - env: BRANCH=devel
+    - env: BRANCH=1.2.4
 
     # Linux - arm64
     - arch: arm64
-      env: BRANCH=1.2.6
+      env: BRANCH=1.2.4
 
     # Linux - ppc64
     - arch: ppc64le
-      env: BRANCH=1.2.6
+      env: BRANCH=1.2.4
 
     # macOS - amd64
     - os: osx
@@ -23,8 +25,6 @@ matrix:
     # windows - amd64
     - os: windows
       env: BRANCH=1.2.4
-    - os: windows
-      env: BRANCH=devel
 
 cache:
   directories:
@@ -38,3 +38,4 @@ install:
 script:
   - nimble develop -y
   - nimble test
+  - nimble examples
