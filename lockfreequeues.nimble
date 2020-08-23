@@ -6,7 +6,7 @@ license       = "MIT"
 srcDir        = "src"
 
 # Dependencies
-requires "nim >= 1.2.0"
+requires "nim >= 1.2.4"
 
 # Tasks
 task make_docs, "Generate documentation":

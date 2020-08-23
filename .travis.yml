@@ -1,116 +1,40 @@
 os: linux
-
 dist: bionic
-
-language: cpp
-
-git:
-  submodules: false
-
-branches:
-  except:
-    - gh-pages
-
-cache:
-  directories:
-    - "$HOME/.nimble"
-    - "$HOME/.choosenim"
+language: c
 
 matrix:
   include:
+    # Linux - amd64
+    - env: BRANCH=1.2.6
+    - env: BRANCH=devel
 
-    - os: linux
-      arch: amd64
-      env:
-        - NIM_VERSION=1.2.4
-    - os: linux
-      arch: amd64
-      env:
-        - NIM_VERSION=stable
-    - os: linux
-      arch: amd64
-      env:
-        - NIM_VERSION=devel
+    # Linux - arm64
+    - arch: arm64
+      env: BRANCH=1.2.6
 
-    - os: linux
-      arch: arm64
-      env:
-        - NIM_VERSION=1.2.4
-    - os: linux
-      arch: arm64
-      env:
-        - NIM_VERSION=stable
-    - os: linux
-      arch: arm64
-      env:
-        - NIM_VERSION=devel
+    # Linux - ppc64
+    - arch: ppc64le
+      env: BRANCH=1.2.6
 
-    - os: linux
-      arch: ppc64le
-      env:
-        - NIM_VERSION=1.2.4
-    - os: linux
-      arch: ppc64le
-      env:
-        - NIM_VERSION=stable
-    - os: linux
-      arch: ppc64le
-      env:
-        - NIM_VERSION=devel
-
+    # macOS - amd64
     - os: osx
-      env:
-        - NIM_VERSION=1.2.4
-    - os: osx
-      env:
-        - NIM_VERSION=stable
-    - os: osx
-      env:
-        - NIM_VERSION=devel
+      env: BRANCH=1.2.4
+
+    # windows - amd64
+    - os: windows
+      env: BRANCH=1.2.4
+    - os: windows
+      env: BRANCH=devel
+
+cache:
+  directories:
+    - "$HOME/.choosenim"
+    - "$HOME/Nim"
 
 install:
-  - uname -m
-  - |
-      case $TRAVIS_CPU_ARCH in
-        amd64 )
-          export CHOOSENIM_CHOOSE_VERSION=$NIM_VERSION
-          export CHOOSENIM_NO_ANALYTICS=1
-          pushd ~
-          curl https://nim-lang.org/choosenim/init.sh -sSf > init.sh
-          sh init.sh -y
-          popd
-          ;;
-        * )
-          case $NIM_VERSION in
-            stable )
-              ref=`git ls-remote https://github.com/nim-lang/Nim.git | grep refs/tags | tail -n 2 | head -n 1 | sed 's/^.*tags\///'`
-              ;;
-            devel )
-              ref=devel
-              ;;
-            * )
-              ref="v$NIM_VERSION"
-              ;;
-          esac
-          pushd ~
-          git clone -b $ref --single-branch https://github.com/nim-lang/Nim.git
-          pushd Nim
-          sh build_all.sh
-          popd
-          popd
-          ;;
-      esac
-
-before_script:
-  - |
-      set -ex
-      export PATH=$HOME/.nimble/bin:$HOME/Nim/bin:$PATH
+  - curl https://gist.github.com/elijahr/a72a228b9617b759a1c24062d35cc23d/raw/2c10bab287e6865b0c63d1d008a0038c7c3c5d4c/travis.sh -LsSf -o travis.sh
+  - source travis.sh
 
 script:
-  - nim -v
-  - travis_wait 30 nimble test
-  - |
-    # examples timeout in 1.2.4
-    if [ "v$NIM_VERSION" != "v1.2.4" ]; then
-      nimble examples
-    fi
+  - nimble develop -y
+  - nimble test
