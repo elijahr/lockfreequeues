@@ -2,8 +2,7 @@
 
 set -e
 
-
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 echo "Generating documentation..."
 cd $DIR/..
@@ -12,19 +11,19 @@ rm htmldocs/index.html || true
 rm -r htmldocs/lockfreequeues* || true
 
 nim doc --project \
-    --index:on \
-    --out:htmldocs \
-    --threads:on \
-    --git.url:https://github.com/elijahr/lockfreequeues \
-    --git.commit:master \
-    src/lockfreequeues.nim
+  --index:on \
+  --out:htmldocs \
+  --threads:on \
+  --git.url:https://github.com/elijahr/lockfreequeues \
+  --git.commit:master \
+  src/lockfreequeues.nim
 
 nim buildIndex \
-    --out:htmldocs/index.html \
-    --threads:on \
-    --git.url:https://github.com/elijahr/lockfreequeues \
-    --git.commit:master \
-    htmldocs
+  --out:htmldocs/index.html \
+  --threads:on \
+  --git.url:https://github.com/elijahr/lockfreequeues \
+  --git.commit:master \
+  htmldocs
 
 # Remove title, since it throws off the simple text substitutions below
 find htmldocs -regex '^.*\.html$' -exec sed -i '' "s/ title=\"[^\"\]*\"/ /g" {} \;

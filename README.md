@@ -44,9 +44,17 @@ Many thanks to Mamy Ratsimbazafy for reviewing the initial release and offering 
 
 ## Running tests
 
-[Travis](https://travis-ci.org/elijahr/lockfreequeues) runs the test suite for both C and C++ targets on Linux and macOS. Tests can be run locally with `nimble test`.
+Tests can be run locally with `nimble test`.
+
+CI runs the test suite for both C and C++ targets on Linux (`x86_64`, `armv7`, `aarch64`, `ppc64le`) and macOS (`x86_64`).
+
+Nightly builds look for and test against the latest release of Nim.
 
 ## Changelog
+
+### v2.0.5 - 2021-01-06
+
+* Moved from Travis CI to GitHub Actions.
 
 ### v2.0.4 - 2020-08-10
 
