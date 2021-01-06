@@ -24,9 +24,9 @@ suite "Sipsic[N, T]":
 
   test "initial state":
     queue.checkState(
-      head=0,
-      tail=0,
-      storage=repeat(0, 8),
+      head = 0,
+      tail = 0,
+      storage = repeat(0, 8),
     )
 
 

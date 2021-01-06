@@ -1,14 +1,17 @@
-name: Build latest nightly
+name: Build
 on:
+  pull_request:
+    paths-ignore:
+      - README.md
+  push:
+    paths-ignore:
+      - README.md
   schedule:
     - cron: "0 0 * * *" # daily at midnight
 
-env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
 jobs:
-  test_x86:
-    name: Test nim-${{ matrix.nim-version }} / ${{ matrix.runs-on }} / x86_64
+  build:
+    name: Test nim-${{ matrix.nim-version }} / ${{ matrix.runs-on }}
     strategy:
       fail-fast: false
       matrix:
@@ -20,40 +23,23 @@ jobs:
 
     runs-on: ${{ matrix.runs-on }}
     steps:
-      - name: Disable tcp/udp offloading
-        run: |
-          # Prevent network slowness
-          # See https://github.com/actions/virtual-environments/issues/1187#issuecomment-696195756
-          # and https://github.com/enso-org/enso/pull/1159
-          if [ "${{ runner.os }}" == "macOS" ]; then
-            sudo sysctl -w net.link.generic.system.hwcksum_tx=0
-            sudo sysctl -w net.link.generic.system.hwcksum_rx=0
-          else
-            sudo ethtool -K eth0 tx off rx off
-          fi
-
-      # Optimization: re-use cached Nim->C compilation
-      - name: Restore cache
-        uses: actions/cache@v2
-        with:
-          path: ${HOME}/.cache
-          key: cache-${{ matrix.runs-on }}-${{ matrix.nim-version }}
-
       - name: Checkout Nim project
         uses: actions/checkout@v2
 
       - name: Install asdf
-        uses: asdf-vm/actions/setup@v1.1.0
+        uses: asdf-vm/actions/setup@v1
 
       - name: Install asdf-nim
         run: |
-          git clone https://github.com/asdf-community/asdf-nim.git "${HOME}/asdf-nim" --branch main --depth 1
+          git clone \
+            --branch main --depth 1
+            https://github.com/asdf-community/asdf-nim.git \
+            "${HOME}/asdf-nim
           asdf plugin add nim "${HOME}/asdf-nim"
           asdf nim install-deps -y
 
       - name: Install Nim
         run: |
-          set -uexo pipefail
           asdf install nim ${{ matrix.nim-version }}
           asdf local nim ${{ matrix.nim-version }}
 

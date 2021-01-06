@@ -52,7 +52,8 @@ proc producerFunc() {.thread.} =
   let remainder = producer.push(items)
 
   if remainder.isSome:
-    echo "[producer ", producer.idx, "] pushed items: ", items[0..<remainder.get.a], ", unpushed items: ", items[remainder.get]
+    echo "[producer ", producer.idx, "] pushed items: ", items[
+        0..<remainder.get.a], ", unpushed items: ", items[remainder.get]
   else:
     echo "[producer ", producer.idx, "] pushed all items: ", items
 

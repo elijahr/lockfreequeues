@@ -18,19 +18,19 @@ template testHeadAndTailReset*(queue: untyped) =
     queue.prevConsumerIdx.relaxed(0)
     queue.consumerHeads[0].relaxed(15)
   queue.checkState(
-    head=15,
-    tail=15,
-    storage=repeat(0, 8),
+    head = 15,
+    tail = 15,
+    storage = repeat(0, 8),
   )
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(
-      prevProducerIdx=0,
-      producerTails=(@[15, 0, 0, 0]),
+      prevProducerIdx = 0,
+      producerTails = (@[15, 0, 0, 0]),
     )
   when queue is Mupmuc:
     queue.checkState(
-      prevConsumerIdx=0,
-      consumerHeads=(@[15, 0, 0, 0]),
+      prevConsumerIdx = 0,
+      consumerHeads = (@[15, 0, 0, 0]),
     )
 
   when ((queue is Mupsic) or (queue is Mupmuc)):
@@ -39,21 +39,21 @@ template testHeadAndTailReset*(queue: untyped) =
     check(queue.push(@[1]).isNone)
 
   queue.checkState(
-    head=15,
-    tail=0,
-    storage=(@[0, 0, 0, 0, 0, 0, 0, 1]),
+    head = 15,
+    tail = 0,
+    storage = (@[0, 0, 0, 0, 0, 0, 0, 1]),
   )
 
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(
-      prevProducerIdx=0,
-      producerTails=(@[0, 0, 0, 0]),
+      prevProducerIdx = 0,
+      producerTails = (@[0, 0, 0, 0]),
     )
 
   when queue is Mupmuc:
     queue.checkState(
-      prevConsumerIdx=0,
-      consumerHeads=(@[15, 0, 0, 0]),
+      prevConsumerIdx = 0,
+      consumerHeads = (@[15, 0, 0, 0]),
     )
 
   let res =
@@ -65,19 +65,19 @@ template testHeadAndTailReset*(queue: untyped) =
   check(res.isSome)
   check(res.get == @[1])
   queue.checkState(
-    head=0,
-    tail=0,
-    storage=(@[0, 0, 0, 0, 0, 0, 0, 1]),
+    head = 0,
+    tail = 0,
+    storage = (@[0, 0, 0, 0, 0, 0, 0, 1]),
   )
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(
-      prevProducerIdx=0,
-      producerTails=repeat(0, 4),
+      prevProducerIdx = 0,
+      producerTails = repeat(0, 4),
     )
   when queue is Mupmuc:
     queue.checkState(
-      prevConsumerIdx=0,
-      consumerHeads=(@[0, 0, 0, 0]),
+      prevConsumerIdx = 0,
+      consumerHeads = (@[0, 0, 0, 0]),
     )
 
 
@@ -97,7 +97,7 @@ template testWraps*(queue: untyped) =
   check(popRes.get == @[1, 2, 3, 4])
 
   let pushRes =
-     when ((queue is Mupsic) or (queue is Mupmuc)):
+    when ((queue is Mupsic) or (queue is Mupmuc)):
        queue.getProducer(0).push(@[9, 10, 11, 12])
      else:
       queue.push(@[9, 10, 11, 12])
@@ -105,20 +105,20 @@ template testWraps*(queue: untyped) =
   check(pushRes.isNone)
 
   queue.checkState(
-    head=4,
-    tail=12,
-    storage=(@[9, 10, 11, 12, 5, 6, 7, 8]),
+    head = 4,
+    tail = 12,
+    storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
   )
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(
-      prevProducerIdx=0,
-      producerTails=(@[12, 0, 0, 0]),
+      prevProducerIdx = 0,
+      producerTails = (@[12, 0, 0, 0]),
     )
 
   when queue is Mupmuc:
     queue.checkState(
-      prevConsumerIdx=0,
-      consumerHeads=(@[4, 0, 0, 0]),
+      prevConsumerIdx = 0,
+      consumerHeads = (@[4, 0, 0, 0]),
     )
 
   popRes =
@@ -130,21 +130,21 @@ template testWraps*(queue: untyped) =
   check(popRes.get == @[5, 6, 7, 8])
 
   queue.checkState(
-    head=8,
-    tail=12,
-    storage=(@[9, 10, 11, 12, 5, 6, 7, 8]),
+    head = 8,
+    tail = 12,
+    storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
   )
 
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(
-      prevProducerIdx=0,
-      producerTails=(@[12, 0, 0, 0]),
+      prevProducerIdx = 0,
+      producerTails = (@[12, 0, 0, 0]),
     )
 
   when queue is Mupmuc:
     queue.checkState(
-      prevConsumerIdx=0,
-      consumerHeads=(@[8, 0, 0, 0]),
+      prevConsumerIdx = 0,
+      consumerHeads = (@[8, 0, 0, 0]),
     )
 
   popRes =
@@ -156,17 +156,17 @@ template testWraps*(queue: untyped) =
   check(popRes.get == @[9, 10, 11, 12])
 
   queue.checkState(
-    head=12,
-    tail=12,
-    storage=(@[9, 10, 11, 12, 5, 6, 7, 8]),
+    head = 12,
+    tail = 12,
+    storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
   )
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(
-      prevProducerIdx=0,
-      producerTails=(@[12, 0, 0, 0]),
+      prevProducerIdx = 0,
+      producerTails = (@[12, 0, 0, 0]),
     )
   when queue is Mupmuc:
     queue.checkState(
-      prevConsumerIdx=1,
-      consumerHeads=(@[8, 12, 0, 0]),
+      prevConsumerIdx = 1,
+      consumerHeads = (@[8, 12, 0, 0]),
     )

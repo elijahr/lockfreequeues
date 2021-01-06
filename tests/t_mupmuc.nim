@@ -27,13 +27,13 @@ suite "Mupmuc[N, P, C, T]":
 
   test "initial state":
     queue.checkState(
-      head=0,
-      tail=0,
-      storage=repeat(0, 8),
+      head = 0,
+      tail = 0,
+      storage = repeat(0, 8),
     )
     queue.checkState(
-      prevProducerIdx=NoProducerIdx,
-      producerTails=repeat(0, 4),
+      prevProducerIdx = NoProducerIdx,
+      producerTails = repeat(0, 4),
     )
 
 
@@ -171,20 +171,20 @@ suite "Mupmuc integration":
     check(pushRes.isNone)
 
     queue.checkState(
-      head=4,
-      tail=12,
-      storage=(@[9, 10, 11, 12, 5, 6, 7, 8]),
+      head = 4,
+      tail = 12,
+      storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
     )
     when ((queue is Mupsic) or (queue is Mupmuc)):
       queue.checkState(
-        prevProducerIdx=0,
-        producerTails=(@[12, 0, 0, 0]),
+        prevProducerIdx = 0,
+        producerTails = (@[12, 0, 0, 0]),
       )
 
     when queue is Mupmuc:
       queue.checkState(
-        prevConsumerIdx=0,
-        consumerHeads=(@[4, 0, 0, 0]),
+        prevConsumerIdx = 0,
+        consumerHeads = (@[4, 0, 0, 0]),
       )
 
     popRes =
@@ -196,21 +196,21 @@ suite "Mupmuc integration":
     check(popRes.get == @[5, 6, 7, 8])
 
     queue.checkState(
-      head=8,
-      tail=12,
-      storage=(@[9, 10, 11, 12, 5, 6, 7, 8]),
+      head = 8,
+      tail = 12,
+      storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
     )
 
     when ((queue is Mupsic) or (queue is Mupmuc)):
       queue.checkState(
-        prevProducerIdx=0,
-        producerTails=(@[12, 0, 0, 0]),
+        prevProducerIdx = 0,
+        producerTails = (@[12, 0, 0, 0]),
       )
 
     when queue is Mupmuc:
       queue.checkState(
-        prevConsumerIdx=0,
-        consumerHeads=(@[8, 0, 0, 0]),
+        prevConsumerIdx = 0,
+        consumerHeads = (@[8, 0, 0, 0]),
       )
 
     popRes =
@@ -222,19 +222,19 @@ suite "Mupmuc integration":
     check(popRes.get == @[9, 10, 11, 12])
 
     queue.checkState(
-      head=12,
-      tail=12,
-      storage=(@[9, 10, 11, 12, 5, 6, 7, 8]),
+      head = 12,
+      tail = 12,
+      storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
     )
     when ((queue is Mupsic) or (queue is Mupmuc)):
       queue.checkState(
-        prevProducerIdx=0,
-        producerTails=(@[12, 0, 0, 0]),
+        prevProducerIdx = 0,
+        producerTails = (@[12, 0, 0, 0]),
       )
     when queue is Mupmuc:
       queue.checkState(
-        prevConsumerIdx=1,
-        consumerHeads=(@[8, 12, 0, 0]),
+        prevConsumerIdx = 1,
+        consumerHeads = (@[8, 12, 0, 0]),
       )
 
 

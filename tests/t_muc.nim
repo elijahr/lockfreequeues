@@ -13,17 +13,17 @@ template testMucPopOne*(queue: untyped) =
   check(res.get == 1)
 
   queue.checkState(
-    head=1,
-    tail=8,
-    storage=(@[1, 2, 3, 4, 5, 6, 7, 8]),
+    head = 1,
+    tail = 8,
+    storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
   queue.checkState(
-    prevProducerIdx=0,
-    producerTails=(@[8, 0, 0, 0]),
+    prevProducerIdx = 0,
+    producerTails = (@[8, 0, 0, 0]),
   )
   queue.checkState(
-    prevConsumerIdx=0,
-    consumerHeads=(@[1, 0, 0, 0]),
+    prevConsumerIdx = 0,
+    consumerHeads = (@[1, 0, 0, 0]),
   )
 
 
@@ -39,17 +39,17 @@ template testMucPopAll*(queue: untyped) =
   check(items == @[1, 2, 3, 4, 5, 6, 7, 8])
 
   queue.checkState(
-    head=8,
-    tail=8,
-    storage=(@[1, 2, 3, 4, 5, 6, 7, 8]),
+    head = 8,
+    tail = 8,
+    storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
   queue.checkState(
-    prevProducerIdx=0,
-    producerTails=(@[8, 0, 0, 0]),
+    prevProducerIdx = 0,
+    producerTails = (@[8, 0, 0, 0]),
   )
   queue.checkState(
-    prevConsumerIdx=0,
-    consumerHeads=(@[8, 0, 0, 0]),
+    prevConsumerIdx = 0,
+    consumerHeads = (@[8, 0, 0, 0]),
   )
 
 
@@ -57,17 +57,17 @@ template testMucPopEmpty*(queue: untyped) =
   check(queue.getConsumer(0).pop().isNone)
 
   queue.checkState(
-    head=0,
-    tail=0,
-    storage=repeat(0, 8),
+    head = 0,
+    tail = 0,
+    storage = repeat(0, 8),
   )
   queue.checkState(
-    prevProducerIdx=NoProducerIdx,
-    producerTails=repeat(0, 4),
+    prevProducerIdx = NoProducerIdx,
+    producerTails = repeat(0, 4),
   )
   queue.checkState(
-    prevConsumerIdx=NoConsumerIdx,
-    consumerHeads=repeat(0, 4),
+    prevConsumerIdx = NoConsumerIdx,
+    consumerHeads = repeat(0, 4),
   )
 
 
@@ -80,17 +80,17 @@ template testMucPopTooMany*(queue: untyped) =
   check(queue.getConsumer(0).pop().isNone)
 
   queue.checkState(
-    head=8,
-    tail=8,
-    storage=(@[1, 2, 3, 4, 5, 6, 7, 8]),
+    head = 8,
+    tail = 8,
+    storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
   queue.checkState(
-    prevProducerIdx=0,
-    producerTails=(@[8, 0, 0, 0]),
+    prevProducerIdx = 0,
+    producerTails = (@[8, 0, 0, 0]),
   )
   queue.checkState(
-    prevConsumerIdx=0,
-    consumerHeads=(@[8, 0, 0, 0]),
+    prevConsumerIdx = 0,
+    consumerHeads = (@[8, 0, 0, 0]),
   )
 
 
@@ -111,17 +111,17 @@ template testMucPopWrap*(queue: untyped) =
   check(items == @[5, 6, 7, 8, 9, 10, 11, 12])
 
   queue.checkState(
-    head=12,
-    tail=12,
-    storage=(@[9, 10, 11, 12, 5, 6, 7, 8]),
+    head = 12,
+    tail = 12,
+    storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
   )
   queue.checkState(
-    prevProducerIdx=1,
-    producerTails=(@[8, 12, 0, 0]),
+    prevProducerIdx = 1,
+    producerTails = (@[8, 12, 0, 0]),
   )
   queue.checkState(
-    prevConsumerIdx=0,
-    consumerHeads=(@[12, 0, 0, 0]),
+    prevConsumerIdx = 0,
+    consumerHeads = (@[12, 0, 0, 0]),
   )
 
 
@@ -132,17 +132,17 @@ template testMucPopCountOne*(queue: untyped) =
     check(popped.isSome)
     check(popped.get() == @[i])
   queue.checkState(
-    head=8,
-    tail=8,
-    storage=(@[1, 2, 3, 4, 5, 6, 7, 8]),
+    head = 8,
+    tail = 8,
+    storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
   queue.checkState(
-    prevProducerIdx=0,
-    producerTails=(@[8, 0, 0, 0]),
+    prevProducerIdx = 0,
+    producerTails = (@[8, 0, 0, 0]),
   )
   queue.checkState(
-    prevConsumerIdx=0,
-    consumerHeads=(@[8, 0, 0, 0]),
+    prevConsumerIdx = 0,
+    consumerHeads = (@[8, 0, 0, 0]),
   )
 
 
@@ -152,17 +152,17 @@ template testMucPopCountAll*(queue: untyped) =
   check(popped.isSome)
   check(popped.get() == @[1, 2, 3, 4, 5, 6, 7, 8])
   queue.checkState(
-    head=8,
-    tail=8,
-    storage=(@[1, 2, 3, 4, 5, 6, 7, 8]),
+    head = 8,
+    tail = 8,
+    storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
   queue.checkState(
-    prevProducerIdx=0,
-    producerTails=(@[8, 0, 0, 0]),
+    prevProducerIdx = 0,
+    producerTails = (@[8, 0, 0, 0]),
   )
   queue.checkState(
-    prevConsumerIdx=0,
-    consumerHeads=(@[8, 0, 0, 0]),
+    prevConsumerIdx = 0,
+    consumerHeads = (@[8, 0, 0, 0]),
   )
 
 
@@ -170,17 +170,17 @@ template testMucPopCountEmpty*(queue: untyped) =
   let popped = queue.getConsumer(0).pop(1)
   check(popped.isNone)
   queue.checkState(
-    head=0,
-    tail=0,
-    storage=repeat(0, 8),
+    head = 0,
+    tail = 0,
+    storage = repeat(0, 8),
   )
   queue.checkState(
-    prevProducerIdx=NoProducerIdx,
-    producerTails=repeat(0, 4),
+    prevProducerIdx = NoProducerIdx,
+    producerTails = repeat(0, 4),
   )
   queue.checkState(
-    prevConsumerIdx=NoConsumerIdx,
-    consumerHeads=repeat(0, 4),
+    prevConsumerIdx = NoConsumerIdx,
+    consumerHeads = repeat(0, 4),
   )
 
 
@@ -188,9 +188,9 @@ template testMucPopCountTooMany*(queue: untyped) =
   check(queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
 
   queue.checkState(
-    head=0,
-    tail=8,
-    storage=(@[1, 2, 3, 4, 5, 6, 7, 8]),
+    head = 0,
+    tail = 8,
+    storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
 
   let popped = queue.getConsumer(0).pop(10)
@@ -198,17 +198,17 @@ template testMucPopCountTooMany*(queue: untyped) =
   check(popped.get() == @[1, 2, 3, 4, 5, 6, 7, 8])
 
   queue.checkState(
-    head=8,
-    tail=8,
-    storage=(@[1, 2, 3, 4, 5, 6, 7, 8]),
+    head = 8,
+    tail = 8,
+    storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
   queue.checkState(
-    prevProducerIdx=0,
-    producerTails=(@[8, 0, 0, 0]),
+    prevProducerIdx = 0,
+    producerTails = (@[8, 0, 0, 0]),
   )
   queue.checkState(
-    prevConsumerIdx=0,
-    consumerHeads=(@[8, 0, 0, 0]),
+    prevConsumerIdx = 0,
+    consumerHeads = (@[8, 0, 0, 0]),
   )
 
 
@@ -224,15 +224,15 @@ template testMucPopCountWrap*(queue: untyped) =
   check(popped.get() == @[5, 6, 7, 8, 9, 10, 11, 12])
 
   queue.checkState(
-    head=12,
-    tail=12,
-    storage=(@[9, 10, 11, 12, 5, 6, 7, 8]),
+    head = 12,
+    tail = 12,
+    storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
   )
   queue.checkState(
-    prevProducerIdx=1,
-    producerTails=(@[8, 12, 0, 0]),
+    prevProducerIdx = 1,
+    producerTails = (@[8, 12, 0, 0]),
   )
   queue.checkState(
-    prevConsumerIdx=1,
-    consumerHeads=(@[4, 12, 0, 0]),
+    prevConsumerIdx = 1,
+    consumerHeads = (@[4, 12, 0, 0]),
   )

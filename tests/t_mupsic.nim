@@ -26,13 +26,13 @@ suite "Mupsic[N, P, T]":
 
   test "initial state":
     queue.checkState(
-      head=0,
-      tail=0,
-      storage=repeat(0, 8),
+      head = 0,
+      tail = 0,
+      storage = repeat(0, 8),
     )
     queue.checkState(
-      prevProducerIdx=NoProducerIdx,
-      producerTails=repeat(0, 4),
+      prevProducerIdx = NoProducerIdx,
+      producerTails = repeat(0, 4),
     )
 
 

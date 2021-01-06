@@ -50,7 +50,8 @@ proc producerFunc() {.thread.} =
     let remainder = queue.push(items)
 
     if remainder.isSome:
-      echo "[producer] pushed items: ", items[0..<remainder.get.a], ", unpushed items: ", items[remainder.get]
+      echo "[producer] pushed items: ", items[0..<remainder.get.a],
+          ", unpushed items: ", items[remainder.get]
     else:
       echo "[producer] pushed all items: ", items
 

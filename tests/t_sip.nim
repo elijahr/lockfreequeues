@@ -11,9 +11,9 @@ template testSipPush*(queue: untyped) =
   for i in 1..8:
     check(queue.push(i) == true)
   queue.checkState(
-    head=0,
-    tail=8,
-    storage=(@[1, 2, 3, 4, 5, 6, 7, 8]),
+    head = 0,
+    tail = 8,
+    storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
 
 
@@ -22,9 +22,9 @@ template testSipPushOverflow*(queue: untyped) =
     discard queue.push(i)
   check(queue.push(9) == false)
   queue.checkState(
-    head=0,
-    tail=8,
-    storage=(@[1, 2, 3, 4, 5, 6, 7, 8]),
+    head = 0,
+    tail = 8,
+    storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
 
 
@@ -36,18 +36,18 @@ template testSipPushWrap*(queue: untyped) =
   for i in 5..10:
     check(queue.push(i) == true)
   queue.checkState(
-    head=2,
-    tail=10,
-    storage=(@[9, 10, 3, 4, 5, 6, 7, 8]),
+    head = 2,
+    tail = 10,
+    storage = (@[9, 10, 3, 4, 5, 6, 7, 8]),
   )
 
 
 template testSipPushSeq*(queue: untyped) =
   check(queue.push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
   queue.checkState(
-    head=0,
-    tail=8,
-    storage=(@[1, 2, 3, 4, 5, 6, 7, 8]),
+    head = 0,
+    tail = 8,
+    storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
 
 
@@ -58,9 +58,9 @@ template testSipPushSeqOverflow*(queue: untyped) =
   check(res.isSome)
   check(res.get == 8..15)
   queue.checkState(
-    head=0,
-    tail=8,
-    storage=(@[1, 2, 3, 4, 5, 6, 7, 8]),
+    head = 0,
+    tail = 8,
+    storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
 
 
@@ -71,7 +71,7 @@ template testSipPushSeqWrap*(queue: untyped) =
   var res = queue.push(@[5, 6, 7, 8, 9, 10])
   check(res.isNone)
   queue.checkState(
-    head=2,
-    tail=10,
-    storage=(@[9, 10, 3, 4, 5, 6, 7, 8]),
+    head = 2,
+    tail = 10,
+    storage = (@[9, 10, 3, 4, 5, 6, 7, 8]),
   )
