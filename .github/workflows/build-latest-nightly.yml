@@ -26,22 +26,11 @@ jobs:
       - name: Checkout Nim project
         uses: actions/checkout@v2
 
-      - name: Install asdf
-        uses: asdf-vm/actions/setup@v1
-
-      - name: Install asdf-nim
-        run: |
-          git clone \
-            --branch main --depth 1
-            https://github.com/asdf-community/asdf-nim.git \
-            "${HOME}/asdf-nim
-          asdf plugin add nim "${HOME}/asdf-nim"
-          asdf nim install-deps -y
-
-      - name: Install Nim
-        run: |
-          asdf install nim ${{ matrix.nim-version }}
-          asdf local nim ${{ matrix.nim-version }}
+      - name: Install nim
+        uses: asdf-vm/actions/plugins-add@v1
+        with:
+          tool_versions: |
+            nim ${{ matrix.nim-version }}
 
       - name: Run tests
         run: |
