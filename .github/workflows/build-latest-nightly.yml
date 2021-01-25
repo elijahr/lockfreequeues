@@ -38,6 +38,7 @@ jobs:
 
       - name: Run tests
         run: |
+          asdf local nim ${{ matrix.nim-version }}
           nimble develop -y
           nimble test
           nimble examples
