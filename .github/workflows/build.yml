@@ -44,8 +44,6 @@ jobs:
 
       - name: Run tests
         run: |
-          source ~/.asdf/asdf.sh
-          find ~/.asdf
           nimble develop -y
           nimble test
           nimble examples
