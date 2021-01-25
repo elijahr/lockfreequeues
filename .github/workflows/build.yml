@@ -112,6 +112,9 @@ jobs:
             asdf install nim ${{ matrix.nim-version }}
             asdf local nim ${{ matrix.nim-version }}
 
+            pwd
+            find .
+
             # Run tests
             nimble develop -y
             nimble test
