@@ -36,8 +36,8 @@ jobs:
       - name: Checkout project
         uses: actions/checkout@v2
 
-      - name: Install nim
-        uses: asdf-vm/actions/plugins-add@v1
+      - name: Install Nim
+        uses: asdf-vm/actions/install@v1
         with:
           tool_versions: |
             nim ${{ matrix.nim-version }}
