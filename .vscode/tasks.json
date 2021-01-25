@@ -1,59 +1,56 @@
- {
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Build tests",
-            "command": "nim",
-            "args": [
-                "c",
-                "tests/test.nim"
-            ],
-            "options": {
-                "cwd": "${workspaceRoot}"
-            },
-            "type": "shell",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            }
-        },
-        {
-            "label": "Run tests",
-            "command": "tests/test",
-            "options": {
-                "cwd": "${workspaceRoot}"
-            },
-            "type": "shell",
-            "group": {
-                "kind": "test",
-                "isDefault": true
-            }
-        },
-        // {
-        //     "label": "Build example 'sipsicqueuestatic'",
-        //     "command": "nim",
-        //     "args": [
-        //         "c",
-        //         "examples/sipsicqueuestatic.nim"
-        //     ],
-        //     "options": {
-        //         "cwd": "${workspaceRoot}"
-        //     },
-        //     "type": "shell",
-        //     "group": "build"
-        // },
-        // {
-        //     "label": "Build mupsic_static_queue",
-        //     "command": "nim",
-        //     "args": [
-        //         "c",
-        //         "src/lockfreequeues/mupsic_static_queue.nim"
-        //     ],
-        //     "options": {
-        //         "cwd": "${workspaceRoot}"
-        //     },
-        //     "type": "shell",
-        //     "group": "build"
-        // },
-     ]
- }
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build tests",
+      "command": "nim",
+      "args": ["c", "tests/test.nim"],
+      "options": {
+        "cwd": "${workspaceRoot}"
+      },
+      "type": "shell",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Run tests",
+      "command": "tests/test",
+      "options": {
+        "cwd": "${workspaceRoot}"
+      },
+      "type": "shell",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    }
+    // {
+    //     "label": "Build example 'sipsicqueuestatic'",
+    //     "command": "nim",
+    //     "args": [
+    //         "c",
+    //         "examples/sipsicqueuestatic.nim"
+    //     ],
+    //     "options": {
+    //         "cwd": "${workspaceRoot}"
+    //     },
+    //     "type": "shell",
+    //     "group": "build"
+    // },
+    // {
+    //     "label": "Build mupsic_static_queue",
+    //     "command": "nim",
+    //     "args": [
+    //         "c",
+    //         "src/lockfreequeues/mupsic_static_queue.nim"
+    //     ],
+    //     "options": {
+    //         "cwd": "${workspaceRoot}"
+    //     },
+    //     "type": "shell",
+    //     "group": "build"
+    // },
+  ]
+}

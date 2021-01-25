@@ -1,3 +1,6 @@
+# yamllint disable rule:line-length
+# yamllint disable rule:comments
+
 name: Build
 on:
   pull_request:
@@ -7,11 +10,12 @@ on:
     paths-ignore:
       - README.md
   schedule:
-    - cron: "0 0 * * *" # daily at midnight
+    - cron: '0 0 * * *' # daily at midnight
 
 jobs:
   build:
     name: Test nim-${{ matrix.nim-version }} / ${{ matrix.runs-on }}
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
@@ -23,7 +27,7 @@ jobs:
 
     runs-on: ${{ matrix.runs-on }}
     steps:
-      - name: Checkout Nim project
+      - name: Checkout project
         uses: actions/checkout@v2
 
       - name: Install nim

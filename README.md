@@ -30,17 +30,17 @@ nimble examples
 
 ## Reference
 
-* Juho Snellman's post ["I've been writing ring buffers wrong all these years"](https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/) ([alt](https://web.archive.org/web/20200530040210/https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/))
-* Mamy Ratsimbazafy's [research on SPSC channels](https://github.com/mratsim/weave/blob/master/weave/cross_thread_com/channels_spsc.md#litterature) for weave.
-* Henrique F Bucher's post ["Yes, You Have Been Writing SPSC Queues Wrong Your Entire Life"](http://www.vitorian.com/x1/archives/370) ([alt](https://web.archive.org/web/20191225164231/http://www.vitorian.com/x1/archives/370))
+- Juho Snellman's post ["I've been writing ring buffers wrong all these years"](https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/) ([alt](https://web.archive.org/web/20200530040210/https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/))
+- Mamy Ratsimbazafy's [research on SPSC channels](https://github.com/mratsim/weave/blob/master/weave/cross_thread_com/channels_spsc.md#litterature) for weave.
+- Henrique F Bucher's post ["Yes, You Have Been Writing SPSC Queues Wrong Your Entire Life"](http://www.vitorian.com/x1/archives/370) ([alt](https://web.archive.org/web/20191225164231/http://www.vitorian.com/x1/archives/370))
 
 Many thanks to Mamy Ratsimbazafy for reviewing the initial release and offering suggestions.
 
 ## Contributing
 
-* Pull requests and feature requests are quite welcome!
-* Please file any issues you encounter.
-* For pull requests, please see the [contribution guidelines](https://github.com/elijahr/lockfreequeues/tree/master/CONTRIBUTING.md).
+- Pull requests and feature requests are quite welcome!
+- Please file any issues you encounter.
+- For pull requests, please see the [contribution guidelines](https://github.com/elijahr/lockfreequeues/tree/master/CONTRIBUTING.md).
 
 ## Running tests
 
@@ -54,22 +54,22 @@ Nightly builds look for and test against the latest release of Nim.
 
 ### v2.0.5 - 2021-01-06
 
-* Moved from Travis CI to GitHub Actions.
+- Moved from Travis CI to GitHub Actions.
 
 ### v2.0.4 - 2020-08-10
 
-* Implement multi-producer, single-consumer queue (Mupsic)
-* Implement multi-producer, multi-consumer queue (Mupmuc)
-* Refactor, remove shared memory queues
-* Fix wrap-around bug, improve test coverage
-* Nicer examples
+- Implement multi-producer, single-consumer queue (Mupsic)
+- Implement multi-producer, multi-consumer queue (Mupmuc)
+- Refactor, remove shared memory queues
+- Fix wrap-around bug, improve test coverage
+- Nicer examples
 
 ### v1.0.0 - 2020-07-06
 
-* Addresses feedback from [#1](https://github.com/elijahr/lockfreequeues/issues/1)
-* `head` and `tail` are now in the range `0 ..<2*capacity`
-* `capacity` doesn’t have to be a power of two
-* Use `align` pragma instead of padding array
+- Addresses feedback from [#1](https://github.com/elijahr/lockfreequeues/issues/1)
+- `head` and `tail` are now in the range `0 ..<2*capacity`
+- `capacity` doesn’t have to be a power of two
+- Use `align` pragma instead of padding array
 
 ### v0.1.0 - 2020-07-02
 

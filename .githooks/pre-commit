@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+set -ueo pipefail
+
+if [ -n "${LINTBALL_DIR:-}" ]; then
+  "${LINTBALL_DIR}/bin/lintball" pre-commit
+else
+  lintball pre-commit
+fi

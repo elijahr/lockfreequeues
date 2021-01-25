@@ -1,11 +1,11 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 echo "Generating documentation..."
-cd $DIR/..
+cd "$DIR"/..
 
 rm htmldocs/index.html || true
 rm -r htmldocs/lockfreequeues* || true
@@ -30,8 +30,11 @@ find htmldocs -regex '^.*\.html$' -exec sed -i '' "s/ title=\"[^\"\]*\"/ /g" {} 
 # Reformat comment indentation
 find htmldocs -regex '^.*\.html$' -exec sed -i '' "s/ \{1,\}\(<span class=\"Comment\">\)/\1/g" {} \;
 # Hack to substitute links in comments
+# shellcheck disable=SC2016
 find htmldocs -regex '^.*\.html$' -exec sed -i '' 's/`\([^ ]\{1,\}\) &lt;\(.*\)&gt;`_/<a href="\2">\1<\/a>/g' {} \;
 # Make backtic items in comments bold
+# shellcheck disable=SC2016
 find htmldocs -regex '^.*\.html$' -exec sed -i '' 's/`\([^`]*\)`/<b>\1<\/b>/g' {} \;
 
-echo "\n* Docs written to $(pwd)/htmldocs"
+echo
+echo "* Docs written to $(pwd)/htmldocs"
