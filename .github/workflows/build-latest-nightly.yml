@@ -38,6 +38,7 @@ jobs:
 
       - name: Run tests
         run: |
+          . "${HOME}/.asdf/asdf.sh"
           asdf local nim ${{ matrix.nim-version }}
           nimble develop -y
           nimble test
