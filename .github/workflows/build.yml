@@ -59,8 +59,8 @@ jobs:
       matrix:
         include:
           # Test on non-x86 Linux using run-on-arch-action
-          - nim-version: 1.4.2
-            arch: armv7
+          # - nim-version: 1.4.2
+          #   arch: armv7
           - nim-version: 1.2.8
             arch: aarch64
           - nim-version: 1.4.2
