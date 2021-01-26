@@ -1,0 +1,3 @@
+relaxed	lockfreequeues/atomic_dsl.html#relaxed,Atomic[T]	atomic_dsl: relaxed[T](location: var Atomic[T]): T	
+relaxed	lockfreequeues/atomic_dsl.html#relaxed,Atomic[T],T	atomic_dsl: relaxed[T](location: var Atomic[T]; value: T)	
+compareExchangeWeakRelaxed	lockfreequeues/atomic_dsl.html#compareExchangeWeakRelaxed,Atomic[T],T,T	atomic_dsl: compareExchangeWeakRelaxed[T](location: var Atomic[T]; expected: var T; desired: T): bool	

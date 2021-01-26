@@ -1,0 +1,7 @@
+validateHeadOrTail	lockfreequeues/ops.html#validateHeadOrTail,int,int	ops: validateHeadOrTail(value: int; capacity: int): void	
+index	lockfreequeues/ops.html#index,int,int	ops: index(value: int; capacity: int): int	
+incOrReset	lockfreequeues/ops.html#incOrReset,int,int,int	ops: incOrReset(original: int; amount: int; capacity: int): int	
+used	lockfreequeues/ops.html#used,int,int,int	ops: used(head: int; tail: int; capacity: int): int	
+available	lockfreequeues/ops.html#available,int,int,int	ops: available(head: int; tail: int; capacity: int): int	
+full	lockfreequeues/ops.html#full,int,int,int	ops: full(head: int; tail: int; capacity: int): bool	
+empty	lockfreequeues/ops.html#empty,int,int,int	ops: empty(head: int; tail: int; capacity: int): bool	
