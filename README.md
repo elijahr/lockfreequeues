@@ -52,6 +52,10 @@ Nightly builds look for and test against the latest release of Nim.
 
 ## Changelog
 
+### v2.0.6 - 2021-01-25
+
+- Fix issue with htmldocs submodule during `nimble install lockfreequeues`.
+
 ### v2.0.5 - 2021-01-06
 
 - Moved from Travis CI to GitHub Actions.
