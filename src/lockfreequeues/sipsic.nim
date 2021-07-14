@@ -36,8 +36,8 @@ type
 proc clear[N: static int, T](
   self: var Sipsic[N, T]
 ) =
-  self.head.relaxed(0)
-  self.tail.relaxed(0)
+  self.head.sequential(0)
+  self.tail.sequential(0)
   for n in 0..<N:
     self.storage[n].reset()
 
@@ -54,8 +54,8 @@ proc push*[N: static int, T](
   ## Append a single item to the queue.
   ## If the queue is full, `false` is returned.
   ## If `item` is appended, `true` is returned.
-  let tail = self.tail.relaxed
-  let head = self.head.relaxed
+  let tail = self.tail.acquire
+  let head = self.head.sequential
 
   if unlikely(full(head, tail, N)):
     # queue is full, return false
@@ -69,7 +69,7 @@ proc push*[N: static int, T](
 
   let newTail = incOrReset(tail, 1, N)
 
-  self.tail.relaxed(newTail)
+  self.tail.release(newTail)
 
 
 proc push*[N: static int, T](
@@ -85,8 +85,8 @@ proc push*[N: static int, T](
     # items is empty, return none
     return NoSlice
 
-  let tail = self.tail.relaxed
-  let head = self.head.relaxed
+  let tail = self.tail.acquire
+  let head = self.head.sequential
 
   if unlikely(full(head, tail, N)):
     # queue is full, return everything
@@ -121,7 +121,7 @@ proc push*[N: static int, T](
 
   let newTail = incOrReset(tail, count, N)
 
-  self.tail.relaxed(newTail)
+  self.tail.release(newTail)
 
 
 proc pop*[N: static int, T](
@@ -130,8 +130,8 @@ proc pop*[N: static int, T](
   ## Pop a single item from the queue.
   ## If the queue is empty, `none(T)` is returned.
   ## Otherwise an item is popped, `some(T)` is returned.
-  let tail = self.tail.relaxed
-  let head = self.head.relaxed
+  let head = self.head.acquire
+  let tail = self.tail.sequential
 
   if unlikely(empty(head, tail, N)):
     return
@@ -142,7 +142,7 @@ proc pop*[N: static int, T](
 
   let newHead = incOrReset(head, 1, N)
 
-  self.head.relaxed(newHead)
+  self.head.release(newHead)
 
 
 proc pop*[N: static int, T](
@@ -152,8 +152,8 @@ proc pop*[N: static int, T](
   ## Pop `count` items from the queue.
   ## If the queue is empty, `none(seq[T])` is returned.
   ## Otherwise `some(seq[T])` is returned containing at least one item.
-  let tail = self.tail.relaxed
-  let head = self.head.relaxed
+  let head = self.head.acquire
+  let tail = self.tail.sequential
 
   let used = used(head, tail, N)
   var actualCount: int
@@ -192,7 +192,7 @@ proc pop*[N: static int, T](
 
   result = some(res)
 
-  self.head.relaxed(newHead)
+  self.head.release(newHead)
 
 
 proc capacity*[N: static int, T](
@@ -220,6 +220,6 @@ when defined(testing):
     tail: int,
     storage: seq[T],
   ) =
-    check(self.head.relaxed == head)
-    check(self.tail.relaxed == tail)
+    check(self.head.sequential == head)
+    check(self.tail.sequential == tail)
     check(self.storage[0..^1] == storage)

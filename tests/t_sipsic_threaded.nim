@@ -9,24 +9,26 @@ import unittest
 
 import lockfreequeues
 
+const capacity = 8
+const itemCount = 128
 
 var
-  channel: Channel[int]
-  queue = initSipsic[8, int]()
+  queue = initSipsic[capacity, int]()
+  output = initSipsic[itemCount, int]()
 
 
 proc consumerFunc() {.thread.} =
   var count = 0
-  while count < 128:
+  while count < itemCount:
     let res = queue.pop()
     if res.isSome:
-      let msg = res.get
-      channel.send(msg)
+      while not output.push(res.get):
+        discard
       inc count
 
 
 proc producerFunc() {.thread.} =
-  for i in 1..128:
+  for i in 0..<itemCount:
     while not queue.push(i):
       discard
 
@@ -37,10 +39,16 @@ suite "Sipsic[N, T] threaded":
     var
       consumer: Thread[void]
       producer: Thread[void]
-    channel.open()
+      i = 0
+
     consumer.createThread(consumerFunc)
     producer.createThread(producerFunc)
-    for i in 1..128:
-      require(channel.recv() == i)
-    joinThreads(consumer, producer)
-    channel.close()
+
+    while i < itemCount:
+      let msg = output.pop()
+      if msg.isSome:
+        require(msg.get == i)
+        inc i
+
+    joinThread(producer)
+    joinThread(consumer)

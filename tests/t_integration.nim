@@ -9,14 +9,14 @@ template testCapacity*(queue: untyped) =
 
 
 template testHeadAndTailReset*(queue: untyped) =
-  queue.head.relaxed(15)
-  queue.tail.relaxed(15)
+  queue.head.sequential(15)
+  queue.tail.sequential(15)
   when ((queue is Mupsic) or (queue is Mupmuc)):
-    queue.prevProducerIdx.relaxed(0)
-    queue.producerTails[0].relaxed(15)
+    queue.prevProducerIdx.sequential(0)
+    queue.producerTails[0].sequential(15)
   when queue is Mupmuc:
-    queue.prevConsumerIdx.relaxed(0)
-    queue.consumerHeads[0].relaxed(15)
+    queue.prevConsumerIdx.sequential(0)
+    queue.consumerHeads[0].sequential(15)
   queue.checkState(
     head = 15,
     tail = 15,
