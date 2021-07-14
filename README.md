@@ -12,8 +12,6 @@ Three implementations are provided:
 
 API documentation: https://elijahr.github.io/lockfreequeues
 
-Note: if your project is compiled with `--threads:off`, only `Sipsic` is available.
-
 ## Installation
 
 ```sh
@@ -46,35 +44,6 @@ Many thanks to Mamy Ratsimbazafy for reviewing the initial release and offering 
 
 Tests can be run locally with `nimble test`.
 
-CI runs the test suite for both C and C++ targets on Linux (`x86_64`, `armv7`, `aarch64`, `ppc64le`) and macOS (`x86_64`).
+CI runs the test suite for both C and C++ targets on Linux (`x86_64`, `armv7`, `aarch64`, `ppc64le`) and macOS (`x86_64`). The test suite is manually run on macOS `arm64`.
 
-Nightly builds look for and test against the latest release of Nim.
-
-## Changelog
-
-### v2.0.6 - 2021-01-25
-
-- Fix issue with htmldocs submodule during `nimble install lockfreequeues`.
-
-### v2.0.5 - 2021-01-06
-
-- Moved from Travis CI to GitHub Actions.
-
-### v2.0.4 - 2020-08-10
-
-- Implement multi-producer, single-consumer queue (Mupsic)
-- Implement multi-producer, multi-consumer queue (Mupmuc)
-- Refactor, remove shared memory queues
-- Fix wrap-around bug, improve test coverage
-- Nicer examples
-
-### v1.0.0 - 2020-07-06
-
-- Addresses feedback from [#1](https://github.com/elijahr/lockfreequeues/issues/1)
-- `head` and `tail` are now in the range `0 ..<2*capacity`
-- `capacity` doesn’t have to be a power of two
-- Use `align` pragma instead of padding array
-
-### v0.1.0 - 2020-07-02
-
-Initial release, containing `SipsicSharedQueue` and `SipsicStaticQueue`
+The test suite is also run with [LLVM thread sanitization](https://clang.llvm.org/docs/ThreadSanitizer.html) to check for data races.
