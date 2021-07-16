@@ -5,37 +5,45 @@
 # copyright.
 
 import algorithm
+import atomics
 import options
 import sequtils
 import unittest
 
 import lockfreequeues
 
+const capacity = 8
+const workerCount = 16
 
 var
-  channel: Channel[int]
-  queue = initMupmuc[8, 32, 32, int]()
-  consumerThreads: array[32, Thread[void]]
-  producerThreads: array[32, Thread[int]]
+  counter: Atomic[int]
+  queue = initMupmuc[capacity, workerCount, workerCount, int]()
+  output = initMupmuc[workerCount, workerCount, 1, int]()
+  consumerThreads: array[workerCount, Thread[void]]
+  producerThreads: array[workerCount, Thread[void]]
 
 
 proc consumerFunc() {.thread.} =
   var consumer = queue.getConsumer()
+  var outputProducer = output.getProducer()
   while true:
     if consumer.idx mod 2 == 0:
       var items = consumer.pop(1)
       if items.isSome:
-        channel.send(items.get[0])
+        while not outputProducer.push(items.get[0]):
+          discard
         break
     else:
       var item = consumer.pop()
       if item.isSome:
-        channel.send(item.get)
+        while not outputProducer.push(item.get):
+          discard
         break
 
 
-proc producerFunc(p: int) {.thread.} =
+proc producerFunc() {.thread.} =
   var producer = queue.getProducer()
+  let p = counter.fetchAdd(1)
   while true:
     if p mod 2 == 0:
       if producer.push(p):
@@ -45,29 +53,26 @@ proc producerFunc(p: int) {.thread.} =
         break
 
 
-suite "Mupmuc[N, P, C, T] threaded":
-
-  channel.open()
+suite "Mupmuc[N, P, C, T] threaded (low capacity)":
 
   test "basic":
-    for i in 1..25:
-      queue.reset()
+    var outputConsumer = output.getConsumer()
 
-      for c in 0..<32:
-        consumerThreads[c].createThread(consumerFunc)
+    for c in 0..<workerCount:
+      consumerThreads[c].createThread(consumerFunc)
 
-      for p in 0..<32:
-        producerThreads[p].createThread(producerFunc, p)
+    for p in 0..<workerCount:
+      producerThreads[p].createThread(producerFunc)
 
-      var received = newSeq[int]()
-      for i in 0..<32:
-        received.add(channel.recv())
+    var received = newSeq[int]()
+    while received.len < workerCount:
+      var item = outputConsumer.pop()
+      if item.isSome:
+        received.add(item.get)
 
-      joinThreads(producerThreads)
-      joinThreads(consumerThreads)
+    joinThreads(producerThreads)
+    joinThreads(consumerThreads)
 
-      received.sort()
+    received.sort()
 
-      check(received == (0..<32).toSeq)
-
-  channel.close()
+    check(received == (0..<workerCount).toSeq)

@@ -15,15 +15,24 @@ env:
 jobs:
   test_x86:
     name: Test nim-${{ matrix.nim-version }} / ${{ matrix.runs-on }} / x86_64
-    timeout-minutes: 5
+    timeout-minutes: ${{ matrix.timeout-minutes }}
+
     strategy:
       fail-fast: false
       matrix:
         include:
           - runs-on: macos-latest
-            nim-version: 1.4.2
+            nim-version: 1.4.8
+            sanitize-threads: yes
+            timeout-minutes: 20
+          - runs-on: ubuntu-latest
+            nim-version: 1.4.8
+            sanitize-threads: yes
+            timeout-minutes: 5
           - runs-on: ubuntu-latest
             nim-version: 1.2.8
+            sanitize-threads: no
+            timeout-minutes: 5
 
     runs-on: ${{ matrix.runs-on }}
     steps:
@@ -43,8 +52,16 @@ jobs:
           tool_versions: |
             nim ${{ matrix.nim-version }}
 
+      - name: Install dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q -y
+          sudo apt-get -qq install -y clang
+
       - name: Run tests
         run: |
+          export SANITIZE_THREADS
+          SANITIZE_THREADS=${{ matrix.sanitize-threads }}
           . "${HOME}/.asdf/asdf.sh"
           asdf local nim ${{ matrix.nim-version }}
           nimble develop -y
@@ -53,17 +70,17 @@ jobs:
 
   test_non_x86:
     name: Test nim-${{ matrix.nim-version }} / debian-buster / ${{ matrix.arch }}
-    timeout-minutes: 20
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
           # Test on non-x86 Linux using run-on-arch-action
-          # - nim-version: 1.4.2
+          # - nim-version: 1.4.8
           #   arch: armv7
           - nim-version: 1.2.8
             arch: aarch64
-          - nim-version: 1.4.2
+          - nim-version: 1.4.8
             arch: ppc64le
 
     runs-on: ubuntu-latest
@@ -100,6 +117,7 @@ jobs:
             git clone https://github.com/asdf-vm/asdf.git "${HOME}/.asdf" --branch v0.8.0
 
           env: |
+            SANITIZE_THREADS: no
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
           run: |

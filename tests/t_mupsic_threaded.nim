@@ -5,6 +5,7 @@
 # copyright.
 
 import algorithm
+import atomics
 import options
 import sequtils
 import unittest
@@ -12,30 +13,37 @@ import unittest
 import lockfreequeues
 
 
+const capacity = 8
+const producerCount = 32
+
 var
-  channel: Channel[int]
-  queue = initMupsic[8, 32, int]()
+  counter: Atomic[int]
+  queue = initMupsic[capacity, producerCount, int]()
+  output = initSipsic[producerCount, int]()
   consumerThread: Thread[void]
-  producerThreads: array[32, Thread[int]]
+  producerThreads: array[producerCount, Thread[void]]
 
 
 proc consumerFunc() {.thread.} =
-  for idx in 0..<32:
+  for idx in 0..<producerCount:
     while true:
       if idx mod 2 == 0:
         var items = queue.pop(1)
         if items.isSome:
-          channel.send(items.get[0])
+          while not output.push(items.get[0]):
+            discard
           break
       else:
         var item = queue.pop()
         if item.isSome:
-          channel.send(item.get)
+          while not output.push(item.get):
+            discard
           break
 
 
-proc producerFunc(p: int) {.thread.} =
+proc producerFunc() {.thread.} =
   var producer = queue.getProducer()
+  let p = counter.fetchAdd(1)
   while true:
     if p mod 2 == 0:
       if producer.push(p):
@@ -47,26 +55,21 @@ proc producerFunc(p: int) {.thread.} =
 
 suite "Mupmuc[N, P, C, T] threaded":
 
-  channel.open()
-
   test "basic":
-    for i in 1..25:
-      queue.reset()
+    consumerThread.createThread(consumerFunc)
 
-      consumerThread.createThread(consumerFunc)
+    for p in 0..<producerCount:
+      producerThreads[p].createThread(producerFunc)
 
-      for p in 0..<32:
-        producerThreads[p].createThread(producerFunc, p)
+    joinThreads(producerThreads)
+    joinThread(consumerThread)
 
-      var received = newSeq[int]()
-      for i in 0..<32:
-        received.add(channel.recv())
+    var received = newSeq[int]()
+    while received.len < producerCount:
+      let msg = output.pop()
+      if msg.isSome:
+        received.add(msg.get)
 
-      joinThreads(producerThreads)
-      joinThread(consumerThread)
+    received.sort()
 
-      received.sort()
-
-      check(received == (0..<32).toSeq)
-
-  channel.close()
+    check(received == (0..<producerCount).toSeq)

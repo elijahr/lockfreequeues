@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Changed
+- Use correct memory orderings, as reported in https://github.com/elijahr/lockfreequeues/issues/6
 - Move changelog from README.md to CHANGELOG.md
 
 ### Removed
