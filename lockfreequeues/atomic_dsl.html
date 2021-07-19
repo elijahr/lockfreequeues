@@ -19,9 +19,9 @@
 <!-- CSS -->
 <title>lockfreequeues/atomic_dsl</title>
 <link rel="stylesheet" type="text/css" href="../nimdoc.out.css">
-<link rel="stylesheet" type="text/css" href="nimdoc.extra.css">
+<link rel="stylesheet" type="text/css" href="../nimdoc.extra.css">
 
-<script type="text/javascript" src="dochack.js"></script>
+<script type="text/javascript" src="../dochack.js"></script>
 
 <script type="text/javascript">
 function main() {
@@ -101,18 +101,30 @@ function main() {
 <li>
   <a class="reference reference-toplevel" href="#12" id="62">Procs</a>
   <ul class="simple simple-toc-section">
+      <ul class="simple nested-toc-section">release
+      <li><a class="reference" href="#release%2CAtomic%5BT%5D%2CT"
+    >release[T](location: var Atomic[T]; value: T)</a></li>
+
+  </ul>
+  <ul class="simple nested-toc-section">relaxed
       <li><a class="reference" href="#relaxed%2CAtomic%5BT%5D"
-    ><wbr />relaxed<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#acquire%2CAtomic%5BT%5D"
-    ><wbr />acquire<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#sequential%2CAtomic%5BT%5D"
-    ><wbr />sequential<span class="attachedType"></span></a></li>
+    >relaxed[T](location: var Atomic[T]): T</a></li>
   <li><a class="reference" href="#relaxed%2CAtomic%5BT%5D%2CT"
-    ><wbr />relaxed<span class="attachedType"></span></a></li>
-  <li><a class="reference" href="#release%2CAtomic%5BT%5D%2CT"
-    ><wbr />release<span class="attachedType"></span></a></li>
+    >relaxed[T](location: var Atomic[T]; value: T)</a></li>
+
+  </ul>
+  <ul class="simple nested-toc-section">acquire
+      <li><a class="reference" href="#acquire%2CAtomic%5BT%5D"
+    >acquire[T](location: var Atomic[T]): T</a></li>
+
+  </ul>
+  <ul class="simple nested-toc-section">sequential
+      <li><a class="reference" href="#sequential%2CAtomic%5BT%5D"
+    >sequential[T](location: var Atomic[T]): T</a></li>
   <li><a class="reference" href="#sequential%2CAtomic%5BT%5D%2CT"
-    ><wbr />sequential<span class="attachedType"></span></a></li>
+    >sequential[T](location: var Atomic[T]; value: T)</a></li>
+
+  </ul>
 
   </ul>
 </li>
@@ -203,7 +215,7 @@ class="link-seesrc" target="_blank">Source</a>
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-08-10 06:40:14 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2021-07-19 23:27:26 UTC</small>
       </div>
     </div>
   </div>

@@ -4,7 +4,7 @@ InvalidCallDefect	lockfreequeues/mupsic.html#InvalidCallDefect	mupsic: InvalidCa
 Mupsic	lockfreequeues/mupsic.html#Mupsic	mupsic: Mupsic	
 Producer	lockfreequeues/mupsic.html#Producer	mupsic: Producer	
 initMupsic	lockfreequeues/mupsic.html#initMupsic	mupsic: initMupsic[N, P: static int; T](): Mupsic[N, P, T]	
-getProducer	lockfreequeues/mupsic.html#getProducer,Mupsic[N,P,T],int	mupsic: getProducer[N, P: static int; T](self: var Mupsic[N, P, T]; idx: int = NoProducerIdx): Producer[\n    N, P, T]	
+getProducer	lockfreequeues/mupsic.html#getProducer,Mupsic[N,P,T],int	mupsic: getProducer[N, P: static int; T](self: var Mupsic[N, P, T];\n                                 idx: int = NoProducerIdx): Producer[N, P, T]	
 push	lockfreequeues/mupsic.html#push,Producer[N,P,T],T	mupsic: push[N, P: static int; T](self: Producer[N, P, T]; item: T): bool	
 push	lockfreequeues/mupsic.html#push,Producer[N,P,T],openArray[T]	mupsic: push[N, P: static int; T](self: Producer[N, P, T]; items: openArray[T]): Option[\n    HSlice[int, int]]	
 push	lockfreequeues/mupsic.html#push,Mupsic[N,P,T],T	mupsic: push[N, P: static int; T](self: var Mupsic[N, P, T]; item: T): bool	

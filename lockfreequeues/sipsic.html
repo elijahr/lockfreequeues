@@ -19,9 +19,9 @@
 <!-- CSS -->
 <title>lockfreequeues/sipsic</title>
 <link rel="stylesheet" type="text/css" href="../nimdoc.out.css">
-<link rel="stylesheet" type="text/css" href="nimdoc.extra.css">
+<link rel="stylesheet" type="text/css" href="../nimdoc.extra.css">
 
-<script type="text/javascript" src="dochack.js"></script>
+<script type="text/javascript" src="../dochack.js"></script>
 
 <script type="text/javascript">
 function main() {
@@ -108,7 +108,10 @@ function main() {
   <a class="reference reference-toplevel" href="#7" id="57">Types</a>
   <ul class="simple simple-toc-section">
       <li><a class="reference" href="#Sipsic"
-    ><wbr />Sipsic<span class="attachedType"></span></a></li>
+    title="Sipsic[N; T] = object of RootObj
+  head* {.align: 64.}: Atomic[int]
+  tail* {.align: 64.}: Atomic[int]
+  storage*: array[N, T]      ## The underlying storage.">Sipsic</a></li>
 
   </ul>
 </li>
@@ -116,25 +119,39 @@ function main() {
   <a class="reference reference-toplevel" href="#10" id="60">Consts</a>
   <ul class="simple simple-toc-section">
       <li><a class="reference" href="#NoSlice"
-    ><wbr />No<wbr />Slice<span class="attachedType"></span></a></li>
+    >NoSlice</a></li>
 
   </ul>
 </li>
 <li>
   <a class="reference reference-toplevel" href="#12" id="62">Procs</a>
   <ul class="simple simple-toc-section">
-      <li><a class="reference" href="#initSipsic"
-    ><wbr />init<wbr />Sipsic<span class="attachedType">Sipsic</span></a></li>
-  <li><a class="reference" href="#push%2CSipsic%5BN%2CT%5D%2CT"
-    ><wbr />push<span class="attachedType">Sipsic</span></a></li>
+      <ul class="simple nested-toc-section">push
+      <li><a class="reference" href="#push%2CSipsic%5BN%2CT%5D%2CT"
+    >push[N: static int; T](self: var Sipsic[N, T]; item: T): bool</a></li>
   <li><a class="reference" href="#push%2CSipsic%5BN%2CT%5D%2CopenArray%5BT%5D"
-    ><wbr />push<span class="attachedType">Sipsic</span></a></li>
-  <li><a class="reference" href="#pop%2CSipsic%5BN%2CT%5D"
-    ><wbr />pop<span class="attachedType">Sipsic</span></a></li>
+    title="push[N: static int; T](self: var Sipsic[N, T]; items: openArray[T]): Option[
+    HSlice[int, int]]">push[N: static int; T](self: var Sipsic[N, T]; items: openArray[T]): Option[
+    HSlice[int, int]]</a></li>
+
+  </ul>
+  <ul class="simple nested-toc-section">initSipsic
+      <li><a class="reference" href="#initSipsic"
+    >initSipsic[N: static int; T](): Sipsic[N, T]</a></li>
+
+  </ul>
+  <ul class="simple nested-toc-section">capacity
+      <li><a class="reference" href="#capacity%2CSipsic%5BN%2CT%5D"
+    >capacity[N: static int; T](self: var Sipsic[N, T]): int</a></li>
+
+  </ul>
+  <ul class="simple nested-toc-section">pop
+      <li><a class="reference" href="#pop%2CSipsic%5BN%2CT%5D"
+    >pop[N: static int; T](self: var Sipsic[N, T]): Option[T]</a></li>
   <li><a class="reference" href="#pop%2CSipsic%5BN%2CT%5D%2Cint"
-    ><wbr />pop<span class="attachedType">Sipsic</span></a></li>
-  <li><a class="reference" href="#capacity%2CSipsic%5BN%2CT%5D"
-    ><wbr />capacity<span class="attachedType">Sipsic</span></a></li>
+    >pop[N: static int; T](self: var Sipsic[N, T]; count: int): Option[seq[T]]</a></li>
+
+  </ul>
 
   </ul>
 </li>
@@ -271,7 +288,7 @@ class="link-seesrc" target="_blank">Source</a>
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-08-10 06:40:14 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2021-07-19 23:27:26 UTC</small>
       </div>
     </div>
   </div>

@@ -19,9 +19,9 @@
 <!-- CSS -->
 <title>lockfreequeues/mupsic</title>
 <link rel="stylesheet" type="text/css" href="../nimdoc.out.css">
-<link rel="stylesheet" type="text/css" href="nimdoc.extra.css">
+<link rel="stylesheet" type="text/css" href="../nimdoc.extra.css">
 
-<script type="text/javascript" src="dochack.js"></script>
+<script type="text/javascript" src="../dochack.js"></script>
 
 <script type="text/javascript">
 function main() {
@@ -108,13 +108,19 @@ function main() {
   <a class="reference reference-toplevel" href="#7" id="57">Types</a>
   <ul class="simple simple-toc-section">
       <li><a class="reference" href="#NoProducersAvailableDefect"
-    ><wbr />No<wbr />Producers<wbr />Available<wbr />Defect<span class="attachedType"></span></a></li>
+    >NoProducersAvailableDefect</a></li>
   <li><a class="reference" href="#InvalidCallDefect"
-    ><wbr />Invalid<wbr />Call<wbr />Defect<span class="attachedType"></span></a></li>
+    >InvalidCallDefect</a></li>
   <li><a class="reference" href="#Mupsic"
-    ><wbr />Mupsic<span class="attachedType"></span></a></li>
+    title="Mupsic[N; P; T] = object of Sipsic[N, T]
+  prevProducerIdx*: Atomic[int] ## The ID (index) of the most recent producer
+  producerTails*: array[P, Atomic[int]] ## Array of producer tails
+  producerThreadIds*: array[P, Atomic[int]] ## \
+                                            ## Array of producer thread IDs by index">Mupsic</a></li>
   <li><a class="reference" href="#Producer"
-    ><wbr />Producer<span class="attachedType"></span></a></li>
+    title="Producer[N; P; T] = object
+  idx*: int                  ## The producer&apos;s unique identifier.
+  queue*: ptr Mupsic[N, P, T] ## A reference to the producer&apos;s queue.">Producer</a></li>
 
   </ul>
 </li>
@@ -122,29 +128,50 @@ function main() {
   <a class="reference reference-toplevel" href="#10" id="60">Consts</a>
   <ul class="simple simple-toc-section">
       <li><a class="reference" href="#NoProducerIdx"
-    ><wbr />No<wbr />Producer<wbr />Idx<span class="attachedType"></span></a></li>
+    >NoProducerIdx</a></li>
 
   </ul>
 </li>
 <li>
   <a class="reference reference-toplevel" href="#12" id="62">Procs</a>
   <ul class="simple simple-toc-section">
-      <li><a class="reference" href="#initMupsic"
-    ><wbr />init<wbr />Mupsic<span class="attachedType">Mupsic</span></a></li>
-  <li><a class="reference" href="#getProducer%2CMupsic%5BN%2CP%2CT%5D%2Cint"
-    ><wbr />get<wbr />Producer<span class="attachedType">Mupsic</span></a></li>
-  <li><a class="reference" href="#push%2CProducer%5BN%2CP%2CT%5D%2CT"
-    ><wbr />push<span class="attachedType">Producer</span></a></li>
+      <ul class="simple nested-toc-section">push
+      <li><a class="reference" href="#push%2CProducer%5BN%2CP%2CT%5D%2CT"
+    >push[N, P: static int; T](self: Producer[N, P, T]; item: T): bool</a></li>
   <li><a class="reference" href="#push%2CProducer%5BN%2CP%2CT%5D%2CopenArray%5BT%5D"
-    ><wbr />push<span class="attachedType">Producer</span></a></li>
+    title="push[N, P: static int; T](self: Producer[N, P, T]; items: openArray[T]): Option[
+    HSlice[int, int]]">push[N, P: static int; T](self: Producer[N, P, T]; items: openArray[T]): Option[
+    HSlice[int, int]]</a></li>
   <li><a class="reference" href="#push%2CMupsic%5BN%2CP%2CT%5D%2CT"
-    ><wbr />push<span class="attachedType">Mupsic</span></a></li>
+    >push[N, P: static int; T](self: var Mupsic[N, P, T]; item: T): bool</a></li>
   <li><a class="reference" href="#push%2CMupsic%5BN%2CP%2CT%5D%2CopenArray%5BT%5D"
-    ><wbr />push<span class="attachedType">Mupsic</span></a></li>
-  <li><a class="reference" href="#capacity%2CMupsic%5BN%2CP%2CT%5D"
-    ><wbr />capacity<span class="attachedType">Mupsic</span></a></li>
-  <li><a class="reference" href="#producerCount%2CMupsic%5BN%2CP%2CT%5D"
-    ><wbr />producer<wbr />Count<span class="attachedType">Mupsic</span></a></li>
+    title="push[N, P: static int; T](self: var Mupsic[N, P, T]; items: openArray[T]): Option[
+    HSlice[int, int]]">push[N, P: static int; T](self: var Mupsic[N, P, T]; items: openArray[T]): Option[
+    HSlice[int, int]]</a></li>
+
+  </ul>
+  <ul class="simple nested-toc-section">getProducer
+      <li><a class="reference" href="#getProducer%2CMupsic%5BN%2CP%2CT%5D%2Cint"
+    title="getProducer[N, P: static int; T](self: var Mupsic[N, P, T];
+                                 idx: int = NoProducerIdx): Producer[N, P, T]">getProducer[N, P: static int; T](self: var Mupsic[N, P, T];
+                                 idx: int = NoProducerIdx): Producer[N, P, T]</a></li>
+
+  </ul>
+  <ul class="simple nested-toc-section">capacity
+      <li><a class="reference" href="#capacity%2CMupsic%5BN%2CP%2CT%5D"
+    >capacity[N, P: static int; T](self: var Mupsic[N, P, T]): int</a></li>
+
+  </ul>
+  <ul class="simple nested-toc-section">initMupsic
+      <li><a class="reference" href="#initMupsic"
+    >initMupsic[N, P: static int; T](): Mupsic[N, P, T]</a></li>
+
+  </ul>
+  <ul class="simple nested-toc-section">producerCount
+      <li><a class="reference" href="#producerCount%2CMupsic%5BN%2CP%2CT%5D"
+    >producerCount[N, P: static int; T](self: var Mupsic[N, P, T]): int</a></li>
+
+  </ul>
 
   </ul>
 </li>
@@ -255,8 +282,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 </dd>
 <a id="getProducer,Mupsic[N,P,T],int"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#getProducer%2CMupsic%5BN%2CP%2CT%5D%2Cint"><span class="Identifier">getProducer</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="mupsic.html#Mupsic"><span class="Identifier">Mupsic</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">idx</span><span class="Other">:</span> <span class="Identifier">int</span> <span class="Other">=</span> <span class="Identifier">NoProducerIdx</span><span class="Other">)</span><span class="Other">:</span> <a href="mupsic.html#Producer"><span class="Identifier">Producer</span></a><span class="Other">[</span>
-    <span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><a href="mupsic.html#NoProducersAvailableDefect"><span class="Identifier">NoProducersAvailableDefect</span></a><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+<dt><pre><span class="Keyword">proc</span> <a href="#getProducer%2CMupsic%5BN%2CP%2CT%5D%2Cint"><span class="Identifier">getProducer</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="mupsic.html#Mupsic"><span class="Identifier">Mupsic</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span>
+                                      <span class="Identifier">idx</span><span class="Other">:</span> <span class="Identifier">int</span> <span class="Other">=</span> <span class="Identifier">NoProducerIdx</span><span class="Other">)</span><span class="Other">:</span> <a href="mupsic.html#Producer"><span class="Identifier">Producer</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span>
+    <span class="Identifier">T</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><a href="mupsic.html#NoProducersAvailableDefect"><span class="Identifier">NoProducersAvailableDefect</span></a><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
 <dd>
 
 Assigns and returns a <tt class="docutils literal"><span class="pre">Producer</span></tt> instance for the current thread.
@@ -284,9 +312,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Append multiple items to the queue. If the queue is already full or is filled by this call, <tt class="docutils literal"><span class="pre">some(unpushed)</span></tt> is returned, where <tt class="docutils literal"><span class="pre">unpushed</span></tt> is an <tt class="docutils literal"><span class="pre">HSlice</span></tt> corresponding to the chunk of items which could not be pushed. If all items are appended, <tt class="docutils literal"><span class="pre">none(HSlice[int, int])</span></tt> is returned.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L171"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L169"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L171" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L169" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="push,Mupsic[N,P,T],T"></a>
@@ -296,9 +324,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Overload of <tt class="docutils literal"><span class="pre">Sipsic.push()</span></tt> that simply raises <tt class="docutils literal"><span class="pre">InvalidCallDefect</span></tt>. Pushes should happen via <tt class="docutils literal"><span class="pre">Producer.push()</span></tt>.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L267"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L261"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L267" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L261" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="push,Mupsic[N,P,T],openArray[T]"></a>
@@ -308,9 +336,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Overload of <tt class="docutils literal"><span class="pre">Sipsic.push()</span></tt> that simply raises <tt class="docutils literal"><span class="pre">InvalidCallDefect</span></tt>. Pushes should happen via <tt class="docutils literal"><span class="pre">Producer.push()</span></tt>.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L277"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L271"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L277" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L271" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="capacity,Mupsic[N,P,T]"></a>
@@ -319,9 +347,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Returns the queue's storage capacity (<tt class="docutils literal"><span class="pre">N</span></tt>).
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L287"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L281"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L287" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L281" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 <a id="producerCount,Mupsic[N,P,T]"></a>
@@ -330,9 +358,9 @@ class="link-seesrc" target="_blank">Source</a>
 
 Returns the queue's number of producers (<tt class="docutils literal"><span class="pre">P</span></tt>).
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L295"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupsic.nim#L289"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L295" class="link-seesrc" target="_blank" >Edit</a>
+<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupsic.nim#L289" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
 
@@ -345,7 +373,7 @@ class="link-seesrc" target="_blank">Source</a>
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2020-08-10 06:40:14 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2021-07-19 23:27:26 UTC</small>
       </div>
     </div>
   </div>
