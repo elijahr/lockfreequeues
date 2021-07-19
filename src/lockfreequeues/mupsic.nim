@@ -51,16 +51,16 @@ type
 proc clear[N, P: static int, T](
   self: var Mupsic[N, P, T]
 ) =
-  self.head.relaxed(0)
-  self.tail.relaxed(0)
+  self.head.sequential(0)
+  self.tail.sequential(0)
 
   for n in 0..<N:
     self.storage[n].reset()
 
-  self.prevProducerIdx.relaxed(NoProducerIdx)
+  self.prevProducerIdx.sequential(NoProducerIdx)
   for p in 0..<P:
-    self.producerTails[p].relaxed(0)
-    self.producerThreadIds[p].relaxed(0)
+    self.producerTails[p].sequential(0)
+    self.producerThreadIds[p].sequential(0)
 
 
 proc initMupsic*[N, P: static int, T](): Mupsic[N, P, T] =
@@ -95,8 +95,8 @@ proc getProducer*[N, P: static int, T](
     if self.producerThreadIds[idx].compareExchangeWeak(
       expected,
       threadId,
-      moRelaxed,
-      moRelaxed,
+      moRelease,
+      moAcquire,
     ):
       result.idx = idx
       return
@@ -123,30 +123,29 @@ proc push*[N, P: static int, T](
 
   # spin until reservation is acquired
   while true:
-    prevProducerIdx = self.queue.prevProducerIdx.relaxed
+    prevProducerIdx = self.queue.prevProducerIdx.acquire
     isFirstProduction = prevProducerIdx == NoProducerIdx
-    var head = self.queue.head.relaxed
+    var head = self.queue.head.sequential
     prevTail =
       if isFirstProduction:
         0
       else:
-        self.queue.producerTails[prevProducerIdx].relaxed
+        self.queue.producerTails[prevProducerIdx].acquire
 
     if unlikely(full(head, prevTail, N)):
       return false
 
     newTail = incOrReset(prevTail, 1, N)
     # validateHeadAndTail(head, newTail, N)
-    self.queue.producerTails[self.idx].relaxed(newTail)
+    self.queue.producerTails[self.idx].release(newTail)
 
     if self.queue.prevProducerIdx.compareExchangeWeak(
       prevProducerIdx,
       self.idx,
-      moRelaxed,
-      moRelaxed,
+      moRelease,
+      moAcquire,
     ):
       break
-    cpuRelax()
 
   result = true
 
@@ -159,13 +158,12 @@ proc push*[N, P: static int, T](
       if self.queue.tail.compareExchangeWeak(
         expectedTail,
         newTail,
-        moRelaxed,
-        moRelaxed,
+        moRelease,
+        moAcquire,
       ):
         break
-      cpuRelax()
   else:
-    self.queue.tail.relaxed(newTail)
+    self.queue.tail.release(newTail)
 
 
 proc push*[N, P: static int, T](
@@ -188,18 +186,16 @@ proc push*[N, P: static int, T](
   var prevProducerIdx: int
   var isFirstProduction: bool
 
-  var head: int
-
   # spin until reservation is acquired
   while true:
-    prevProducerIdx = self.queue.prevProducerIdx.relaxed
+    prevProducerIdx = self.queue.prevProducerIdx.acquire
     isFirstProduction = prevProducerIdx == NoProducerIdx
-    head = self.queue.head.relaxed
+    var head = self.queue.head.sequential
     prevTail =
       if isFirstProduction:
         0
       else:
-        self.queue.producerTails[prevProducerIdx].relaxed
+        self.queue.producerTails[prevProducerIdx].acquire
 
     avail = available(head, prevTail, N)
     if likely(avail >= items.len):
@@ -215,16 +211,15 @@ proc push*[N, P: static int, T](
 
     newTail = incOrReset(prevTail, count, N)
     #  validateHeadAndTail(head, newTail, N)
-    self.queue.producerTails[self.idx].relaxed(newTail)
+    self.queue.producerTails[self.idx].release(newTail)
 
     if self.queue.prevProducerIdx.compareExchangeWeak(
       prevProducerIdx,
       self.idx,
-      moRelaxed,
-      moRelaxed,
+      moRelease,
+      moAcquire,
     ):
       break
-    cpuRelax()
 
   if count < items.len:
     # give back remainder
@@ -254,14 +249,13 @@ proc push*[N, P: static int, T](
       if self.queue.tail.compareExchangeWeak(
         expectedTail,
         newTail,
-        moRelaxed,
-        moRelaxed,
+        moRelease,
+        moAcquire,
       ):
         break
-      cpuRelax()
 
   elif isFirstProduction:
-    self.queue.tail.relaxed(newTail)
+    self.queue.tail.release(newTail)
 
 
 proc push*[N, P: static int, T](

@@ -1,3 +1,5 @@
+import os
+
 # Package
 version       = "2.0.0"
 author        = "Elijah Shaw-Rutschman"
@@ -12,9 +14,17 @@ requires "nim >= 1.2.0"
 task make_docs, "Generate documentation":
   exec "sh bin/make_docs.sh"
 
-task test, "Runs the test suite (C & C++)":
+task test, "Runs the test suite":
+  # C
   exec "nim c -r -f tests/test.nim"
+
+  # C++
   exec "nim cpp -r -f tests/test.nim"
+
+  if getEnv("SANITIZE_THREADS") != "no":
+    # C (with thread sanitization)
+    exec "nim c --cc:clang --passC:\"-fsanitize=thread\" --passL:\"-fsanitize=thread\" -r -f tests/test.nim"
+
 
 task examples, "Runs the examples":
   exec "nim c -r -f examples/mupmuc.nim"
