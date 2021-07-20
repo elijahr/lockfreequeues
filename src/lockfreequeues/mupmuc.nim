@@ -4,7 +4,7 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-## A multi-producer, single-consumer bounded queue implemented as a ring buffer.
+## A multi-producer, multi-consumer bounded queue implemented as a ring buffer.
 
 when not compileOption("threads"):
   {.error: "lockfreequeues/mupmuc requires --threads:on option.".}
