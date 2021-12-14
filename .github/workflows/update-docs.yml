@@ -24,6 +24,7 @@ jobs:
           rm -rf htmldocs
           nim doc --out:htmldocs src/lockfreequeues.nim
           mv htmldocs/theindex.html htmldocs/index.html
+          find htmldocs -type f -name "*.html" -print0 | xargs -0 sed -i '' -e 's/theindex\.html/index\.html/g'
 
       - name: Update gh-pages branch
         uses: peaceiris/actions-gh-pages@v3
