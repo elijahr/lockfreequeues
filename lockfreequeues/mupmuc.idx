@@ -1,5 +1,5 @@
 NoConsumerIdx	lockfreequeues/mupmuc.html#NoConsumerIdx	mupmuc: NoConsumerIdx	
-NoConsumersAvailableDefect	lockfreequeues/mupmuc.html#NoConsumersAvailableDefect	mupmuc: NoConsumersAvailableDefect	
+NoConsumersAvailableError	lockfreequeues/mupmuc.html#NoConsumersAvailableError	mupmuc: NoConsumersAvailableError	
 Mupmuc	lockfreequeues/mupmuc.html#Mupmuc	mupmuc: Mupmuc	
 Consumer	lockfreequeues/mupmuc.html#Consumer	mupmuc: Consumer	
 initMupmuc	lockfreequeues/mupmuc.html#initMupmuc	mupmuc: initMupmuc[N, P, C: static int; T](): Mupmuc[N, P, C, T]	

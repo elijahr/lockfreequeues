@@ -1,9 +1,0 @@
-.vscode/tags
-.DS_Store
-nimcache/
-nimblecache/
-tests/test
-*.dSYM
-examples/spscqueuestatic
-examples/spscqueueshared
-
