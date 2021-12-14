@@ -78,7 +78,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [armv7, aarch64, ppc64le]
+        arch: [aarch64, ppc64le]
         nim-version: [1.6.0]
 
     runs-on: ubuntu-latest
