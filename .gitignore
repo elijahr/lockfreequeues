@@ -7,6 +7,7 @@ nimblecache/
 /src/*
 /tests/*
 /examples/*
+/htmldocs/*
 
 !**/*.nims
 !**/*.nim

@@ -50,7 +50,7 @@ suite "getProducer(Mupmuc[N, P, C, T])":
   test "explicit index":
     testMupGetProducerExplicitIndex(queue)
 
-  test "throws NoProducersAvailableDefect":
+  test "throws NoProducersAvailableError":
     testMupGetProducerThrowsNoProducersAvailable(queue)
 
 

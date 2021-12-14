@@ -1,0 +1,32 @@
+# yamllint disable rule:line-length
+
+name: Build docs
+
+on:
+  push:
+    branches:
+      - devel
+
+jobs:
+  release_docs:
+    name: Update docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v2
+
+      - name: Install Nim
+        uses: asdf-vm/actions/install@v1
+
+      - name: Generate documentation
+        run: |
+          . "${HOME}/.asdf/asdf.sh"
+          rm -rf htmldocs
+          nim doc --out:htmldocs src/lockfreequeues.nim
+          mv htmldocs/theindex.html htmldocs/index.html
+
+      - name: Update gh-pages branch
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./htmldocs

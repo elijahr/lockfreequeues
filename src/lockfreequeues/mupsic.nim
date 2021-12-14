@@ -19,7 +19,7 @@ import ./sipsic
 const NoProducerIdx* = -1 ## The initial value of `Mupsic.prevProducerIdx`.
 
 
-type NoProducersAvailableDefect* = object of Defect ## \
+type NoProducersAvailableError* = object of CatchableError ## \
   ## Raised by `getProducer()` if all producers have been assigned to other
   ## threads.
 
@@ -72,7 +72,7 @@ proc getProducer*[N, P: static int, T](
   self: var Mupsic[N, P, T],
   idx: int = NoProducerIdx,
 ): Producer[N, P, T]
-  {.raises: [NoProducersAvailableDefect].} =
+  {.raises: [NoProducersAvailableError].} =
   ## Assigns and returns a `Producer` instance for the current thread.
   result.queue = addr(self)
 
@@ -103,7 +103,7 @@ proc getProducer*[N, P: static int, T](
 
   # Producers are all spoken for by another thread
   raise newException(
-    NoProducersAvailableDefect,
+    NoProducersAvailableError,
     "All producers have been assigned. " &
     "Increase your producer count (P) or setMaxPoolSize(P).")
 
@@ -261,8 +261,7 @@ proc push*[N, P: static int, T](
 proc push*[N, P: static int, T](
   self: var Mupsic[N, P, T],
   item: T,
-): bool
-  {.raises: [InvalidCallDefect].} =
+): bool =
   ## Overload of `Sipsic.push()` that simply raises `InvalidCallDefect`.
   ## Pushes should happen via `Producer.push()`.
   raise newException(InvalidCallDefect, "Use Producer.push()")
@@ -271,8 +270,7 @@ proc push*[N, P: static int, T](
 proc push*[N, P: static int, T](
   self: var Mupsic[N, P, T],
   items: openArray[T],
-): Option[HSlice[int, int]]
-  {.raises: [InvalidCallDefect].} =
+): Option[HSlice[int, int]] =
   ## Overload of `Sipsic.push()` that simply raises `InvalidCallDefect`.
   ## Pushes should happen via `Producer.push()`.
   raise newException(InvalidCallDefect, "Use Producer.push()")

@@ -19,7 +19,7 @@ import ./mupsic
 const NoConsumerIdx* = -1 ## The initial value of `Mupmuc.prevConsumerIdx`.
 
 
-type NoConsumersAvailableDefect* = object of Defect ## \
+type NoConsumersAvailableError* = object of CatchableError ## \
   ## Raised by `getConsumer()` if all consumers have been assigned to other
   ## threads.
 
@@ -75,7 +75,7 @@ proc getConsumer*[N, P, C: static int, T](
   self: var Mupmuc[N, P, C, T],
   idx: int = NoConsumerIdx,
 ): Consumer[N, P, C, T]
-  {.raises: [NoConsumersAvailableDefect].} =
+  {.raises: [NoConsumersAvailableError].} =
   ## Assigns and returns a `Consumer` instance for the current thread.
   result.queue = addr(self)
 
@@ -106,7 +106,7 @@ proc getConsumer*[N, P, C: static int, T](
 
   # Consumers are all spoken for by another thread
   raise newException(
-    NoConsumersAvailableDefect,
+    NoConsumersAvailableError,
     "All consumers have been assigned. " &
     "Increase your consumer count (C) or setMaxPoolSize(min(C, P)).")
 
@@ -254,8 +254,7 @@ proc pop*[N, P, C: static int, T](
 
 proc pop*[N, P, C: static int, T](
   self: var Mupmuc[N, P, C, T],
-): bool
-  {.raises: [InvalidCallDefect].} =
+): bool  =
   ## Overload of `Sipsic.pop()` that simply raises `InvalidCallDefect`.
   ## Pops should happen via `Consumer.pop()`.
   raise newException(InvalidCallDefect, "Use Consumer.pop()")
@@ -264,8 +263,7 @@ proc pop*[N, P, C: static int, T](
 proc pop*[N, P, C: static int, T](
   self: var Mupmuc[N, P, C, T],
   count: int,
-): Option[seq[T]]
-  {.raises: [InvalidCallDefect].} =
+): Option[seq[T]] =
   ## Overload of `Sipsic.pop()` that simply raises `InvalidCallDefect`.
   ## Pops should happen via `Consumer.pop()`.
   raise newException(InvalidCallDefect, "Use Consumer.pop()")
