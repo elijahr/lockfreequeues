@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Changed
-- Regenerate documentation with Nim 1.4.8
+- Regenerate documentation on PR merge.
+- Test against Nim 1.6.0
 
 ### Removed
 ## [2.1.0] - 2021-07-19

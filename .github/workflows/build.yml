@@ -4,10 +4,10 @@ name: Build
 on:
   pull_request:
     paths-ignore:
-      - README.md
+      - '*.md'
   push:
     paths-ignore:
-      - README.md
+      - '*.md'
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
