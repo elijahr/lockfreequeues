@@ -123,6 +123,7 @@ jobs:
             . "${HOME}/.asdf/asdf.sh"
 
             # Install asdf-nim and dependencies
+            echo "::group::Install Nim"
             git clone https://github.com/asdf-community/asdf-nim.git ~/asdf-nim --branch main --depth 1
             asdf plugin add nim ~/asdf-nim
             asdf nim install-deps -y
@@ -130,8 +131,11 @@ jobs:
             # Install Nim
             asdf install nim ${{ matrix.nim-version }}
             asdf local nim ${{ matrix.nim-version }}
+            echo "::endgroup::"
 
             # Run tests
+            echo "::group::Run tests"
             nimble develop -y
             nimble test
             nimble examples
+            echo "::endgroup::"
