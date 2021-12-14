@@ -11,9 +11,6 @@ srcDir        = "src"
 requires "nim >= 1.2.0"
 
 # Tasks
-task make_docs, "Generate documentation":
-  exec "sh bin/make_docs.sh"
-
 task test, "Runs the test suite":
   # C
   exec "nim c -r -f tests/test.nim"

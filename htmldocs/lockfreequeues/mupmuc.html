@@ -17,9 +17,8 @@
 <link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400,500,600' rel='stylesheet' type='text/css'/>
 
 <!-- CSS -->
-<title>lockfreequeues/mupmuc</title>
+<title>src/lockfreequeues/mupmuc</title>
 <link rel="stylesheet" type="text/css" href="../nimdoc.out.css">
-<link rel="stylesheet" type="text/css" href="../nimdoc.extra.css">
 
 <script type="text/javascript" src="../dochack.js"></script>
 
@@ -35,7 +34,6 @@ function main() {
     }
   }
 
-  const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
   function switchTheme(e) {
       if (e.target.checked) {
           document.documentElement.setAttribute('data-theme', 'dark');
@@ -46,33 +44,32 @@ function main() {
       }
   }
 
-  toggleSwitch.addEventListener('change', switchTheme, false);
+  const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
+  if (toggleSwitch !== null) {
+    toggleSwitch.addEventListener('change', switchTheme, false);
+  }
 
+  var currentTheme = localStorage.getItem('theme');
+  if (!currentTheme && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    currentTheme = 'dark';
+  }
+  if (currentTheme) {
+    document.documentElement.setAttribute('data-theme', currentTheme);
 
-  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-    document.documentElement.setAttribute('data-theme', "dark");
-    toggleSwitch.checked = true;
-  } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-    document.documentElement.setAttribute('data-theme', "light");
-    toggleSwitch.checked = false;
-  } else {
-    const currentTheme = localStorage.getItem('theme') ? localStorage.getItem('theme') : null;
-    if (currentTheme) {
-      document.documentElement.setAttribute('data-theme', currentTheme);
-
-      if (currentTheme === 'dark') {
-        toggleSwitch.checked = true;
-      }
+    if (currentTheme === 'dark' && toggleSwitch !== null) {
+      toggleSwitch.checked = true;
     }
   }
 }
+
+window.addEventListener('DOMContentLoaded', main);
 </script>
 
 </head>
-<body onload="main()">
+<body>
 <div class="document" id="documentId">
   <div class="container">
-    <h1 class="title">lockfreequeues/mupmuc</h1>
+    <h1 class="title">src/lockfreequeues/mupmuc</h1>
     <div class="row">
   <div class="three columns">
   <div class="theme-switch-wrapper">
@@ -84,6 +81,9 @@ function main() {
   </div>
   <div id="global-links">
     <ul class="simple">
+    <li>
+      <a href="../theindex.html">Index</a>
+    </li>
     </ul>
   </div>
   <div id="searchInputDiv">
@@ -107,18 +107,18 @@ function main() {
 <li>
   <a class="reference reference-toplevel" href="#7" id="57">Types</a>
   <ul class="simple simple-toc-section">
-      <li><a class="reference" href="#NoConsumersAvailableDefect"
-    >NoConsumersAvailableDefect</a></li>
+      <li><a class="reference" href="#Consumer"
+    title="Consumer[N; P; C; T] = object
+  idx*: int                  ## The consumer's unique identifier.
+  queue*: ptr Mupmuc[N, P, C, T] ## A reference to the consumer's queue.">Consumer</a></li>
   <li><a class="reference" href="#Mupmuc"
     title="Mupmuc[N; P; C; T] = object of Mupsic[N, P, T]
   prevConsumerIdx*: Atomic[int] ## The ID (index) of the most recent consumer
   consumerHeads*: array[C, Atomic[int]] ## Array of consumer heads
   consumerThreadIds*: array[C, Atomic[int]] ## \
                                             ## Array of consumer thread IDs by index">Mupmuc</a></li>
-  <li><a class="reference" href="#Consumer"
-    title="Consumer[N; P; C; T] = object
-  idx*: int                  ## The consumer&apos;s unique identifier.
-  queue*: ptr Mupmuc[N, P, C, T] ## A reference to the consumer&apos;s queue.">Consumer</a></li>
+  <li><a class="reference" href="#NoConsumersAvailableDefect"
+    title="NoConsumersAvailableDefect = object of Defect">NoConsumersAvailableDefect</a></li>
 
   </ul>
 </li>
@@ -126,7 +126,7 @@ function main() {
   <a class="reference reference-toplevel" href="#10" id="60">Consts</a>
   <ul class="simple simple-toc-section">
       <li><a class="reference" href="#NoConsumerIdx"
-    >NoConsumerIdx</a></li>
+    title="NoConsumerIdx = -1">NoConsumerIdx</a></li>
 
   </ul>
 </li>
@@ -135,12 +135,7 @@ function main() {
   <ul class="simple simple-toc-section">
       <ul class="simple nested-toc-section">consumerCount
       <li><a class="reference" href="#consumerCount%2CMupmuc%5BN%2CP%2CC%2CT%5D"
-    >consumerCount[N, P, C: static int; T](self: var Mupmuc[N, P, C, T]): int</a></li>
-
-  </ul>
-  <ul class="simple nested-toc-section">initMupmuc
-      <li><a class="reference" href="#initMupmuc"
-    >initMupmuc[N, P, C: static int; T](): Mupmuc[N, P, C, T]</a></li>
+    title="consumerCount[N, P, C: static int; T](self: var Mupmuc[N, P, C, T]): int">consumerCount[N, P, C: static int; T](self: var Mupmuc[N, P, C, T]): int</a></li>
 
   </ul>
   <ul class="simple nested-toc-section">getConsumer
@@ -152,15 +147,20 @@ function main() {
     T]</a></li>
 
   </ul>
+  <ul class="simple nested-toc-section">initMupmuc
+      <li><a class="reference" href="#initMupmuc"
+    title="initMupmuc[N, P, C: static int; T](): Mupmuc[N, P, C, T]">initMupmuc[N, P, C: static int; T](): Mupmuc[N, P, C, T]</a></li>
+
+  </ul>
   <ul class="simple nested-toc-section">pop
       <li><a class="reference" href="#pop%2CConsumer%5BN%2CP%2CC%2CT%5D"
-    >pop[N, P, C: static int; T](self: Consumer[N, P, C, T]): Option[T]</a></li>
+    title="pop[N, P, C: static int; T](self: Consumer[N, P, C, T]): Option[T]">pop[N, P, C: static int; T](self: Consumer[N, P, C, T]): Option[T]</a></li>
   <li><a class="reference" href="#pop%2CConsumer%5BN%2CP%2CC%2CT%5D%2Cint"
     title="pop[N, P, C: static int; T](self: Consumer[N, P, C, T]; count: int): Option[
     seq[T]]">pop[N, P, C: static int; T](self: Consumer[N, P, C, T]; count: int): Option[
     seq[T]]</a></li>
   <li><a class="reference" href="#pop%2CMupmuc%5BN%2CP%2CC%2CT%5D"
-    >pop[N, P, C: static int; T](self: var Mupmuc[N, P, C, T]): bool</a></li>
+    title="pop[N, P, C: static int; T](self: var Mupmuc[N, P, C, T]): bool">pop[N, P, C: static int; T](self: var Mupmuc[N, P, C, T]): bool</a></li>
   <li><a class="reference" href="#pop%2CMupmuc%5BN%2CP%2CC%2CT%5D%2Cint"
     title="pop[N, P, C: static int; T](self: var Mupmuc[N, P, C, T]; count: int): Option[
     seq[T]]">pop[N, P, C: static int; T](self: var Mupmuc[N, P, C, T]; count: int): Option[
@@ -174,6 +174,11 @@ function main() {
 </ul>
 
   </div>
+  &nbsp;&nbsp;<a
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L1"
+class="link-seesrc" target="_blank">Source</a>
+&nbsp;&nbsp;<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L1" class="link-seesrc" target="_blank" >Edit</a>
+
   <div class="nine columns" id="content">
   <div id="tocRoot"></div>
   
@@ -186,75 +191,106 @@ function main() {
 <div class="section" id="7">
 <h1><a class="toc-backref" href="#7">Types</a></h1>
 <dl class="item">
-<a id="NoConsumersAvailableDefect"></a>
-<dt><pre><a href="mupmuc.html#NoConsumersAvailableDefect"><span class="Identifier">NoConsumersAvailableDefect</span></a> <span class="Other">=</span> <span class="Keyword">object</span> <span class="Keyword">of</span> <span class="Identifier">Defect</span></pre></dt>
-<dd>
-
-
-Raised by <tt class="docutils literal"><span class="pre">getConsumer()</span></tt> if all consumers have been assigned to other threads.
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L22"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L22" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
-<a id="Mupmuc"></a>
-<dt><pre><a href="mupmuc.html#Mupmuc"><span class="Identifier">Mupmuc</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">;</span> <span class="Identifier">P</span><span class="Other">;</span> <span class="Identifier">C</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span> <span class="Other">=</span> <span class="Keyword">object</span> <span class="Keyword">of</span> <a href="mupsic.html#Mupsic"><span class="Identifier">Mupsic</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span>
-  <span class="Identifier">prevConsumerIdx</span><span class="Operator">*</span><span class="Other">:</span> <span class="Identifier">Atomic</span><span class="Other">[</span><span class="Identifier">int</span><span class="Other">]</span><span class="Comment">## The ID (index) of the most recent consumer</span>
-  <span class="Identifier">consumerHeads</span><span class="Operator">*</span><span class="Other">:</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">C</span><span class="Other">,</span> <span class="Identifier">Atomic</span><span class="Other">[</span><span class="Identifier">int</span><span class="Other">]</span><span class="Other">]</span><span class="Comment">## Array of consumer heads</span>
-  <span class="Identifier">consumerThreadIds</span><span class="Operator">*</span><span class="Other">:</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">C</span><span class="Other">,</span> <span class="Identifier">Atomic</span><span class="Other">[</span><span class="Identifier">int</span><span class="Other">]</span><span class="Other">]</span><span class="Comment">## \</span>
-<span class="Comment">## Array of consumer thread IDs by index</span>
+<div id="Consumer">
+<dt><pre><a href="mupmuc.html#Consumer"><span class="Identifier">Consumer</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">;</span> <span class="Identifier">P</span><span class="Other">;</span> <span class="Identifier">C</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span> <span class="Other">=</span> <span class="Keyword">object</span>
+  <span class="Identifier">idx</span><span class="Operator">*</span><span class="Other">:</span> <span class="Identifier">int</span>                  <span class="Comment">## The consumer's unique identifier.</span>
+  <span class="Identifier">queue</span><span class="Operator">*</span><span class="Other">:</span> <span class="Keyword">ptr</span> <a href="mupmuc.html#Mupmuc"><span class="Identifier">Mupmuc</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span> <span class="Comment">## A reference to the consumer's queue.</span>
   </pre></dt>
 <dd>
 
-A multi-producer, multi-consumer bounded queue implemented as a ring buffer.<ul class="simple"><li><tt class="docutils literal"><span class="pre">N</span></tt> is the capacity of the queue.</li>
-<li><tt class="docutils literal"><span class="pre">P</span></tt> is the number of producer threads.</li>
-<li><tt class="docutils literal"><span class="pre">C</span></tt> is the number of consumer threads.</li>
-<li><tt class="docutils literal"><span class="pre">T</span></tt> is the type of data the queue will hold.</li>
+A per-thread interface for popping items from a queue. Retrieved via a call to <tt class="docutils literal"><span class="pre"><span class="Identifier">Mupmuc</span><span class="Operator">.</span><span class="Identifier">getConsumer</span><span class="Punctuation">(</span><span class="Punctuation">)</span></span></tt>
+&nbsp;&nbsp;<a
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L42"
+class="link-seesrc" target="_blank">Source</a>
+&nbsp;&nbsp;<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L42" class="link-seesrc" target="_blank" >Edit</a>
+
+</dd>
+</div>
+<div id="Mupmuc">
+<dt><pre><a href="mupmuc.html#Mupmuc"><span class="Identifier">Mupmuc</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">;</span> <span class="Identifier">P</span><span class="Other">;</span> <span class="Identifier">C</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span> <span class="Other">=</span> <span class="Keyword">object</span> <span class="Keyword">of</span> <a href="mupsic.html#Mupsic"><span class="Identifier">Mupsic</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span>
+  <span class="Identifier">prevConsumerIdx</span><span class="Operator">*</span><span class="Other">:</span> <span class="Identifier">Atomic</span><span class="Other">[</span><span class="Identifier">int</span><span class="Other">]</span> <span class="Comment">## The ID (index) of the most recent consumer</span>
+  <span class="Identifier">consumerHeads</span><span class="Operator">*</span><span class="Other">:</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">C</span><span class="Other">,</span> <span class="Identifier">Atomic</span><span class="Other">[</span><span class="Identifier">int</span><span class="Other">]</span><span class="Other">]</span> <span class="Comment">## Array of consumer heads</span>
+  <span class="Identifier">consumerThreadIds</span><span class="Operator">*</span><span class="Other">:</span> <span class="Identifier">array</span><span class="Other">[</span><span class="Identifier">C</span><span class="Other">,</span> <span class="Identifier">Atomic</span><span class="Other">[</span><span class="Identifier">int</span><span class="Other">]</span><span class="Other">]</span> <span class="Comment">## \</span>
+                                            <span class="Comment">## Array of consumer thread IDs by index</span>
+  </pre></dt>
+<dd>
+
+A multi-producer, multi-consumer bounded queue implemented as a ring buffer.<ul class="simple"><li><tt class="docutils literal"><span class="pre"><span class="Identifier">N</span></span></tt> is the capacity of the queue.</li>
+<li><tt class="docutils literal"><span class="pre"><span class="Identifier">P</span></span></tt> is the number of producer threads.</li>
+<li><tt class="docutils literal"><span class="pre"><span class="Identifier">C</span></span></tt> is the number of consumer threads.</li>
+<li><tt class="docutils literal"><span class="pre"><span class="Identifier">T</span></span></tt> is the type of data the queue will hold.</li>
 </ul>
 
 &nbsp;&nbsp;<a
 href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L28"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L28" class="link-seesrc" target="_blank" >Edit</a>
+&nbsp;&nbsp;<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L28" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="Consumer"></a>
-<dt><pre><a href="mupmuc.html#Consumer"><span class="Identifier">Consumer</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">;</span> <span class="Identifier">P</span><span class="Other">;</span> <span class="Identifier">C</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span> <span class="Other">=</span> <span class="Keyword">object</span>
-  <span class="Identifier">idx</span><span class="Operator">*</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Comment">## The consumer's unique identifier.</span>
-  <span class="Identifier">queue</span><span class="Operator">*</span><span class="Other">:</span> <span class="Keyword">ptr</span> <a href="mupmuc.html#Mupmuc"><span class="Identifier">Mupmuc</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Comment">## A reference to the consumer's queue.</span>
-  </pre></dt>
+</div>
+<div id="NoConsumersAvailableDefect">
+<dt><pre><a href="mupmuc.html#NoConsumersAvailableDefect"><span class="Identifier">NoConsumersAvailableDefect</span></a> <span class="Other">=</span> <span class="Keyword">object</span> <span class="Keyword">of</span> <span class="Identifier">Defect</span></pre></dt>
 <dd>
 
-A per-thread interface for popping items from a queue. Retrieved via a call to <tt class="docutils literal"><span class="pre">Mupmuc.getConsumer()</span></tt>
+
+Raised by <tt class="docutils literal"><span class="pre"><span class="Identifier">getConsumer</span><span class="Punctuation">(</span><span class="Punctuation">)</span></span></tt> if all consumers have been assigned to other threads.
 &nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L42"
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L22"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L42" class="link-seesrc" target="_blank" >Edit</a>
+&nbsp;&nbsp;<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L22" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
+</div>
 
 </dl></div>
 <div class="section" id="10">
 <h1><a class="toc-backref" href="#10">Consts</a></h1>
 <dl class="item">
-<a id="NoConsumerIdx"></a>
+<div id="NoConsumerIdx">
 <dt><pre><a href="mupmuc.html#NoConsumerIdx"><span class="Identifier">NoConsumerIdx</span></a> <span class="Other">=</span> <span class="DecNumber">-1</span></pre></dt>
 <dd>
 
-The initial value of <tt class="docutils literal"><span class="pre">Mupmuc.prevConsumerIdx</span></tt>.
+The initial value of <tt class="docutils literal"><span class="pre"><span class="Identifier">Mupmuc</span><span class="Operator">.</span><span class="Identifier">prevConsumerIdx</span></span></tt>.
 &nbsp;&nbsp;<a
 href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L19"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L19" class="link-seesrc" target="_blank" >Edit</a>
+&nbsp;&nbsp;<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L19" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
+</div>
 
 </dl></div>
 <div class="section" id="12">
 <h1><a class="toc-backref" href="#12">Procs</a></h1>
 <dl class="item">
-<a id="initMupmuc"></a>
+<div id="consumerCount,Mupmuc[N,P,C,T]">
+<dt><pre><span class="Keyword">proc</span> <a href="#consumerCount%2CMupmuc%5BN%2CP%2CC%2CT%5D"><span class="Identifier">consumerCount</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="mupmuc.html#Mupmuc"><span class="Identifier">Mupmuc</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">int</span> {.
+    <span class="Identifier">inline</span>.}</pre></dt>
+<dd>
+
+Returns the queue's number of consumers (<tt class="docutils literal"><span class="pre"><span class="Identifier">C</span></span></tt>).
+&nbsp;&nbsp;<a
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L274"
+class="link-seesrc" target="_blank">Source</a>
+&nbsp;&nbsp;<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L274" class="link-seesrc" target="_blank" >Edit</a>
+
+</dd>
+</div>
+<div id="getConsumer,Mupmuc[N,P,C,T],int">
+<dt><pre><span class="Keyword">proc</span> <a href="#getConsumer%2CMupmuc%5BN%2CP%2CC%2CT%5D%2Cint"><span class="Identifier">getConsumer</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="mupmuc.html#Mupmuc"><span class="Identifier">Mupmuc</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span>
+    <span class="Identifier">idx</span><span class="Other">:</span> <span class="Identifier">int</span> <span class="Other">=</span> <span class="Identifier">NoConsumerIdx</span><span class="Other">)</span><span class="Other">:</span> <a href="mupmuc.html#Consumer"><span class="Identifier">Consumer</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span> {.
+    <span><span class="Other pragmadots">...</span></span><span class="pragmawrap"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><a href="mupmuc.html#NoConsumersAvailableDefect"><span class="Identifier">NoConsumersAvailableDefect</span></a><span class="Other">]</span></span>.}</pre></dt>
+<dd>
+
+Assigns and returns a <tt class="docutils literal"><span class="pre"><span class="Identifier">Consumer</span></span></tt> instance for the current thread.
+&nbsp;&nbsp;<a
+href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L74"
+class="link-seesrc" target="_blank">Source</a>
+&nbsp;&nbsp;<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L74" class="link-seesrc" target="_blank" >Edit</a>
+
+</dd>
+</div>
+<div id="initMupmuc">
 <dt><pre><span class="Keyword">proc</span> <a href="#initMupmuc"><span class="Identifier">initMupmuc</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Other">)</span><span class="Other">:</span> <a href="mupmuc.html#Mupmuc"><span class="Identifier">Mupmuc</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span></pre></dt>
 <dd>
 
@@ -262,81 +298,61 @@ Initialize a new Mupmuc queue.
 &nbsp;&nbsp;<a
 href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L69"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L69" class="link-seesrc" target="_blank" >Edit</a>
+&nbsp;&nbsp;<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L69" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="getConsumer,Mupmuc[N,P,C,T],int"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#getConsumer%2CMupmuc%5BN%2CP%2CC%2CT%5D%2Cint"><span class="Identifier">getConsumer</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="mupmuc.html#Mupmuc"><span class="Identifier">Mupmuc</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span>
-    <span class="Identifier">idx</span><span class="Other">:</span> <span class="Identifier">int</span> <span class="Other">=</span> <span class="Identifier">NoConsumerIdx</span><span class="Other">)</span><span class="Other">:</span> <a href="mupmuc.html#Consumer"><span class="Identifier">Consumer</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma">
-    <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><a href="mupmuc.html#NoConsumersAvailableDefect"><span class="Identifier">NoConsumersAvailableDefect</span></a><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
-<dd>
-
-Assigns and returns a <tt class="docutils literal"><span class="pre">Consumer</span></tt> instance for the current thread.
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L74"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L74" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
-<a id="pop,Consumer[N,P,C,T]"></a>
+</div>
+<div id="pop,Consumer[N,P,C,T]">
 <dt><pre><span class="Keyword">proc</span> <a href="#pop%2CConsumer%5BN%2CP%2CC%2CT%5D"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <a href="mupmuc.html#Consumer"><span class="Identifier">Consumer</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span></pre></dt>
 <dd>
 
-Pop a single item from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre">none(T)</span></tt> is returned. Otherwise an item is popped, <tt class="docutils literal"><span class="pre">some(T)</span></tt> is returned.
+Pop a single item from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre"><span class="Identifier">none</span><span class="Punctuation">(</span><span class="Identifier">T</span><span class="Punctuation">)</span></span></tt> is returned. Otherwise an item is popped, <tt class="docutils literal"><span class="pre"><span class="Identifier">some</span><span class="Punctuation">(</span><span class="Identifier">T</span><span class="Punctuation">)</span></span></tt> is returned.
 &nbsp;&nbsp;<a
 href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L114"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L114" class="link-seesrc" target="_blank" >Edit</a>
+&nbsp;&nbsp;<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L114" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="pop,Consumer[N,P,C,T],int"></a>
+</div>
+<div id="pop,Consumer[N,P,C,T],int">
 <dt><pre><span class="Keyword">proc</span> <a href="#pop%2CConsumer%5BN%2CP%2CC%2CT%5D%2Cint"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <a href="mupmuc.html#Consumer"><span class="Identifier">Consumer</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">count</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span>
     <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span></pre></dt>
 <dd>
 
-Pop <tt class="docutils literal"><span class="pre">count</span></tt> items from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre">none(seq[T])</span></tt> is returned. Otherwise <tt class="docutils literal"><span class="pre">some(seq[T])</span></tt> is returned containing at least one item.
+Pop <tt class="docutils literal"><span class="pre"><span class="Identifier">count</span></span></tt> items from the queue. If the queue is empty, <tt class="docutils literal"><span class="pre"><span class="Identifier">none</span><span class="Punctuation">(</span><span class="Identifier">seq</span><span class="Punctuation">[</span><span class="Identifier">T</span><span class="Punctuation">]</span><span class="Punctuation">)</span></span></tt> is returned. Otherwise <tt class="docutils literal"><span class="pre"><span class="Identifier">some</span><span class="Punctuation">(</span><span class="Identifier">seq</span><span class="Punctuation">[</span><span class="Identifier">T</span><span class="Punctuation">]</span><span class="Punctuation">)</span></span></tt> is returned containing at least one item.
 &nbsp;&nbsp;<a
 href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L168"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L168" class="link-seesrc" target="_blank" >Edit</a>
+&nbsp;&nbsp;<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L168" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="pop,Mupmuc[N,P,C,T]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#pop%2CMupmuc%5BN%2CP%2CC%2CT%5D"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="mupmuc.html#Mupmuc"><span class="Identifier">Mupmuc</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma">
-    <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><a href="mupsic.html#InvalidCallDefect"><span class="Identifier">InvalidCallDefect</span></a><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+</div>
+<div id="pop,Mupmuc[N,P,C,T]">
+<dt><pre><span class="Keyword">proc</span> <a href="#pop%2CMupmuc%5BN%2CP%2CC%2CT%5D"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="mupmuc.html#Mupmuc"><span class="Identifier">Mupmuc</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">bool</span> {.
+    <span><span class="Other pragmadots">...</span></span><span class="pragmawrap"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><a href="mupsic.html#InvalidCallDefect"><span class="Identifier">InvalidCallDefect</span></a><span class="Other">]</span></span>.}</pre></dt>
 <dd>
 
-Overload of <tt class="docutils literal"><span class="pre">Sipsic.pop()</span></tt> that simply raises <tt class="docutils literal"><span class="pre">InvalidCallDefect</span></tt>. Pops should happen via <tt class="docutils literal"><span class="pre">Consumer.pop()</span></tt>.
+Overload of <tt class="docutils literal"><span class="pre"><span class="Identifier">Sipsic</span><span class="Operator">.</span><span class="Identifier">pop</span><span class="Punctuation">(</span><span class="Punctuation">)</span></span></tt> that simply raises <tt class="docutils literal"><span class="pre"><span class="Identifier">InvalidCallDefect</span></span></tt>. Pops should happen via <tt class="docutils literal"><span class="pre"><span class="Identifier">Consumer</span><span class="Operator">.</span><span class="Identifier">pop</span><span class="Punctuation">(</span><span class="Punctuation">)</span></span></tt>.
 &nbsp;&nbsp;<a
 href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L255"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L255" class="link-seesrc" target="_blank" >Edit</a>
+&nbsp;&nbsp;<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L255" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="pop,Mupmuc[N,P,C,T],int"></a>
+</div>
+<div id="pop,Mupmuc[N,P,C,T],int">
 <dt><pre><span class="Keyword">proc</span> <a href="#pop%2CMupmuc%5BN%2CP%2CC%2CT%5D%2Cint"><span class="Identifier">pop</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="mupmuc.html#Mupmuc"><span class="Identifier">Mupmuc</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">;</span> <span class="Identifier">count</span><span class="Other">:</span> <span class="Identifier">int</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">Option</span><span class="Other">[</span>
-    <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><a href="mupsic.html#InvalidCallDefect"><span class="Identifier">InvalidCallDefect</span></a><span class="Other">]</span></span><span class="Other">.}</span></span></pre></dt>
+    <span class="Identifier">seq</span><span class="Other">[</span><span class="Identifier">T</span><span class="Other">]</span><span class="Other">]</span> {.<span><span class="Other pragmadots">...</span></span><span class="pragmawrap"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><a href="mupsic.html#InvalidCallDefect"><span class="Identifier">InvalidCallDefect</span></a><span class="Other">]</span></span>.}</pre></dt>
 <dd>
 
-Overload of <tt class="docutils literal"><span class="pre">Sipsic.pop()</span></tt> that simply raises <tt class="docutils literal"><span class="pre">InvalidCallDefect</span></tt>. Pops should happen via <tt class="docutils literal"><span class="pre">Consumer.pop()</span></tt>.
+Overload of <tt class="docutils literal"><span class="pre"><span class="Identifier">Sipsic</span><span class="Operator">.</span><span class="Identifier">pop</span><span class="Punctuation">(</span><span class="Punctuation">)</span></span></tt> that simply raises <tt class="docutils literal"><span class="pre"><span class="Identifier">InvalidCallDefect</span></span></tt>. Pops should happen via <tt class="docutils literal"><span class="pre"><span class="Identifier">Consumer</span><span class="Operator">.</span><span class="Identifier">pop</span><span class="Punctuation">(</span><span class="Punctuation">)</span></span></tt>.
 &nbsp;&nbsp;<a
 href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L264"
 class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L264" class="link-seesrc" target="_blank" >Edit</a>
+&nbsp;&nbsp;<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L264" class="link-seesrc" target="_blank" >Edit</a>
 
 </dd>
-<a id="consumerCount,Mupmuc[N,P,C,T]"></a>
-<dt><pre><span class="Keyword">proc</span> <a href="#consumerCount%2CMupmuc%5BN%2CP%2CC%2CT%5D"><span class="Identifier">consumerCount</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">:</span> <span class="Identifier">static</span> <span class="Identifier">int</span><span class="Other">;</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">(</span><span class="Identifier">self</span><span class="Other">:</span> <span class="Keyword">var</span> <a href="mupmuc.html#Mupmuc"><span class="Identifier">Mupmuc</span></a><span class="Other">[</span><span class="Identifier">N</span><span class="Other">,</span> <span class="Identifier">P</span><span class="Other">,</span> <span class="Identifier">C</span><span class="Other">,</span> <span class="Identifier">T</span><span class="Other">]</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">int</span> <span><span class="Other">{</span><span class="Other pragmadots">...</span><span class="Other">}</span></span><span class="pragmawrap"><span class="Other">{.</span><span class="pragma">
-    <span class="Identifier">inline</span></span><span class="Other">.}</span></span></pre></dt>
-<dd>
-
-Returns the queue's number of consumers (<tt class="docutils literal"><span class="pre">C</span></tt>).
-&nbsp;&nbsp;<a
-href="https://github.com/elijahr/lockfreequeues/tree/master/src/lockfreequeues/mupmuc.nim#L274"
-class="link-seesrc" target="_blank">Source</a>
-<a href="https://github.com/elijahr/lockfreequeues/edit/devel/src/lockfreequeues/mupmuc.nim#L274" class="link-seesrc" target="_blank" >Edit</a>
-
-</dd>
+</div>
 
 </dl></div>
 
@@ -347,7 +363,7 @@ class="link-seesrc" target="_blank">Source</a>
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small style="color: var(--hint);">Made with Nim. Generated: 2021-07-19 23:27:26 UTC</small>
+        <small style="color: var(--hint);">Made with Nim. Generated: 2021-12-14 18:46:03 UTC</small>
       </div>
     </div>
   </div>
