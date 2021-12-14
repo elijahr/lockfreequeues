@@ -1,8 +1,0 @@
-NoSlice	lockfreequeues/sipsic.html#NoSlice	sipsic: NoSlice	
-Sipsic	lockfreequeues/sipsic.html#Sipsic	sipsic: Sipsic	
-initSipsic	lockfreequeues/sipsic.html#initSipsic	sipsic: initSipsic[N: static int; T](): Sipsic[N, T]	
-push	lockfreequeues/sipsic.html#push,Sipsic[N,T],T	sipsic: push[N: static int; T](self: var Sipsic[N, T]; item: T): bool	
-push	lockfreequeues/sipsic.html#push,Sipsic[N,T],openArray[T]	sipsic: push[N: static int; T](self: var Sipsic[N, T]; items: openArray[T]): Option[\n    HSlice[int, int]]	
-pop	lockfreequeues/sipsic.html#pop,Sipsic[N,T]	sipsic: pop[N: static int; T](self: var Sipsic[N, T]): Option[T]	
-pop	lockfreequeues/sipsic.html#pop,Sipsic[N,T],int	sipsic: pop[N: static int; T](self: var Sipsic[N, T]; count: int): Option[seq[T]]	
-capacity	lockfreequeues/sipsic.html#capacity,Sipsic[N,T]	sipsic: capacity[N: static int; T](self: var Sipsic[N, T]): int	
