@@ -33,7 +33,7 @@ template testMupGetProducerThrowsNoProducersAvailable*(queue: untyped) =
   for i in 0..3:
     threads[i].createThread(assignProducer)
   joinThreads(threads)
-  expect NoProducersAvailableDefect:
+  expect NoProducersAvailableError:
     discard queue.getProducer()
 
 

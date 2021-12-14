@@ -49,7 +49,7 @@ suite "getProducer(Mupsic[N, P, T])":
   test "explicit index":
     testMupGetProducerExplicitIndex(queue)
 
-  test "throws NoProducersAvailableDefect":
+  test "throws NoProducersAvailableError":
     testMupGetProducerThrowsNoProducersAvailable(queue)
 
 
