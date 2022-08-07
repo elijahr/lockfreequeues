@@ -22,11 +22,11 @@ jobs:
       matrix:
         include:
           - runs-on: macos-latest
-            nim-version: 1.6.0
+            nim-version: 1.6.6
             sanitize-threads: yes
             timeout-minutes: 20
           - runs-on: ubuntu-latest
-            nim-version: 1.6.0
+            nim-version: 1.6.6
             sanitize-threads: yes
             timeout-minutes: 5
           - runs-on: ubuntu-latest
@@ -34,7 +34,7 @@ jobs:
             sanitize-threads: no
             timeout-minutes: 5
           - runs-on: ubuntu-latest
-            nim-version: 1.2.14
+            nim-version: 1.2.18
             sanitize-threads: no
             timeout-minutes: 5
 
@@ -79,7 +79,7 @@ jobs:
       fail-fast: false
       matrix:
         arch: [aarch64, ppc64le]
-        nim-version: [1.6.0]
+        nim-version: [1.6.6]
 
     runs-on: ubuntu-latest
     steps:
@@ -94,7 +94,7 @@ jobs:
         uses: actions/checkout@v2
 
       # Install & run tests on non-x86
-      - uses: uraimo/run-on-arch-action@v2.1.1
+      - uses: uraimo/run-on-arch-action@v2.2.0
         name: Install Nim & run tests
         with:
           arch: ${{ matrix.arch }}
