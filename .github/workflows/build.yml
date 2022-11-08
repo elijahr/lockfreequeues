@@ -22,19 +22,19 @@ jobs:
       matrix:
         include:
           - runs-on: macos-latest
-            nim-version: 1.6.6
+            nim-version: 'ref:version-1-6'
             sanitize-threads: yes
             timeout-minutes: 20
           - runs-on: ubuntu-latest
-            nim-version: 1.6.6
+            nim-version: 'latest:1.6'
             sanitize-threads: yes
             timeout-minutes: 5
           - runs-on: ubuntu-latest
-            nim-version: 1.4.8
+            nim-version: 'latest:1.4'
             sanitize-threads: no
             timeout-minutes: 5
           - runs-on: ubuntu-latest
-            nim-version: 1.2.18
+            nim-version: 'latest:1.2'
             sanitize-threads: no
             timeout-minutes: 5
 
@@ -78,8 +78,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [aarch64, ppc64le]
-        nim-version: [1.6.6]
+        include:
+          - arch: aarch64
+            nim-version: 'ref:version-1-6'
+          - arch: ppc64le
+            nim-version: 'latest:1.6'
 
     runs-on: ubuntu-latest
     steps:
