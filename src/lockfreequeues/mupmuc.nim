@@ -254,7 +254,7 @@ proc pop*[N, P, C: static int, T](
 
 proc pop*[N, P, C: static int, T](
   self: var Mupmuc[N, P, C, T],
-): bool  =
+): bool =
   ## Overload of `Sipsic.pop()` that simply raises `InvalidCallDefect`.
   ## Pops should happen via `Consumer.pop()`.
   raise newException(InvalidCallDefect, "Use Consumer.pop()")

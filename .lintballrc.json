@@ -1,0 +1,25 @@
+{
+  "check_args": {
+    "yamllint": "-c ./.yamllint.yml"
+  },
+  "write_args": {
+    "yamllint": "-c ./.yamllint.yml"
+  },
+  "use": {
+    "autoflake": false,
+    "autopep8": false,
+    "black": false,
+    "docformatter": false,
+    "isort": false,
+    "nimfmt": true,
+    "nimpretty": true,
+    "prettier": true,
+    "prettier-eslint": true,
+    "pylint": false,
+    "rubocop": false,
+    "shellcheck": true,
+    "shfmt": true,
+    "yamllint": true
+  },
+  "ignores": ["*/.git/*", "*/Gemfile.lock", "*/Pipfile.lock", "*/venv/*"]
+}

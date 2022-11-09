@@ -1,6 +1,3 @@
 {
-  "recommendations": [
-    "nimsaem.nimvscode",
-    "junknet.nimlsp"
-  ]
+  "recommendations": ["nimsaem.nimvscode", "junknet.nimlsp"]
 }

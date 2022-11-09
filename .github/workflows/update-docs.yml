@@ -2,10 +2,12 @@
 
 name: Build docs
 
+# yamllint disable rule:truthy
 on:
   push:
     branches:
       - devel
+# yamllint enable rule:truthy
 
 jobs:
   release_docs:

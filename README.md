@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/elijahr/lockfreequeues.svg?branch=master)](https://travis-ci.org/elijahr/lockfreequeues) [![Join the chat at https://gitter.im/lockfreequeues/community](https://badges.gitter.im/lockfreequeues/community.svg)](https://gitter.im/lockfreequeues/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+![build](https://github.com/asdf-community/lockfreequeues/workflows/build/badge.svg) ![lint](https://github.com/asdf-community/lockfreequeues/workflows/lint/badge.svg) [![Join the chat at https://gitter.im/lockfreequeues/community](https://badges.gitter.im/lockfreequeues/community.svg)](https://gitter.im/lockfreequeues/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 # lockfreequeues
 
@@ -36,7 +36,7 @@ Many thanks to Mamy Ratsimbazafy for reviewing the initial release and offering 
 
 ## Contributing
 
-- Pull requests and feature requests are quite welcome!
+- Pull requests and feature requests are welcome!
 - Please file any issues you encounter.
 - For pull requests, please see the [contribution guidelines](https://github.com/elijahr/lockfreequeues/tree/master/CONTRIBUTING.md).
 
@@ -47,3 +47,11 @@ Tests can be run locally with `nimble test`.
 CI runs the test suite for both C and C++ targets on Linux (`x86_64`, `armv7`, `aarch64`, `ppc64le`) and macOS (`x86_64`). The test suite is manually run on macOS `arm64`.
 
 The test suite is also run with [LLVM thread sanitization](https://clang.llvm.org/docs/ThreadSanitizer.html) to check for data races.
+
+### Linting
+
+This project uses [lintball](https://github.com/elijahr/lintball) to auto-format code. Please ensure your changeset passes linting. Enable the githooks with:
+
+```sh
+git config --local core.hooksPath .githooks
+```
