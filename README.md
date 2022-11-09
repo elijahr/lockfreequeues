@@ -44,7 +44,9 @@ Many thanks to Mamy Ratsimbazafy for reviewing the initial release and offering 
 
 Tests can be run locally with `nimble test`.
 
-CI runs the test suite for both C and C++ targets on Linux (`x86_64`, `armv7`, `aarch64`, `ppc64le`) and macOS (`x86_64`). The test suite is manually run on macOS `arm64`.
+CI runs the test suite for both C and C++ targets on:
+- Linux `x86_64` and `aarch64`
+- macOS `x86_64`
 
 The test suite is also run with [LLVM thread sanitization](https://clang.llvm.org/docs/ThreadSanitizer.html) to check for data races.
 
