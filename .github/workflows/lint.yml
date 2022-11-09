@@ -37,6 +37,7 @@ jobs:
 
       - name: Install lintball
         run: |
+          asdf local nim latest:1.6
           npm install -g lintball@1.6.0
           lintball install-tools --yes
 
