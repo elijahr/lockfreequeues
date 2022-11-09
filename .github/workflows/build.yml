@@ -121,7 +121,9 @@ jobs:
             # Install asdf and dependencies
             apt-get update -q -y
             apt-get -qq install -y build-essential curl git
-            git clone https://github.com/asdf-vm/asdf.git "${HOME}/.asdf" --branch v0.8.1
+            git clone https://github.com/asdf-vm/asdf.git \
+              "${HOME}/.asdf" \
+              --branch v0.10.2
 
           env: |
             SANITIZE_THREADS: no
