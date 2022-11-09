@@ -28,6 +28,9 @@ jobs:
           python-version: '3.x'
 
       - uses: asdf-vm/actions/install@v1
+        with:
+          tool_versions: |
+            nim latest:1.6
 
       - name: Install shfmt
         uses: mfinelli/setup-shfmt@v2
