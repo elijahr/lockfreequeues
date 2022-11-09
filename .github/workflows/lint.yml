@@ -45,7 +45,7 @@ jobs:
         run: |
           set -uexo pipefail
 
-          default_branch=main
+          default_branch=devel
           if [ "$GITHUB_REF" = "refs/heads/$default_branch" ]; then
             # A push to the default branch.
             # Check files which were changed in the most recent commit.
