@@ -1,4 +1,4 @@
-![build](https://github.com/elijahr/lockfreequeues/workflows/build/badge.svg) ![lint](https://github.com/elijahr/lockfreequeues/workflows/lint/badge.svg) [![Join the chat at https://gitter.im/lockfreequeues/community](https://badges.gitter.im/lockfreequeues/community.svg)](https://gitter.im/lockfreequeues/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+![build](https://github.com/elijahr/lockfreequeues/workflows/build/badge.svg) ![lint](https://github.com/elijahr/lockfreequeues/workflows/lint/badge.svg) ![build-docs](https://github.com/elijahr/lockfreequeues/workflows/build-docs/badge.svg) [![Join the chat at https://gitter.im/lockfreequeues/community](https://badges.gitter.im/lockfreequeues/community.svg)](https://gitter.im/lockfreequeues/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 # lockfreequeues
 

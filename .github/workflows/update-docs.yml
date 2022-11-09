@@ -1,6 +1,6 @@
 # yamllint disable rule:line-length
 
-name: Build docs
+name: build-docs
 
 # yamllint disable rule:truthy
 on:
