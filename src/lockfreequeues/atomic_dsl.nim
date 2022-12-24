@@ -9,31 +9,31 @@
 import atomics
 
 
-proc relaxed*[T](location: var Atomic[T]): T {.inline.} =
+template relaxed*[T](location: var Atomic[T]): T =
   ## Load the value from location using moRelaxed
-  result = location.load(moRelaxed)
+  location.load(moRelaxed)
 
 
-proc acquire*[T](location: var Atomic[T]): T {.inline.} =
+template acquire*[T](location: var Atomic[T]): T =
   ## Load the value from location using moAcquire
-  result = location.load(moAcquire)
+  location.load(moAcquire)
 
 
-proc sequential*[T](location: var Atomic[T]): T {.inline.} =
+template sequential*[T](location: var Atomic[T]): T =
   ## Load the value from location using moSequentiallyConsistent
-  result = location.load(moSequentiallyConsistent)
+  location.load(moSequentiallyConsistent)
 
 
-proc relaxed*[T](location: var Atomic[T], value: T) {.inline.} =
+template relaxed*[T](location: var Atomic[T], value: T) =
   ## Store the value in location using moRelaxed
   location.store(value, moRelaxed)
 
 
-proc release*[T](location: var Atomic[T], value: T) {.inline.} =
+template release*[T](location: var Atomic[T], value: T) =
   ## Store the value in location using moRelease
   location.store(value, moRelease)
 
 
-proc sequential*[T](location: var Atomic[T], value: T) {.inline.} =
+template sequential*[T](location: var Atomic[T], value: T) =
   ## Store the value in location using moSequentiallyConsistent
   location.store(value, moSequentiallyConsistent)
