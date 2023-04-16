@@ -87,7 +87,7 @@ proc full*(
   ## Determine if storage is full given `head`, `tail`, and `capacity` values.
   validateHeadOrTail(head, capacity)
   validateHeadOrTail(tail, capacity)
-  return abs(tail - head) >= capacity
+  return used(head, tail, capacity) >= capacity
 
 
 proc empty*(
@@ -100,4 +100,3 @@ proc empty*(
   validateHeadOrTail(head, capacity)
   validateHeadOrTail(tail, capacity)
   return head == tail
-
