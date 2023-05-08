@@ -1,7 +1,7 @@
 import os
 
 # Package
-version       = "3.0.0"
+version       = "3.0.1"
 author        = "Elijah Shaw-Rutschman"
 description   = "Lock-free queue implementations for Nim."
 license       = "MIT"
