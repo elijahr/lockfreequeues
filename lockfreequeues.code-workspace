@@ -56,9 +56,21 @@
             "tests/test.nim",
         ],
         "nim.lintOnSave": true,
-        "nim.buildOnSave": true,
+        "nim.buildOnSave": false,
         "nim.licenseString": "# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file \"LICENSE\", included in this distribution for details about the # copyright.",
         "search.useIgnoreFiles": false,
         "nimlsp.path": "/Users/elijahrutschman/.asdf/shims/nimlsp",
+        "search.exclude": {
+            "**/htmldocs": true
+        },
+        "nim.projectMapping": [{
+            // open files under tests using one nimsuggest instance started with root = test/all.nim
+            "projectPath": "tests/test.nim",
+            "fileRegex": "tests/.*\\.nim"
+        }, {
+            // everything else - use main.nim as root.
+            "projectPath": "src/lockfreequeues.nim",
+            "fileRegex": "src/lockfreequeues/.*\\.nim"
+        }]
 	}
 }

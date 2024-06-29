@@ -4,6 +4,7 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
+
 template testCapacity*(queue: untyped) =
   check(queue.capacity == 8)
 
@@ -34,7 +35,8 @@ template testHeadAndTailReset*(queue: untyped) =
     )
 
   when ((queue is Mupsic) or (queue is Mupmuc)):
-    check(queue.getProducer(0).push(@[1]).isNone)
+    var producer0 = queue.getProducer(0)
+    check(producer0.push(@[1]).isNone)
   else:
     check(queue.push(@[1]).isNone)
 
@@ -58,7 +60,8 @@ template testHeadAndTailReset*(queue: untyped) =
 
   let res =
     when queue is Mupmuc:
-      queue.getConsumer(0).pop(1)
+      var consumer = queue.getConsumer(0)
+      consumer.pop(1)
     else:
       queue.pop(1)
 
@@ -83,7 +86,8 @@ template testHeadAndTailReset*(queue: untyped) =
 
 template testWraps*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
-    check(queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
+    var producer0 = queue.getProducer(0)
+    check(producer0.push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
   else:
     check(queue.push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
 
@@ -98,8 +102,8 @@ template testWraps*(queue: untyped) =
 
   let pushRes =
     when ((queue is Mupsic) or (queue is Mupmuc)):
-       queue.getProducer(0).push(@[9, 10, 11, 12])
-     else:
+      producer0.push(@[9, 10, 11, 12])
+    else:
       queue.push(@[9, 10, 11, 12])
 
   check(pushRes.isNone)
@@ -123,7 +127,8 @@ template testWraps*(queue: untyped) =
 
   popRes =
     when queue is Mupmuc:
-      queue.getConsumer(0).pop(4)
+      var consumer0 = queue.getConsumer(0)
+      consumer0.pop(4)
     else:
       queue.pop(4)
   check(popRes.isSome)
@@ -149,7 +154,8 @@ template testWraps*(queue: untyped) =
 
   popRes =
     when queue is Mupmuc:
-      queue.getConsumer(1).pop(4)
+      var consumer1 = queue.getConsumer(1)
+      consumer1.pop(4)
     else:
       queue.pop(4)
   check(popRes.isSome)

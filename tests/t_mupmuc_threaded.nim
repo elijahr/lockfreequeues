@@ -6,27 +6,35 @@
 
 import algorithm
 import atomics
+import math
 import options
+import os
 import sequtils
 import unittest
 
 import lockfreequeues
 
-const capacity = 8
-const workerCount = 16
+const queueCount = 100
+
+# queueCount must be a perfect square
+assert(sqrt(float(queueCount)) == ceil(sqrt(float(queueCount))), "queueCount must be a perfect square")
+
+const capacity = 1000
+const workerCount = 31
 
 var
-  counter: Atomic[int]
-  queue = initMupmuc[capacity, workerCount, workerCount, int]()
-  output = initMupmuc[workerCount, workerCount, 1, int]()
-  consumerThreads: array[workerCount, Thread[void]]
-  producerThreads: array[workerCount, Thread[void]]
+  counters: array[queueCount, Atomic[int]]
+  queues: array[queueCount, Mupmuc[capacity, workerCount, workerCount, int]]
+  outputs: array[queueCount, Mupmuc[workerCount, workerCount, 1, int]]
+  consumerThreads: array[workerCount*queueCount, Thread[(int, int)]]
+  producerThreads: array[workerCount*queueCount, Thread[(int, int)]]
 
 
-proc consumerFunc() {.thread.} =
-  var consumer = queue.getConsumer()
-  var outputProducer = output.getProducer()
+proc consumerFunc(args: tuple[queueIndex: int, sleepMs: int]) {.thread.} =
+  var consumer = queues[args.queueIndex].getConsumer()
+  var outputProducer = outputs[args.queueIndex].getProducer()
   while true:
+    sleep(args.sleepMs)
     if consumer.idx mod 2 == 0:
       var items = consumer.pop(1)
       if items.isSome:
@@ -41,10 +49,11 @@ proc consumerFunc() {.thread.} =
         break
 
 
-proc producerFunc() {.thread.} =
-  var producer = queue.getProducer()
-  let p = counter.fetchAdd(1)
+proc producerFunc(args: tuple[queueIndex: int, sleepMs: int]) {.thread.} =
+  var producer = queues[args.queueIndex].getProducer()
+  let p = counters[args.queueIndex].fetchAdd(1)
   while true:
+    sleep(args.sleepMs)
     if p mod 2 == 0:
       if producer.push(p):
         break
@@ -53,26 +62,40 @@ proc producerFunc() {.thread.} =
         break
 
 
-suite "Mupmuc[N, P, C, T] threaded (low capacity)":
+proc testBasic(queueIndex, consumerSleepMs, producerSleepMs: int) =
+  counters[queueIndex].store(0)
+  queues[queueIndex] = initMupmuc[capacity, workerCount, workerCount, int]()
+  outputs[queueIndex] = initMupmuc[workerCount, workerCount, 1, int]()
+
+  for c in 0..<workerCount:
+    consumerThreads[(queueIndex * workerCount)+c].createThread(consumerFunc, (queueIndex, consumerSleepMs))
+
+  for p in 0..<workerCount:
+    producerThreads[(queueIndex * workerCount)+p].createThread(producerFunc, (queueIndex, producerSleepMs))
+
+
+suite "Mupmuc[N, P, C, T] threaded":
 
   test "basic":
-    var outputConsumer = output.getConsumer()
-
-    for c in 0..<workerCount:
-      consumerThreads[c].createThread(consumerFunc)
-
-    for p in 0..<workerCount:
-      producerThreads[p].createThread(producerFunc)
-
-    var received = newSeq[int]()
-    while received.len < workerCount:
-      var item = outputConsumer.pop()
-      if item.isSome:
-        received.add(item.get)
+    # Test with various produce/consume rhythms
+    var queueIndex = 0
+    for consumerSleepMs in 0..<int(sqrt(float(queueCount))):
+      for producerSleepMs in 0..<int(sqrt(float(queueCount))):
+        testBasic(queueIndex, consumerSleepMs, producerSleepMs)
+        queueIndex += 1
 
     joinThreads(producerThreads)
     joinThreads(consumerThreads)
 
-    received.sort()
+    for queueIndex in 0..<queueCount:
+      var outputConsumer = outputs[queueIndex].getConsumer()
+      var received = newSeq[int]()
+      while received.len < workerCount:
+        var item = outputConsumer.pop()
+        if item.isSome:
+          received.add(item.get)
+      received.sort()
+      check(received == (0..<workerCount).toSeq)
 
-    check(received == (0..<workerCount).toSeq)
+
+

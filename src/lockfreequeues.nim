@@ -4,10 +4,11 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-when compileOption("threads"):
+when compileOption("threads") or defined(nimdoc):
   import ./lockfreequeues/[
     atomic_dsl,
     constants,
+    exceptions,
     mupmuc,
     mupsic,
     ops,
@@ -17,6 +18,7 @@ when compileOption("threads"):
   export
     atomic_dsl,
     constants,
+    exceptions,
     mupmuc,
     mupsic,
     ops,
@@ -26,6 +28,7 @@ else:
   import ./lockfreequeues/[
     atomic_dsl,
     constants,
+    exceptions,
     ops,
     sipsic,
   ]
@@ -33,5 +36,6 @@ else:
   export
     atomic_dsl,
     constants,
+    exceptions,
     ops,
     sipsic

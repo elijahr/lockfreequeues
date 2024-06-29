@@ -60,7 +60,7 @@ suite "push(Sipsic[N, T], seq[T])":
     testSipPushSeqWrap(queue)
 
 
-suite "pop(Sipsic)":
+suite "pop(Sipsic[N, T])":
 
   setup:
     queue.reset()
@@ -81,7 +81,7 @@ suite "pop(Sipsic)":
     testSicPopWrap(queue)
 
 
-suite "pop(Sipsic, int)":
+suite "pop(Sipsic[N, T], int)":
 
   setup:
     queue.reset()
@@ -102,13 +102,13 @@ suite "pop(Sipsic, int)":
     testSicPopCountWrap(queue)
 
 
-suite "capacity(Sipsic)":
+suite "capacity(Sipsic[N, T])":
 
   test "basic":
     testCapacity(queue)
 
 
-suite "Sipsic integration":
+suite "Sipsic[N, T] integration":
 
   setup:
     queue.reset()

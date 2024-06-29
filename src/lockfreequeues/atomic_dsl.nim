@@ -9,31 +9,38 @@
 import atomics
 
 
-proc relaxed*[T](location: var Atomic[T]): T {.inline.} =
+type
+  Trivial* = SomeNumber | bool | enum | ptr | pointer
+    # A type that is known to be atomic and whose size is known at
+    # compile time to be 8 bytes or less
+
+
+proc relaxed*[T: Trivial](location: var Atomic[T]): T {.inline.} =
   ## Load the value from location using moRelaxed
   result = location.load(moRelaxed)
 
 
-proc acquire*[T](location: var Atomic[T]): T {.inline.} =
+proc acquire*[T: Trivial](location: var Atomic[T]): T {.inline.} =
   ## Load the value from location using moAcquire
   result = location.load(moAcquire)
 
 
-proc sequential*[T](location: var Atomic[T]): T {.inline.} =
+proc sequential*[T: Trivial](location: var Atomic[T]): T {.inline.} =
   ## Load the value from location using moSequentiallyConsistent
   result = location.load(moSequentiallyConsistent)
 
 
-proc relaxed*[T](location: var Atomic[T], value: T) {.inline.} =
+proc relaxed*[T: Trivial](location: var Atomic[T], desired: T) {.inline.} =
   ## Store the value in location using moRelaxed
-  location.store(value, moRelaxed)
+  location.store(desired, moRelaxed)
 
 
-proc release*[T](location: var Atomic[T], value: T) {.inline.} =
+proc release*[T: Trivial](location: var Atomic[T], desired: T) {.inline.} =
   ## Store the value in location using moRelease
-  location.store(value, moRelease)
+  location.store(desired, moRelease)
 
 
-proc sequential*[T](location: var Atomic[T], value: T) {.inline.} =
+proc sequential*[T: Trivial](location: var Atomic[T], desired: T) {.inline.} =
   ## Store the value in location using moSequentiallyConsistent
-  location.store(value, moSequentiallyConsistent)
+  location.store(desired, moSequentiallyConsistent)
+

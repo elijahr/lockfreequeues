@@ -4,6 +4,8 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
+{.experimental: "strictFuncs".}
+
 import ./t_atomic_dsl
 import ./t_mupmuc
 import ./t_mupmuc_threaded

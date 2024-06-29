@@ -12,6 +12,7 @@ import options
 
 import ./constants
 import ./ops
+import ./atomic_dsl
 
 
 const NoSlice* = none(HSlice[int, int])
@@ -33,7 +34,7 @@ type
     storage*: array[N, T] ## The underlying storage.
 
 
-proc clear[N: static int, T](
+proc clear*[N: static int, T](
   self: var Sipsic[N, T]
 ) =
   self.head.sequential(0)
@@ -70,6 +71,17 @@ proc push*[N: static int, T](
   let newTail = incOrReset(tail, 1, N)
 
   self.tail.release(newTail)
+
+
+proc push*[N: static int, T](
+  self: ref Sipsic[N, T],
+  item: T,
+): bool =
+  ## Append a single item to the queue.
+  ## If the queue is full, `false` is returned.
+  ## If `item` is appended, `true` is returned.
+  var self = self
+  result = self.push(item)
 
 
 proc push*[N: static int, T](
@@ -124,6 +136,19 @@ proc push*[N: static int, T](
   self.tail.release(newTail)
 
 
+# proc push*[N: static int, T](
+#   self: ref Sipsic[N, T],
+#   items: openArray[T],
+# ): Option[HSlice[int, int]] =
+#   ## Append multiple items to the queue.
+#   ## If the queue is already full or is filled by this call, `some(unpushed)`
+#   ## is returned, where `unpushed` is an `HSlice` corresponding to the
+#   ## chunk of items which could not be pushed.
+#   ## If all items are appended, `NoSlice` is returned.
+#   var self = self
+#   result = self.push(items)
+
+
 proc pop*[N: static int, T](
   self: var Sipsic[N, T],
 ): Option[T] =
@@ -143,6 +168,16 @@ proc pop*[N: static int, T](
   let newHead = incOrReset(head, 1, N)
 
   self.head.release(newHead)
+
+
+# proc pop*[N: static int, T](
+#   self: ref Sipsic[N, T],
+# ): Option[T] =
+#   ## Pop a single item from the queue.
+#   ## If the queue is empty, `none(T)` is returned.
+#   ## Otherwise an item is popped, `some(T)` is returned.
+#   var self = self
+#   result = self.pop()
 
 
 proc pop*[N: static int, T](
@@ -195,12 +230,26 @@ proc pop*[N: static int, T](
   self.head.release(newHead)
 
 
+proc pop*[N: static int, T](
+  self: ref Sipsic[N, T],
+  count: int,
+): Option[seq[T]] =
+  ## Pop `count` items from the queue.
+  ## If the queue is empty, `none(seq[T])` is returned.
+  ## Otherwise `some(seq[T])` is returned containing at least one item.
+  var self = self
+  result = self.pop(count)
+
+
 proc capacity*[N: static int, T](
   self: var Sipsic[N, T],
 ): int
   {.inline.} =
   ## Returns the queue's storage capacity (`N`).
   result = N
+
+
+#proc `=copy`*[N: static int, T](a: var Sipsic[N, T], b: Sipsic[N, T]) {.error.}
 
 
 when defined(testing):

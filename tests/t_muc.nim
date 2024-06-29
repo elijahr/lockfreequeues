@@ -6,9 +6,11 @@
 
 
 template testMucPopOne*(queue: untyped) =
-  discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+  var producer0 = queue.getProducer(0)
+  discard producer0.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
-  let res = queue.getConsumer(0).pop()
+  var consumer0 = queue.getConsumer(0)
+  let res = consumer0.pop()
   check(res.isSome)
   check(res.get == 1)
 
@@ -28,11 +30,13 @@ template testMucPopOne*(queue: untyped) =
 
 
 template testMucPopAll*(queue: untyped) =
-  discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+  var producer0 = queue.getProducer(0)
+  discard producer0.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
+  var consumer0 = queue.getConsumer(0)
   var items = newSeq[int]()
   for i in 1..8:
-    let res = queue.getConsumer(0).pop()
+    let res = consumer0.pop()
     check(res.isSome)
     items.add(res.get)
 
@@ -54,7 +58,8 @@ template testMucPopAll*(queue: untyped) =
 
 
 template testMucPopEmpty*(queue: untyped) =
-  check(queue.getConsumer(0).pop().isNone)
+  var consumer0 = queue.getConsumer(0)
+  check(consumer0.pop().isNone)
 
   queue.checkState(
     head = 0,
@@ -72,12 +77,14 @@ template testMucPopEmpty*(queue: untyped) =
 
 
 template testMucPopTooMany*(queue: untyped) =
-  discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+  var producer0 = queue.getProducer(0)
+  discard producer0.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
+  var consumer0 = queue.getConsumer(0)
   for i in 1..8:
-    discard queue.getConsumer(0).pop()
+    discard consumer0.pop()
 
-  check(queue.getConsumer(0).pop().isNone)
+  check(consumer0.pop().isNone)
 
   queue.checkState(
     head = 8,
@@ -95,16 +102,19 @@ template testMucPopTooMany*(queue: untyped) =
 
 
 template testMucPopWrap*(queue: untyped) =
-  discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+  var producer0 = queue.getProducer(0)
+  discard producer0.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
+  var consumer0 = queue.getConsumer(0)
   for i in 1..4:
-    discard queue.getConsumer(0).pop()
+    discard consumer0.pop()
 
-  discard queue.getProducer(1).push(@[9, 10, 11, 12])
+  var producer1 = queue.getProducer(1)
+  discard producer1.push(@[9, 10, 11, 12])
 
   var items = newSeq[int]()
   for i in 1..8:
-    let res = queue.getConsumer(0).pop()
+    let res = consumer0.pop()
     check(res.isSome)
     items.add(res.get)
 
@@ -126,11 +136,15 @@ template testMucPopWrap*(queue: untyped) =
 
 
 template testMucPopCountOne*(queue: untyped) =
-  check(queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
+  var producer0 = queue.getProducer(0)
+  check(producer0.push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
+
+  var consumer0 = queue.getConsumer(0)
   for i in 1..8:
-    let popped = queue.getConsumer(0).pop(1)
+    let popped = consumer0.pop(1)
     check(popped.isSome)
     check(popped.get() == @[i])
+
   queue.checkState(
     head = 8,
     tail = 8,
@@ -147,8 +161,12 @@ template testMucPopCountOne*(queue: untyped) =
 
 
 template testMucPopCountAll*(queue: untyped) =
-  discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
-  let popped = queue.getConsumer(0).pop(8)
+  var producer0 = queue.getProducer(0)
+  discard producer0.push(@[1, 2, 3, 4, 5, 6, 7, 8])
+
+  var consumer0 = queue.getConsumer(0)
+  let popped = consumer0.pop(8)
+
   check(popped.isSome)
   check(popped.get() == @[1, 2, 3, 4, 5, 6, 7, 8])
   queue.checkState(
@@ -167,7 +185,8 @@ template testMucPopCountAll*(queue: untyped) =
 
 
 template testMucPopCountEmpty*(queue: untyped) =
-  let popped = queue.getConsumer(0).pop(1)
+  var consumer0 = queue.getConsumer(0)
+  let popped = consumer0.pop(1)
   check(popped.isNone)
   queue.checkState(
     head = 0,
@@ -185,7 +204,8 @@ template testMucPopCountEmpty*(queue: untyped) =
 
 
 template testMucPopCountTooMany*(queue: untyped) =
-  check(queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
+  var producer0 = queue.getProducer(0)
+  check(producer0.push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
 
   queue.checkState(
     head = 0,
@@ -193,7 +213,8 @@ template testMucPopCountTooMany*(queue: untyped) =
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
 
-  let popped = queue.getConsumer(0).pop(10)
+  var consumer0 = queue.getConsumer(0)
+  let popped = consumer0.pop(10)
   check(popped.isSome)
   check(popped.get() == @[1, 2, 3, 4, 5, 6, 7, 8])
 
@@ -213,13 +234,17 @@ template testMucPopCountTooMany*(queue: untyped) =
 
 
 template testMucPopCountWrap*(queue: untyped) =
-  discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+  var producer0 = queue.getProducer(0)
+  discard producer0.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
-  discard queue.getConsumer(0).pop(4)
+  var consumer0 = queue.getConsumer(0)
+  discard consumer0.pop(4)
 
-  discard queue.getProducer(1).push(@[9, 10, 11, 12])
+  var producer1 = queue.getProducer(1)
+  discard producer1.push(@[9, 10, 11, 12])
 
-  let popped = queue.getConsumer(1).pop(8)
+  var consumer1 = queue.getConsumer(1)
+  let popped = consumer1.pop(8)
   check(popped.isSome)
   check(popped.get() == @[5, 6, 7, 8, 9, 10, 11, 12])
 

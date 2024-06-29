@@ -6,22 +6,19 @@
 
 ## A multi-producer, multi-consumer bounded queue implemented as a ring buffer.
 
-when not compileOption("threads"):
+when not compileOption("threads") or defined(nimdoc):
   {.error: "lockfreequeues/mupmuc requires --threads:on option.".}
 
 import atomics
 import options
 
+import ./atomic_dsl
+import ./exceptions
 import ./ops
 import ./mupsic
 
 
 const NoConsumerIdx* = -1 ## The initial value of `Mupmuc.prevConsumerIdx`.
-
-
-type NoConsumersAvailableError* = object of CatchableError ## \
-  ## Raised by `getConsumer()` if all consumers have been assigned to other
-  ## threads.
 
 
 type
@@ -43,10 +40,10 @@ type
     ## A per-thread interface for popping items from a queue.
     ## Retrieved via a call to `Mupmuc.getConsumer()`
     idx*: int ## The consumer's unique identifier.
-    queue*: ptr Mupmuc[N, P, C, T] ## A reference to the consumer's queue.
+    queuePtr*: ptr Mupmuc[N, P, C, T] ## A ptr to the consumer's queue.
 
 
-proc clear[N, P, C: static int, T](
+proc clear*[N, P, C: static int, T](
   self: var Mupmuc[N, P, C, T]
 ) =
   self.head.sequential(0)
@@ -68,7 +65,21 @@ proc clear[N, P, C: static int, T](
 
 proc initMupmuc*[N, P, C: static int, T](): Mupmuc[N, P, C, T] =
   ## Initialize a new Mupmuc queue.
-  result.clear()
+  result.head.sequential(0)
+  result.tail.sequential(0)
+
+  for n in 0..<N:
+    result.storage[n].reset()
+
+  result.prevProducerIdx.sequential(NoConsumerIdx)
+  for p in 0..<P:
+    result.producerTails[p].sequential(0)
+    result.producerThreadIds[p].sequential(0)
+
+  result.prevConsumerIdx.sequential(NoConsumerIdx)
+  for c in 0..<C:
+    result.consumerHeads[c].sequential(0)
+    result.consumerThreadIds[c].sequential(0)
 
 
 proc getConsumer*[N, P, C: static int, T](
@@ -77,9 +88,9 @@ proc getConsumer*[N, P, C: static int, T](
 ): Consumer[N, P, C, T]
   {.raises: [NoConsumersAvailableError].} =
   ## Assigns and returns a `Consumer` instance for the current thread.
-  result.queue = addr(self)
+  result.queuePtr = addr self
 
-  if idx >= 0:
+  if likely(idx >= 0):
     result.idx = idx
     return
 
@@ -112,7 +123,7 @@ proc getConsumer*[N, P, C: static int, T](
 
 
 proc pop*[N, P, C: static int, T](
-  self: Consumer[N, P, C, T],
+  self: var Consumer[N, P, C, T],
 ): Option[T] =
   ## Pop a single item from the queue.
   ## If the queue is empty, `none(T)` is returned.
@@ -125,22 +136,24 @@ proc pop*[N, P, C: static int, T](
 
   # spin until reservation is acquired
   while true:
-    prevConsumerIdx = self.queue.prevConsumerIdx.acquire
+    prevConsumerIdx = self.queuePtr.prevConsumerIdx.acquire
     isFirstConsumption = prevConsumerIdx == NoConsumerIdx
-    var tail = self.queue.tail.sequential
+    var tail = self.queuePtr.tail.sequential
     prevHead =
       if isFirstConsumption:
         0
       else:
-        self.queue.consumerHeads[prevConsumerIdx].acquire
+        self.queuePtr.consumerHeads[prevConsumerIdx].acquire
 
     if unlikely(empty(prevHead, tail, N)):
+      if prevHead != tail:
+        echo "empty but prevHead and tail are not equal! prevHead=" & $prevHead & " tail=" & $tail
       return none(T)
 
     newHead = incOrReset(prevHead, 1, N)
-    self.queue.consumerHeads[self.idx].release(newHead)
+    self.queuePtr.consumerHeads[self.idx].release(newHead)
 
-    if self.queue.prevConsumerIdx.compareExchangeWeak(
+    if self.queuePtr.prevConsumerIdx.compareExchangeWeak(
       prevConsumerIdx,
       self.idx,
       moRelease,
@@ -148,13 +161,13 @@ proc pop*[N, P, C: static int, T](
     ):
       break
 
-  result = some(self.queue.storage[index(prevHead, N)])
+  result = some(self.queuePtr.storage[index(prevHead, N)])
 
   # Wait for prev consumer to update head, then update head
   if not isFirstConsumption:
     while true:
       var expectedHead = prevHead
-      if self.queue.head.compareExchangeWeak(
+      if self.queuePtr.head.compareExchangeWeak(
         expectedHead,
         newHead,
         moRelease,
@@ -162,11 +175,11 @@ proc pop*[N, P, C: static int, T](
       ):
         break
   else:
-    self.queue.head.release(newHead)
+    self.queuePtr.head.release(newHead)
 
 
 proc pop*[N, P, C: static int, T](
-  self: Consumer[N, P, C, T],
+  self: var Consumer[N, P, C, T],
   count: int,
 ): Option[seq[T]] =
   ## Pop `count` items from the queue.
@@ -186,14 +199,14 @@ proc pop*[N, P, C: static int, T](
 
   # spin until reservation is acquired
   while true:
-    prevConsumerIdx = self.queue.prevConsumerIdx.acquire
+    prevConsumerIdx = self.queuePtr.prevConsumerIdx.acquire
     isFirstConsumption = prevConsumerIdx == NoConsumerIdx
-    tail = self.queue.tail.sequential
+    tail = self.queuePtr.tail.sequential
     prevHead =
       if isFirstConsumption:
         0
       else:
-        self.queue.consumerHeads[prevConsumerIdx].acquire
+        self.queuePtr.consumerHeads[prevConsumerIdx].acquire
 
     used = used(prevHead, tail, N)
     if likely(used >= count):
@@ -207,9 +220,9 @@ proc pop*[N, P, C: static int, T](
       actualCount = min(used, N)
 
     newHead = incOrReset(prevHead, actualCount, N)
-    self.queue.consumerHeads[self.idx].release(newHead)
+    self.queuePtr.consumerHeads[self.idx].release(newHead)
 
-    if self.queue.prevConsumerIdx.compareExchangeWeak(
+    if self.queuePtr.prevConsumerIdx.compareExchangeWeak(
       prevConsumerIdx,
       self.idx,
       moRelease,
@@ -226,13 +239,13 @@ proc pop*[N, P, C: static int, T](
   if start > stop:
     # data may wrap
     let pivot = (N-1) - start
-    items[0..pivot] = self.queue.storage[start..start+pivot]
+    items[0..pivot] = self.queuePtr.storage[start..start+pivot]
     if stop > 0:
       # data wraps
-      items[pivot+1..pivot+1+stop] = self.queue.storage[0..stop]
+      items[pivot+1..pivot+1+stop] = self.queuePtr.storage[0..stop]
   else:
     # data does not wrap
-    items[0..stop-start] = self.queue.storage[start..stop]
+    items[0..stop-start] = self.queuePtr.storage[start..stop]
 
   result = some(items)
 
@@ -240,7 +253,7 @@ proc pop*[N, P, C: static int, T](
   if not isFirstConsumption:
     while true:
       var expectedHead = prevHead
-      if self.queue.head.compareExchangeWeak(
+      if self.queuePtr.head.compareExchangeWeak(
         expectedHead,
         newHead,
         moRelease,
@@ -249,7 +262,7 @@ proc pop*[N, P, C: static int, T](
         break
 
   elif isFirstConsumption:
-    self.queue.head.release(newHead)
+    self.queuePtr.head.release(newHead)
 
 
 proc pop*[N, P, C: static int, T](
@@ -275,6 +288,9 @@ proc consumerCount*[N, P, C: static int, T](
   {.inline.} =
   ## Returns the queue's number of consumers (`C`).
   result = C
+
+
+proc `=copy`*[N, P, C: static int, T](a: var Mupmuc[N, P, C, T], b: Mupmuc[N, P, C, T]) {.error.}
 
 
 when defined(testing):

@@ -6,26 +6,18 @@
 
 ## A multi-producer, single-consumer bounded queue implemented as a ring buffer.
 
-when not compileOption("threads"):
+when not compileOption("threads") or defined(nimdoc):
   {.error: "lockfreequeues/mupsic requires --threads:on option.".}
 
 import atomics
 import options
 
+import ./atomic_dsl
+import ./exceptions
 import ./ops
 import ./sipsic
 
-
 const NoProducerIdx* = -1 ## The initial value of `Mupsic.prevProducerIdx`.
-
-
-type NoProducersAvailableError* = object of CatchableError ## \
-  ## Raised by `getProducer()` if all producers have been assigned to other
-  ## threads.
-
-type InvalidCallDefect* = object of Defect ## \
-  ## Raised by `Mupsic.push()`, `Mupmuc.push()`, and `Mupmuc.pop()` because
-  ## those should happen via `Producer.push()` or `Consumer.pop()`.
 
 type
   Mupsic*[N, P: static int, T] = object of Sipsic[N, T]
@@ -40,15 +32,19 @@ type
     producerTails*: array[P, Atomic[int]] ## Array of producer tails
     producerThreadIds*: array[P, Atomic[int]] ## \
       ## Array of producer thread IDs by index
+    producerReleases*: array[P, Atomic[bool]] ## \
+      ## Array indicating whether producers have been released by release()
+
+  # MupsicRef*[N, P: static int, T] = ref Mupsic[N, P, T]
 
   Producer*[N, P: static int, T] = object
     ## A per-thread interface for pushing items to a queue.
     ## Retrieved via a call to `Mupsic.getProducer()`
     idx*: int ## The producer's unique identifier.
-    queue*: ptr Mupsic[N, P, T] ## A reference to the producer's queue.
+    queuePtr*: ptr Mupsic[N, P, T] ## A pointer to the producer's queue.
 
 
-proc clear[N, P: static int, T](
+proc clear*[N, P: static int, T](
   self: var Mupsic[N, P, T]
 ) =
   self.head.sequential(0)
@@ -61,11 +57,22 @@ proc clear[N, P: static int, T](
   for p in 0..<P:
     self.producerTails[p].sequential(0)
     self.producerThreadIds[p].sequential(0)
+    self.producerReleases[p].sequential(true)
 
 
 proc initMupsic*[N, P: static int, T](): Mupsic[N, P, T] =
   ## Initialize a new Mupsic queue.
-  result.clear()
+  result.head.sequential(0)
+  result.tail.sequential(0)
+
+  for n in 0..<N:
+    result.storage[n].reset()
+
+  result.prevProducerIdx.sequential(NoProducerIdx)
+  for p in 0..<P:
+    result.producerTails[p].sequential(0)
+    result.producerThreadIds[p].sequential(0)
+    result.producerReleases[p].sequential(true)
 
 
 proc getProducer*[N, P: static int, T](
@@ -74,7 +81,7 @@ proc getProducer*[N, P: static int, T](
 ): Producer[N, P, T]
   {.raises: [NoProducersAvailableError].} =
   ## Assigns and returns a `Producer` instance for the current thread.
-  result.queue = addr(self)
+  result.queuePtr = addr self
 
   if idx >= 0:
     result.idx = idx
@@ -92,7 +99,7 @@ proc getProducer*[N, P: static int, T](
   # Try to create new mapping of threadId -> producerIdx
   for idx in 0..<P:
     var expected = 0
-    if self.producerThreadIds[idx].compareExchangeWeak(
+    if self.producerThreadIds[idx].compareExchange(
       expected,
       threadId,
       moRelease,
@@ -108,8 +115,18 @@ proc getProducer*[N, P: static int, T](
     "Increase your producer count (P) or setMaxPoolSize(P).")
 
 
+proc release*[N, P: static int, T](producer: var Producer[N, P, T]) =
+  producer.queuePtr.producerReleases[producer.idx].release(true)
+
+
+proc released*[N, P: static int, T](
+  producer: var Producer[N, P, T]
+): bool {.noSideEffect.} =
+  return producer.queuePtr.producerReleases[producer.idx].relaxed
+
+
 proc push*[N, P: static int, T](
-  self: Producer[N, P, T],
+  self: var Producer[N, P, T],
   item: T,
 ): bool =
   ## Append a single item to the queue.
@@ -123,23 +140,23 @@ proc push*[N, P: static int, T](
 
   # spin until reservation is acquired
   while true:
-    prevProducerIdx = self.queue.prevProducerIdx.acquire
+    prevProducerIdx = self.queuePtr.prevProducerIdx.acquire
     isFirstProduction = prevProducerIdx == NoProducerIdx
-    var head = self.queue.head.sequential
+    var head = self.queuePtr.head.sequential
     prevTail =
-      if isFirstProduction:
+      if unlikely(isFirstProduction):
         0
       else:
-        self.queue.producerTails[prevProducerIdx].acquire
+        self.queuePtr.producerTails[prevProducerIdx].acquire
 
     if unlikely(full(head, prevTail, N)):
       return false
 
     newTail = incOrReset(prevTail, 1, N)
     # validateHeadAndTail(head, newTail, N)
-    self.queue.producerTails[self.idx].release(newTail)
+    self.queuePtr.producerTails[self.idx].release(newTail)
 
-    if self.queue.prevProducerIdx.compareExchangeWeak(
+    if self.queuePtr.prevProducerIdx.compareExchangeWeak(
       prevProducerIdx,
       self.idx,
       moRelease,
@@ -149,25 +166,25 @@ proc push*[N, P: static int, T](
 
   result = true
 
-  self.queue.storage[index(prevTail, N)] = item
+  self.queuePtr.storage[index(prevTail, N)] = item
 
-  # Wait for prev producer to update tail, then update tail
-  if not isFirstProduction:
+  if unlikely(isFirstProduction):
+    self.queuePtr.tail.release(newTail)
+  else:
+    # Wait for prev producer to update tail, then update tail
     while true:
       var expectedTail = prevTail
-      if self.queue.tail.compareExchangeWeak(
+      if self.queuePtr.tail.compareExchangeWeak(
         expectedTail,
         newTail,
         moRelease,
         moAcquire,
       ):
         break
-  else:
-    self.queue.tail.release(newTail)
 
 
 proc push*[N, P: static int, T](
-  self: Producer[N, P, T],
+  self: var Producer[N, P, T],
   items: openArray[T],
 ): Option[HSlice[int, int]] =
   ## Append multiple items to the queue.
@@ -188,14 +205,14 @@ proc push*[N, P: static int, T](
 
   # spin until reservation is acquired
   while true:
-    prevProducerIdx = self.queue.prevProducerIdx.acquire
+    prevProducerIdx = self.queuePtr.prevProducerIdx.acquire
     isFirstProduction = prevProducerIdx == NoProducerIdx
-    var head = self.queue.head.sequential
+    var head = self.queuePtr.head.sequential
     prevTail =
       if isFirstProduction:
         0
       else:
-        self.queue.producerTails[prevProducerIdx].acquire
+        self.queuePtr.producerTails[prevProducerIdx].acquire
 
     avail = available(head, prevTail, N)
     if likely(avail >= items.len):
@@ -210,10 +227,10 @@ proc push*[N, P: static int, T](
         count = avail
 
     newTail = incOrReset(prevTail, count, N)
-    #  validateHeadAndTail(head, newTail, N)
-    self.queue.producerTails[self.idx].release(newTail)
+    # validateHeadAndTail(head, newTail, N)
+    self.queuePtr.producerTails[self.idx].release(newTail)
 
-    if self.queue.prevProducerIdx.compareExchangeWeak(
+    if self.queuePtr.prevProducerIdx.compareExchangeWeak(
       prevProducerIdx,
       self.idx,
       moRelease,
@@ -234,28 +251,27 @@ proc push*[N, P: static int, T](
   if start > stop:
     # data may wrap
     let pivot = (N-1) - start
-    self.queue.storage[start..start+pivot] = items[0..pivot]
+    self.queuePtr.storage[start..start+pivot] = items[0..pivot]
     if stop > 0:
       # data wraps
-      self.queue.storage[0..stop] = items[pivot+1..pivot+1+stop]
+      self.queuePtr.storage[0..stop] = items[pivot+1..pivot+1+stop]
   else:
     # data does not wrap
-    self.queue.storage[start..stop] = items[0..stop-start]
+    self.queuePtr.storage[start..stop] = items[0..stop-start]
 
-  # Wait for prev producer to update tail, then update tail
-  if not isFirstProduction:
+  if unlikely(isFirstProduction):
+    self.queuePtr.tail.release(newTail)
+  else:
+    # Wait for prev producer to update tail, then update tail
     while true:
       var expectedTail = prevTail
-      if self.queue.tail.compareExchangeWeak(
+      if self.queuePtr.tail.compareExchangeWeak(
         expectedTail,
         newTail,
         moRelease,
         moAcquire,
       ):
         break
-
-  elif isFirstProduction:
-    self.queue.tail.release(newTail)
 
 
 proc push*[N, P: static int, T](
@@ -291,6 +307,10 @@ proc producerCount*[N, P: static int, T](
   ## Returns the queue's number of producers (`P`).
   result = P
 
+
+proc `=copy`*[N, P: static int, T](a: var Mupsic[N, P, T], b: Mupsic[N, P, T]) {.error.}
+
+
 when defined(testing):
   import sugar
   from unittest import check
@@ -307,8 +327,8 @@ when defined(testing):
     prevProducerIdx: int,
     producerTails: seq[int],
   ) =
+    check(self.prevProducerIdx.acquire == prevProducerIdx)
     let tails = collect(newSeq):
       for p in 0..<P:
         self.producerTails[p].acquire
-    check(self.prevProducerIdx.acquire == prevProducerIdx)
     check(tails == producerTails)

@@ -4,8 +4,8 @@
 nimcache/
 nimblecache/
 
-/src/*
-/tests/*
+/tests/test
+/tests/test.dSyM
 /examples/*
 /htmldocs/*
 

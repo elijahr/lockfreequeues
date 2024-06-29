@@ -139,7 +139,7 @@ suite "capacity(Mupsic[N, P, T])":
     testCapacity(queue)
 
 
-suite "Mupsic integration":
+suite "Mupsic[N, P, T] integration":
   setup:
     queue.reset()
 

@@ -3,6 +3,7 @@
 #
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
+import lockfreequeues
 
 
 template testMupGetProducerAssigns*(queue: untyped) =
@@ -38,8 +39,9 @@ template testMupGetProducerThrowsNoProducersAvailable*(queue: untyped) =
 
 
 template testMupPush*(queue: untyped) =
-  check(queue.getProducer(0).push(1) == true)
-  check(queue.getProducer(0).push(2) == true)
+  var producer0 = queue.getProducer(0)
+  check(producer0.push(1) == true)
+  check(producer0.push(2) == true)
   queue.checkState(
     head = 0,
     tail = 2,
@@ -55,8 +57,9 @@ template testMupPush*(queue: untyped) =
       consumerHeads = repeat(0, 4),
     )
 
-  check(queue.getProducer(1).push(3) == true)
-  check(queue.getProducer(1).push(4) == true)
+  var producer1 = queue.getProducer(1)
+  check(producer1.push(3) == true)
+  check(producer1.push(4) == true)
 
   queue.checkState(
     head = 0,
@@ -73,8 +76,9 @@ template testMupPush*(queue: untyped) =
       consumerHeads = repeat(0, 4),
     )
 
-  check(queue.getProducer(2).push(5) == true)
-  check(queue.getProducer(2).push(6) == true)
+  var producer2 = queue.getProducer(2)
+  check(producer2.push(5) == true)
+  check(producer2.push(6) == true)
 
   queue.checkState(
     head = 0,
@@ -91,8 +95,9 @@ template testMupPush*(queue: untyped) =
       consumerHeads = repeat(0, 4),
     )
 
-  check(queue.getProducer(3).push(7) == true)
-  check(queue.getProducer(3).push(8) == true)
+  var producer3 = queue.getProducer(3)
+  check(producer3.push(7) == true)
+  check(producer3.push(8) == true)
 
   queue.checkState(
     head = 0,
@@ -111,9 +116,10 @@ template testMupPush*(queue: untyped) =
 
 
 template testMupPushOverflow*(queue: untyped) =
+  var producer0 = queue.getProducer(0)
   for i in 1..8:
-    discard queue.getProducer(0).push(i)
-  check(queue.getProducer(0).push(9) == false)
+    discard producer0.push(i)
+  check(producer0.push(9) == false)
   queue.checkState(
     head = 0,
     tail = 8,
@@ -130,15 +136,17 @@ template testMupPushOverflow*(queue: untyped) =
     )
 
 template testMupPushWrap*(queue: untyped) =
+  var producer0 = queue.getProducer(0)
   for i in 1..4:
-    discard queue.getProducer(0).push(i)
+    discard producer0.push(i)
   for i in 0..1:
     when queue is Mupmuc:
-      discard queue.getConsumer(i).pop()
+      var consumer = queue.getConsumer(i)
+      discard consumer.pop()
     else:
       discard queue.pop()
   for i in 5..10:
-    check(queue.getProducer(0).push(i) == true)
+    check(producer0.push(i) == true)
   queue.checkState(
     head = 2,
     tail = 10,
@@ -156,7 +164,8 @@ template testMupPushWrap*(queue: untyped) =
 
 
 template testMupPushSeq*(queue: untyped) =
-  check(queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
+  var producer0 = queue.getProducer(0)
+  check(producer0.push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
   queue.checkState(
     head = 0,
     tail = 8,
@@ -174,7 +183,8 @@ template testMupPushSeq*(queue: untyped) =
 
 
 template testMupPushSeqOverflow*(queue: untyped) =
-  let res = queue.getProducer(0).push(
+  var producer0 = queue.getProducer(0)
+  let res = producer0.push(
     @[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
   )
   check(res.isSome)
@@ -195,13 +205,15 @@ template testMupPushSeqOverflow*(queue: untyped) =
     )
 
 template testMupPushSeqWrap*(queue: untyped) =
-  discard queue.getProducer(0).push(@[1, 2, 3, 4])
+  var producer0 = queue.getProducer(0)
+  discard producer0.push(@[1, 2, 3, 4])
   for i in 0..1:
     when queue is Mupmuc:
-      discard queue.getConsumer(i).pop()
+      var consumer = queue.getConsumer(i)
+      discard consumer.pop()
     else:
       discard queue.pop()
-  var res = queue.getProducer(0).push(@[5, 6, 7, 8, 9, 10])
+  var res = producer0.push(@[5, 6, 7, 8, 9, 10])
   check(res.isNone)
   queue.checkState(
     head = 2,
