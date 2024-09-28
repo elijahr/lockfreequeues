@@ -1,13 +1,15 @@
-NoProducerIdx	lockfreequeues/mupsic.html#NoProducerIdx	mupsic: NoProducerIdx	
-NoProducersAvailableError	lockfreequeues/mupsic.html#NoProducersAvailableError	mupsic: NoProducersAvailableError	
-InvalidCallDefect	lockfreequeues/mupsic.html#InvalidCallDefect	mupsic: InvalidCallDefect	
-Mupsic	lockfreequeues/mupsic.html#Mupsic	mupsic: Mupsic	
-Producer	lockfreequeues/mupsic.html#Producer	mupsic: Producer	
-initMupsic	lockfreequeues/mupsic.html#initMupsic	mupsic: initMupsic[N, P: static int; T](): Mupsic[N, P, T]	
-getProducer	lockfreequeues/mupsic.html#getProducer,Mupsic[N,P,T],int	mupsic: getProducer[N, P: static int; T](self: var Mupsic[N, P, T];\n                                 idx: int = NoProducerIdx): Producer[N, P, T]	
-push	lockfreequeues/mupsic.html#push,Producer[N,P,T],T	mupsic: push[N, P: static int; T](self: Producer[N, P, T]; item: T): bool	
-push	lockfreequeues/mupsic.html#push,Producer[N,P,T],openArray[T]	mupsic: push[N, P: static int; T](self: Producer[N, P, T]; items: openArray[T]): Option[\n    HSlice[int, int]]	
-push	lockfreequeues/mupsic.html#push,Mupsic[N,P,T],T	mupsic: push[N, P: static int; T](self: var Mupsic[N, P, T]; item: T): bool	
-push	lockfreequeues/mupsic.html#push,Mupsic[N,P,T],openArray[T]	mupsic: push[N, P: static int; T](self: var Mupsic[N, P, T]; items: openArray[T]): Option[\n    HSlice[int, int]]	
-capacity	lockfreequeues/mupsic.html#capacity,Mupsic[N,P,T]	mupsic: capacity[N, P: static int; T](self: var Mupsic[N, P, T]): int	
-producerCount	lockfreequeues/mupsic.html#producerCount,Mupsic[N,P,T]	mupsic: producerCount[N, P: static int; T](self: var Mupsic[N, P, T]): int	
+nimTitle	mupsic	lockfreequeues/mupsic.html	module src/lockfreequeues/mupsic		0
+nim	NoProducerIdx	lockfreequeues/mupsic.html#NoProducerIdx	const NoProducerIdx		19
+nim	NoProducersAvailableError	lockfreequeues/mupsic.html#NoProducersAvailableError	object NoProducersAvailableError		22
+nim	InvalidCallDefect	lockfreequeues/mupsic.html#InvalidCallDefect	object InvalidCallDefect		26
+nim	Mupsic	lockfreequeues/mupsic.html#Mupsic	object Mupsic		31
+nim	Producer	lockfreequeues/mupsic.html#Producer	object Producer		44
+nim	initMupsic	lockfreequeues/mupsic.html#initMupsic	proc initMupsic[N, P: static int; T](): Mupsic[N, P, T]		66
+nim	getProducer	lockfreequeues/mupsic.html#getProducer,Mupsic[N,P,T],int	proc getProducer[N, P: static int; T](self: var Mupsic[N, P, T];\n                                 idx: int = NoProducerIdx): Producer[N, P, T]		71
+nim	push	lockfreequeues/mupsic.html#push,Producer[N,P,T],T	proc push[N, P: static int; T](self: Producer[N, P, T]; item: T): bool		111
+nim	push	lockfreequeues/mupsic.html#push,Producer[N,P,T],openArray[T]	proc push[N, P: static int; T](self: Producer[N, P, T]; items: openArray[T]): Option[\n    HSlice[int, int]]		169
+nim	push	lockfreequeues/mupsic.html#push,Mupsic[N,P,T],T	proc push[N, P: static int; T](self: var Mupsic[N, P, T]; item: T): bool		261
+nim	push	lockfreequeues/mupsic.html#push,Mupsic[N,P,T],openArray[T]	proc push[N, P: static int; T](self: var Mupsic[N, P, T]; items: openArray[T]): Option[\n    HSlice[int, int]]		270
+nim	capacity	lockfreequeues/mupsic.html#capacity,Mupsic[N,P,T]	proc capacity[N, P: static int; T](self: var Mupsic[N, P, T]): int		279
+nim	producerCount	lockfreequeues/mupsic.html#producerCount,Mupsic[N,P,T]	proc producerCount[N, P: static int; T](self: var Mupsic[N, P, T]): int		287
+nimgrp	push	lockfreequeues/mupsic.html#push-procs-all	proc		111

@@ -1,1 +1,2 @@
-CacheLineBytes	lockfreequeues/constants.html#CacheLineBytes	constants: CacheLineBytes	
+nimTitle	constants	lockfreequeues/constants.html	module src/lockfreequeues/constants		0
+nim	CacheLineBytes	lockfreequeues/constants.html#CacheLineBytes	const CacheLineBytes		10
