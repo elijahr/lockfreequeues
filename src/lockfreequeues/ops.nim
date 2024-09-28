@@ -1,5 +1,5 @@
 # lockfreequeues
-# © Copyright 2020 Elijah Shaw-Rutschman
+# © Copyright 2020-2024 Elijah Shaw-Rutschman
 #
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
@@ -14,7 +14,8 @@ proc index*(
   ## Given a head or tail `value` in the range `0..<2*capacity`, determine its
   ## actual index in storage.
   if unlikely(value < 0 or value >= 2*capacity):
-    raise newException(QueueIndexError, "value=" & $value & " must be > 0 and <= 2*" & $capacity)
+    raise newException(QueueIndexError, "value=" & $value &
+        " must be > 0 and <= 2*" & $capacity)
   elif value >= capacity:
     result = value - capacity
   else:
@@ -30,9 +31,11 @@ proc incOrReset*(
   ## increment `original` by `amount`, or reset from zero if
   ## `original + amount >= 2 * capacity`.
   if unlikely(original < 0 or original >= 2*capacity):
-    raise newException(QueueIndexError, "original=" & $original & " must be > 0 and <= 2*" & $capacity)
+    raise newException(QueueIndexError, "original=" & $original &
+        " must be > 0 and <= 2*" & $capacity)
   elif unlikely(amount notin 0..capacity):
-    raise newException(QueueIndexError, "amount=" & $amount & " must be > 0 and < " & $capacity)
+    raise newException(QueueIndexError, "amount=" & $amount &
+        " must be > 0 and < " & $capacity)
   result = original + amount
   if unlikely(result >= 2 * capacity):
     result -= 2 * capacity
@@ -56,9 +59,11 @@ proc used*(
     if unlikely(capacity < 0):
       raise newException(QueueIndexError, "capacity=" & $capacity & " must be > 0")
     elif unlikely(head < 0 or head >= 2*capacity):
-      raise newException(QueueIndexError, "head=" & $head & " must be > 0 and <= 2*" & $capacity)
+      raise newException(QueueIndexError, "head=" & $head &
+          " must be > 0 and <= 2*" & $capacity)
     elif unlikely(tail < 0 or tail >= 2*capacity):
-      raise newException(QueueIndexError, "tail=" & $tail & " must be > 0 and <= 2*" & $capacity)
+      raise newException(QueueIndexError, "tail=" & $tail &
+          " must be > 0 and <= 2*" & $capacity)
 
   if tail >= capacity:
     if head >= capacity:
@@ -71,7 +76,11 @@ proc used*(
     else:
       result = tail - head
   if unlikely(result < 0 or result > capacity):
-    raise newException(QueueIndexError, "result=" & $result & " must be <= capacity=" & $capacity)
+    raise newException(
+      QueueIndexError,
+      "result=" & $result & " must be > 0 and <= " & $capacity &
+      " (head=" & $head & ", tail=" & $tail & ")",
+    )
 
 
 proc available*(

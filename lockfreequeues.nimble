@@ -13,10 +13,10 @@ requires "nim >= 1.2.0"
 # Tasks
 task test, "Runs the test suite":
   # C
-  exec "nim c -r -f tests/test.nim"
+  # exec "nim c -r -f tests/test.nim"
 
-  # C++
-  exec "nim cpp -r -f tests/test.nim"
+  # # C++
+  # exec "nim cpp -r -f tests/test.nim"
 
   if getEnv("SANITIZE_THREADS") != "no":
     # C (with thread sanitization)

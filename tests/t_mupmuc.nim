@@ -54,19 +54,6 @@ suite "getProducer(Mupmuc[N, P, C, T])":
     testMupGetProducerThrowsNoProducersAvailable(queue)
 
 
-suite "push(Mupmuc[N, P, C, T])":
-  setup:
-    queue.reset()
-
-  test "seq[T] should fail":
-    expect InvalidCallDefect:
-      discard queue.push(1)
-
-  test "T should fail":
-    expect InvalidCallDefect:
-      discard queue.push(@[1])
-
-
 suite "push(Producer[N, P, T], T)":
   setup:
     queue.reset()

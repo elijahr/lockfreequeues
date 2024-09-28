@@ -8,6 +8,3 @@ type NoProducersAvailableError* = object of QueueError ## \
 type NoConsumersAvailableError* = object of QueueError ## \
   ## Raised by `getConsumer()` if all producers have been assigned to other
   ## threads.
-type InvalidCallDefect* = object of Defect ## \
-  ## Raised by `Mupsic.push()`, `Mupmuc.push()`, and `Mupmuc.pop()` because
-  ## those should happen via `Producer.push()` or `Consumer.pop()`.

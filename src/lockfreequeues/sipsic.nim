@@ -13,9 +13,7 @@ import options
 import ./constants
 import ./ops
 import ./atomic_dsl
-
-
-const NoSlice* = none(HSlice[int, int])
+import ./state
 
 
 type
@@ -136,19 +134,6 @@ proc push*[N: static int, T](
   self.tail.release(newTail)
 
 
-# proc push*[N: static int, T](
-#   self: ref Sipsic[N, T],
-#   items: openArray[T],
-# ): Option[HSlice[int, int]] =
-#   ## Append multiple items to the queue.
-#   ## If the queue is already full or is filled by this call, `some(unpushed)`
-#   ## is returned, where `unpushed` is an `HSlice` corresponding to the
-#   ## chunk of items which could not be pushed.
-#   ## If all items are appended, `NoSlice` is returned.
-#   var self = self
-#   result = self.push(items)
-
-
 proc pop*[N: static int, T](
   self: var Sipsic[N, T],
 ): Option[T] =
@@ -168,16 +153,6 @@ proc pop*[N: static int, T](
   let newHead = incOrReset(head, 1, N)
 
   self.head.release(newHead)
-
-
-# proc pop*[N: static int, T](
-#   self: ref Sipsic[N, T],
-# ): Option[T] =
-#   ## Pop a single item from the queue.
-#   ## If the queue is empty, `none(T)` is returned.
-#   ## Otherwise an item is popped, `some(T)` is returned.
-#   var self = self
-#   result = self.pop()
 
 
 proc pop*[N: static int, T](
@@ -228,17 +203,6 @@ proc pop*[N: static int, T](
   result = some(res)
 
   self.head.release(newHead)
-
-
-proc pop*[N: static int, T](
-  self: ref Sipsic[N, T],
-  count: int,
-): Option[seq[T]] =
-  ## Pop `count` items from the queue.
-  ## If the queue is empty, `none(seq[T])` is returned.
-  ## Otherwise `some(seq[T])` is returned containing at least one item.
-  var self = self
-  result = self.pop(count)
 
 
 proc capacity*[N: static int, T](

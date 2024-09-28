@@ -15,12 +15,11 @@ import options
 import ./atomic_dsl
 import ./exceptions
 import ./ops
-import ./sipsic
 
 const NoProducerIdx* = -1 ## The initial value of `Mupsic.prevProducerIdx`.
 
 type
-  Mupsic*[N, P: static int, T] = object of Sipsic[N, T]
+  Mupsic*[N, P: static int, T] = object of RootObj
     ## A multi-producer, single-consumer bounded queue implemented as a ring
     ## buffer. Popping is wait-free.
     ##
@@ -28,27 +27,27 @@ type
     ## * `P` is the number of producer threads.
     ## * `T` is the type of data the queue will hold.
 
-    prevProducerIdx*: Atomic[int] ## The ID (index) of the most recent producer
-    producerTails*: array[P, Atomic[int]] ## Array of producer tails
+    head*: Atomic[int]
+    prevProducerIdx*: Atomic[int] ## The ID (index) of the most recent producer.
+    producerTails*: array[P, Atomic[int]] ## Array of producer tails.
     producerThreadIds*: array[P, Atomic[int]] ## \
-      ## Array of producer thread IDs by index
+      ## Array of producer thread IDs by index.
     producerReleases*: array[P, Atomic[bool]] ## \
-      ## Array indicating whether producers have been released by release()
+      ## Array indicating whether producers have been released by release().
 
-  # MupsicRef*[N, P: static int, T] = ref Mupsic[N, P, T]
+    storage*: array[N, T] ## The underlying storage.
 
-  Producer*[N, P: static int, T] = object
+  Producer*[Q] = object
     ## A per-thread interface for pushing items to a queue.
-    ## Retrieved via a call to `Mupsic.getProducer()`
+    ## Retrieved via a call to `Mupmuc.getProducer()`
     idx*: int ## The producer's unique identifier.
-    queuePtr*: ptr Mupsic[N, P, T] ## A pointer to the producer's queue.
+    queuePtr*: ptr Q ## A pointer to the producer's queue.
 
 
 proc clear*[N, P: static int, T](
   self: var Mupsic[N, P, T]
 ) =
   self.head.sequential(0)
-  self.tail.sequential(0)
 
   for n in 0..<N:
     self.storage[n].reset()
@@ -62,23 +61,13 @@ proc clear*[N, P: static int, T](
 
 proc initMupsic*[N, P: static int, T](): Mupsic[N, P, T] =
   ## Initialize a new Mupsic queue.
-  result.head.sequential(0)
-  result.tail.sequential(0)
-
-  for n in 0..<N:
-    result.storage[n].reset()
-
-  result.prevProducerIdx.sequential(NoProducerIdx)
-  for p in 0..<P:
-    result.producerTails[p].sequential(0)
-    result.producerThreadIds[p].sequential(0)
-    result.producerReleases[p].sequential(true)
+  result.clear()
 
 
 proc getProducer*[N, P: static int, T](
   self: var Mupsic[N, P, T],
   idx: int = NoProducerIdx,
-): Producer[N, P, T]
+): Producer[Mupsic[N, P, T]]
   {.raises: [NoProducersAvailableError].} =
   ## Assigns and returns a `Producer` instance for the current thread.
   result.queuePtr = addr self
@@ -115,18 +104,18 @@ proc getProducer*[N, P: static int, T](
     "Increase your producer count (P) or setMaxPoolSize(P).")
 
 
-proc release*[N, P: static int, T](producer: var Producer[N, P, T]) =
+proc release*[N, P: static int, T](producer: var Producer[Mupsic[N, P, T]]) =
   producer.queuePtr.producerReleases[producer.idx].release(true)
 
 
 proc released*[N, P: static int, T](
-  producer: var Producer[N, P, T]
+  producer: var Producer[Mupsic[N, P, T]]
 ): bool {.noSideEffect.} =
   return producer.queuePtr.producerReleases[producer.idx].relaxed
 
 
 proc push*[N, P: static int, T](
-  self: var Producer[N, P, T],
+  self: var Producer[Mupsic[N, P, T]],
   item: T,
 ): bool =
   ## Append a single item to the queue.
@@ -184,7 +173,7 @@ proc push*[N, P: static int, T](
 
 
 proc push*[N, P: static int, T](
-  self: var Producer[N, P, T],
+  self: var Producer[Mupsic[N, P, T]],
   items: openArray[T],
 ): Option[HSlice[int, int]] =
   ## Append multiple items to the queue.
@@ -277,19 +266,85 @@ proc push*[N, P: static int, T](
 proc push*[N, P: static int, T](
   self: var Mupsic[N, P, T],
   item: T,
-): bool =
-  ## Overload of `Sipsic.push()` that simply raises `InvalidCallDefect`.
-  ## Pushes should happen via `Producer.push()`.
-  raise newException(InvalidCallDefect, "Use Producer.push()")
+): bool {.error: "Use Producer.push()".}
 
 
 proc push*[N, P: static int, T](
   self: var Mupsic[N, P, T],
   items: openArray[T],
-): Option[HSlice[int, int]] =
-  ## Overload of `Sipsic.push()` that simply raises `InvalidCallDefect`.
-  ## Pushes should happen via `Producer.push()`.
-  raise newException(InvalidCallDefect, "Use Producer.push()")
+): Option[HSlice[int, int]] {.error: "Use Producer.push()".}
+
+
+
+proc pop*[N, P: static int, T](
+  self: var Mupsic[N, P, T],
+): Option[T] =
+  ## Pop a single item from the queue.
+  ## If the queue is empty, `none(T)` is returned.
+  ## Otherwise an item is popped, `some(T)` is returned.
+  let head = self.head.acquire
+  let tail = self.tail.sequential
+
+  if unlikely(empty(head, tail, N)):
+    return
+
+  let headIndex = index(head, N)
+
+  result = some(self.storage[headIndex])
+
+  let newHead = incOrReset(head, 1, N)
+
+  self.head.release(newHead)
+
+
+proc pop*[N, P: static int, T](
+  self: var Mupsic[N, P, T],
+  count: int,
+): Option[seq[T]] =
+  ## Pop `count` items from the queue.
+  ## If the queue is empty, `none(seq[T])` is returned.
+  ## Otherwise `some(seq[T])` is returned containing at least one item.
+  let head = self.head.acquire
+  let tail = self.tail.sequential
+
+  let used = used(head, tail, N)
+  var actualCount: int
+
+  if likely(used >= count):
+    # Enough items to fulfill request
+    actualCount = count
+  elif used <= 0:
+    # Queue is empty, return nothing
+    return none(seq[T])
+  else:
+    # Not enough items to fulfill request
+    actualCount = min(used, N)
+
+  var res = newSeq[T](actualCount)
+  let headIndex = index(head, N)
+  let newHead = incOrReset(head, actualCount, N)
+
+  let newHeadIndex = index(newHead, N)
+
+  if headIndex < newHeadIndex:
+    # request does not wrap
+    for i in 0..<actualCount:
+      res[i] = self.storage[headIndex+i]
+  else:
+    # request may wrap
+    var i = 0
+    for j in headIndex..<N:
+      res[i] = self.storage[j]
+      inc i
+    if newHeadIndex > 0:
+      # request wraps
+      for j in 0..<newHeadIndex:
+        res[i] = self.storage[j]
+        inc i
+
+  result = some(res)
+
+  self.head.release(newHead)
 
 
 proc capacity*[N, P: static int, T](
