@@ -8,6 +8,7 @@ when compileOption("threads"):
   import ./lockfreequeues/[
     atomic_dsl,
     constants,
+    epoch,
     mupmuc,
     mupsic,
     ops,
@@ -18,6 +19,7 @@ when compileOption("threads"):
   export
     atomic_dsl,
     constants,
+    epoch,
     mupmuc,
     mupsic,
     ops,

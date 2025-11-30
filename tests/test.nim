@@ -5,6 +5,7 @@
 # copyright.
 
 import ./t_atomic_dsl
+import ./t_epoch
 import ./t_mupmuc
 import ./t_mupmuc_threaded
 import ./t_mupsic
@@ -18,6 +19,7 @@ import ./t_wraparound
 
 export
   t_atomic_dsl,
+  t_epoch,
   t_mupmuc,
   t_mupmuc_threaded,
   t_mupsic,
