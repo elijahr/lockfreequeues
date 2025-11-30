@@ -1,14 +1,16 @@
 import os
 
 # Package
-version       = "3.1.0"
-author        = "Elijah Shaw-Rutschman"
-description   = "Lock-free queue implementations for Nim."
-license       = "MIT"
-srcDir        = "src"
+version        = "3.1.0"
+author         = "Elijah Shaw-Rutschman"
+description    = "Lock-free queue implementations for Nim."
+license        = "MIT"
+srcDir         = "src"
+entryPoints    = @["tests/test.nim"]
 
 # Dependencies
 requires "nim >= 2.0.0"
+requires "unittest2"
 
 # Tasks
 task test, "Runs the test suite":
@@ -26,4 +28,5 @@ task test, "Runs the test suite":
 task examples, "Runs the examples":
   exec "nim c -r -f examples/mupmuc.nim"
   exec "nim c -r -f examples/mupsic.nim"
+  exec "nim c -r -f examples/sipmuc.nim"
   exec "nim c -r -f examples/sipsic.nim"

@@ -11,6 +11,7 @@ when compileOption("threads"):
     mupmuc,
     mupsic,
     ops,
+    sipmuc,
     sipsic,
   ]
 
@@ -20,6 +21,7 @@ when compileOption("threads"):
     mupmuc,
     mupsic,
     ops,
+    sipmuc,
     sipsic
 else:
   # threading off, only provide sipsic

@@ -4,6 +4,9 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
+import lockfreequeues/sipmuc
+
+
 template testCapacity*(queue: untyped) =
   check(queue.capacity == 8)
 
@@ -14,7 +17,7 @@ template testHeadAndTailReset*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.prevProducerIdx.sequential(0)
     queue.producerTails[0].sequential(15)
-  when queue is Mupmuc:
+  when ((queue is Mupmuc) or (queue is Sipmuc)):
     queue.prevConsumerIdx.sequential(0)
     queue.consumerHeads[0].sequential(15)
   queue.checkState(
@@ -27,7 +30,7 @@ template testHeadAndTailReset*(queue: untyped) =
       prevProducerIdx = 0,
       producerTails = (@[15, 0, 0, 0]),
     )
-  when queue is Mupmuc:
+  when ((queue is Mupmuc) or (queue is Sipmuc)):
     queue.checkState(
       prevConsumerIdx = 0,
       consumerHeads = (@[15, 0, 0, 0]),
@@ -50,14 +53,14 @@ template testHeadAndTailReset*(queue: untyped) =
       producerTails = (@[0, 0, 0, 0]),
     )
 
-  when queue is Mupmuc:
+  when ((queue is Mupmuc) or (queue is Sipmuc)):
     queue.checkState(
       prevConsumerIdx = 0,
       consumerHeads = (@[15, 0, 0, 0]),
     )
 
   let res =
-    when queue is Mupmuc:
+    when ((queue is Mupmuc) or (queue is Sipmuc)):
       queue.getConsumer(0).pop(1)
     else:
       queue.pop(1)
@@ -74,7 +77,7 @@ template testHeadAndTailReset*(queue: untyped) =
       prevProducerIdx = 0,
       producerTails = repeat(0, 4),
     )
-  when queue is Mupmuc:
+  when ((queue is Mupmuc) or (queue is Sipmuc)):
     queue.checkState(
       prevConsumerIdx = 0,
       consumerHeads = (@[0, 0, 0, 0]),

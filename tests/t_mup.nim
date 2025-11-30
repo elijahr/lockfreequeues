@@ -51,7 +51,7 @@ template testMupPush*(queue: untyped) =
   )
   when queue is Mupmuc:
     queue.checkState(
-      prevConsumerIdx = NoConsumerIdx,
+      prevConsumerIdx = -1,  # NoConsumerIdx
       consumerHeads = repeat(0, 4),
     )
 
@@ -69,7 +69,7 @@ template testMupPush*(queue: untyped) =
   )
   when queue is Mupmuc:
     queue.checkState(
-      prevConsumerIdx = NoConsumerIdx,
+      prevConsumerIdx = -1,  # NoConsumerIdx
       consumerHeads = repeat(0, 4),
     )
 
@@ -87,7 +87,7 @@ template testMupPush*(queue: untyped) =
   )
   when queue is Mupmuc:
     queue.checkState(
-      prevConsumerIdx = NoConsumerIdx,
+      prevConsumerIdx = -1,  # NoConsumerIdx
       consumerHeads = repeat(0, 4),
     )
 
@@ -105,7 +105,7 @@ template testMupPush*(queue: untyped) =
   )
   when queue is Mupmuc:
     queue.checkState(
-      prevConsumerIdx = NoConsumerIdx,
+      prevConsumerIdx = -1,  # NoConsumerIdx
       consumerHeads = repeat(0, 4),
     )
 
@@ -125,7 +125,7 @@ template testMupPushOverflow*(queue: untyped) =
   )
   when queue is Mupmuc:
     queue.checkState(
-      prevConsumerIdx = NoConsumerIdx,
+      prevConsumerIdx = -1,  # NoConsumerIdx
       consumerHeads = repeat(0, 4),
     )
 
@@ -168,7 +168,7 @@ template testMupPushSeq*(queue: untyped) =
   )
   when queue is Mupmuc:
     queue.checkState(
-      prevConsumerIdx = NoConsumerIdx,
+      prevConsumerIdx = -1,  # NoConsumerIdx
       consumerHeads = repeat(0, 4),
     )
 
@@ -190,7 +190,7 @@ template testMupPushSeqOverflow*(queue: untyped) =
   )
   when queue is Mupmuc:
     queue.checkState(
-      prevConsumerIdx = NoConsumerIdx,
+      prevConsumerIdx = -1,  # NoConsumerIdx
       consumerHeads = repeat(0, 4),
     )
 

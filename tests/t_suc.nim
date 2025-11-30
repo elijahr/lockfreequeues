@@ -4,9 +4,14 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
+## Shared test templates for single-producer, multi-consumer queues (Sipmuc).
 
-template testMucPopOne*(queue: untyped) =
-  discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+import sequtils
+
+
+template testSucPopOne*(queue: untyped) =
+  ## Test popping one item via Consumer.
+  discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
   let res = queue.getConsumer(0).pop()
   check(res.isSome)
@@ -18,17 +23,14 @@ template testMucPopOne*(queue: untyped) =
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
   queue.checkState(
-    prevProducerIdx = 0,
-    producerTails = (@[8, 0, 0, 0]),
-  )
-  queue.checkState(
     prevConsumerIdx = 0,
     consumerHeads = (@[1, 0, 0, 0]),
   )
 
 
-template testMucPopAll*(queue: untyped) =
-  discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+template testSucPopAll*(queue: untyped) =
+  ## Test popping all items via Consumer.
+  discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
   var items = newSeq[int]()
   for i in 1..8:
@@ -44,16 +46,13 @@ template testMucPopAll*(queue: untyped) =
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
   queue.checkState(
-    prevProducerIdx = 0,
-    producerTails = (@[8, 0, 0, 0]),
-  )
-  queue.checkState(
     prevConsumerIdx = 0,
     consumerHeads = (@[8, 0, 0, 0]),
   )
 
 
-template testMucPopEmpty*(queue: untyped) =
+template testSucPopEmpty*(queue: untyped) =
+  ## Test popping from empty queue.
   check(queue.getConsumer(0).pop().isNone)
 
   queue.checkState(
@@ -62,17 +61,14 @@ template testMucPopEmpty*(queue: untyped) =
     storage = repeat(0, 8),
   )
   queue.checkState(
-    prevProducerIdx = NoProducerIdx,
-    producerTails = repeat(0, 4),
-  )
-  queue.checkState(
     prevConsumerIdx = -1,  # NoConsumerIdx
     consumerHeads = repeat(0, 4),
   )
 
 
-template testMucPopTooMany*(queue: untyped) =
-  discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+template testSucPopTooMany*(queue: untyped) =
+  ## Test popping more items than available.
+  discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
   for i in 1..8:
     discard queue.getConsumer(0).pop()
@@ -85,22 +81,19 @@ template testMucPopTooMany*(queue: untyped) =
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
   queue.checkState(
-    prevProducerIdx = 0,
-    producerTails = (@[8, 0, 0, 0]),
-  )
-  queue.checkState(
     prevConsumerIdx = 0,
     consumerHeads = (@[8, 0, 0, 0]),
   )
 
 
-template testMucPopWrap*(queue: untyped) =
-  discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+template testSucPopWrap*(queue: untyped) =
+  ## Test popping with wraparound.
+  discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
   for i in 1..4:
     discard queue.getConsumer(0).pop()
 
-  discard queue.getProducer(1).push(@[9, 10, 11, 12])
+  discard queue.push(@[9, 10, 11, 12])
 
   var items = newSeq[int]()
   for i in 1..8:
@@ -116,17 +109,14 @@ template testMucPopWrap*(queue: untyped) =
     storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
   )
   queue.checkState(
-    prevProducerIdx = 1,
-    producerTails = (@[8, 12, 0, 0]),
-  )
-  queue.checkState(
     prevConsumerIdx = 0,
     consumerHeads = (@[12, 0, 0, 0]),
   )
 
 
-template testMucPopCountOne*(queue: untyped) =
-  check(queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
+template testSucPopCountOne*(queue: untyped) =
+  ## Test batch pop of one item at a time.
+  check(queue.push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
   for i in 1..8:
     let popped = queue.getConsumer(0).pop(1)
     check(popped.isSome)
@@ -137,17 +127,14 @@ template testMucPopCountOne*(queue: untyped) =
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
   queue.checkState(
-    prevProducerIdx = 0,
-    producerTails = (@[8, 0, 0, 0]),
-  )
-  queue.checkState(
     prevConsumerIdx = 0,
     consumerHeads = (@[8, 0, 0, 0]),
   )
 
 
-template testMucPopCountAll*(queue: untyped) =
-  discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+template testSucPopCountAll*(queue: untyped) =
+  ## Test batch pop of all items.
+  discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
   let popped = queue.getConsumer(0).pop(8)
   check(popped.isSome)
   check(popped.get() == @[1, 2, 3, 4, 5, 6, 7, 8])
@@ -157,16 +144,13 @@ template testMucPopCountAll*(queue: untyped) =
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
   queue.checkState(
-    prevProducerIdx = 0,
-    producerTails = (@[8, 0, 0, 0]),
-  )
-  queue.checkState(
     prevConsumerIdx = 0,
     consumerHeads = (@[8, 0, 0, 0]),
   )
 
 
-template testMucPopCountEmpty*(queue: untyped) =
+template testSucPopCountEmpty*(queue: untyped) =
+  ## Test batch pop from empty queue.
   let popped = queue.getConsumer(0).pop(1)
   check(popped.isNone)
   queue.checkState(
@@ -175,17 +159,14 @@ template testMucPopCountEmpty*(queue: untyped) =
     storage = repeat(0, 8),
   )
   queue.checkState(
-    prevProducerIdx = NoProducerIdx,
-    producerTails = repeat(0, 4),
-  )
-  queue.checkState(
     prevConsumerIdx = -1,  # NoConsumerIdx
     consumerHeads = repeat(0, 4),
   )
 
 
-template testMucPopCountTooMany*(queue: untyped) =
-  check(queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
+template testSucPopCountTooMany*(queue: untyped) =
+  ## Test batch pop requesting more than available.
+  check(queue.push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
 
   queue.checkState(
     head = 0,
@@ -203,21 +184,18 @@ template testMucPopCountTooMany*(queue: untyped) =
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
   queue.checkState(
-    prevProducerIdx = 0,
-    producerTails = (@[8, 0, 0, 0]),
-  )
-  queue.checkState(
     prevConsumerIdx = 0,
     consumerHeads = (@[8, 0, 0, 0]),
   )
 
 
-template testMucPopCountWrap*(queue: untyped) =
-  discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+template testSucPopCountWrap*(queue: untyped) =
+  ## Test batch pop with wraparound.
+  discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
   discard queue.getConsumer(0).pop(4)
 
-  discard queue.getProducer(1).push(@[9, 10, 11, 12])
+  discard queue.push(@[9, 10, 11, 12])
 
   let popped = queue.getConsumer(1).pop(8)
   check(popped.isSome)
@@ -229,10 +207,26 @@ template testMucPopCountWrap*(queue: untyped) =
     storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
   )
   queue.checkState(
-    prevProducerIdx = 1,
-    producerTails = (@[8, 12, 0, 0]),
-  )
-  queue.checkState(
     prevConsumerIdx = 1,
     consumerHeads = (@[4, 12, 0, 0]),
   )
+
+
+template testSucGetConsumerAssigns*(queue: untyped) =
+  ## Test that getConsumer assigns by thread ID.
+  let consumer = queue.getConsumer()
+  check(consumer.idx >= 0)
+  check(consumer.idx < 4)
+
+
+template testSucGetConsumerReusesAssigned*(queue: untyped) =
+  ## Test that getConsumer reuses previously assigned index.
+  let consumer1 = queue.getConsumer()
+  let consumer2 = queue.getConsumer()
+  check(consumer1.idx == consumer2.idx)
+
+
+template testSucGetConsumerExplicitIndex*(queue: untyped) =
+  ## Test explicit consumer index assignment.
+  let consumer = queue.getConsumer(2)
+  check(consumer.idx == 2)

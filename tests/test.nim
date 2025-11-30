@@ -10,6 +10,8 @@ import ./t_mupmuc_threaded
 import ./t_mupsic
 import ./t_mupsic_threaded
 import ./t_ops
+import ./t_sipmuc
+import ./t_sipmuc_threaded
 import ./t_sipsic
 import ./t_sipsic_threaded
 import ./t_wraparound
@@ -21,6 +23,8 @@ export
   t_mupsic,
   t_mupsic_threaded,
   t_ops,
+  t_sipmuc,
+  t_sipmuc_threaded,
   t_sipsic,
   t_sipsic_threaded,
   t_wraparound
