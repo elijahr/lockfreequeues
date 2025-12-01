@@ -32,7 +32,7 @@ import ./epoch
 proc c_calloc(n, size: csize_t): pointer {.importc: "calloc", header: "<stdlib.h>".}
 proc c_free(p: pointer) {.importc: "free", header: "<stdlib.h>".}
 
-const MaxConsumers = 64  # Initial capacity, grows dynamically
+const MaxConsumers* = 128  # Fixed size, matches MaxThreads in epoch.nim
 
 
 type
@@ -62,7 +62,7 @@ type
     segments: Atomic[int]   # Number of segments
     # Consumer tracking
     consumerCount: Atomic[int]
-    consumerHeads: seq[Atomic[int]]  # Per-consumer read position (global across segments)
+    consumerHeads: array[MaxConsumers, Atomic[int]]  # Per-consumer read position
 
   Consumer*[S: static int, T] = object
     ## Handle for a registered consumer.
@@ -104,7 +104,6 @@ proc newUnboundedSipmuc*[S: static int, T](
 
   # Initialize consumer tracking
   result.consumerCount.store(0, moRelaxed)
-  result.consumerHeads = newSeq[Atomic[int]](MaxConsumers)
   for i in 0..<MaxConsumers:
     result.consumerHeads[i].store(0, moRelaxed)
 
@@ -154,17 +153,10 @@ proc getConsumer*[S: static int, T](self: var UnboundedSipmuc[S, T]): Consumer[S
   ## Each consumer sees every item exactly once. Items are distributed
   ## among consumers in arrival order (not broadcast).
   let idx = self.consumerCount.fetchAdd(1, moAcquire)
+  assert idx < MaxConsumers, "Too many consumers (max " & $MaxConsumers & ")"
 
   # Register with epoch manager for safe memory reclamation
   let threadIdx = self.manager.registerThread()
-
-  # Grow consumer tracking if needed
-  if idx >= self.consumerHeads.len:
-    # Simple growth - in production would need synchronization
-    let newSize = self.consumerHeads.len * 2
-    self.consumerHeads.setLen(newSize)
-    for i in self.consumerHeads.len div 2 ..< newSize:
-      self.consumerHeads[i].store(0, moRelaxed)
 
   result.queue = addr self
   result.idx = idx
@@ -199,6 +191,15 @@ proc pop*[S: static int, T](self: var Consumer[S, T]): Option[T] =
       # Won the slot
       result = some(seg.data[mySlot])
       discard self.queue.itemCount.fetchSub(1, moRelaxed)
+
+      # If we claimed the last slot (S-1), retire segment for reclamation
+      if mySlot == S - 1 and self.queue.strategy != NeverDeallocate:
+        self.queue.manager.retire(seg)
+        discard self.queue.segments.fetchSub(1, moRelaxed)
+
+        if self.queue.strategy == EagerDeallocate:
+          discard self.queue.manager.tryReclaim()
+
       return
 
     # Lost CAS, retry

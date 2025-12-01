@@ -222,6 +222,15 @@ proc pop*[S: static int, T](self: var Consumer[S, T]): Option[T] =
     if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
       result = some(seg.data[mySlot])
       discard self.queue.itemCount.fetchSub(1, moRelaxed)
+
+      # If we claimed the last slot (S-1), retire segment for reclamation
+      if mySlot == S - 1 and self.queue.strategy != NeverDeallocate:
+        self.queue.manager.retire(seg)
+        discard self.queue.segments.fetchSub(1, moRelaxed)
+
+        if self.queue.strategy == EagerDeallocate:
+          discard self.queue.manager.tryReclaim()
+
       return
 
 

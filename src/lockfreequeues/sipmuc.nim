@@ -129,6 +129,7 @@ proc getConsumer*[N, C: static int, T](
   result.queue = addr(self)
 
   if idx >= 0:
+    assert idx < C, "Consumer index " & $idx & " out of bounds (max " & $(C-1) & ")"
     result.idx = idx
     return
 
@@ -183,7 +184,7 @@ proc pop*[N, C: static int, T](
   while true:
     prevConsumerIdx = self.queue.prevConsumerIdx.acquire
     isFirstConsumption = prevConsumerIdx == NoConsumerIdx
-    var tail = self.queue.tail.sequential
+    var tail = self.queue.tail.acquire
     prevHead =
       if isFirstConsumption:
         0
@@ -252,7 +253,7 @@ proc pop*[N, C: static int, T](
   while true:
     prevConsumerIdx = self.queue.prevConsumerIdx.acquire
     isFirstConsumption = prevConsumerIdx == NoConsumerIdx
-    tail = self.queue.tail.sequential
+    tail = self.queue.tail.acquire
     prevHead =
       if isFirstConsumption:
         0
