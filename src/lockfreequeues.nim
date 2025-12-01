@@ -14,6 +14,9 @@ when compileOption("threads"):
     ops,
     sipmuc,
     sipsic,
+    unbounded_mupmuc,
+    unbounded_mupsic,
+    unbounded_sipmuc,
     unbounded_sipsic,
   ]
 
@@ -26,6 +29,9 @@ when compileOption("threads"):
     ops,
     sipmuc,
     sipsic,
+    unbounded_mupmuc,
+    unbounded_mupsic,
+    unbounded_sipmuc,
     unbounded_sipsic
 else:
   # threading off, only provide sipsic
