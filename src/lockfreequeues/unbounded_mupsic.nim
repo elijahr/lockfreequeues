@@ -28,6 +28,10 @@ import options
 
 import ./epoch
 
+# Use C stdlib for thread-safe cross-thread allocation
+proc c_calloc(n, size: csize_t): pointer {.importc: "calloc", header: "<stdlib.h>".}
+proc c_free(p: pointer) {.importc: "free", header: "<stdlib.h>".}
+
 type
   DeallocationStrategy* = enum
     ## Strategy for segment memory reclamation.
@@ -68,8 +72,8 @@ type
 
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
-  ## Allocate a new segment.
-  result = cast[ptr Segment[S, T]](alloc0(sizeof(Segment[S, T])))
+  ## Allocate a new segment using C malloc (thread-safe cross-thread).
+  result = cast[ptr Segment[S, T]](c_calloc(1, csize_t(sizeof(Segment[S, T]))))
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
   result.head = 0
@@ -151,7 +155,7 @@ proc push*[S: static int, T](self: var Producer[S, T], item: T) =
           continue
         else:
           # Lost race, free our segment
-          dealloc(newSeg)
+          c_free(newSeg)
           continue
       else:
         # Someone else allocated, advance tail segment
@@ -243,5 +247,5 @@ proc `=destroy`*[S: static int, T](self: UnboundedMupsic[S, T]) =
     var seg = self.headSegment
     while seg != nil:
       let next = seg.next.load(moRelaxed)
-      dealloc(seg)
+      c_free(seg)
       seg = next

@@ -31,6 +31,9 @@
 
 import atomics
 
+# Use C stdlib for thread-safe cross-thread allocation
+proc c_free(p: pointer) {.importc: "free", header: "<stdlib.h>".}
+
 type
   RetiredSegment = tuple[epoch: uint64, segment: pointer]
 
@@ -174,7 +177,7 @@ proc tryReclaim*(self: EpochManager): int =
 
   for item in self.retireQueue:
     if self.safeToReclaim(item.epoch):
-      dealloc(item.segment)
+      c_free(item.segment)
       inc result
     else:
       remaining.add(item)

@@ -1,0 +1,11 @@
+nimTitle	sipsic	lockfreequeues/sipsic.html	module src/lockfreequeues/sipsic		0
+nim	NoSlice	lockfreequeues/sipsic.html#NoSlice	const NoSlice		17
+nim	Sipsic	lockfreequeues/sipsic.html#Sipsic	object Sipsic		21
+nim	initSipsic	lockfreequeues/sipsic.html#initSipsic	proc initSipsic[N: static int; T](): Sipsic[N, T]		45
+nim	push	lockfreequeues/sipsic.html#push,Sipsic[N,T],T	proc push[N: static int; T](self: var Sipsic[N, T]; item: T): bool		50
+nim	push	lockfreequeues/sipsic.html#push,Sipsic[N,T],openArray[T]	proc push[N: static int; T](self: var Sipsic[N, T]; items: openArray[T]): Option[\n    HSlice[int, int]]		75
+nim	pop	lockfreequeues/sipsic.html#pop,Sipsic[N,T]	proc pop[N: static int; T](self: var Sipsic[N, T]): Option[T]		127
+nim	pop	lockfreequeues/sipsic.html#pop,Sipsic[N,T],int	proc pop[N: static int; T](self: var Sipsic[N, T]; count: int): Option[seq[T]]		148
+nim	capacity	lockfreequeues/sipsic.html#capacity,Sipsic[N,T]	proc capacity[N: static int; T](self: var Sipsic[N, T]): int		198
+nimgrp	pop	lockfreequeues/sipsic.html#pop-procs-all	proc		127
+nimgrp	push	lockfreequeues/sipsic.html#push-procs-all	proc		50

@@ -7,7 +7,7 @@
 import atomics
 import options
 import sequtils
-import unittest
+import unittest2
 
 import lockfreequeues
 import ./t_integration

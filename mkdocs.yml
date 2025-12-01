@@ -1,0 +1,85 @@
+site_name: lockfreequeues
+site_description: Lock-free queues for Nim, implemented as ring buffers
+site_url: https://elijahr.github.io/lockfreequeues/
+
+repo_name: elijahr/lockfreequeues
+repo_url: https://github.com/elijahr/lockfreequeues
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - content.code.copy
+    - content.code.annotate
+    - navigation.instant
+    - navigation.sections
+    - toc.follow
+
+exclude_docs: |
+  plans/
+
+plugins:
+  - search
+  - mike:
+      alias_type: symlink
+      canonical_version: latest
+  - git-revision-date-localized:
+      enable_creation_date: true
+      type: timeago
+  - glightbox
+  - mkdocstrings:
+      default_handler: nim
+      handlers:
+        nim:
+          paths: [src]
+          options:
+            docstring_style: rst
+            show_source: true
+            show_signature: true
+            heading_level: 2
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - API Reference:
+    - Overview: api/index.md
+    - Sipsic: api/sipsic.md
+    - Sipmuc: api/sipmuc.md
+    - Mupsic: api/mupsic.md
+    - Mupmuc: api/mupmuc.md
+    - Operations: api/ops.md
+
+watch:
+  - docs
+  - src  # Reload when Nim source files change
+
+extra:
+  version:
+    provider: mike
+    default: latest
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/elijahr/lockfreequeues

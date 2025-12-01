@@ -28,6 +28,10 @@ import options
 
 import ./epoch
 
+# Use C stdlib for thread-safe cross-thread allocation
+proc c_calloc(n, size: csize_t): pointer {.importc: "calloc", header: "<stdlib.h>".}
+proc c_free(p: pointer) {.importc: "free", header: "<stdlib.h>".}
+
 
 type
   DeallocationStrategy* = enum
@@ -72,8 +76,8 @@ type
 
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
-  ## Allocate a new segment.
-  result = cast[ptr Segment[S, T]](alloc0(sizeof(Segment[S, T])))
+  ## Allocate a new segment using C malloc (thread-safe cross-thread).
+  result = cast[ptr Segment[S, T]](c_calloc(1, csize_t(sizeof(Segment[S, T]))))
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
   result.prevConsumerIdx.store(-1, moRelaxed)
@@ -160,7 +164,7 @@ proc push*[S: static int, T](self: var Producer[S, T], item: T) =
           discard self.queue.segments.fetchAdd(1, moRelaxed)
           continue
         else:
-          dealloc(newSeg)
+          c_free(newSeg)
           continue
       else:
         var expectedSeg = seg
@@ -247,5 +251,5 @@ proc `=destroy`*[S: static int, T](self: UnboundedMupmuc[S, T]) =
     var seg = self.headSegment
     while seg != nil:
       let next = seg.next.load(moRelaxed)
-      dealloc(seg)
+      c_free(seg)
       seg = next

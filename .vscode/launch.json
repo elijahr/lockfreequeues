@@ -1,26 +1,32 @@
 {
-  // Use IntelliSense to learn about possible attributes.
-  // Hover to view descriptions of existing attributes.
-  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug tests (cppdbg)",
-      "type": "cppdbg",
-      "MIMode": "lldb",
+      "type": "nimdbg",
       "request": "launch",
-      "program": "${workspaceRoot}/tests/test",
-      // "args": ["Mupmuc[N, P, C, T] threaded::"],
-      "cwd": "${workspaceRoot}"
+      "name": "Debug: current file",
+      "program": "${fileDirname}/${fileBasenameNoExtension}",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "nim: compile current file (debug)",
+      "stopOnEntry": false
     },
     {
-      "name": "Debug examples (cppdbg)",
-      "type": "cppdbg",
-      "MIMode": "lldb",
+      "type": "nimdbg",
       "request": "launch",
-      "program": "${workspaceRoot}/examples/mupsic",
-      // "args": ["ops.used(head, tail, capacity)::"],
-      "cwd": "${workspaceRoot}"
+      "name": "Debug: test: test",
+      "program": "${workspaceFolder}/tests/test",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "nim: compile tests/test.nim (debug)",
+      "stopOnEntry": false
+    },
+    {
+      "type": "nimdbg",
+      "request": "launch",
+      "name": "Debug: test: sipmuc",
+      "program": "${workspaceFolder}/examples/sipmuc",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "nim: compile examples/sipmuc.nim (debug)",
+      "stopOnEntry": false
     }
   ]
 }

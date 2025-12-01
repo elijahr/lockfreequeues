@@ -24,6 +24,10 @@ task test, "Runs the test suite":
     # C (with thread sanitization)
     exec "nim c --cc:clang --passC:\"-fsanitize=thread\" --passL:\"-fsanitize=thread\" -r -f tests/test.nim"
 
+  if getEnv("SANITIZE_ADDRESS") != "no":
+    # C (with address sanitization)
+    exec "nim c --cc:clang --passC:\"-fsanitize=address\" --passL:\"-fsanitize=address\" -r -f tests/test.nim"
+
 
 task examples, "Runs the examples":
   exec "nim c -r -f examples/mupmuc.nim"

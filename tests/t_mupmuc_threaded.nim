@@ -8,7 +8,7 @@ import algorithm
 import atomics
 import options
 import sequtils
-import unittest
+import unittest2
 
 import lockfreequeues
 

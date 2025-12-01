@@ -1,56 +1,54 @@
 {
   "version": "2.0.0",
+  "inputs": [
+    {
+      "id": "nimdbgPath",
+      "type": "command",
+      "command": "nim-debugger.getNimdbgPath"
+    }
+  ],
   "tasks": [
     {
-      "label": "Build tests",
-      "command": "nim",
-      "args": ["c", "tests/test.nim"],
-      "options": {
-        "cwd": "${workspaceRoot}"
-      },
+      "label": "nim: compile current file (debug)",
       "type": "shell",
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      }
+      "command": "nim",
+      "args": [
+        "c",
+        "--debugger:native",
+        "--path:${input:nimdbgPath}",
+        "--import:nimdbg",
+        "${file}"
+      ],
+      "problemMatcher": "$nim",
+      "group": "build"
     },
     {
-      "label": "Run tests",
-      "command": "tests/test",
-      "options": {
-        "cwd": "${workspaceRoot}"
-      },
+      "label": "nim: compile tests/test.nim (debug)",
       "type": "shell",
-      "group": {
-        "kind": "test",
-        "isDefault": true
-      }
+      "command": "nim",
+      "args": [
+        "c",
+        "--debugger:native",
+        "--path:${input:nimdbgPath}",
+        "--import:nimdbg",
+        "tests/test.nim"
+      ],
+      "problemMatcher": "$nim",
+      "group": "test"
+    },
+    {
+      "label": "nim: compile examples/sipmuc.nim (debug)",
+      "type": "shell",
+      "command": "nim",
+      "args": [
+        "c",
+        "--debugger:native",
+        "--path:${input:nimdbgPath}",
+        "--import:nimdbg",
+        "examples/sipmuc.nim"
+      ],
+      "problemMatcher": "$nim",
+      "group": "test"
     }
-    // {
-    //     "label": "Build example 'sipsicqueuestatic'",
-    //     "command": "nim",
-    //     "args": [
-    //         "c",
-    //         "examples/sipsicqueuestatic.nim"
-    //     ],
-    //     "options": {
-    //         "cwd": "${workspaceRoot}"
-    //     },
-    //     "type": "shell",
-    //     "group": "build"
-    // },
-    // {
-    //     "label": "Build mupsic_static_queue",
-    //     "command": "nim",
-    //     "args": [
-    //         "c",
-    //         "src/lockfreequeues/mupsic_static_queue.nim"
-    //     ],
-    //     "options": {
-    //         "cwd": "${workspaceRoot}"
-    //     },
-    //     "type": "shell",
-    //     "group": "build"
-    // },
   ]
 }

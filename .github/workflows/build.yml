@@ -28,7 +28,8 @@ jobs:
           - runs-on: ubuntu-latest
             nim-version: '2.0.8'
             sanitize-threads: 'yes'
-            timeout-minutes: 5
+            sanitize-address: 'yes'
+            timeout-minutes: 10
 
     steps:
       # Optimization: re-use cached Nim->C compilation
@@ -55,8 +56,8 @@ jobs:
 
       - name: Run tests
         run: |
-          export SANITIZE_THREADS
-          SANITIZE_THREADS=${{ matrix.sanitize-threads }}
+          export SANITIZE_THREADS=${{ matrix.sanitize-threads }}
+          export SANITIZE_ADDRESS=${{ matrix.sanitize-address }}
           . "${HOME}/.asdf/asdf.sh"
           nimble develop -y
           nimble test

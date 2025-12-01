@@ -7,8 +7,14 @@ nimblecache/
 /src/*
 /tests/*
 /examples/*
-/htmldocs/*
+/htmldocs/
+/site/
 
 !**/*.nims
 !**/*.nim
 !**/*.cfg
+
+# Axiomantic - ignore user-specific instructions (personal preferences)
+.github/instructions/user.instructions.md
+nimble.develop
+nimble.paths

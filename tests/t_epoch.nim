@@ -9,6 +9,10 @@ import unittest2
 
 import lockfreequeues/epoch
 
+# Use C stdlib to match epoch.nim
+proc c_calloc(n, size: csize_t): pointer {.importc: "calloc", header: "<stdlib.h>".}
+proc c_free(p: pointer) {.importc: "free", header: "<stdlib.h>".}
+
 
 suite "EpochManager":
 
@@ -89,8 +93,8 @@ suite "EpochManager":
     let manager = newEpochManager()
     let idx = manager.registerThread()
 
-    # Allocate some memory
-    var segment = cast[pointer](alloc(64))
+    # Allocate some memory (use c_calloc to match epoch.nim's c_free)
+    var segment = c_calloc(1, 64)
 
     # Retire at epoch 1
     manager.retire(segment)
@@ -109,7 +113,7 @@ suite "EpochManager":
     let manager = newEpochManager()
     let idx = manager.registerThread()
 
-    var segment = cast[pointer](alloc(64))
+    var segment = c_calloc(1, 64)
 
     # Pin before retiring
     let guard = manager.pin(idx)
@@ -127,7 +131,7 @@ suite "EpochManager":
     check(manager.retireQueueLen == 1)
 
     # Clean up manually since we didn't reclaim
-    dealloc(segment)
+    c_free(segment)
 
 
 suite "EpochGuard":

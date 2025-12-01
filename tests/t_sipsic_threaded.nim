@@ -5,7 +5,7 @@
 # copyright.
 
 import options
-import unittest
+import unittest2
 
 import lockfreequeues
 
