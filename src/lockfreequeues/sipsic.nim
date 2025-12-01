@@ -210,7 +210,7 @@ when defined(testing):
     self: var Sipsic[N, T]
   ) =
     ## Resets the queue to its default state.
-    ## Probably only useful in single-threaded unit tests.
+    ## For single-threaded unit tests only.
     self.clear()
 
 

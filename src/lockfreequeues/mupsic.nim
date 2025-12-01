@@ -262,8 +262,7 @@ proc push*[N, P: static int, T](
   self: var Mupsic[N, P, T],
   item: T,
 ): bool =
-  ## Overload of `Sipsic.push()` that simply raises `InvalidCallDefect`.
-  ## Pushes should happen via `Producer.push()`.
+  ## Raises `InvalidCallDefect`. Use `Producer.push()` instead.
   raise newException(InvalidCallDefect, "Use Producer.push()")
 
 
@@ -271,8 +270,7 @@ proc push*[N, P: static int, T](
   self: var Mupsic[N, P, T],
   items: openArray[T],
 ): Option[HSlice[int, int]] =
-  ## Overload of `Sipsic.push()` that simply raises `InvalidCallDefect`.
-  ## Pushes should happen via `Producer.push()`.
+  ## Raises `InvalidCallDefect`. Use `Producer.push()` instead.
   raise newException(InvalidCallDefect, "Use Producer.push()")
 
 
@@ -299,7 +297,7 @@ when defined(testing):
     self: var Mupsic[N, P, T]
   ) =
     ## Resets the queue to its default state.
-    ## Probably only useful in single-threaded unit tests.
+    ## For single-threaded unit tests only.
     self.clear()
 
   proc checkState*[N, P: static int, T](

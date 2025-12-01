@@ -255,8 +255,7 @@ proc pop*[N, P, C: static int, T](
 proc pop*[N, P, C: static int, T](
   self: var Mupmuc[N, P, C, T],
 ): bool =
-  ## Overload of `Sipsic.pop()` that simply raises `InvalidCallDefect`.
-  ## Pops should happen via `Consumer.pop()`.
+  ## Raises `InvalidCallDefect`. Use `Consumer.pop()` instead.
   raise newException(InvalidCallDefect, "Use Consumer.pop()")
 
 
@@ -264,8 +263,7 @@ proc pop*[N, P, C: static int, T](
   self: var Mupmuc[N, P, C, T],
   count: int,
 ): Option[seq[T]] =
-  ## Overload of `Sipsic.pop()` that simply raises `InvalidCallDefect`.
-  ## Pops should happen via `Consumer.pop()`.
+  ## Raises `InvalidCallDefect`. Use `Consumer.pop()` instead.
   raise newException(InvalidCallDefect, "Use Consumer.pop()")
 
 
