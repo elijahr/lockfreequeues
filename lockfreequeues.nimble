@@ -30,7 +30,13 @@ task test, "Runs the test suite":
 
 
 task examples, "Runs the examples":
-  exec "nim c -r -f examples/mupmuc.nim"
-  exec "nim c -r -f examples/mupsic.nim"
-  exec "nim c -r -f examples/sipmuc.nim"
-  exec "nim c -r -f examples/sipsic.nim"
+  # Bounded queue examples
+  exec "nim c --threads:on -r -f examples/sipsic.nim"
+  exec "nim c --threads:on -r -f examples/sipmuc.nim"
+  exec "nim c --threads:on -r -f examples/mupsic.nim"
+  exec "nim c --threads:on -r -f examples/mupmuc.nim"
+  # Advanced examples
+  exec "nim c --threads:on -r -f examples/audio_buffer.nim"
+  exec "nim c --threads:on -r -f examples/task_fanout.nim"
+  exec "nim c --threads:on -r -f examples/event_collector.nim"
+  exec "nim c --threads:on -r -f examples/job_scheduler.nim"
