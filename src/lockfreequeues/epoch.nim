@@ -12,27 +12,31 @@
 ##
 ## Usage:
 ##
-## .. code-block:: nim
-##    let manager = newEpochManager()
+## ```nim
+## let manager = newEpochManager()
 ##
-##    # Register thread (once per thread)
-##    let threadIdx = manager.registerThread()
+## # Register thread (once per thread)
+## let threadIdx = manager.registerThread()
 ##
-##    # Pin before accessing shared data
-##    let guard = manager.pin(threadIdx)
-##    # ... access shared memory ...
-##    # guard destroyed, unpins automatically
+## # Pin before accessing shared data
+## let guard = manager.pin(threadIdx)
+## # ... access shared memory ...
+## # guard destroyed, unpins automatically
 ##
-##    # Retire memory for later reclamation
-##    manager.retire(segmentPtr)
+## # Retire memory for later reclamation
+## manager.retire(segmentPtr)
 ##
-##    # Periodically reclaim safe memory
-##    discard manager.tryReclaim()
+## # Periodically reclaim safe memory
+## discard manager.tryReclaim()
+## ```
 
 import atomics
 
 # Use C stdlib for thread-safe cross-thread allocation
 proc c_free(p: pointer) {.importc: "free", header: "<stdlib.h>".}
+
+const
+  MaxThreads* = 128  ## Maximum supported threads for epoch manager
 
 type
   RetiredSegment = tuple[epoch: uint64, segment: pointer]
@@ -43,8 +47,10 @@ type
     ## Thread-safe for concurrent registration and pinning.
     globalEpoch*: Atomic[uint64]
       ## Current global epoch, monotonically increasing.
-    threadStates*: seq[Atomic[uint64]]
-      ## Per-thread pinned epoch. 0 = unpinned.
+    threadStates*: array[MaxThreads, Atomic[uint64]]
+      ## Per-thread pinned epoch. 0 = unpinned. Fixed size to avoid reallocation races.
+    threadCount*: Atomic[int]
+      ## Number of registered threads.
     retireQueue: seq[RetiredSegment]
       ## Queue of segments awaiting reclamation.
     retireLock: Atomic[bool]
@@ -62,10 +68,12 @@ type
 proc newEpochManager*(): EpochManager =
   ## Create a new EpochManager.
   ##
-  ## :returns: A new EpochManager instance with epoch starting at 1.
+  ## Returns a new EpochManager instance with epoch starting at 1.
   result = EpochManager()
   result.globalEpoch.store(1, moRelease)
-  result.threadStates = @[]
+  result.threadCount.store(0, moRelaxed)
+  for i in 0..<MaxThreads:
+    result.threadStates[i].store(0, moRelaxed)
   result.retireQueue = @[]
   result.retireLock.store(false, moRelease)
 
@@ -73,26 +81,20 @@ proc newEpochManager*(): EpochManager =
 proc registerThread*(self: EpochManager): int =
   ## Register a new thread with the epoch manager.
   ##
-  ## :returns: The thread's unique index for use with `pin()`.
+  ## Returns the thread's unique index for use with `pin()`.
   ##
   ## Thread-safe. Each thread should register once and reuse its index.
-  # Simple spinlock for thread-safe registration
-  while self.retireLock.exchange(true, moAcquire):
-    discard
-
-  result = self.threadStates.len
-  var newState: Atomic[uint64]
-  newState.store(0, moRelaxed)
-  self.threadStates.add(newState)
-
-  self.retireLock.store(false, moRelease)
+  ## Raises assertion if MaxThreads exceeded.
+  result = self.threadCount.fetchAdd(1, moAcquire)
+  assert result < MaxThreads, "Too many threads registered with EpochManager (max " & $MaxThreads & ")"
+  # Slot is already initialized to 0 (unpinned) from newEpochManager
 
 
 proc pin*(self: EpochManager, threadIdx: int): EpochGuard =
   ## Pin the current thread to the current epoch.
   ##
-  ## :param threadIdx: Thread index from `registerThread()`.
-  ## :returns: An EpochGuard that unpins on destruction.
+  ## Thread index from `registerThread()` is required.
+  ## Returns an EpochGuard that unpins on destruction.
   ##
   ## While pinned, memory retired at the current epoch cannot be reclaimed.
   let epoch = self.globalEpoch.load(moAcquire)
@@ -127,7 +129,7 @@ proc advance*(self: EpochManager) =
 proc retire*(self: EpochManager, segment: pointer) =
   ## Mark a segment for future reclamation.
   ##
-  ## :param segment: Pointer to memory to be freed when safe.
+  ## Pointer to memory to be freed when safe.
   ##
   ## The segment will be freed when `tryReclaim()` determines it's safe.
   let epoch = self.globalEpoch.load(moAcquire)
@@ -151,9 +153,9 @@ proc retireQueueLen*(self: EpochManager): int =
 proc safeToReclaim*(self: EpochManager, epoch: uint64): bool =
   ## Check if segments retired at given epoch can be safely reclaimed.
   ##
-  ## :param epoch: The epoch when segments were retired.
-  ## :returns: true if no threads are pinned to epochs <= given epoch.
-  for i in 0..<self.threadStates.len:
+  ## Returns true if no threads are pinned to epochs <= given epoch.
+  let count = self.threadCount.load(moAcquire)
+  for i in 0..<count:
     let threadEpoch = self.threadStates[i].load(moAcquire)
     if threadEpoch != 0 and threadEpoch <= epoch:
       return false
@@ -163,7 +165,7 @@ proc safeToReclaim*(self: EpochManager, epoch: uint64): bool =
 proc tryReclaim*(self: EpochManager): int =
   ## Attempt to reclaim retired segments that are safe to free.
   ##
-  ## :returns: Number of segments reclaimed.
+  ## Returns the number of segments reclaimed.
   ##
   ## Call this periodically to free memory. Only segments where all threads
   ## have advanced past the retirement epoch will be freed.

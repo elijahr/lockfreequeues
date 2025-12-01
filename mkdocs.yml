@@ -55,6 +55,8 @@ markdown_extensions:
       anchor_linenums: true
   - pymdownx.superfences
   - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path: ["."]
   - admonition
   - pymdownx.details
   - attr_list
@@ -66,11 +68,20 @@ nav:
   - Home: index.md
   - API Reference:
     - Overview: api/index.md
-    - Sipsic: api/sipsic.md
-    - Sipmuc: api/sipmuc.md
-    - Mupsic: api/mupsic.md
-    - Mupmuc: api/mupmuc.md
-    - Operations: api/ops.md
+    - Bounded Queues:
+      - Sipsic: api/sipsic.md
+      - Sipmuc: api/sipmuc.md
+      - Mupsic: api/mupsic.md
+      - Mupmuc: api/mupmuc.md
+    - Unbounded Queues:
+      - UnboundedSipsic: api/unbounded_sipsic.md
+      - UnboundedSipmuc: api/unbounded_sipmuc.md
+      - UnboundedMupsic: api/unbounded_mupsic.md
+      - UnboundedMupmuc: api/unbounded_mupmuc.md
+    - Support:
+      - EpochManager: api/epoch.md
+      - Operations: api/ops.md
+  - Examples: examples.md
 
 watch:
   - docs

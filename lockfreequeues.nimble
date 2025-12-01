@@ -15,18 +15,18 @@ requires "unittest2"
 # Tasks
 task test, "Runs the test suite":
   # C
-  exec "nim c -r -f tests/test.nim"
+  exec "nim c --threads:on -r -f tests/test.nim"
 
   # C++
-  exec "nim cpp -r -f tests/test.nim"
+  exec "nim cpp --threads:on -r -f tests/test.nim"
 
   if getEnv("SANITIZE_THREADS") != "no":
-    # C (with thread sanitization)
-    exec "nim c --cc:clang --passC:\"-fsanitize=thread\" --passL:\"-fsanitize=thread\" -r -f tests/test.nim"
+    # C (with thread sanitization, requires atomicArc for thread-safe refcounting)
+    exec "nim c --cc:clang --mm:atomicArc --passC:\"-fsanitize=thread\" --passL:\"-fsanitize=thread\" --threads:on -r -f tests/test.nim"
 
   if getEnv("SANITIZE_ADDRESS") != "no":
     # C (with address sanitization)
-    exec "nim c --cc:clang --passC:\"-fsanitize=address\" --passL:\"-fsanitize=address\" -r -f tests/test.nim"
+    exec "nim c --cc:clang --passC:\"-fsanitize=address\" --passL:\"-fsanitize=address\" --threads:on -r -f tests/test.nim"
 
 
 task examples, "Runs the examples":

@@ -8,18 +8,18 @@
 ##
 ## Uses epoch-based reclamation for safe memory deallocation.
 ##
-## :param S: Segment size (items per segment). Larger = less allocation,
-##           smaller = faster reclamation.
-## :param T: Type of data the queue holds.
+## - S: Segment size (items per segment). Larger = less allocation, smaller = faster reclamation.
+## - T: Type of data the queue holds.
 ##
 ## Both push and pop are wait-free for SPSC.
 ##
-## .. code-block:: nim
-##    let manager = newEpochManager()
-##    var queue = newUnboundedSipsic[64, int](manager)
+## ```nim
+## let manager = newEpochManager()
+## var queue = newUnboundedSipsic[64, int](manager)
 ##
-##    queue.push(42)
-##    let item = queue.pop()  # some(42)
+## queue.push(42)
+## let item = queue.pop()  # some(42)
+## ```
 
 import atomics
 import options
@@ -42,14 +42,14 @@ type
     ## A fixed-size segment in the linked list.
     data: array[S, T]
     next: Atomic[ptr Segment[S, T]]
-    head: int  # Consumer read position within segment
-    tail: int  # Producer write position within segment
+    head: Atomic[int]  # Consumer read position within segment
+    tail: Atomic[int]  # Producer write position within segment
 
   UnboundedSipsic*[S: static int, T] = object
     ## Unbounded SPSC queue using linked segments.
     ##
-    ## :param S: Segment size (compile-time constant).
-    ## :param T: Data type.
+    ## - S: Segment size (compile-time constant).
+    ## - T: Data type.
     manager: EpochManager
     headSegment: ptr Segment[S, T]  # Consumer reads from here
     tailSegment: ptr Segment[S, T]  # Producer writes here
@@ -63,8 +63,8 @@ proc newSegment[S: static int, T](): ptr Segment[S, T] =
   ## Allocate a new segment using C malloc (thread-safe cross-thread).
   result = cast[ptr Segment[S, T]](c_calloc(1, csize_t(sizeof(Segment[S, T]))))
   result.next.store(nil, moRelaxed)
-  result.head = 0
-  result.tail = 0
+  result.head.store(0, moRelaxed)
+  result.tail.store(0, moRelaxed)
 
 
 proc newUnboundedSipsic*[S: static int, T](
@@ -73,9 +73,9 @@ proc newUnboundedSipsic*[S: static int, T](
 ): UnboundedSipsic[S, T] =
   ## Create a new unbounded SPSC queue.
   ##
-  ## :param manager: EpochManager for memory reclamation.
-  ## :param strategy: Deallocation strategy (default: Pooled).
-  ## :returns: New queue instance.
+  ## Requires an EpochManager for memory reclamation.
+  ## Deallocation strategy defaults to Pooled.
+  ## Returns a new queue instance.
   result.manager = manager
   result.strategy = strategy
   result.threadIdx = manager.registerThread()
@@ -100,12 +100,11 @@ proc len*[S: static int, T](self: var UnboundedSipsic[S, T]): int =
 
 proc push*[S: static int, T](self: var UnboundedSipsic[S, T], item: T) =
   ## Push a single item. Never blocks or fails (unbounded).
-  ##
-  ## :param item: Item to push.
   var seg = self.tailSegment
 
   # Check if current segment is full
-  if seg.tail >= S:
+  let tail = seg.tail.load(moRelaxed)
+  if tail >= S:
     # Allocate new segment
     let newSeg = newSegment[S, T]()
     seg.next.store(newSeg, moRelease)
@@ -113,16 +112,15 @@ proc push*[S: static int, T](self: var UnboundedSipsic[S, T], item: T) =
     seg = newSeg
     discard self.segments.fetchAdd(1, moRelaxed)
 
-  # Write item
-  seg.data[seg.tail] = item
-  inc seg.tail
+  # Write item then publish with release semantics
+  let pos = seg.tail.load(moRelaxed)
+  seg.data[pos] = item
+  seg.tail.store(pos + 1, moRelease)
   discard self.itemCount.fetchAdd(1, moRelaxed)
 
 
 proc push*[S: static int, T](self: var UnboundedSipsic[S, T], items: openArray[T]) =
   ## Push multiple items.
-  ##
-  ## :param items: Items to push.
   for item in items:
     self.push(item)
 
@@ -130,13 +128,14 @@ proc push*[S: static int, T](self: var UnboundedSipsic[S, T], items: openArray[T
 proc pop*[S: static int, T](self: var UnboundedSipsic[S, T]): Option[T] =
   ## Pop a single item.
   ##
-  ## :returns: some(T) if available, none(T) if empty.
+  ## Returns some(T) if available, none(T) if empty.
   let guard {.used.} = self.manager.pin(self.threadIdx)
 
   var seg = self.headSegment
 
-  # Check if segment is exhausted
-  while seg.head >= seg.tail:
+  # Check if segment is exhausted (acquire tail to sync with producer's release)
+  var head = seg.head.load(moRelaxed)
+  while head >= seg.tail.load(moAcquire):
     # Try to advance to next segment
     let nextSeg = seg.next.load(moAcquire)
     if nextSeg == nil:
@@ -149,10 +148,11 @@ proc pop*[S: static int, T](self: var UnboundedSipsic[S, T]): Option[T] =
 
     self.headSegment = nextSeg
     seg = nextSeg
+    head = seg.head.load(moRelaxed)
 
-  # Read item
-  result = some(seg.data[seg.head])
-  inc seg.head
+  # Read item then advance head
+  result = some(seg.data[head])
+  seg.head.store(head + 1, moRelaxed)
   discard self.itemCount.fetchSub(1, moRelaxed)
 
   # Try to reclaim if eager
@@ -163,8 +163,7 @@ proc pop*[S: static int, T](self: var UnboundedSipsic[S, T]): Option[T] =
 proc pop*[S: static int, T](self: var UnboundedSipsic[S, T], count: int): Option[seq[T]] =
   ## Pop up to count items.
   ##
-  ## :param count: Maximum items to pop.
-  ## :returns: some(seq[T]) with at least one item, none if empty.
+  ## Returns some(seq[T]) with at least one item, none if empty.
   if count <= 0:
     return none(seq[T])
 

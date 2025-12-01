@@ -8,20 +8,20 @@
 ##
 ## Uses epoch-based reclamation for safe memory deallocation.
 ##
-## :param S: Segment size (items per segment). Larger = less allocation,
-##           smaller = faster reclamation.
-## :param T: Type of data the queue holds.
+## - S: Segment size (items per segment). Larger = less allocation, smaller = faster reclamation.
+## - T: Type of data the queue holds.
 ##
 ## Push is wait-free for the single producer.
 ## Pop is lock-free for multiple consumers (CAS coordination).
 ##
-## .. code-block:: nim
-##    let manager = newEpochManager()
-##    var queue = newUnboundedSipmuc[64, int](manager)
+## ```nim
+## let manager = newEpochManager()
+## var queue = newUnboundedSipmuc[64, int](manager)
 ##
-##    queue.push(42)
-##    var consumer = queue.getConsumer()
-##    let item = consumer.pop()  # some(42)
+## queue.push(42)
+## var consumer = queue.getConsumer()
+## let item = consumer.pop()  # some(42)
+## ```
 
 import atomics
 import options
@@ -52,8 +52,8 @@ type
   UnboundedSipmuc*[S: static int, T] = object
     ## Unbounded SPMC queue using linked segments.
     ##
-    ## :param S: Segment size (compile-time constant).
-    ## :param T: Data type.
+    ## - S: Segment size (compile-time constant).
+    ## - T: Data type.
     manager: EpochManager
     headSegment: ptr Segment[S, T]  # Consumers read from here
     tailSegment: ptr Segment[S, T]  # Producer writes here
@@ -89,9 +89,9 @@ proc newUnboundedSipmuc*[S: static int, T](
 ): UnboundedSipmuc[S, T] =
   ## Create a new unbounded SPMC queue.
   ##
-  ## :param manager: EpochManager for memory reclamation.
-  ## :param strategy: Deallocation strategy (default: Pooled).
-  ## :returns: New queue instance.
+  ## Requires an EpochManager for memory reclamation.
+  ## Deallocation strategy defaults to Pooled.
+  ## Returns a new queue instance.
   result.manager = manager
   result.strategy = strategy
 
@@ -121,8 +121,6 @@ proc len*[S: static int, T](self: var UnboundedSipmuc[S, T]): int =
 
 proc push*[S: static int, T](self: var UnboundedSipmuc[S, T], item: T) =
   ## Push a single item. Never blocks or fails (unbounded).
-  ##
-  ## :param item: Item to push.
   var seg = self.tailSegment
   var tail = seg.tail.load(moRelaxed)
 
@@ -144,8 +142,6 @@ proc push*[S: static int, T](self: var UnboundedSipmuc[S, T], item: T) =
 
 proc push*[S: static int, T](self: var UnboundedSipmuc[S, T], items: openArray[T]) =
   ## Push multiple items.
-  ##
-  ## :param items: Items to push.
   for item in items:
     self.push(item)
 
@@ -153,7 +149,7 @@ proc push*[S: static int, T](self: var UnboundedSipmuc[S, T], items: openArray[T
 proc getConsumer*[S: static int, T](self: var UnboundedSipmuc[S, T]): Consumer[S, T] =
   ## Register a new consumer and get a handle.
   ##
-  ## :returns: A Consumer handle for popping items.
+  ## Returns a Consumer handle for popping items.
   ##
   ## Each consumer sees every item exactly once. Items are distributed
   ## among consumers in arrival order (not broadcast).
@@ -179,7 +175,7 @@ proc getConsumer*[S: static int, T](self: var UnboundedSipmuc[S, T]): Consumer[S
 proc pop*[S: static int, T](self: var Consumer[S, T]): Option[T] =
   ## Pop a single item.
   ##
-  ## :returns: some(T) if available, none(T) if empty.
+  ## Returns some(T) if available, none(T) if empty.
   let guard {.used.} = self.queue.manager.pin(self.threadIdx)
 
   var seg = self.queue.headSegment
@@ -211,8 +207,7 @@ proc pop*[S: static int, T](self: var Consumer[S, T]): Option[T] =
 proc pop*[S: static int, T](self: var Consumer[S, T], count: int): Option[seq[T]] =
   ## Pop up to count items.
   ##
-  ## :param count: Maximum items to pop.
-  ## :returns: some(seq[T]) with at least one item, none if empty.
+  ## Returns some(seq[T]) with at least one item, none if empty.
   if count <= 0:
     return none(seq[T])
 

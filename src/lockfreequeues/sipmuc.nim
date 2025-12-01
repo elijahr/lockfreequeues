@@ -9,9 +9,9 @@
 ## Sipmuc provides wait-free push operations (single producer) and lock-free
 ## pop operations (multiple consumers coordinate via CAS).
 ##
-## :param N: The capacity of the queue (static, compile-time).
-## :param C: The number of consumer threads (static, compile-time).
-## :param T: The type of data the queue will hold.
+## - N: The capacity of the queue (static, compile-time).
+## - C: The number of consumer threads (static, compile-time).
+## - T: The type of data the queue will hold.
 
 when not compileOption("threads"):
   {.error: "lockfreequeues/sipmuc requires --threads:on option.".}
@@ -40,19 +40,20 @@ type
     ## A single-producer, multi-consumer bounded queue implemented as a ring
     ## buffer. Pushing is wait-free. Popping is lock-free.
     ##
-    ## :param N: The capacity of the queue.
-    ## :param C: The number of consumer threads.
-    ## :param T: The type of data the queue will hold.
+    ## - N: The capacity of the queue.
+    ## - C: The number of consumer threads.
+    ## - T: The type of data the queue will hold.
     ##
-    ## .. code-block:: nim
-    ##    var queue = initSipmuc[64, 4, int]()
+    ## ```nim
+    ## var queue = initSipmuc[64, 4, int]()
     ##
-    ##    # Single producer pushes directly
-    ##    discard queue.push(42)
+    ## # Single producer pushes directly
+    ## discard queue.push(42)
     ##
-    ##    # Multiple consumers get handles
-    ##    let consumer = queue.getConsumer()
-    ##    let item = consumer.pop()
+    ## # Multiple consumers get handles
+    ## let consumer = queue.getConsumer()
+    ## let item = consumer.pop()
+    ## ```
 
     prevConsumerIdx*: Atomic[int]
       ## The ID (index) of the most recent consumer.
@@ -65,9 +66,9 @@ type
     ## A per-thread interface for popping items from a queue.
     ## Retrieved via a call to `Sipmuc.getConsumer()`.
     ##
-    ## :param N: The capacity of the queue.
-    ## :param C: The number of consumer threads.
-    ## :param T: The type of data the queue will hold.
+    ## - N: The capacity of the queue.
+    ## - C: The number of consumer threads.
+    ## - T: The type of data the queue will hold.
     idx*: int
       ## The consumer's unique identifier (0 to C-1).
     queue*: ptr Sipmuc[N, C, T]
@@ -93,10 +94,11 @@ proc clear[N, C: static int, T](
 proc initSipmuc*[N, C: static int, T](): Sipmuc[N, C, T] =
   ## Initialize a new Sipmuc queue.
   ##
-  ## :returns: A new Sipmuc queue instance.
+  ## Returns a new Sipmuc queue instance.
   ##
-  ## .. code-block:: nim
-  ##    var queue = initSipmuc[64, 4, int]()
+  ## ```nim
+  ## var queue = initSipmuc[64, 4, int]()
+  ## ```
   result.clear()
 
 
@@ -105,8 +107,6 @@ proc consumerCount*[N, C: static int, T](
 ): int
   {.inline.} =
   ## Returns the queue's number of consumers (`C`).
-  ##
-  ## :returns: The number of consumer slots.
   result = C
 
 
@@ -117,15 +117,15 @@ proc getConsumer*[N, C: static int, T](
   {.raises: [NoConsumersAvailableError].} =
   ## Assigns and returns a `Consumer` instance for the current thread.
   ##
-  ## :param idx: Optional explicit consumer index (0 to C-1). If not provided,
-  ##             assigns based on thread ID.
-  ## :returns: A Consumer instance for popping items.
-  ## :raises NoConsumersAvailableError: If all consumer slots are taken.
+  ## Optional explicit consumer index (0 to C-1). If not provided, assigns based on thread ID.
+  ## Returns a Consumer instance for popping items.
+  ## Raises NoConsumersAvailableError if all consumer slots are taken.
   ##
-  ## .. code-block:: nim
-  ##    var queue = initSipmuc[64, 4, int]()
-  ##    let consumer = queue.getConsumer()
-  ##    let item = consumer.pop()
+  ## ```nim
+  ## var queue = initSipmuc[64, 4, int]()
+  ## let consumer = queue.getConsumer()
+  ## let item = consumer.pop()
+  ## ```
   result.queue = addr(self)
 
   if idx >= 0:
@@ -165,13 +165,14 @@ proc pop*[N, C: static int, T](
 ): Option[T] =
   ## Pop a single item from the queue.
   ##
-  ## :returns: ``some(T)`` if an item was popped, ``none(T)`` if queue is empty.
+  ## Returns `some(T)` if an item was popped, `none(T)` if queue is empty.
   ##
-  ## .. code-block:: nim
-  ##    let consumer = queue.getConsumer()
-  ##    let item = consumer.pop()
-  ##    if item.isSome:
-  ##      echo "Got: ", item.get
+  ## ```nim
+  ## let consumer = queue.getConsumer()
+  ## let item = consumer.pop()
+  ## if item.isSome:
+  ##   echo "Got: ", item.get
+  ## ```
 
   var prevHead: int
   var newHead: int
@@ -226,15 +227,15 @@ proc pop*[N, C: static int, T](
 ): Option[seq[T]] =
   ## Pop `count` items from the queue.
   ##
-  ## :param count: Maximum number of items to pop.
-  ## :returns: ``some(seq[T])`` with at least one item, or ``none(seq[T])`` if empty.
+  ## Returns `some(seq[T])` with at least one item, or `none(seq[T])` if empty.
   ##
-  ## .. code-block:: nim
-  ##    let consumer = queue.getConsumer()
-  ##    let items = consumer.pop(10)
-  ##    if items.isSome:
-  ##      for item in items.get:
-  ##        echo item
+  ## ```nim
+  ## let consumer = queue.getConsumer()
+  ## let items = consumer.pop(10)
+  ## if items.isSome:
+  ##   for item in items.get:
+  ##     echo item
+  ## ```
 
   if unlikely(count <= 0):
     return none(seq[T])

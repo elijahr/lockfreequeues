@@ -8,20 +8,20 @@
 ##
 ## Uses epoch-based reclamation for safe memory deallocation.
 ##
-## :param S: Segment size (items per segment). Larger = less allocation,
-##           smaller = faster reclamation.
-## :param T: Type of data the queue holds.
+## - S: Segment size (items per segment). Larger = less allocation, smaller = faster reclamation.
+## - T: Type of data the queue holds.
 ##
 ## Push is lock-free for multiple producers (CAS coordination).
 ## Pop is wait-free for the single consumer.
 ##
-## .. code-block:: nim
-##    let manager = newEpochManager()
-##    var queue = newUnboundedMupsic[64, int](manager)
+## ```nim
+## let manager = newEpochManager()
+## var queue = newUnboundedMupsic[64, int](manager)
 ##
-##    var producer = queue.getProducer()
-##    producer.push(42)
-##    let item = queue.pop()  # some(42)
+## var producer = queue.getProducer()
+## producer.push(42)
+## let item = queue.pop()  # some(42)
+## ```
 
 import atomics
 import options
@@ -50,8 +50,8 @@ type
   UnboundedMupsic*[S: static int, T] = object
     ## Unbounded MPSC queue using linked segments.
     ##
-    ## :param S: Segment size (compile-time constant).
-    ## :param T: Data type.
+    ## - S: Segment size (compile-time constant).
+    ## - T: Data type.
     manager: EpochManager
     headSegment: ptr Segment[S, T]  # Consumer reads from here
     tailSegment: Atomic[ptr Segment[S, T]]  # Producers write here (atomic for CAS)
@@ -87,9 +87,9 @@ proc newUnboundedMupsic*[S: static int, T](
 ): UnboundedMupsic[S, T] =
   ## Create a new unbounded MPSC queue.
   ##
-  ## :param manager: EpochManager for memory reclamation.
-  ## :param strategy: Deallocation strategy (default: Pooled).
-  ## :returns: New queue instance.
+  ## Requires an EpochManager for memory reclamation.
+  ## Deallocation strategy defaults to Pooled.
+  ## Returns a new queue instance.
   result.manager = manager
   result.strategy = strategy
   result.threadIdx = manager.registerThread()  # For consumer
@@ -118,7 +118,7 @@ proc len*[S: static int, T](self: var UnboundedMupsic[S, T]): int =
 proc getProducer*[S: static int, T](self: var UnboundedMupsic[S, T]): Producer[S, T] =
   ## Register a new producer and get a handle.
   ##
-  ## :returns: A Producer handle for pushing items.
+  ## Returns a Producer handle for pushing items.
   let idx = self.producerCount.fetchAdd(1, moAcquire)
 
   # Register with epoch manager for safe memory reclamation
@@ -131,8 +131,6 @@ proc getProducer*[S: static int, T](self: var UnboundedMupsic[S, T]): Producer[S
 
 proc push*[S: static int, T](self: var Producer[S, T], item: T) =
   ## Push a single item. Never blocks or fails (unbounded).
-  ##
-  ## :param item: Item to push.
   let guard {.used.} = self.queue.manager.pin(self.threadIdx)
 
   while true:
@@ -177,8 +175,6 @@ proc push*[S: static int, T](self: var Producer[S, T], item: T) =
 
 proc push*[S: static int, T](self: var Producer[S, T], items: openArray[T]) =
   ## Push multiple items.
-  ##
-  ## :param items: Items to push.
   for item in items:
     self.push(item)
 
@@ -186,7 +182,7 @@ proc push*[S: static int, T](self: var Producer[S, T], items: openArray[T]) =
 proc pop*[S: static int, T](self: var UnboundedMupsic[S, T]): Option[T] =
   ## Pop a single item.
   ##
-  ## :returns: some(T) if available, none(T) if empty.
+  ## Returns some(T) if available, none(T) if empty.
   let guard {.used.} = self.manager.pin(self.threadIdx)
 
   var seg = self.headSegment
@@ -223,8 +219,7 @@ proc pop*[S: static int, T](self: var UnboundedMupsic[S, T]): Option[T] =
 proc pop*[S: static int, T](self: var UnboundedMupsic[S, T], count: int): Option[seq[T]] =
   ## Pop up to count items.
   ##
-  ## :param count: Maximum items to pop.
-  ## :returns: some(seq[T]) with at least one item, none if empty.
+  ## Returns some(seq[T]) with at least one item, none if empty.
   if count <= 0:
     return none(seq[T])
 
