@@ -1,6 +1,6 @@
 # Sipmuc
 
-Single-producer, multiple-consumer bounded queue.
+Single-producer, multiple-consumer (SPMC) bounded queue.
 
 ## Overview
 

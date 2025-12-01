@@ -4,7 +4,7 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-## A single-producer, multi-consumer bounded queue implemented as a ring buffer.
+## A single-producer, multi-consumer (SPMC) bounded queue implemented as a ring buffer.
 ##
 ## Sipmuc provides wait-free push operations (single producer) and lock-free
 ## pop operations (multiple consumers coordinate via CAS).
@@ -37,8 +37,8 @@ type NoConsumersAvailableError* = object of CatchableError
 
 type
   Sipmuc*[N, C: static int, T] = object of Sipsic[N, T]
-    ## A single-producer, multi-consumer bounded queue implemented as a ring
-    ## buffer. Pushing is wait-free. Popping is lock-free.
+    ## A single-producer, multi-consumer (SPMC) bounded queue implemented as a
+    ## ring buffer. Pushing is wait-free. Popping is lock-free.
     ##
     ## - N: The capacity of the queue.
     ## - C: The number of consumer threads.

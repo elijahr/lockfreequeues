@@ -6,7 +6,7 @@
 
 ## Task Fan-Out Example
 ##
-## Demonstrates using a bounded Sipmuc queue for distributing work
+## Demonstrates using a bounded Sipmuc (SPMC) queue for distributing work
 ## from a single producer to multiple consumer workers.
 ##
 ## Pattern: Single dispatcher → Multiple workers

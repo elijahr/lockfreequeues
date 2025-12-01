@@ -1,6 +1,6 @@
 # UnboundedMupsic
 
-Unbounded multiple-producer, single-consumer queue using linked segments.
+Unbounded multiple-producer, single-consumer (MPSC) queue using linked segments.
 
 ## Overview
 

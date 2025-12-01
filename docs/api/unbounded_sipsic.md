@@ -1,6 +1,6 @@
 # UnboundedSipsic
 
-Unbounded single-producer, single-consumer queue using linked segments.
+Unbounded single-producer, single-consumer (SPSC) queue using linked segments.
 
 ## Overview
 

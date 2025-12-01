@@ -4,7 +4,7 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-## A multi-producer, single-consumer bounded queue implemented as a ring buffer.
+## A multi-producer, single-consumer (MPSC) bounded queue implemented as a ring buffer.
 
 when not compileOption("threads"):
   {.error: "lockfreequeues/mupsic requires --threads:on option.".}

@@ -6,7 +6,7 @@
 
 ## Job Scheduler Example
 ##
-## Demonstrates using an unbounded Mupmuc queue for a dynamic job
+## Demonstrates using an unbounded Mupmuc (MPMC) queue for a dynamic job
 ## scheduling system with multiple producers and consumers.
 ##
 ## Pattern: Multiple submitters → Job queue → Multiple workers

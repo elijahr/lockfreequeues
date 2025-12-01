@@ -6,7 +6,7 @@
 
 ## Audio Buffer Example
 ##
-## Demonstrates using a bounded Sipsic queue for real-time audio processing.
+## Demonstrates using a bounded Sipsic (SPSC) queue for real-time audio processing.
 ## The producer thread captures audio samples, the consumer thread plays them.
 ##
 ## Key properties:

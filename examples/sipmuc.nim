@@ -1,4 +1,4 @@
-## Example: Single-producer, multi-consumer queue
+## Example: Single-producer, multi-consumer (SPMC) queue
 ##
 ## This demonstrates a fan-out pattern where one producer
 ## distributes work to multiple consumers.

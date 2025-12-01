@@ -1,6 +1,6 @@
 # UnboundedMupmuc
 
-Unbounded multiple-producer, multiple-consumer queue using linked segments.
+Unbounded multiple-producer, multiple-consumer (MPMC) queue using linked segments.
 
 ## Overview
 

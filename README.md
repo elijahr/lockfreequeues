@@ -2,13 +2,21 @@
 
 # lockfreequeues
 
-Lock-free queues for Nim, implemented as ring buffers.
+Lock-free queues for Nim, implemented as ring buffers (bounded) and linked segments (unbounded).
 
-Three implementations are provided:
+**Bounded queues** (fixed capacity):
 
-- [`Sipsic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/sipsic.html) is a single-producer, single-consumer bounded queue. Pushing and popping are wait-free.
-- [`Mupsic`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupsic.html) is a multi-producer, single-consumer bounded queue. Popping is wait-free.
-- [`Mupmuc`](https://elijahr.github.io/lockfreequeues/lockfreequeues/mupmuc.html) is a multi-producer, multi-consumer bounded queue.
+- `Sipsic` - Single-producer, single-consumer (SPSC). Wait-free operations.
+- `Sipmuc` - Single-producer, multi-consumer (SPMC). Wait-free push, lock-free pop.
+- `Mupsic` - Multi-producer, single-consumer (MPSC). Lock-free push, wait-free pop.
+- `Mupmuc` - Multi-producer, multi-consumer (MPMC). Lock-free operations.
+
+**Unbounded queues** (dynamic capacity with epoch-based memory reclamation):
+
+- `UnboundedSipsic` - Single-producer, single-consumer (SPSC). Wait-free operations.
+- `UnboundedSipmuc` - Single-producer, multi-consumer (SPMC). Wait-free push, lock-free pop.
+- `UnboundedMupsic` - Multi-producer, single-consumer (MPSC). Lock-free push, wait-free pop.
+- `UnboundedMupmuc` - Multi-producer, multi-consumer (MPMC). Lock-free operations.
 
 API documentation: https://elijahr.github.io/lockfreequeues
 

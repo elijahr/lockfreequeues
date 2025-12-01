@@ -4,19 +4,19 @@
 
 Fixed-capacity ring buffer implementations. Capacity and thread counts are compile-time constants.
 
-- **[Sipsic](sipsic.md)** - Single-producer, single-consumer. Wait-free operations.
-- **[Sipmuc](sipmuc.md)** - Single-producer, multiple-consumer. Wait-free push, lock-free pop.
-- **[Mupsic](mupsic.md)** - Multiple-producer, single-consumer. Lock-free push, wait-free pop.
-- **[Mupmuc](mupmuc.md)** - Multiple-producer, multiple-consumer. Lock-free operations.
+- **[Sipsic](sipsic.md)** - Single-producer, single-consumer (SPSC). Wait-free operations.
+- **[Sipmuc](sipmuc.md)** - Single-producer, multiple-consumer (SPMC). Wait-free push, lock-free pop.
+- **[Mupsic](mupsic.md)** - Multiple-producer, single-consumer (MPSC). Lock-free push, wait-free pop.
+- **[Mupmuc](mupmuc.md)** - Multiple-producer, multiple-consumer (MPMC). Lock-free operations.
 
 ## Unbounded Queues
 
 Dynamic-capacity linked segment implementations. Grow as needed with epoch-based memory reclamation.
 
-- **[UnboundedSipsic](unbounded_sipsic.md)** - Single-producer, single-consumer. Wait-free operations.
-- **[UnboundedSipmuc](unbounded_sipmuc.md)** - Single-producer, multiple-consumer. Wait-free push, lock-free pop.
-- **[UnboundedMupsic](unbounded_mupsic.md)** - Multiple-producer, single-consumer. Lock-free push, wait-free pop.
-- **[UnboundedMupmuc](unbounded_mupmuc.md)** - Multiple-producer, multiple-consumer. Lock-free operations.
+- **[UnboundedSipsic](unbounded_sipsic.md)** - Single-producer, single-consumer (SPSC). Wait-free operations.
+- **[UnboundedSipmuc](unbounded_sipmuc.md)** - Single-producer, multiple-consumer (SPMC). Wait-free push, lock-free pop.
+- **[UnboundedMupsic](unbounded_mupsic.md)** - Multiple-producer, single-consumer (MPSC). Lock-free push, wait-free pop.
+- **[UnboundedMupmuc](unbounded_mupmuc.md)** - Multiple-producer, multiple-consumer (MPMC). Lock-free operations.
 
 ## Support Types
 

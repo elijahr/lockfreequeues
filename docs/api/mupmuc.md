@@ -1,5 +1,5 @@
 # Mupmuc
 
-Multi-producer, multi-consumer bounded queue.
+Multi-producer, multi-consumer (MPMC) bounded queue.
 
 ::: lockfreequeues.mupmuc

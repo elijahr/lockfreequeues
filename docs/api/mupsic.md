@@ -1,5 +1,5 @@
 # Mupsic
 
-Multi-producer, single-consumer bounded queue. Popping is wait-free.
+Multi-producer, single-consumer (MPSC) bounded queue. Popping is wait-free.
 
 ::: lockfreequeues.mupsic

@@ -6,7 +6,7 @@
 
 ## Event Collector Example
 ##
-## Demonstrates using an unbounded Mupsic queue for collecting events
+## Demonstrates using an unbounded Mupsic (MPSC) queue for collecting events
 ## from multiple sources into a single processing pipeline.
 ##
 ## Pattern: Multiple event sources → Single processor

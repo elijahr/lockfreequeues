@@ -4,7 +4,7 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-## Unbounded single-producer, multiple-consumer queue using linked segments.
+## Unbounded single-producer, multiple-consumer (SPMC) queue using linked segments.
 ##
 ## Uses epoch-based reclamation for safe memory deallocation.
 ##

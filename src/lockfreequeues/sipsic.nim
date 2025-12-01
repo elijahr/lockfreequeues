@@ -4,8 +4,8 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
-## A single-producer, single-consumer bounded queue implemented as a ring
-## buffer.
+## A single-producer, single-consumer (SPSC) bounded queue implemented as a
+## ring buffer.
 
 import atomics
 import options
@@ -19,8 +19,8 @@ const NoSlice* = none(HSlice[int, int])
 
 type
   Sipsic*[N: static int, T] = object of RootObj
-    ## A single-producer, single-consumer bounded queue implemented as a ring
-    ## buffer. Pushing and popping are both wait-free.
+    ## A single-producer, single-consumer (SPSC) bounded queue implemented as a
+    ## ring buffer. Pushing and popping are both wait-free.
     ##
     ## * `N` is the capacity of the queue.
     ## * `T` is the type of data the queue will hold.
