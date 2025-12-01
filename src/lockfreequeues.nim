@@ -14,6 +14,7 @@ when compileOption("threads"):
     ops,
     sipmuc,
     sipsic,
+    unbounded_sipsic,
   ]
 
   export
@@ -24,7 +25,8 @@ when compileOption("threads"):
     mupsic,
     ops,
     sipmuc,
-    sipsic
+    sipsic,
+    unbounded_sipsic
 else:
   # threading off, only provide sipsic
   import ./lockfreequeues/[

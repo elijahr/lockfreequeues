@@ -15,6 +15,8 @@ import ./t_sipmuc
 import ./t_sipmuc_threaded
 import ./t_sipsic
 import ./t_sipsic_threaded
+import ./t_unbounded_sipsic
+import ./t_unbounded_sipsic_threaded
 import ./t_wraparound
 
 export
@@ -29,4 +31,6 @@ export
   t_sipmuc_threaded,
   t_sipsic,
   t_sipsic_threaded,
+  t_unbounded_sipsic,
+  t_unbounded_sipsic_threaded,
   t_wraparound
