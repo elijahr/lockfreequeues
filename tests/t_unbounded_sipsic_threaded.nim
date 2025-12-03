@@ -1,9 +1,3 @@
-# lockfreequeues
-# © Copyright 2020 Elijah Shaw-Rutschman
-#
-# See the file "LICENSE", included in this distribution for details about the
-# copyright.
-
 import atomics
 import options
 import unittest2
@@ -12,65 +6,119 @@ import lockfreequeues/epoch
 import lockfreequeues/unbounded_sipsic
 
 
-const
-  ItemCount = 10000
-  SegmentSize = 64
+const ItemCount = 10000
 
 
 type
-  TestContext = object
-    queue: ptr UnboundedSipsic[SegmentSize, int]
+  TestContext[S: static int] = object
+    queue: ptr UnboundedSipsic[S, int]
+    received: ptr array[ItemCount, Atomic[bool]]
+    duplicateFound: ptr Atomic[bool]
     producerDone: ptr Atomic[bool]
-    totalConsumed: ptr Atomic[int]
 
 
-proc producer(ctx: ptr TestContext) {.thread, gcsafe.} =
+proc producer[S: static int](ctx: ptr TestContext[S]) {.thread.} =
   for i in 1..ItemCount:
     ctx.queue[].push(i)
   ctx.producerDone[].store(true, moRelease)
 
 
-proc consumer(ctx: ptr TestContext) {.thread, gcsafe.} =
+proc consumer[S: static int](ctx: ptr TestContext[S]) {.thread.} =
   var consumed = 0
-  while true:
+  while consumed < ItemCount:
     let item = ctx.queue[].pop()
     if item.isSome:
+      let val = item.get - 1  # Items are 1-indexed
+      if ctx.received[val].exchange(true, moRelaxed):
+        ctx.duplicateFound[].store(true, moRelaxed)
       inc consumed
-      if consumed >= ItemCount:
-        break
     elif ctx.producerDone[].load(moAcquire):
-      # Double-check after seeing producer done
-      let item2 = ctx.queue[].pop()
-      if item2.isSome:
-        inc consumed
-      if consumed >= ItemCount or item2.isNone:
-        break
-  ctx.totalConsumed[].store(consumed, moRelease)
+      # Producer done but we haven't consumed everything - keep trying
+      discard
 
 
 suite "UnboundedSipsic threaded":
 
-  test "concurrent producer and consumer":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipsic[SegmentSize, int](manager)
-    var producerDone: Atomic[bool]
-    var totalConsumed: Atomic[int]
+  var
+    received: array[ItemCount, Atomic[bool]]
+    duplicateFound: Atomic[bool]
+    producerDone: Atomic[bool]
 
+  setup:
+    for i in 0..<ItemCount:
+      received[i].store(false, moRelaxed)
+    duplicateFound.store(false, moRelaxed)
     producerDone.store(false, moRelaxed)
-    totalConsumed.store(0, moRelaxed)
 
-    var ctx = TestContext(
+  test "high segment turnover":
+    let manager = newEpochManager()
+    var queue = newUnboundedSipsic[8, int](manager)
+    var ctx = TestContext[8](
       queue: addr queue,
-      producerDone: addr producerDone,
-      totalConsumed: addr totalConsumed
+      received: addr received,
+      duplicateFound: addr duplicateFound,
+      producerDone: addr producerDone
     )
 
-    var prodThread, consThread: Thread[ptr TestContext]
-    createThread(prodThread, producer, addr ctx)
-    createThread(consThread, consumer, addr ctx)
+    var prodThread, consThread: Thread[ptr TestContext[8]]
+    createThread(prodThread, producer[8], addr ctx)
+    createThread(consThread, consumer[8], addr ctx)
 
     joinThread(prodThread)
     joinThread(consThread)
 
-    check(totalConsumed.load(moAcquire) == ItemCount)
-    check(queue.len == 0)
+    check(not duplicateFound.load(moRelaxed))
+    for i in 0..<ItemCount:
+      check(received[i].load(moRelaxed))
+
+  test "normal segment size":
+    let manager = newEpochManager()
+    var queue = newUnboundedSipsic[64, int](manager)
+    var ctx = TestContext[64](
+      queue: addr queue,
+      received: addr received,
+      duplicateFound: addr duplicateFound,
+      producerDone: addr producerDone
+    )
+
+    var prodThread, consThread: Thread[ptr TestContext[64]]
+    createThread(prodThread, producer[64], addr ctx)
+    createThread(consThread, consumer[64], addr ctx)
+
+    joinThread(prodThread)
+    joinThread(consThread)
+
+    check(not duplicateFound.load(moRelaxed))
+    for i in 0..<ItemCount:
+      check(received[i].load(moRelaxed))
+
+  test "segment retirement (NeverDeallocate)":
+    let manager = newEpochManager()
+    var queue = newUnboundedSipsic[8, int](manager, NeverDeallocate)
+
+    # Push items to create segments
+    for i in 1..1000:
+      queue.push(i)
+    let peakSegments = queue.segmentCount()
+
+    # Pop all items
+    for i in 1..1000:
+      discard queue.pop()
+
+    # Segments should NOT be freed with NeverDeallocate
+    check(queue.segmentCount() == peakSegments)
+
+  test "segment retirement (EagerDeallocate)":
+    let manager = newEpochManager()
+    var queue = newUnboundedSipsic[8, int](manager, EagerDeallocate)
+
+    # Push items to create segments
+    for i in 1..1000:
+      queue.push(i)
+
+    # Pop all items
+    for i in 1..1000:
+      discard queue.pop()
+
+    # Segments SHOULD be freed with EagerDeallocate
+    check(queue.segmentCount() <= 3)

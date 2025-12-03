@@ -1,9 +1,3 @@
-# lockfreequeues
-# © Copyright 2020 Elijah Shaw-Rutschman
-#
-# See the file "LICENSE", included in this distribution for details about the
-# copyright.
-
 ## Event Collector Example
 ##
 ## Demonstrates using an unbounded Mupsic (MPSC) queue for collecting events

@@ -1,78 +1,142 @@
-# lockfreequeues
-# © Copyright 2020 Elijah Shaw-Rutschman
-#
-# See the file "LICENSE", included in this distribution for details about the
-# copyright.
-
-import algorithm
 import atomics
 import options
-import sequtils
 import unittest2
 
 import lockfreequeues
 
-const capacity = 8
-const workerCount = 16
 
-var
-  counter: Atomic[int]
-  queue = initMupmuc[capacity, workerCount, workerCount, int]()
-  output = initMupmuc[workerCount, workerCount, 1, int]()
-  consumerThreads: array[workerCount, Thread[void]]
-  producerThreads: array[workerCount, Thread[void]]
+const
+  ItemCount = 10000
+  ProducerCount = 4
+  ConsumerCount = 4
+  ItemsPerProducer = ItemCount div ProducerCount
 
 
-proc consumerFunc() {.thread.} =
-  var consumer = queue.getConsumer()
-  var outputProducer = output.getProducer()
+type
+  ProducerContext[N: static int] = object
+    queue: ptr Mupmuc[N, ProducerCount, ConsumerCount, int]
+    producersDone: ptr Atomic[int]
+    producerIdx: int
+
+  ConsumerContext[N: static int] = object
+    queue: ptr Mupmuc[N, ProducerCount, ConsumerCount, int]
+    received: ptr array[ItemCount, Atomic[bool]]
+    duplicateFound: ptr Atomic[bool]
+    producersDone: ptr Atomic[int]
+    totalConsumed: ptr Atomic[int]
+
+
+proc producer[N: static int](ctx: ptr ProducerContext[N]) {.thread.} =
+  var p = ctx.queue[].getProducer()
+  let base = ctx.producerIdx * ItemsPerProducer
+  for i in 1..ItemsPerProducer:
+    while not p.push(base + i):
+      discard
+  discard ctx.producersDone[].fetchAdd(1, moRelease)
+
+
+proc consumer[N: static int](ctx: ptr ConsumerContext[N]) {.thread.} =
+  var c = ctx.queue[].getConsumer()
   while true:
-    if consumer.idx mod 2 == 0:
-      var items = consumer.pop(1)
-      if items.isSome:
-        while not outputProducer.push(items.get[0]):
-          discard
+    let item = c.pop()
+    if item.isSome:
+      let val = item.get - 1  # Items are 1-indexed
+      if ctx.received[val].exchange(true, moRelaxed):
+        ctx.duplicateFound[].store(true, moRelaxed)
+      if ctx.totalConsumed[].fetchAdd(1, moRelaxed) + 1 >= ItemCount:
         break
-    else:
-      var item = consumer.pop()
-      if item.isSome:
-        while not outputProducer.push(item.get):
-          discard
+    elif ctx.producersDone[].load(moAcquire) >= ProducerCount:
+      if ctx.totalConsumed[].load(moRelaxed) >= ItemCount:
         break
 
 
-proc producerFunc() {.thread.} =
-  var producer = queue.getProducer()
-  let p = counter.fetchAdd(1)
-  while true:
-    if p mod 2 == 0:
-      if producer.push(p):
-        break
-    else:
-      if producer.push(@[p]).isNone:
-        break
+suite "Mupmuc threaded":
 
+  var
+    received: array[ItemCount, Atomic[bool]]
+    duplicateFound: Atomic[bool]
+    producersDone: Atomic[int]
+    totalConsumed: Atomic[int]
 
-suite "Mupmuc[N, P, C, T] threaded (low capacity)":
+  setup:
+    for i in 0..<ItemCount:
+      received[i].store(false, moRelaxed)
+    duplicateFound.store(false, moRelaxed)
+    producersDone.store(0, moRelaxed)
+    totalConsumed.store(0, moRelaxed)
 
-  test "basic":
-    var outputConsumer = output.getConsumer()
+  test "high contention":
+    var queue = initMupmuc[16, ProducerCount, ConsumerCount, int]()
 
-    for c in 0..<workerCount:
-      consumerThreads[c].createThread(consumerFunc)
+    var prodContexts: array[ProducerCount, ProducerContext[16]]
+    for i in 0..<ProducerCount:
+      prodContexts[i] = ProducerContext[16](
+        queue: addr queue,
+        producersDone: addr producersDone,
+        producerIdx: i
+      )
 
-    for p in 0..<workerCount:
-      producerThreads[p].createThread(producerFunc)
+    var consContexts: array[ConsumerCount, ConsumerContext[16]]
+    for i in 0..<ConsumerCount:
+      consContexts[i] = ConsumerContext[16](
+        queue: addr queue,
+        received: addr received,
+        duplicateFound: addr duplicateFound,
+        producersDone: addr producersDone,
+        totalConsumed: addr totalConsumed
+      )
 
-    var received = newSeq[int]()
-    while received.len < workerCount:
-      var item = outputConsumer.pop()
-      if item.isSome:
-        received.add(item.get)
+    var prodThreads: array[ProducerCount, Thread[ptr ProducerContext[16]]]
+    var consThreads: array[ConsumerCount, Thread[ptr ConsumerContext[16]]]
 
-    joinThreads(producerThreads)
-    joinThreads(consumerThreads)
+    for i in 0..<ProducerCount:
+      createThread(prodThreads[i], producer[16], addr prodContexts[i])
+    for i in 0..<ConsumerCount:
+      createThread(consThreads[i], consumer[16], addr consContexts[i])
 
-    received.sort()
+    for i in 0..<ProducerCount:
+      joinThread(prodThreads[i])
+    for i in 0..<ConsumerCount:
+      joinThread(consThreads[i])
 
-    check(received == (0..<workerCount).toSeq)
+    check(not duplicateFound.load(moRelaxed))
+    for i in 0..<ItemCount:
+      check(received[i].load(moRelaxed))
+
+  test "normal capacity":
+    var queue = initMupmuc[64, ProducerCount, ConsumerCount, int]()
+
+    var prodContexts: array[ProducerCount, ProducerContext[64]]
+    for i in 0..<ProducerCount:
+      prodContexts[i] = ProducerContext[64](
+        queue: addr queue,
+        producersDone: addr producersDone,
+        producerIdx: i
+      )
+
+    var consContexts: array[ConsumerCount, ConsumerContext[64]]
+    for i in 0..<ConsumerCount:
+      consContexts[i] = ConsumerContext[64](
+        queue: addr queue,
+        received: addr received,
+        duplicateFound: addr duplicateFound,
+        producersDone: addr producersDone,
+        totalConsumed: addr totalConsumed
+      )
+
+    var prodThreads: array[ProducerCount, Thread[ptr ProducerContext[64]]]
+    var consThreads: array[ConsumerCount, Thread[ptr ConsumerContext[64]]]
+
+    for i in 0..<ProducerCount:
+      createThread(prodThreads[i], producer[64], addr prodContexts[i])
+    for i in 0..<ConsumerCount:
+      createThread(consThreads[i], consumer[64], addr consContexts[i])
+
+    for i in 0..<ProducerCount:
+      joinThread(prodThreads[i])
+    for i in 0..<ConsumerCount:
+      joinThread(consThreads[i])
+
+    check(not duplicateFound.load(moRelaxed))
+    for i in 0..<ItemCount:
+      check(received[i].load(moRelaxed))

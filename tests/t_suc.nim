@@ -22,10 +22,6 @@ template testSucPopOne*(queue: untyped) =
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
-  queue.checkState(
-    prevConsumerIdx = 0,
-    consumerHeads = (@[1, 0, 0, 0]),
-  )
 
 
 template testSucPopAll*(queue: untyped) =
@@ -45,10 +41,6 @@ template testSucPopAll*(queue: untyped) =
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
-  queue.checkState(
-    prevConsumerIdx = 0,
-    consumerHeads = (@[8, 0, 0, 0]),
-  )
 
 
 template testSucPopEmpty*(queue: untyped) =
@@ -59,10 +51,6 @@ template testSucPopEmpty*(queue: untyped) =
     head = 0,
     tail = 0,
     storage = repeat(0, 8),
-  )
-  queue.checkState(
-    prevConsumerIdx = -1,  # NoConsumerIdx
-    consumerHeads = repeat(0, 4),
   )
 
 
@@ -79,10 +67,6 @@ template testSucPopTooMany*(queue: untyped) =
     head = 8,
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
-  )
-  queue.checkState(
-    prevConsumerIdx = 0,
-    consumerHeads = (@[8, 0, 0, 0]),
   )
 
 
@@ -108,10 +92,6 @@ template testSucPopWrap*(queue: untyped) =
     tail = 12,
     storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
   )
-  queue.checkState(
-    prevConsumerIdx = 0,
-    consumerHeads = (@[12, 0, 0, 0]),
-  )
 
 
 template testSucPopCountOne*(queue: untyped) =
@@ -126,10 +106,6 @@ template testSucPopCountOne*(queue: untyped) =
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
-  queue.checkState(
-    prevConsumerIdx = 0,
-    consumerHeads = (@[8, 0, 0, 0]),
-  )
 
 
 template testSucPopCountAll*(queue: untyped) =
@@ -143,10 +119,6 @@ template testSucPopCountAll*(queue: untyped) =
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
-  queue.checkState(
-    prevConsumerIdx = 0,
-    consumerHeads = (@[8, 0, 0, 0]),
-  )
 
 
 template testSucPopCountEmpty*(queue: untyped) =
@@ -157,10 +129,6 @@ template testSucPopCountEmpty*(queue: untyped) =
     head = 0,
     tail = 0,
     storage = repeat(0, 8),
-  )
-  queue.checkState(
-    prevConsumerIdx = -1,  # NoConsumerIdx
-    consumerHeads = repeat(0, 4),
   )
 
 
@@ -183,10 +151,6 @@ template testSucPopCountTooMany*(queue: untyped) =
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
-  queue.checkState(
-    prevConsumerIdx = 0,
-    consumerHeads = (@[8, 0, 0, 0]),
-  )
 
 
 template testSucPopCountWrap*(queue: untyped) =
@@ -205,10 +169,6 @@ template testSucPopCountWrap*(queue: untyped) =
     head = 12,
     tail = 12,
     storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
-  )
-  queue.checkState(
-    prevConsumerIdx = 1,
-    consumerHeads = (@[4, 12, 0, 0]),
   )
 
 

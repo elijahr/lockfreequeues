@@ -31,10 +31,6 @@ suite "Mupmuc[N, P, C, T]":
       tail = 0,
       storage = repeat(0, 8),
     )
-    queue.checkState(
-      prevProducerIdx = NoProducerIdx,
-      producerTails = repeat(0, 4),
-    )
 
 
 suite "getProducer(Mupmuc[N, P, C, T])":
@@ -148,25 +144,14 @@ suite "Mupmuc integration":
     testHeadAndTailReset(queue)
 
   test "wraps":
-    when ((queue is Mupsic) or (queue is Mupmuc)):
-      check(queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
-    else:
-      check(queue.push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
+    check(queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
 
-    var popRes =
-      when queue is Mupmuc:
-        queue.getConsumer(0).pop(4)
-      else:
-        queue.pop(4)
+    var popRes = queue.getConsumer(0).pop(4)
 
     check(popRes.isSome)
     check(popRes.get == @[1, 2, 3, 4])
 
-    let pushRes =
-      when ((queue is Mupsic) or (queue is Mupmuc)):
-        queue.getProducer(0).push(@[9, 10, 11, 12])
-      else:
-        queue.push(@[9, 10, 11, 12])
+    let pushRes = queue.getProducer(0).push(@[9, 10, 11, 12])
 
     check(pushRes.isNone)
 
@@ -175,23 +160,8 @@ suite "Mupmuc integration":
       tail = 12,
       storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
     )
-    when ((queue is Mupsic) or (queue is Mupmuc)):
-      queue.checkState(
-        prevProducerIdx = 0,
-        producerTails = (@[12, 0, 0, 0]),
-      )
 
-    when queue is Mupmuc:
-      queue.checkState(
-        prevConsumerIdx = 0,
-        consumerHeads = (@[4, 0, 0, 0]),
-      )
-
-    popRes =
-      when queue is Mupmuc:
-        queue.getConsumer(0).pop(4)
-      else:
-        queue.pop(4)
+    popRes = queue.getConsumer(0).pop(4)
     check(popRes.isSome)
     check(popRes.get == @[5, 6, 7, 8])
 
@@ -201,23 +171,7 @@ suite "Mupmuc integration":
       storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
     )
 
-    when ((queue is Mupsic) or (queue is Mupmuc)):
-      queue.checkState(
-        prevProducerIdx = 0,
-        producerTails = (@[12, 0, 0, 0]),
-      )
-
-    when queue is Mupmuc:
-      queue.checkState(
-        prevConsumerIdx = 0,
-        consumerHeads = (@[8, 0, 0, 0]),
-      )
-
-    popRes =
-      when queue is Mupmuc:
-        queue.getConsumer(1).pop(4)
-      else:
-        queue.pop(4)
+    popRes = queue.getConsumer(1).pop(4)
     check(popRes.isSome)
     check(popRes.get == @[9, 10, 11, 12])
 
@@ -226,15 +180,3 @@ suite "Mupmuc integration":
       tail = 12,
       storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
     )
-    when ((queue is Mupsic) or (queue is Mupmuc)):
-      queue.checkState(
-        prevProducerIdx = 0,
-        producerTails = (@[12, 0, 0, 0]),
-      )
-    when queue is Mupmuc:
-      queue.checkState(
-        prevConsumerIdx = 1,
-        consumerHeads = (@[8, 12, 0, 0]),
-      )
-
-

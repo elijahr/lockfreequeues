@@ -4,6 +4,8 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
+## Shared test templates for multi-consumer queues (Mupmuc).
+
 
 template testMucPopOne*(queue: untyped) =
   discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
@@ -16,14 +18,6 @@ template testMucPopOne*(queue: untyped) =
     head = 1,
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
-  )
-  queue.checkState(
-    prevProducerIdx = 0,
-    producerTails = (@[8, 0, 0, 0]),
-  )
-  queue.checkState(
-    prevConsumerIdx = 0,
-    consumerHeads = (@[1, 0, 0, 0]),
   )
 
 
@@ -43,14 +37,6 @@ template testMucPopAll*(queue: untyped) =
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
-  queue.checkState(
-    prevProducerIdx = 0,
-    producerTails = (@[8, 0, 0, 0]),
-  )
-  queue.checkState(
-    prevConsumerIdx = 0,
-    consumerHeads = (@[8, 0, 0, 0]),
-  )
 
 
 template testMucPopEmpty*(queue: untyped) =
@@ -60,14 +46,6 @@ template testMucPopEmpty*(queue: untyped) =
     head = 0,
     tail = 0,
     storage = repeat(0, 8),
-  )
-  queue.checkState(
-    prevProducerIdx = NoProducerIdx,
-    producerTails = repeat(0, 4),
-  )
-  queue.checkState(
-    prevConsumerIdx = -1,  # NoConsumerIdx
-    consumerHeads = repeat(0, 4),
   )
 
 
@@ -83,14 +61,6 @@ template testMucPopTooMany*(queue: untyped) =
     head = 8,
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
-  )
-  queue.checkState(
-    prevProducerIdx = 0,
-    producerTails = (@[8, 0, 0, 0]),
-  )
-  queue.checkState(
-    prevConsumerIdx = 0,
-    consumerHeads = (@[8, 0, 0, 0]),
   )
 
 
@@ -115,14 +85,6 @@ template testMucPopWrap*(queue: untyped) =
     tail = 12,
     storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
   )
-  queue.checkState(
-    prevProducerIdx = 1,
-    producerTails = (@[8, 12, 0, 0]),
-  )
-  queue.checkState(
-    prevConsumerIdx = 0,
-    consumerHeads = (@[12, 0, 0, 0]),
-  )
 
 
 template testMucPopCountOne*(queue: untyped) =
@@ -136,14 +98,6 @@ template testMucPopCountOne*(queue: untyped) =
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
-  queue.checkState(
-    prevProducerIdx = 0,
-    producerTails = (@[8, 0, 0, 0]),
-  )
-  queue.checkState(
-    prevConsumerIdx = 0,
-    consumerHeads = (@[8, 0, 0, 0]),
-  )
 
 
 template testMucPopCountAll*(queue: untyped) =
@@ -156,14 +110,6 @@ template testMucPopCountAll*(queue: untyped) =
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
-  queue.checkState(
-    prevProducerIdx = 0,
-    producerTails = (@[8, 0, 0, 0]),
-  )
-  queue.checkState(
-    prevConsumerIdx = 0,
-    consumerHeads = (@[8, 0, 0, 0]),
-  )
 
 
 template testMucPopCountEmpty*(queue: untyped) =
@@ -173,14 +119,6 @@ template testMucPopCountEmpty*(queue: untyped) =
     head = 0,
     tail = 0,
     storage = repeat(0, 8),
-  )
-  queue.checkState(
-    prevProducerIdx = NoProducerIdx,
-    producerTails = repeat(0, 4),
-  )
-  queue.checkState(
-    prevConsumerIdx = -1,  # NoConsumerIdx
-    consumerHeads = repeat(0, 4),
   )
 
 
@@ -202,14 +140,6 @@ template testMucPopCountTooMany*(queue: untyped) =
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
-  queue.checkState(
-    prevProducerIdx = 0,
-    producerTails = (@[8, 0, 0, 0]),
-  )
-  queue.checkState(
-    prevConsumerIdx = 0,
-    consumerHeads = (@[8, 0, 0, 0]),
-  )
 
 
 template testMucPopCountWrap*(queue: untyped) =
@@ -227,12 +157,4 @@ template testMucPopCountWrap*(queue: untyped) =
     head = 12,
     tail = 12,
     storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
-  )
-  queue.checkState(
-    prevProducerIdx = 1,
-    producerTails = (@[8, 12, 0, 0]),
-  )
-  queue.checkState(
-    prevConsumerIdx = 1,
-    consumerHeads = (@[4, 12, 0, 0]),
   )

@@ -1,9 +1,3 @@
-# lockfreequeues
-# © Copyright 2020 Elijah Shaw-Rutschman
-#
-# See the file "LICENSE", included in this distribution for details about the
-# copyright.
-
 ## Example usage of Mupmuc, a multi-producer, multi-consumer (MPMC) bounded queue.
 
 import options

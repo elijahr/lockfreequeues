@@ -25,11 +25,6 @@ import ./ops
 import ./sipsic
 
 
-const NoConsumerIdx* = -1
-  ## The initial value of `Sipmuc.prevConsumerIdx`.
-  ## Indicates no consumer has popped yet.
-
-
 type NoConsumersAvailableError* = object of CatchableError
   ## Raised by `getConsumer()` if all consumers have been assigned to other
   ## threads.
@@ -38,7 +33,7 @@ type NoConsumersAvailableError* = object of CatchableError
 type
   Sipmuc*[N, C: static int, T] = object of Sipsic[N, T]
     ## A single-producer, multi-consumer (SPMC) bounded queue implemented as a
-    ## ring buffer. Pushing is wait-free. Popping is lock-free.
+    ## ring buffer. Push is wait-free. Pop is lock-free.
     ##
     ## - N: The capacity of the queue.
     ## - C: The number of consumer threads.
@@ -55,10 +50,12 @@ type
     ## let item = consumer.pop()
     ## ```
 
-    prevConsumerIdx*: Atomic[int]
-      ## The ID (index) of the most recent consumer.
-    consumerHeads*: array[C, Atomic[int]]
-      ## Array of consumer heads, one per consumer thread.
+    reservedHead* {.align: 64.}: Atomic[int]
+      ## The next slot to be claimed by a consumer. Consumers CAS this
+      ## to reserve slots.
+    committed*: array[N, Atomic[bool]]
+      ## Per-slot commit flags. Set by producer after writing data.
+      ## Checked/cleared by consumer. Enables lock-free pop.
     consumerThreadIds*: array[C, Atomic[int]]
       ## Array of consumer thread IDs by index.
 
@@ -81,13 +78,13 @@ proc clear[N, C: static int, T](
   ## Reset the queue to initial state.
   self.head.sequential(0)
   self.tail.sequential(0)
+  self.reservedHead.sequential(0)
 
   for n in 0..<N:
     self.storage[n].reset()
+    self.committed[n].store(false, moRelaxed)
 
-  self.prevConsumerIdx.sequential(NoConsumerIdx)
   for c in 0..<C:
-    self.consumerHeads[c].sequential(0)
     self.consumerThreadIds[c].sequential(0)
 
 
@@ -110,9 +107,98 @@ proc consumerCount*[N, C: static int, T](
   result = C
 
 
+proc push*[N, C: static int, T](
+  self: var Sipmuc[N, C, T],
+  item: T,
+): bool =
+  ## Append a single item to the queue.
+  ## If the queue is full, `false` is returned.
+  ## If `item` is appended, `true` is returned.
+  ##
+  ## This operation is wait-free for the single producer.
+  let tail = self.tail.load(moAcquire)
+  let tailIdx = index(tail, N)
+
+  # Check if slot is still committed (not yet consumed) - queue is full
+  if self.committed[tailIdx].load(moAcquire):
+    return false
+
+  # Write the item
+  self.storage[tailIdx] = item
+
+  # Mark slot as committed (data ready to read)
+  self.committed[tailIdx].store(true, moRelease)
+
+  # Advance tail
+  let newTail = incOrReset(tail, 1, N)
+  self.tail.store(newTail, moRelease)
+
+  return true
+
+
+proc push*[N, C: static int, T](
+  self: var Sipmuc[N, C, T],
+  items: openArray[T],
+): Option[HSlice[int, int]] =
+  ## Append multiple items to the queue.
+  ## If the queue is already full or is filled by this call, `some(unpushed)`
+  ## is returned, where `unpushed` is an `HSlice` corresponding to the
+  ## chunk of items which could not be pushed.
+  ## If all items are appended, `NoSlice` is returned.
+  ##
+  ## This operation is wait-free for the single producer.
+  if unlikely(items.len == 0):
+    return NoSlice
+
+  let tail = self.tail.load(moAcquire)
+
+  # Count available slots by checking committed flags
+  var avail = 0
+  for i in 0..<min(items.len, N):
+    let idx = index(incOrReset(tail, i, N), N)
+    if self.committed[idx].load(moAcquire):
+      break  # Hit a committed slot, stop
+    inc avail
+
+  if unlikely(avail == 0):
+    return some(0..items.len - 1)
+
+  var count: int
+  if likely(avail >= items.len):
+    result = NoSlice
+    count = items.len
+  else:
+    result = some(avail..items.len - 1)
+    count = avail
+
+  let start = index(tail, N)
+  var stop = incOrReset(tail, count - 1, N)
+  stop = index(stop, N)
+
+  if start > stop:
+    # data may wrap
+    let pivot = (N-1) - start
+    self.storage[start..start+pivot] = items[0..pivot]
+    if stop > 0:
+      # data wraps
+      self.storage[0..stop] = items[pivot+1..pivot+1+stop]
+  else:
+    # data does not wrap
+    self.storage[start..stop] = items[0..stop-start]
+
+  # Mark all written slots as committed
+  for i in 0..<count:
+    let idx = index(incOrReset(tail, i, N), N)
+    self.committed[idx].store(true, moRelease)
+
+  # Advance tail
+  let newTail = incOrReset(tail, count, N)
+  self.tail.store(newTail, moRelease)
+
+
 proc getConsumer*[N, C: static int, T](
   self: var Sipmuc[N, C, T],
-  idx: int = NoConsumerIdx,
+  idx: int = -1,
 ): Consumer[N, C, T]
   {.raises: [NoConsumersAvailableError].} =
   ## Assigns and returns a `Consumer` instance for the current thread.
@@ -168,6 +254,8 @@ proc pop*[N, C: static int, T](
   ##
   ## Returns `some(T)` if an item was popped, `none(T)` if queue is empty.
   ##
+  ## This operation is lock-free: consumers never block on each other.
+  ##
   ## ```nim
   ## let consumer = queue.getConsumer()
   ## let item = consumer.pop()
@@ -175,51 +263,49 @@ proc pop*[N, C: static int, T](
   ##   echo "Got: ", item.get
   ## ```
 
-  var prevHead: int
-  var newHead: int
-  var prevConsumerIdx: int
-  var isFirstConsumption: bool
+  var slot: int
+  var newReservedHead: int
 
-  # spin until reservation is acquired
+  # Claim a slot using CAS on reservedHead
   while true:
-    prevConsumerIdx = self.queue.prevConsumerIdx.acquire
-    isFirstConsumption = prevConsumerIdx == NoConsumerIdx
-    var tail = self.queue.tail.acquire
-    prevHead =
-      if isFirstConsumption:
-        0
-      else:
-        self.queue.consumerHeads[prevConsumerIdx].acquire
+    slot = self.queue.reservedHead.load(moAcquire)
+    let tail = self.queue.tail.load(moAcquire)
 
-    if unlikely(empty(prevHead, tail, N)):
+    if unlikely(empty(slot, tail, N)):
       return none(T)
 
-    newHead = incOrReset(prevHead, 1, N)
-    self.queue.consumerHeads[self.idx].release(newHead)
+    newReservedHead = incOrReset(slot, 1, N)
 
-    if self.queue.prevConsumerIdx.compareExchangeWeak(
-      prevConsumerIdx,
-      self.idx,
+    if self.queue.reservedHead.compareExchangeWeak(
+      slot,
+      newReservedHead,
       moRelease,
       moAcquire,
     ):
       break
 
-  result = some(self.queue.storage[index(prevHead, N)])
+  let slotIdx = index(slot, N)
 
-  # Wait for prev consumer to update head, then update head
-  if not isFirstConsumption:
-    while true:
-      var expectedHead = prevHead
-      if self.queue.head.compareExchangeWeak(
-        expectedHead,
-        newHead,
-        moRelease,
-        moAcquire,
-      ):
-        break
-  else:
-    self.queue.head.release(newHead)
+  # Check if slot is committed (data ready to read)
+  # This should always be true for SPMC since producer sets committed before advancing tail
+  if not self.queue.committed[slotIdx].load(moAcquire):
+    return none(T)  # Should not happen in normal operation
+
+  # Read the item from the claimed slot
+  result = some(self.queue.storage[slotIdx])
+
+  # Clear committed flag (slot can be reused by producer)
+  # This is what signals to the producer that the slot is free
+  self.queue.committed[slotIdx].store(false, moRelease)
+
+  # Try to advance head (lock-free, may fail if other consumers are ahead)
+  var expectedHead = slot
+  discard self.queue.head.compareExchangeWeak(
+    expectedHead,
+    newReservedHead,
+    moRelease,
+    moAcquire,
+  )
 
 
 proc pop*[N, C: static int, T](
@@ -242,48 +328,38 @@ proc pop*[N, C: static int, T](
     return none(seq[T])
 
   var actualCount: int
-  var used: int
-  var prevHead: int
-  var newHead: int
-  var prevConsumerIdx: int
-  var isFirstConsumption: bool
-  var tail: int
+  var slot: int
+  var newReservedHead: int
 
-  # spin until reservation is acquired
+  # Claim slots using CAS on reservedHead
   while true:
-    prevConsumerIdx = self.queue.prevConsumerIdx.acquire
-    isFirstConsumption = prevConsumerIdx == NoConsumerIdx
-    tail = self.queue.tail.acquire
-    prevHead =
-      if isFirstConsumption:
-        0
-      else:
-        self.queue.consumerHeads[prevConsumerIdx].acquire
+    slot = self.queue.reservedHead.load(moAcquire)
+    let tail = self.queue.tail.load(moAcquire)
 
-    used = used(prevHead, tail, N)
-    if likely(used >= count):
+    let avail = used(slot, tail, N)
+    if likely(avail >= count):
       # Enough items to fulfill request
       actualCount = count
-    elif used <= 0:
+    elif avail <= 0:
       # Queue is empty, return nothing
       return none(seq[T])
     else:
       # Not enough items to fulfill request
-      actualCount = min(used, N)
+      actualCount = min(avail, N)
 
-    newHead = incOrReset(prevHead, actualCount, N)
-    self.queue.consumerHeads[self.idx].release(newHead)
+    newReservedHead = incOrReset(slot, actualCount, N)
 
-    if self.queue.prevConsumerIdx.compareExchangeWeak(
-      prevConsumerIdx,
-      self.idx,
+    if self.queue.reservedHead.compareExchangeWeak(
+      slot,
+      newReservedHead,
       moRelease,
       moAcquire,
     ):
       break
 
-  let start = index(prevHead, N)
-  var stop = incOrReset(prevHead, actualCount - 1, N)
+  # Read items from claimed slots
+  let start = index(slot, N)
+  var stop = incOrReset(slot, actualCount - 1, N)
   stop = index(stop, N)
 
   var items = newSeq[T](actualCount)
@@ -301,20 +377,19 @@ proc pop*[N, C: static int, T](
 
   result = some(items)
 
-  # Wait for prev consumer to update head, then update head
-  if not isFirstConsumption:
-    while true:
-      var expectedHead = prevHead
-      if self.queue.head.compareExchangeWeak(
-        expectedHead,
-        newHead,
-        moRelease,
-        moAcquire,
-      ):
-        break
+  # Clear committed flags for all claimed slots (signals producer they're free)
+  for i in 0..<actualCount:
+    let idx = index(incOrReset(slot, i, N), N)
+    self.queue.committed[idx].store(false, moRelease)
 
-  elif isFirstConsumption:
-    self.queue.head.release(newHead)
+  # Try to advance head (lock-free, may fail if other consumers are ahead)
+  var expectedHead = slot
+  discard self.queue.head.compareExchangeWeak(
+    expectedHead,
+    newReservedHead,
+    moRelease,
+    moAcquire,
+  )
 
 
 proc pop*[N, C: static int, T](
@@ -335,7 +410,6 @@ proc pop*[N, C: static int, T](
 
 
 when defined(testing):
-  import sugar
   from unittest import check
 
   proc reset*[N, C: static int, T](
@@ -346,11 +420,11 @@ when defined(testing):
 
   proc checkState*[N, C: static int, T](
     self: var Sipmuc[N, C, T],
-    prevConsumerIdx: int,
-    consumerHeads: seq[int],
+    head: int,
+    reservedHead: int,
+    tail: int,
   ) =
-    check(self.prevConsumerIdx.sequential == prevConsumerIdx)
-    let heads = collect(newSeq):
-      for c in 0..<C:
-        self.consumerHeads[c].sequential
-    check(heads == consumerHeads)
+    ## Check internal queue state for testing.
+    check(self.head.sequential == head)
+    check(self.reservedHead.sequential == reservedHead)
+    check(self.tail.sequential == tail)

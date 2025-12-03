@@ -4,6 +4,8 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
+## Shared test templates for multi-producer queues (Mupsic, Mupmuc).
+
 
 template testMupGetProducerAssigns*(queue: untyped) =
   let producer = queue.getProducer()
@@ -45,15 +47,6 @@ template testMupPush*(queue: untyped) =
     tail = 2,
     storage = (@[1, 2, 0, 0, 0, 0, 0, 0]),
   )
-  queue.checkState(
-    prevProducerIdx = 0,
-    producerTails = (@[2, 0, 0, 0]),
-  )
-  when queue is Mupmuc:
-    queue.checkState(
-      prevConsumerIdx = -1,  # NoConsumerIdx
-      consumerHeads = repeat(0, 4),
-    )
 
   check(queue.getProducer(1).push(3) == true)
   check(queue.getProducer(1).push(4) == true)
@@ -63,15 +56,6 @@ template testMupPush*(queue: untyped) =
     tail = 4,
     storage = (@[1, 2, 3, 4, 0, 0, 0, 0]),
   )
-  queue.checkState(
-    prevProducerIdx = 1,
-    producerTails = (@[2, 4, 0, 0]),
-  )
-  when queue is Mupmuc:
-    queue.checkState(
-      prevConsumerIdx = -1,  # NoConsumerIdx
-      consumerHeads = repeat(0, 4),
-    )
 
   check(queue.getProducer(2).push(5) == true)
   check(queue.getProducer(2).push(6) == true)
@@ -81,15 +65,6 @@ template testMupPush*(queue: untyped) =
     tail = 6,
     storage = (@[1, 2, 3, 4, 5, 6, 0, 0]),
   )
-  queue.checkState(
-    prevProducerIdx = 2,
-    producerTails = (@[2, 4, 6, 0]),
-  )
-  when queue is Mupmuc:
-    queue.checkState(
-      prevConsumerIdx = -1,  # NoConsumerIdx
-      consumerHeads = repeat(0, 4),
-    )
 
   check(queue.getProducer(3).push(7) == true)
   check(queue.getProducer(3).push(8) == true)
@@ -99,15 +74,6 @@ template testMupPush*(queue: untyped) =
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
-  queue.checkState(
-    prevProducerIdx = 3,
-    producerTails = (@[2, 4, 6, 8]),
-  )
-  when queue is Mupmuc:
-    queue.checkState(
-      prevConsumerIdx = -1,  # NoConsumerIdx
-      consumerHeads = repeat(0, 4),
-    )
 
 
 template testMupPushOverflow*(queue: untyped) =
@@ -119,15 +85,7 @@ template testMupPushOverflow*(queue: untyped) =
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
-  queue.checkState(
-    prevProducerIdx = 0,
-    producerTails = (@[8, 0, 0, 0]),
-  )
-  when queue is Mupmuc:
-    queue.checkState(
-      prevConsumerIdx = -1,  # NoConsumerIdx
-      consumerHeads = repeat(0, 4),
-    )
+
 
 template testMupPushWrap*(queue: untyped) =
   for i in 1..4:
@@ -144,15 +102,6 @@ template testMupPushWrap*(queue: untyped) =
     tail = 10,
     storage = (@[9, 10, 3, 4, 5, 6, 7, 8]),
   )
-  queue.checkState(
-    prevProducerIdx = 0,
-    producerTails = (@[10, 0, 0, 0]),
-  )
-  when queue is Mupmuc:
-    queue.checkState(
-      prevConsumerIdx = 1,
-      consumerHeads = (@[1, 2, 0, 0]),
-    )
 
 
 template testMupPushSeq*(queue: untyped) =
@@ -162,15 +111,6 @@ template testMupPushSeq*(queue: untyped) =
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
-  queue.checkState(
-    prevProducerIdx = 0,
-    producerTails = (@[8, 0, 0, 0]),
-  )
-  when queue is Mupmuc:
-    queue.checkState(
-      prevConsumerIdx = -1,  # NoConsumerIdx
-      consumerHeads = repeat(0, 4),
-    )
 
 
 template testMupPushSeqOverflow*(queue: untyped) =
@@ -184,15 +124,7 @@ template testMupPushSeqOverflow*(queue: untyped) =
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
-  queue.checkState(
-    prevProducerIdx = 0,
-    producerTails = (@[8, 0, 0, 0]),
-  )
-  when queue is Mupmuc:
-    queue.checkState(
-      prevConsumerIdx = -1,  # NoConsumerIdx
-      consumerHeads = repeat(0, 4),
-    )
+
 
 template testMupPushSeqWrap*(queue: untyped) =
   discard queue.getProducer(0).push(@[1, 2, 3, 4])
@@ -208,12 +140,3 @@ template testMupPushSeqWrap*(queue: untyped) =
     tail = 10,
     storage = (@[9, 10, 3, 4, 5, 6, 7, 8]),
   )
-  queue.checkState(
-    prevProducerIdx = 0,
-    producerTails = (@[10, 0, 0, 0]),
-  )
-  when queue is Mupmuc:
-    queue.checkState(
-      prevConsumerIdx = 1,
-      consumerHeads = (@[1, 2, 0, 0]),
-    )

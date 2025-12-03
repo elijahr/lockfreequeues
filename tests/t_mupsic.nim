@@ -31,8 +31,8 @@ suite "Mupsic[N, P, T]":
       storage = repeat(0, 8),
     )
     queue.checkState(
-      prevProducerIdx = NoProducerIdx,
-      producerTails = repeat(0, 4),
+      head = 0,
+      reservedTail = 0,
     )
 
 

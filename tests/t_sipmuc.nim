@@ -33,8 +33,9 @@ suite "Sipmuc[N, C, T]":
       storage = repeat(0, 8),
     )
     queue.checkState(
-      prevConsumerIdx = -1,  # NoConsumerIdx
-      consumerHeads = repeat(0, 4),
+      head = 0,
+      reservedHead = 0,
+      tail = 0,
     )
 
 

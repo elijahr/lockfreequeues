@@ -1,9 +1,3 @@
-# lockfreequeues
-# © Copyright 2020 Elijah Shaw-Rutschman
-#
-# See the file "LICENSE", included in this distribution for details about the
-# copyright.
-
 ## Audio Buffer Example
 ##
 ## Demonstrates using a bounded Sipsic (SPSC) queue for real-time audio processing.

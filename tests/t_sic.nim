@@ -4,6 +4,8 @@
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
+## Shared test templates for single-consumer queues (Sipsic, Mupsic).
+
 
 template testSicPopOne*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
@@ -20,11 +22,6 @@ template testSicPopOne*(queue: untyped) =
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
-  when ((queue is Mupsic) or (queue is Mupmuc)):
-    queue.checkState(
-      prevProducerIdx = 0,
-      producerTails = (@[8, 0, 0, 0]),
-    )
 
 
 template testSicPopAll*(queue: untyped) =
@@ -47,11 +44,6 @@ template testSicPopAll*(queue: untyped) =
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
 
-  when ((queue is Mupsic) or (queue is Mupmuc)):
-    queue.checkState(
-      prevProducerIdx = 0,
-      producerTails = (@[8, 0, 0, 0]),
-    )
 
 template testSicPopEmpty*(queue: untyped) =
   check(queue.pop().isNone)
@@ -61,12 +53,6 @@ template testSicPopEmpty*(queue: untyped) =
     tail = 0,
     storage = repeat(0, 8),
   )
-
-  when ((queue is Mupsic) or (queue is Mupmuc)):
-    queue.checkState(
-      prevProducerIdx = NoProducerIdx,
-      producerTails = repeat(0, 4),
-    )
 
 
 template testSicPopTooMany*(queue: untyped) =
@@ -85,12 +71,6 @@ template testSicPopTooMany*(queue: untyped) =
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
-
-  when ((queue is Mupsic) or (queue is Mupmuc)):
-    queue.checkState(
-      prevProducerIdx = 0,
-      producerTails = (@[8, 0, 0, 0]),
-    )
 
 
 template testSicPopWrap*(queue: untyped) =
@@ -120,11 +100,6 @@ template testSicPopWrap*(queue: untyped) =
     tail = 12,
     storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
   )
-  when ((queue is Mupsic) or (queue is Mupmuc)):
-    queue.checkState(
-      prevProducerIdx = 1,
-      producerTails = (@[8, 12, 0, 0]),
-    )
 
 
 template testSicPopCountOne*(queue: untyped) =
@@ -142,11 +117,6 @@ template testSicPopCountOne*(queue: untyped) =
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
-  when ((queue is Mupsic) or (queue is Mupmuc)):
-    queue.checkState(
-      prevProducerIdx = 0,
-      producerTails = (@[8, 0, 0, 0]),
-    )
 
 
 template testSicPopCountAll*(queue: untyped) =
@@ -162,11 +132,6 @@ template testSicPopCountAll*(queue: untyped) =
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
-  when ((queue is Mupsic) or (queue is Mupmuc)):
-    queue.checkState(
-      prevProducerIdx = 0,
-      producerTails = (@[8, 0, 0, 0]),
-    )
 
 
 template testSicPopCountEmpty*(queue: untyped) =
@@ -177,11 +142,6 @@ template testSicPopCountEmpty*(queue: untyped) =
     tail = 0,
     storage = repeat(0, 8),
   )
-  when ((queue is Mupsic) or (queue is Mupmuc)):
-    queue.checkState(
-      prevProducerIdx = NoProducerIdx,
-      producerTails = repeat(0, 4),
-    )
 
 
 template testSicPopCountTooMany*(queue: untyped) =
@@ -199,11 +159,6 @@ template testSicPopCountTooMany*(queue: untyped) =
     tail = 8,
     storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
   )
-  when ((queue is Mupsic) or (queue is Mupmuc)):
-    queue.checkState(
-      prevProducerIdx = 0,
-      producerTails = (@[8, 0, 0, 0]),
-    )
 
 
 template testSicPopCountWrap*(queue: untyped) =
@@ -228,8 +183,3 @@ template testSicPopCountWrap*(queue: untyped) =
     tail = 12,
     storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
   )
-  when ((queue is Mupsic) or (queue is Mupmuc)):
-    queue.checkState(
-      prevProducerIdx = 1,
-      producerTails = (@[8, 12, 0, 0]),
-    )

@@ -48,7 +48,9 @@ plugins:
             docstring_style: rst
             show_source: true
             show_signature: true
-            heading_level: 2
+            heading_level: 3  # h3 so procs nest under h2 API section in TOC
+            source_url: https://github.com/elijahr/lockfreequeues
+            # source_ref auto-detected from git branch; set explicitly for releases
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -63,6 +65,7 @@ markdown_extensions:
   - md_in_html
   - toc:
       permalink: true
+      toc_depth: 4  # Include h2, h3, h4 in right-side TOC
 
 nav:
   - Home: index.md
@@ -85,7 +88,9 @@ nav:
 
 watch:
   - docs
-  - src  # Reload when Nim source files change
+  - docs/api
+  - src
+  - src/lockfreequeues
 
 extra:
   version:
