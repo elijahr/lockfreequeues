@@ -10,6 +10,7 @@
 import atomics
 import options
 
+import ./atomic_dsl
 import ./constants
 import ./ops
 

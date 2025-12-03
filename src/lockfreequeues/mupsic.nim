@@ -15,6 +15,7 @@ when not compileOption("threads"):
 import atomics
 import options
 
+import ./atomic_dsl
 import ./ops
 import ./sipsic
 
