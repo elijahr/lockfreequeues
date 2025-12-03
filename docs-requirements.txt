@@ -1,7 +1,7 @@
 # MkDocs documentation dependencies
 mkdocs>=1.5
 mkdocs-material>=9.0
-mkdocstrings-nim>=0.1.0
+mkdocstrings-nim>=0.1.2
 mike>=2.0
 mkdocs-git-revision-date-localized-plugin>=1.2
 mkdocs-glightbox>=0.3
