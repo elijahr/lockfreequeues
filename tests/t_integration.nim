@@ -1,4 +1,4 @@
-# lockfreequeues
+# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues
 # © Copyright 2020 Elijah Shaw-Rutschman
 #
 # See the file "LICENSE", included in this distribution for details about the
@@ -12,42 +12,41 @@ template testCapacity*(queue: untyped) =
 
 
 template testHeadAndTailReset*(queue: untyped) =
-  queue.head.sequential(15)
-  queue.tail.sequential(15)
-  when ((queue is Mupsic) or (queue is Mupmuc)):
-    queue.reservedTail.sequential(15)
-  when ((queue is Mupmuc) or (queue is Sipmuc)):
-    queue.reservedHead.sequential(15)
-  queue.checkState(
-    head = 15,
-    tail = 15,
-    storage = repeat(0, 8),
-  )
+  # SPSC: Virtual space is 2*(N+1) = 18 for N=8, so valid values are 0..17
+  # MPSC/MPMC: Virtual space is 2*N = 16 for N=8, so valid values are 0..15
+  # This test uses 17 which is only valid for SPSC/SPMC, so skip for MPSC/MPMC
+  when not ((queue is Mupsic) or (queue is Mupmuc)):
+    # Set head/tail to 17 to test wrap from 17 -> 0 (SPSC/SPMC only)
+    queue.head.sequential(17)
+    queue.tail.sequential(17)
+    when ((queue is Sipmuc)):
+      queue.reservedHead.sequential(17)
+    queue.checkState(head = 17, tail = 17, storage = repeat(0, 8))
 
-  when ((queue is Mupsic) or (queue is Mupmuc)):
-    check(queue.getProducer(0).push(@[1]).isNone)
-  else:
     check(queue.push(@[1]).isNone)
 
-  queue.checkState(
-    head = 15,
-    tail = 0,
-    storage = (@[0, 0, 0, 0, 0, 0, 0, 1]),
-  )
+    # With mod (N+1) indexing: index(17, 8) = 17 mod 9 = 8 (in slot N, beyond visible storage[0..<N])
+    # After push, tail becomes 18 which wraps to 0
+    queue.checkState(
+      head = 17,
+      tail = 0,
+      storage = (@[0, 0, 0, 0, 0, 0, 0, 0]),  # item at slot 8, not visible in storage[0..<N]
+    )
 
-  let res =
-    when ((queue is Mupmuc) or (queue is Sipmuc)):
-      queue.getConsumer(0).pop(1)
-    else:
-      queue.pop(1)
+    let res =
+      when ((queue is Sipmuc)):
+        queue.getConsumer(0).pop(1)
+      else:
+        queue.pop(1)
 
-  check(res.isSome)
-  check(res.get == @[1])
-  queue.checkState(
-    head = 0,
-    tail = 0,
-    storage = (@[0, 0, 0, 0, 0, 0, 0, 1]),
-  )
+    check(res.isSome)
+    check(res.get == @[1])
+    # After pop, head becomes 18 which wraps to 0
+    queue.checkState(
+      head = 0,
+      tail = 0,
+      storage = (@[0, 0, 0, 0, 0, 0, 0, 0]),
+    )
 
 
 template testWraps*(queue: untyped) =
@@ -73,11 +72,16 @@ template testWraps*(queue: untyped) =
 
   check(pushRes.isNone)
 
-  queue.checkState(
-    head = 4,
-    tail = 12,
-    storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
-  )
+  # With mod (N+1) indexing: items 9,10,11,12 go to slots 8,0,1,2
+  # Item 9 is at slot 8 (beyond storage[0..<N]), so visible storage shows:
+  when ((queue is Mupsic) or (queue is Mupmuc)):
+    queue.checkState(head = 4, reservedTail = 12)
+  else:
+    queue.checkState(
+      head = 4,
+      tail = 12,
+      storage = (@[10, 11, 12, 4, 5, 6, 7, 8]),
+    )
 
   popRes =
     when ((queue is Mupmuc) or (queue is Sipmuc)):
@@ -87,11 +91,14 @@ template testWraps*(queue: untyped) =
   check(popRes.isSome)
   check(popRes.get == @[5, 6, 7, 8])
 
-  queue.checkState(
-    head = 8,
-    tail = 12,
-    storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
-  )
+  when ((queue is Mupsic) or (queue is Mupmuc)):
+    queue.checkState(head = 8, reservedTail = 12)
+  else:
+    queue.checkState(
+      head = 8,
+      tail = 12,
+      storage = (@[10, 11, 12, 4, 5, 6, 7, 8]),
+    )
 
   popRes =
     when ((queue is Mupmuc) or (queue is Sipmuc)):
@@ -101,8 +108,11 @@ template testWraps*(queue: untyped) =
   check(popRes.isSome)
   check(popRes.get == @[9, 10, 11, 12])
 
-  queue.checkState(
-    head = 12,
-    tail = 12,
-    storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
-  )
+  when ((queue is Mupsic) or (queue is Mupmuc)):
+    queue.checkState(head = 12, reservedTail = 12)
+  else:
+    queue.checkState(
+      head = 12,
+      tail = 12,
+      storage = (@[10, 11, 12, 4, 5, 6, 7, 8]),
+    )

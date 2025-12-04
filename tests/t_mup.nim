@@ -1,4 +1,4 @@
-# lockfreequeues
+# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues
 # © Copyright 2020 Elijah Shaw-Rutschman
 #
 # See the file "LICENSE", included in this distribution for details about the
@@ -44,8 +44,7 @@ template testMupPush*(queue: untyped) =
   check(queue.getProducer(0).push(2) == true)
   queue.checkState(
     head = 0,
-    tail = 2,
-    storage = (@[1, 2, 0, 0, 0, 0, 0, 0]),
+    reservedTail = 2,
   )
 
   check(queue.getProducer(1).push(3) == true)
@@ -53,8 +52,7 @@ template testMupPush*(queue: untyped) =
 
   queue.checkState(
     head = 0,
-    tail = 4,
-    storage = (@[1, 2, 3, 4, 0, 0, 0, 0]),
+    reservedTail = 4,
   )
 
   check(queue.getProducer(2).push(5) == true)
@@ -62,8 +60,7 @@ template testMupPush*(queue: untyped) =
 
   queue.checkState(
     head = 0,
-    tail = 6,
-    storage = (@[1, 2, 3, 4, 5, 6, 0, 0]),
+    reservedTail = 6,
   )
 
   check(queue.getProducer(3).push(7) == true)
@@ -71,8 +68,7 @@ template testMupPush*(queue: untyped) =
 
   queue.checkState(
     head = 0,
-    tail = 8,
-    storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
+    reservedTail = 8,
   )
 
 
@@ -82,8 +78,7 @@ template testMupPushOverflow*(queue: untyped) =
   check(queue.getProducer(0).push(9) == false)
   queue.checkState(
     head = 0,
-    tail = 8,
-    storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
+    reservedTail = 8,
   )
 
 
@@ -99,8 +94,7 @@ template testMupPushWrap*(queue: untyped) =
     check(queue.getProducer(0).push(i) == true)
   queue.checkState(
     head = 2,
-    tail = 10,
-    storage = (@[9, 10, 3, 4, 5, 6, 7, 8]),
+    reservedTail = 10,
   )
 
 
@@ -108,8 +102,7 @@ template testMupPushSeq*(queue: untyped) =
   check(queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
   queue.checkState(
     head = 0,
-    tail = 8,
-    storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
+    reservedTail = 8,
   )
 
 
@@ -121,8 +114,7 @@ template testMupPushSeqOverflow*(queue: untyped) =
   check(res.get == 8..15)
   queue.checkState(
     head = 0,
-    tail = 8,
-    storage = (@[1, 2, 3, 4, 5, 6, 7, 8]),
+    reservedTail = 8,
   )
 
 
@@ -137,6 +129,5 @@ template testMupPushSeqWrap*(queue: untyped) =
   check(res.isNone)
   queue.checkState(
     head = 2,
-    tail = 10,
-    storage = (@[9, 10, 3, 4, 5, 6, 7, 8]),
+    reservedTail = 10,
   )

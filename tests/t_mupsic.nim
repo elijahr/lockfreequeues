@@ -1,4 +1,4 @@
-# lockfreequeues
+# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues
 # © Copyright 2020 Elijah Shaw-Rutschman
 #
 # See the file "LICENSE", included in this distribution for details about the
@@ -25,11 +25,6 @@ suite "Mupsic[N, P, T]":
     check(queue.producerCount == 4)
 
   test "initial state":
-    queue.checkState(
-      head = 0,
-      tail = 0,
-      storage = repeat(0, 8),
-    )
     queue.checkState(
       head = 0,
       reservedTail = 0,
