@@ -1,4 +1,4 @@
-# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues
+# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues
 # © Copyright 2020 Elijah Shaw-Rutschman
 #
 # See the file "LICENSE", included in this distribution for details about the
@@ -13,9 +13,9 @@ template testCapacity*(queue: untyped) =
 
 template testHeadAndTailReset*(queue: untyped) =
   # SPSC: Virtual space is 2*(N+1) = 18 for N=8, so valid values are 0..17
-  # MPSC/MPMC: Virtual space is 2*N = 16 for N=8, so valid values are 0..15
-  # This test uses 17 which is only valid for SPSC/SPMC, so skip for MPSC/MPMC
-  when not ((queue is Mupsic) or (queue is Mupmuc)):
+  # MPSC/SPMC/MPMC: Virtual space is 2*N = 16 for N=8, so valid values are 0..15
+  # This test uses 17 which is only valid for SPSC (N+1 slot design)
+  when not ((queue is Mupsic) or (queue is Mupmuc) or (queue is Sipmuc)):
     # Set head/tail to 17 to test wrap from 17 -> 0 (SPSC/SPMC only)
     queue.head.sequential(17)
     queue.tail.sequential(17)

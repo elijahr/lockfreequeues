@@ -1,4 +1,4 @@
-# lockfreequeues
+# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues
 # © Copyright 2020 Elijah Shaw-Rutschman
 #
 # See the file "LICENSE", included in this distribution for details about the
@@ -10,6 +10,7 @@ import sequtils
 import unittest2
 
 import lockfreequeues
+import lockfreequeues/exceptions
 import lockfreequeues/mupsic
 import lockfreequeues/sipmuc
 import ./t_integration

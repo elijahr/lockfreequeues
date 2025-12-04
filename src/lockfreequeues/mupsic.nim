@@ -1,4 +1,4 @@
-# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues
+# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues
 # © Copyright 2020 Elijah Shaw-Rutschman
 #
 # See the file "LICENSE", included in this distribution for details about the
@@ -16,15 +16,13 @@ import atomics
 import options
 
 import ./constants
+import ./exceptions
 import ./typestates
 
 const NoSlice* = none(HSlice[int, int])
 
 type NoProducersAvailableError* = object of CatchableError
   ## Raised by `getProducer()` if all producers have been assigned to other threads.
-
-type InvalidCallDefect* = object of Defect
-  ## Raised by `Mupsic.push()` because push should happen via `Producer.push()`.
 
 type
   Mupsic*[N, P: static int, T] = object of RootObj
