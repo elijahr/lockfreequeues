@@ -1,4 +1,4 @@
-# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues
+# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues
 # © Copyright 2020 Elijah Shaw-Rutschman
 #
 # See the file "LICENSE", included in this distribution for details about the
@@ -12,11 +12,13 @@ import options
 
 import ./constants
 import ./typestates
+import ./typestates/spsc_push
+import ./typestates/spsc_pop
 
 const NoSlice* = none(HSlice[int, int])
 
 type
-  Sipsic*[N: static int, T] = object of RootObj
+  Sipsic*[N: static int, T] = object
     ## A single-producer, single-consumer (SPSC) bounded queue.
     ## Uses N+1 slots to distinguish full from empty.
     ##
@@ -42,24 +44,23 @@ proc push*[N: static int, T](self: var Sipsic[N, T], item: T): bool =
   ## Append a single item to the queue.
   ## If the queue is full, `false` is returned.
   ## If `item` is appended, `true` is returned.
+  ##
+  ## Uses typestate to ensure correct operation sequencing.
 
-  # Load pointers with proper memory ordering
-  let tail = loadAcquireN1[N](self.tail).validate()
-  let head = loadSequentialN1[N](self.head).validate()
+  # Cast queue to SipsicBase for typestate compatibility
+  var queueBase = cast[ptr SipsicBase[N, T]](addr self)
 
-  # Check fullness using SPSC formula
-  if unlikely(fullN1(head, tail)):
-    return false
+  let op = spsc_push.start[N]()
+  let loaded = op.loadPointers(queueBase[])
+  let fullCheck = loaded.checkFull()
 
-  # Write to storage using type-safe slot
-  let slot = tail.index()
-  self.storage[slot] = item
-
-  # Advance tail
-  let newTail = tail.incOrResetN1(1)
-  self.tail.storeReleaseN1(newTail)
-
-  result = true
+  case fullCheck.kind:
+  of sSPSCPushFull:
+    return fullCheck.spscpushfull.extractFalse()
+  of sSPSCPushNotFull:
+    let notFull = fullCheck.spscpushnotfull
+    let written = notFull.writeData(queueBase[], item)
+    return written.complete(queueBase[])
 
 
 proc push*[N: static int, T](
@@ -67,6 +68,7 @@ proc push*[N: static int, T](
   items: openArray[T],
 ): Option[HSlice[int, int]] =
   ## Append multiple items to the queue.
+  ## Batch push doesn't use typestate yet - uses inline implementation.
   if unlikely(items.len == 0):
     return NoSlice
 
@@ -97,21 +99,29 @@ proc push*[N: static int, T](
 
 proc pop*[N: static int, T](self: var Sipsic[N, T]): Option[T] =
   ## Pop a single item from the queue.
-  let head = loadAcquireN1[N](self.head).validate()
-  let tail = loadSequentialN1[N](self.tail).validate()
+  ## If the queue is empty, `none(T)` is returned.
+  ## Otherwise an item is popped, `some(T)` is returned.
+  ##
+  ## Uses typestate to ensure correct operation sequencing.
 
-  if unlikely(emptyN1(head, tail)):
-    return
+  # Cast queue to SipsicBase for typestate compatibility
+  var queueBase = cast[ptr SipsicBase[N, T]](addr self)
 
-  let slot = head.index()
-  result = some(self.storage[slot])
+  let op = spsc_pop.start[N]()
+  let loaded = op.loadPointers(queueBase[])
+  let emptyCheck = loaded.checkEmpty()
 
-  let newHead = head.incOrResetN1(1)
-  self.head.storeReleaseN1(newHead)
+  case emptyCheck.kind:
+  of sSPSCPopEmpty:
+    return none(T)
+  of sSPSCPopNotEmpty:
+    let notEmpty = emptyCheck.spscpopnotempty
+    return some(notEmpty.complete(queueBase[]))
 
 
 proc pop*[N: static int, T](self: var Sipsic[N, T], count: int): Option[seq[T]] =
   ## Pop `count` items from the queue.
+  ## Batch pop doesn't use typestate yet - uses inline implementation.
   let head = loadAcquireN1[N](self.head).validate()
   let tail = loadSequentialN1[N](self.tail).validate()
 
