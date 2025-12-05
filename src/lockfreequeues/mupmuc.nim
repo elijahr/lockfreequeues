@@ -1,4 +1,4 @@
-# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues
+# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues
 # © Copyright 2020 Elijah Shaw-Rutschman
 #
 # See the file "LICENSE", included in this distribution for details about the
@@ -18,11 +18,14 @@ import options
 import ./constants
 import ./exceptions
 import ./typestates
+import ./typestates/mpmc_pop
+
+export exceptions
 
 const NoSlice* = none(HSlice[int, int])
 
 type
-  Mupmuc*[N, P, C: static int, T] = object of RootObj
+  Mupmuc*[N, P, C: static int, T] = object
     ## A multi-producer, multi-consumer bounded queue.
     ## Uses N slots + committed flags. Both push and pop are lock-free.
     ##
@@ -259,50 +262,37 @@ proc pop*[N, P, C: static int, T](
   ## Otherwise an item is popped, `some(T)` is returned.
   ##
   ## This operation is lock-free: consumers never block on each other.
+  ## Uses typestate to ensure correct operation sequencing.
 
-  var reservedHead: WrappedValueN[N]
-  var newReservedHead: WrappedValueN[N]
+  # Cast queue to MupmucBase for typestate compatibility
+  var queueBase = cast[ptr MupmucBase[N, P, C, T]](self.queue)
 
-  # Claim a slot using CAS on reservedHead
+  var op = mpmc_pop.start[N]()
+
   while true:
-    reservedHead = loadAcquireN[N](self.queue.reservedHead).validate()
-    let reservedTail = loadAcquireN[N](self.queue.reservedTail).validate()
+    let loaded = op.loadPointers(queueBase[])
 
-    # MPMC: uses reservedHead vs reservedTail
-    if unlikely(emptyN(reservedHead, reservedTail)):
+    let emptyCheck = loaded.checkEmpty()
+    case emptyCheck.kind:
+    of mMPMCPopEmpty:
       return none(T)
-
-    let slotIdx = reservedHead.index()
-
-    # Check if slot is committed BEFORE claiming
-    if not self.queue.committed.load(slotIdx):
-      continue  # Producer still writing, retry
-
-    newReservedHead = reservedHead.incOrResetN(1)
-
-    let cas = prepareCAS(
-      addr self.queue.reservedHead,
-      reservedHead.value,
-      newReservedHead.value
-    ).executeCAS()
-
-    if cas.succeeded:
-      # Successfully claimed the slot
-      # Read the item
-      result = some(self.queue.storage[slotIdx])
-
-      # Clear committed flag (slot can be reused by producer)
-      self.queue.committed.store(slotIdx, false)
-
-      # Try to advance head (lock-free, may fail if other consumers are ahead)
-      var expectedHead = reservedHead.value
-      discard self.queue.head.compareExchangeWeak(
-        expectedHead,
-        newReservedHead.value,
-        moRelease,
-        moAcquire,
-      )
-      return
+    of mMPMCPopNotEmpty:
+      let notEmpty = emptyCheck.mpmcpopnotempty
+      let committedCheck = notEmpty.checkCommitted(queueBase[])
+      case committedCheck.kind:
+      of mMPMCPopStart:
+        op = committedCheck.mpmcpopstart  # Retry - producer still writing
+        continue
+      of mMPMCPopSlotReady:
+        let ready = committedCheck.mpmcpopslotready
+        let claimResult = ready.tryClaim(queueBase[])
+        case claimResult.kind:
+        of mMPMCPopStart:
+          op = claimResult.mpmcpopstart  # Retry - CAS contention
+          continue
+        of mMPMCPopSlotClaimed:
+          let claimed = claimResult.mpmcpopslotclaimed
+          return some(claimed.complete(queueBase[]))
 
 
 proc pop*[N, P, C: static int, T](

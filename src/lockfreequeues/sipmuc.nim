@@ -1,9 +1,4 @@
-# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues
-# © Copyright 2020 Elijah Shaw-Rutschman
-#
-# See the file "LICENSE", included in this distribution for details about the
-# copyright.
-
+# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.
 ## A single-producer, multi-consumer (SPMC) bounded queue.
 ##
 ## Sipmuc provides wait-free push operations (single producer) and lock-free
@@ -18,6 +13,9 @@ import options
 import ./constants
 import ./exceptions
 import ./typestates
+import ./typestates/spmc_pop
+
+export exceptions
 
 const NoSlice* = none(HSlice[int, int])
 
@@ -169,48 +167,37 @@ proc pop*[N, C: static int, T](self: Consumer[N, C, T]): Option[T] =
   ## Pop a single item from the queue.
   ##
   ## This operation is lock-free: consumers never block on each other.
-  var reservedHead: WrappedValueN[N]
-  var newReservedHead: WrappedValueN[N]
+  ## Uses typestate to ensure correct operation sequencing.
 
-  # Claim a slot using CAS on reservedHead
+  # Cast queue to SipmucBase for typestate compatibility
+  var queueBase = cast[ptr SipmucBase[N, C, T]](self.queue)
+
+  var op = spmc_pop.start[N]()
+
   while true:
-    reservedHead = loadAcquireN[N](self.queue.reservedHead).validate()
-    let tail = loadAcquireN[N](self.queue.tail).validate()
+    let loaded = op.loadPointers(queueBase[])
 
-    # SPMC: uses reservedHead vs tail
-    if unlikely(emptyN(reservedHead, tail)):
+    let emptyCheck = loaded.checkEmpty()
+    case emptyCheck.kind:
+    of eSPMCPopEmpty:
       return none(T)
-
-    newReservedHead = reservedHead.incOrResetN(1)
-
-    var expected = reservedHead.value
-    if self.queue.reservedHead.compareExchangeWeak(
-      expected,
-      newReservedHead.value,
-      moRelease,
-      moAcquire,
-    ):
-      break
-
-  let slot = reservedHead.index()
-
-  # Check committed
-  if not self.queue.committed.load(slot):
-    return none(T)
-
-  result = some(self.queue.storage[slot])
-
-  # Clear committed
-  self.queue.committed.store(slot, false)
-
-  # Fire-and-forget head advance (best effort)
-  var expectedHead = reservedHead.value
-  discard self.queue.head.compareExchangeWeak(
-    expectedHead,
-    newReservedHead.value,
-    moRelease,
-    moAcquire,
-  )
+    of eSPMCPopNotEmpty:
+      let notEmpty = emptyCheck.spmcpopnotempty
+      let committedCheck = notEmpty.checkCommitted(queueBase[])
+      case committedCheck.kind:
+      of cSPMCPopStart:
+        op = committedCheck.spmcpopstart  # Retry - producer still writing
+        continue
+      of cSPMCPopSlotReady:
+        let ready = committedCheck.spmcpopslotready
+        let claimResult = ready.tryClaim(queueBase[])
+        case claimResult.kind:
+        of cSPMCPopStart:
+          op = claimResult.spmcpopstart  # Retry - CAS contention
+          continue
+        of cSPMCPopSlotClaimed:
+          let claimed = claimResult.spmcpopslotclaimed
+          return some(claimed.complete(queueBase[]))
 
 
 proc pop*[N, C: static int, T](
