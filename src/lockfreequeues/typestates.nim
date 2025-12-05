@@ -1,4 +1,4 @@
-# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues
+# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues
 # © Copyright 2020 Elijah Shaw-Rutschman
 #
 # See the file "LICENSE", included in this distribution for details about the
@@ -23,6 +23,7 @@ import ./typestates/fullness_checks
 # Operation lifecycle typestates
 import ./typestates/spsc_push
 import ./typestates/spsc_pop
+import ./typestates/spmc_push
 import ./typestates/spmc_pop
 import ./typestates/mpmc_pop
 
@@ -41,6 +42,7 @@ export atomic_loaders
 export fullness_checks
 export spsc_push
 export spsc_pop
+export spmc_push
 export spmc_pop
 export mpmc_pop
 export fullness  # Backward compatibility

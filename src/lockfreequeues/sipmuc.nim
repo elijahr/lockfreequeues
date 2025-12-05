@@ -1,4 +1,4 @@
-# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.
+# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.
 ## A single-producer, multi-consumer (SPMC) bounded queue.
 ##
 ## Sipmuc provides wait-free push operations (single producer) and lock-free
@@ -13,6 +13,7 @@ import options
 import ./constants
 import ./exceptions
 import ./typestates
+import ./typestates/spmc_push
 import ./typestates/spmc_pop
 
 export exceptions
@@ -70,28 +71,22 @@ proc push*[N, C: static int, T](self: var Sipmuc[N, C, T], item: T): bool =
   ## If `item` is appended, `true` is returned.
   ##
   ## This operation is wait-free for the single producer.
+  ## Uses typestate to ensure correct operation sequencing.
 
-  # Load pointers with proper memory ordering
-  let tail = loadAcquireN[N](self.tail).validate()
-  # KEY FIX: SPMC uses reservedHead vs tail for fullness check!
-  let reservedHead = loadAcquireN[N](self.reservedHead).validate()
+  # Cast queue to SipmucBase for typestate compatibility
+  var queueBase = cast[ptr SipmucBase[N, C, T]](addr self)
 
-  # Check fullness using SPMC formula (reservedHead, not head)
-  if unlikely(fullN(reservedHead, tail)):
-    return false
+  let op = spmc_push.start[N]()
+  let loaded = op.loadPointers(queueBase[])
+  let fullCheck = loaded.checkFull()
 
-  # Write to storage using type-safe slot
-  let slot = tail.index()
-  self.storage[slot] = item
-
-  # Mark committed first, then advance tail
-  self.committed.store(slot, true)
-
-  # Advance tail
-  let newTail = tail.incOrResetN(1)
-  self.tail.storeReleaseN(newTail)
-
-  return true
+  case fullCheck.kind:
+  of sSPMCPushFull:
+    return fullCheck.spmcpushfull.extractFalse()
+  of sSPMCPushNotFull:
+    let notFull = fullCheck.spmcpushnotfull
+    let written = notFull.writeData(queueBase[], item)
+    return written.complete(queueBase[])
 
 
 proc push*[N, C: static int, T](
