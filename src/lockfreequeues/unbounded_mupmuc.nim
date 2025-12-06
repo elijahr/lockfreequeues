@@ -1,8 +1,3 @@
-# lockfreequeues
-# © Copyright 2020 Elijah Shaw-Rutschman
-#
-# See the file "LICENSE", included in this distribution for details about the
-# copyright.
 
 ## Unbounded multiple-producer, multiple-consumer (MPMC) queue using linked segments.
 ##
@@ -36,10 +31,17 @@ proc c_free(p: pointer) {.importc: "free", header: "<stdlib.h>".}
 type
   DeallocationStrategy* = enum
     ## Strategy for segment memory reclamation.
-    NeverDeallocate    ## Segments stay allocated forever (highest performance)
-    EagerDeallocate    ## Free segments immediately when empty
-    Pooled             ## Cache N free segments, free excess (default)
+    Manual    ## Retire segments. User calls tryReclaim().
+              ## Best for --mm:none (no GC assistance).
+    Eager     ## Retire + immediate tryReclaim() after each segment retirement.
+              ## Best for GC environments.
 
+when defined(gcNone):
+  const DefaultDeallocationStrategy* = Manual
+else:
+  const DefaultDeallocationStrategy* = Eager
+
+type
   Segment[S: static int, T] = object
     ## A fixed-size segment in the linked list.
     data: array[S, T]
@@ -87,12 +89,12 @@ proc newSegment[S: static int, T](): ptr Segment[S, T] =
 
 proc newUnboundedMupmuc*[S: static int, T](
   manager: EpochManager,
-  strategy: DeallocationStrategy = Pooled
+  strategy: DeallocationStrategy = DefaultDeallocationStrategy
 ): UnboundedMupmuc[S, T] =
   ## Create a new unbounded MPMC queue.
   ##
   ## Requires an EpochManager for memory reclamation.
-  ## Deallocation strategy defaults to Pooled.
+  ## Deallocation strategy defaults based on memory management mode.
   ## Returns a new queue instance.
   result.manager = manager
   result.strategy = strategy
@@ -224,11 +226,11 @@ proc pop*[S: static int, T](self: var Consumer[S, T]): Option[T] =
       discard self.queue.itemCount.fetchSub(1, moRelaxed)
 
       # If we claimed the last slot (S-1), retire segment for reclamation
-      if mySlot == S - 1 and self.queue.strategy != NeverDeallocate:
+      if mySlot == S - 1 and self.queue.strategy != Manual:
         self.queue.manager.retire(seg)
         discard self.queue.segments.fetchSub(1, moRelaxed)
 
-        if self.queue.strategy == EagerDeallocate:
+        if self.queue.strategy == Eager:
           discard self.queue.manager.tryReclaim()
 
       return

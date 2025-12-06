@@ -1,9 +1,3 @@
-# lockfreequeues
-# © Copyright 2020 Elijah Shaw-Rutschman
-#
-# See the file "LICENSE", included in this distribution for details about the
-# copyright.
-
 import atomics
 import options
 import unittest2
@@ -79,9 +73,9 @@ suite "UnboundedSipsic":
       check(item.isSome)
       check(item.get == i)
 
-  test "segment reclamation with NeverDeallocate":
+  test "segment reclamation with Manual":
     let manager = newEpochManager()
-    var queue = newUnboundedSipsic[4, int](manager, NeverDeallocate)
+    var queue = newUnboundedSipsic[4, int](manager, Manual)
 
     # Fill and drain multiple segments
     for round in 1..3:
@@ -93,9 +87,9 @@ suite "UnboundedSipsic":
     # Segments should accumulate
     check(queue.segmentCount >= 1)
 
-  test "segment reclamation with EagerDeallocate":
+  test "segment reclamation with Eager":
     let manager = newEpochManager()
-    var queue = newUnboundedSipsic[4, int](manager, EagerDeallocate)
+    var queue = newUnboundedSipsic[4, int](manager, Eager)
 
     # Fill and drain
     for i in 1..8:

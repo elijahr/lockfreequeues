@@ -1,8 +1,3 @@
-# lockfreequeues
-# © Copyright 2020 Elijah Shaw-Rutschman
-#
-# See the file "LICENSE", included in this distribution for details about the
-# copyright.
 
 ## Unbounded multiple-producer, single-consumer (MPSC) queue using linked segments.
 ##
@@ -35,10 +30,17 @@ proc c_free(p: pointer) {.importc: "free", header: "<stdlib.h>".}
 type
   DeallocationStrategy* = enum
     ## Strategy for segment memory reclamation.
-    NeverDeallocate    ## Segments stay allocated forever (highest performance)
-    EagerDeallocate    ## Free segments immediately when empty
-    Pooled             ## Cache N free segments, free excess (default)
+    Manual    ## Retire segments. User calls tryReclaim().
+              ## Best for --mm:none (no GC assistance).
+    Eager     ## Retire + immediate tryReclaim() after each segment retirement.
+              ## Best for GC environments.
 
+when defined(gcNone):
+  const DefaultDeallocationStrategy* = Manual
+else:
+  const DefaultDeallocationStrategy* = Eager
+
+type
   Segment[S: static int, T] = object
     ## A fixed-size segment in the linked list.
     data: array[S, T]
@@ -83,12 +85,12 @@ proc newSegment[S: static int, T](): ptr Segment[S, T] =
 
 proc newUnboundedMupsic*[S: static int, T](
   manager: EpochManager,
-  strategy: DeallocationStrategy = Pooled
+  strategy: DeallocationStrategy = DefaultDeallocationStrategy
 ): UnboundedMupsic[S, T] =
   ## Create a new unbounded MPSC queue.
   ##
   ## Requires an EpochManager for memory reclamation.
-  ## Deallocation strategy defaults to Pooled.
+  ## Deallocation strategy defaults based on memory management mode.
   ## Returns a new queue instance.
   result.manager = manager
   result.strategy = strategy
@@ -208,7 +210,7 @@ proc pop*[S: static int, T](self: var UnboundedMupsic[S, T]): Option[T] =
       return none(T)
 
     # Retire old segment
-    if self.strategy != NeverDeallocate:
+    if self.strategy != Manual:
       self.manager.retire(seg)
       discard self.segments.fetchSub(1, moRelaxed)
 

@@ -22,7 +22,9 @@ Dynamic-capacity linked segment implementations. Grow as needed with epoch-based
 
 - **[EpochManager](epoch.md)** - Memory reclamation for unbounded queues.
 - **[Ops](ops.md)** - Ring buffer index operations (internal).
-- **DeallocationStrategy** - Memory reclamation policy (NeverDeallocate, EagerDeallocate, Pooled).
+- **DeallocationStrategy** - Memory reclamation policy:
+  - `Manual` - Retire segments to epoch manager. User calls `tryReclaim()` periodically. Best for `--mm:none`.
+  - `Eager` - Retire segments and immediately call `tryReclaim()`. Best for GC environments.
 
 ## Performance Guarantees
 
