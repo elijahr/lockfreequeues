@@ -1,9 +1,3 @@
-# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues
-# © Copyright 2020 Elijah Shaw-Rutschman
-#
-# See the file "LICENSE", included in this distribution for details about the
-# copyright.
-
 ## N+1-slot virtual values for SPSC queue.
 ##
 ## SPSC uses N+1 slots to distinguish full from empty without flags.

@@ -1,4 +1,3 @@
-# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# tests/t_fullness_checks.nim
 import unittest2
 import lockfreequeues/typestates/virtual_values_n
 import lockfreequeues/typestates/virtual_values_n1
