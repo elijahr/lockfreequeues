@@ -12,7 +12,7 @@ entryPoints    = @["tests/test.nim"]
 requires "nim >= 2.0.0"
 requires "unittest2"
 requires "typestates"
-requires "debra >= 0.1.0"
+requires "debra"
 
 # Tasks
 task test, "Runs the test suite":
