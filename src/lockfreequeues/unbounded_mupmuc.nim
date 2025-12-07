@@ -1,19 +1,21 @@
 
 ## Unbounded multiple-producer, multiple-consumer (MPMC) queue using linked segments.
 ##
-## Uses epoch-based reclamation for safe memory deallocation.
+## Uses DEBRA+ epoch-based reclamation for safe memory deallocation.
 ##
 ## - S: Segment size (items per segment). Larger = less allocation, smaller = faster reclamation.
 ## - T: Type of data the queue holds.
+## - MaxThreads: Maximum number of threads (compile-time constant).
 ##
 ## Both push and pop are lock-free (CAS coordination).
 ##
 ## ```nim
-## let manager = newEpochManager()
-## var queue = newUnboundedMupmuc[64, int](manager)
-##
-## var producer = queue.getProducer()
-## var consumer = queue.getConsumer()
+## var manager = initDebraManager[4]()
+## var queue = newUnboundedMupmuc[64, int, 4](addr manager)
+## let producerHandle = registerThread(manager)
+## let consumerHandle = registerThread(manager)
+## var producer = queue.getProducer(producerHandle)
+## var consumer = queue.getConsumer(consumerHandle)
 ## producer.push(42)
 ## let item = consumer.pop()  # some(42)
 ## ```
@@ -21,7 +23,7 @@
 import atomics
 import options
 
-import ./epoch
+import debra
 
 # Use C stdlib for thread-safe cross-thread allocation
 proc c_calloc(n, size: csize_t): pointer {.importc: "calloc", header: "<stdlib.h>".}
@@ -50,12 +52,13 @@ type
     prevConsumerIdx: Atomic[int]  # CAS coordination for consumers
     committed: array[S, Atomic[bool]]  # Track which slots are ready to read
 
-  UnboundedMupmuc*[S: static int, T] = object
+  UnboundedMupmuc*[S: static int; T; MaxThreads: static int] = object
     ## Unbounded MPMC queue using linked segments.
     ##
     ## - S: Segment size (compile-time constant).
     ## - T: Data type.
-    manager: EpochManager
+    ## - MaxThreads: Maximum number of threads (compile-time constant).
+    manager: ptr DebraManager[MaxThreads]
     headSegment: ptr Segment[S, T]  # Consumers read from here
     tailSegment: Atomic[ptr Segment[S, T]]  # Producers write here
     strategy: DeallocationStrategy
@@ -64,17 +67,21 @@ type
     producerCount: Atomic[int]
     consumerCount: Atomic[int]
 
-  Producer*[S: static int, T] = object
+  Producer*[S: static int; T; MaxThreads: static int] = object
     ## Handle for a registered producer.
-    queue: ptr UnboundedMupmuc[S, T]
+    ##
+    ## Producers must call getProducer() before pushing.
+    queue: ptr UnboundedMupmuc[S, T, MaxThreads]
     idx*: int
-    threadIdx: int
+    handle: ThreadHandle[MaxThreads]
 
-  Consumer*[S: static int, T] = object
+  Consumer*[S: static int; T; MaxThreads: static int] = object
     ## Handle for a registered consumer.
-    queue: ptr UnboundedMupmuc[S, T]
+    ##
+    ## Consumers must call getConsumer() before popping.
+    queue: ptr UnboundedMupmuc[S, T, MaxThreads]
     idx*: int
-    threadIdx: int
+    handle: ThreadHandle[MaxThreads]
 
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
@@ -87,13 +94,13 @@ proc newSegment[S: static int, T](): ptr Segment[S, T] =
     result.committed[i].store(false, moRelaxed)
 
 
-proc newUnboundedMupmuc*[S: static int, T](
-  manager: EpochManager,
+proc newUnboundedMupmuc*[S: static int; T; MaxThreads: static int](
+  manager: ptr DebraManager[MaxThreads],
   strategy: DeallocationStrategy = DefaultDeallocationStrategy
-): UnboundedMupmuc[S, T] =
+): UnboundedMupmuc[S, T, MaxThreads] =
   ## Create a new unbounded MPMC queue.
   ##
-  ## Requires an EpochManager for memory reclamation.
+  ## Requires a DebraManager pointer for memory reclamation.
   ## Deallocation strategy defaults based on memory management mode.
   ## Returns a new queue instance.
   result.manager = manager
@@ -109,43 +116,45 @@ proc newUnboundedMupmuc*[S: static int, T](
   result.consumerCount.store(0, moRelaxed)
 
 
-proc segmentCount*[S: static int, T](self: var UnboundedMupmuc[S, T]): int =
+proc segmentCount*[S: static int; T; MaxThreads: static int](self: var UnboundedMupmuc[S, T, MaxThreads]): int =
   ## Number of segments currently allocated.
   result = self.segments.load(moRelaxed)
 
 
-proc len*[S: static int, T](self: var UnboundedMupmuc[S, T]): int =
+proc len*[S: static int; T; MaxThreads: static int](self: var UnboundedMupmuc[S, T, MaxThreads]): int =
   ## Number of items currently in the queue.
   result = self.itemCount.load(moRelaxed)
 
 
-proc getProducer*[S: static int, T](self: var UnboundedMupmuc[S, T]): Producer[S, T] =
+proc getProducer*[S: static int; T; MaxThreads: static int](
+  self: var UnboundedMupmuc[S, T, MaxThreads],
+  handle: ThreadHandle[MaxThreads]
+): Producer[S, T, MaxThreads] =
   ## Register a new producer and get a handle.
   ##
   ## Returns a Producer handle for pushing items.
   let idx = self.producerCount.fetchAdd(1, moAcquire)
-  let threadIdx = self.manager.registerThread()
-
   result.queue = addr self
   result.idx = idx
-  result.threadIdx = threadIdx
+  result.handle = handle
 
 
-proc getConsumer*[S: static int, T](self: var UnboundedMupmuc[S, T]): Consumer[S, T] =
+proc getConsumer*[S: static int; T; MaxThreads: static int](
+  self: var UnboundedMupmuc[S, T, MaxThreads],
+  handle: ThreadHandle[MaxThreads]
+): Consumer[S, T, MaxThreads] =
   ## Register a new consumer and get a handle.
   ##
   ## Returns a Consumer handle for popping items.
   let idx = self.consumerCount.fetchAdd(1, moAcquire)
-  let threadIdx = self.manager.registerThread()
-
   result.queue = addr self
   result.idx = idx
-  result.threadIdx = threadIdx
+  result.handle = handle
 
 
-proc push*[S: static int, T](self: var Producer[S, T], item: T) =
+proc push*[S: static int; T; MaxThreads: static int](self: var Producer[S, T, MaxThreads], item: T) =
   ## Push a single item. Never blocks or fails (unbounded).
-  let guard {.used.} = self.queue.manager.pin(self.threadIdx)
+  let pinned = unpinned(self.handle).pin()
 
   while true:
     var seg = self.queue.tailSegment.load(moAcquire)
@@ -177,20 +186,26 @@ proc push*[S: static int, T](self: var Producer[S, T], item: T) =
       seg.data[tail] = item
       seg.committed[tail].store(true, moRelease)
       discard self.queue.itemCount.fetchAdd(1, moRelaxed)
+      discard pinned.unpin()
       return
 
 
-proc push*[S: static int, T](self: var Producer[S, T], items: openArray[T]) =
+proc push*[S: static int; T; MaxThreads: static int](self: var Producer[S, T, MaxThreads], items: openArray[T]) =
   ## Push multiple items.
   for item in items:
     self.push(item)
 
 
-proc pop*[S: static int, T](self: var Consumer[S, T]): Option[T] =
+# Helper to wrap destructor for c_free
+proc segmentDestructor(p: pointer) {.nimcall.} =
+  c_free(p)
+
+
+proc pop*[S: static int; T; MaxThreads: static int](self: var Consumer[S, T, MaxThreads]): Option[T] =
   ## Pop a single item.
   ##
   ## Returns some(T) if available, none(T) if empty.
-  let guard {.used.} = self.queue.manager.pin(self.threadIdx)
+  let pinned = unpinned(self.handle).pin()
 
   var seg = self.queue.headSegment
 
@@ -205,19 +220,22 @@ proc pop*[S: static int, T](self: var Consumer[S, T]): Option[T] =
       if mySlot < S and seg.tail.load(moAcquire) > mySlot:
         # Slot reserved but maybe not committed yet
         if not seg.committed[mySlot].load(moAcquire):
-          return none(T)  # Wait for commit
+          discard pinned.unpin()
+          return none(T)
         # Try again
         continue
 
       # Segment exhausted, try next
       let nextSeg = seg.next.load(moAcquire)
       if nextSeg == nil:
+        discard pinned.unpin()
         return none(T)
       seg = nextSeg
       continue
 
     # Check if this slot is committed
     if not seg.committed[mySlot].load(moAcquire):
+      discard pinned.unpin()
       return none(T)  # Producer still writing
 
     # CAS to claim slot
@@ -227,17 +245,24 @@ proc pop*[S: static int, T](self: var Consumer[S, T]): Option[T] =
 
       # If we claimed the last slot (S-1), retire segment for reclamation
       if mySlot == S - 1 and self.queue.strategy != Manual:
-        self.queue.manager.retire(seg)
+        let ready = retireReady(pinned)
+        discard ready.retire(seg, segmentDestructor)
         discard self.queue.segments.fetchSub(1, moRelaxed)
 
-        if self.queue.strategy == Eager:
-          discard self.queue.manager.tryReclaim()
+      discard pinned.unpin()
+
+      if self.queue.strategy == Eager:
+        let reclaimOp = reclaimStart(self.queue.manager).loadEpochs().checkSafe()
+        if reclaimOp.kind == rReclaimReady:
+          discard reclaimOp.reclaimready.tryReclaim()
 
       return
 
 
-proc pop*[S: static int, T](self: var Consumer[S, T], count: int): Option[seq[T]] =
+proc pop*[S: static int; T; MaxThreads: static int](self: var Consumer[S, T, MaxThreads], count: int): Option[seq[T]] =
   ## Pop up to count items.
+  ##
+  ## Returns some(seq[T]) with at least one item, none if empty.
   if count <= 0:
     return none(seq[T])
 
@@ -254,7 +279,7 @@ proc pop*[S: static int, T](self: var Consumer[S, T], count: int): Option[seq[T]
   return some(items)
 
 
-proc `=destroy`*[S: static int, T](self: UnboundedMupmuc[S, T]) =
+proc `=destroy`*[S: static int; T; MaxThreads: static int](self: var UnboundedMupmuc[S, T, MaxThreads]) =
   ## Clean up all segments.
   if self.headSegment != nil:
     var seg = self.headSegment
