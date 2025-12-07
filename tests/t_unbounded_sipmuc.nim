@@ -1,85 +1,85 @@
-# lockfreequeues
-# © Copyright 2020 Elijah Shaw-Rutschman
-#
-# See the file "LICENSE", included in this distribution for details about the
-# copyright.
-
-import atomics
+# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.import atomics
 import options
 import unittest2
 
-import lockfreequeues/epoch
+import debra
 import lockfreequeues/unbounded_sipmuc
 
 
 suite "UnboundedSipmuc":
 
   test "newUnboundedSipmuc creates valid instance":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipmuc[16, int](manager)
+    var manager = initDebraManager[4]()
+    var queue = newUnboundedSipmuc[16, int, 4](addr manager)
     check(queue.segmentCount == 1)
 
   test "push single item":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipmuc[16, int](manager)
+    var manager = initDebraManager[4]()
+    var queue = newUnboundedSipmuc[16, int, 4](addr manager)
 
     queue.push(42)
     check(queue.len == 1)
 
   test "push multiple items":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipmuc[16, int](manager)
+    var manager = initDebraManager[4]()
+    var queue = newUnboundedSipmuc[16, int, 4](addr manager)
 
     for i in 1..10:
       queue.push(i)
     check(queue.len == 10)
 
   test "getConsumer returns valid consumer":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipmuc[16, int](manager)
-    var consumer = queue.getConsumer()
+    var manager = initDebraManager[4]()
+    var queue = newUnboundedSipmuc[16, int, 4](addr manager)
+    let handle = registerThread(manager)
+    var consumer = queue.getConsumer(handle)
     check(consumer.idx >= 0)
 
   test "consumer pop single item":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipmuc[16, int](manager)
+    var manager = initDebraManager[4]()
+    var queue = newUnboundedSipmuc[16, int, 4](addr manager)
 
     queue.push(42)
-    var consumer = queue.getConsumer()
+    let handle = registerThread(manager)
+    var consumer = queue.getConsumer(handle)
     let item = consumer.pop()
     check(item.isSome)
     check(item.get == 42)
 
   test "consumer pop from empty returns none":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipmuc[16, int](manager)
-    var consumer = queue.getConsumer()
+    var manager = initDebraManager[4]()
+    var queue = newUnboundedSipmuc[16, int, 4](addr manager)
+    let handle = registerThread(manager)
+    var consumer = queue.getConsumer(handle)
 
     let item = consumer.pop()
     check(item.isNone)
 
   test "FIFO order preserved with single consumer":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipmuc[16, int](manager)
+    var manager = initDebraManager[4]()
+    var queue = newUnboundedSipmuc[16, int, 4](addr manager)
 
     for i in 1..5:
       queue.push(i)
 
-    var consumer = queue.getConsumer()
+    let handle = registerThread(manager)
+    var consumer = queue.getConsumer(handle)
     for i in 1..5:
       let item = consumer.pop()
       check(item.isSome)
       check(item.get == i)
 
   test "multiple consumers can pop":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipmuc[16, int](manager)
+    var manager = initDebraManager[4]()
+    var queue = newUnboundedSipmuc[16, int, 4](addr manager)
 
     for i in 1..10:
       queue.push(i)
 
-    var consumer1 = queue.getConsumer()
-    var consumer2 = queue.getConsumer()
+    let handle1 = registerThread(manager)
+    let handle2 = registerThread(manager)
+    var consumer1 = queue.getConsumer(handle1)
+    var consumer2 = queue.getConsumer(handle2)
 
     var count1, count2 = 0
     var total = 0
@@ -99,24 +99,26 @@ suite "UnboundedSipmuc":
     check(total == 55)  # sum of 1..10
 
   test "grows beyond single segment":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipmuc[4, int](manager)
+    var manager = initDebraManager[4]()
+    var queue = newUnboundedSipmuc[4, int, 4](addr manager)
 
     for i in 1..10:
       queue.push(i)
 
     check(queue.segmentCount >= 3)
 
-    var consumer = queue.getConsumer()
+    let handle = registerThread(manager)
+    var consumer = queue.getConsumer(handle)
     for i in 1..10:
       let item = consumer.pop()
       check(item.isSome)
       check(item.get == i)
 
   test "len tracks items correctly":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipmuc[8, int](manager)
-    var consumer = queue.getConsumer()
+    var manager = initDebraManager[4]()
+    var queue = newUnboundedSipmuc[8, int, 4](addr manager)
+    let handle = registerThread(manager)
+    var consumer = queue.getConsumer(handle)
 
     check(queue.len == 0)
 
@@ -135,20 +137,22 @@ suite "UnboundedSipmuc":
     check(queue.len == 0)
 
   test "batch push":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipmuc[8, int](manager)
+    var manager = initDebraManager[4]()
+    var queue = newUnboundedSipmuc[8, int, 4](addr manager)
 
     queue.push(@[1, 2, 3, 4, 5])
     check(queue.len == 5)
 
-    var consumer = queue.getConsumer()
+    let handle = registerThread(manager)
+    var consumer = queue.getConsumer(handle)
     for i in 1..5:
       check(consumer.pop().get == i)
 
   test "batch pop":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipmuc[8, int](manager)
-    var consumer = queue.getConsumer()
+    var manager = initDebraManager[4]()
+    var queue = newUnboundedSipmuc[8, int, 4](addr manager)
+    let handle = registerThread(manager)
+    var consumer = queue.getConsumer(handle)
 
     for i in 1..10:
       queue.push(i)
@@ -159,9 +163,10 @@ suite "UnboundedSipmuc":
     check(queue.len == 5)
 
   test "batch pop more than available":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipmuc[8, int](manager)
-    var consumer = queue.getConsumer()
+    var manager = initDebraManager[4]()
+    var queue = newUnboundedSipmuc[8, int, 4](addr manager)
+    let handle = registerThread(manager)
+    var consumer = queue.getConsumer(handle)
 
     queue.push(@[1, 2, 3])
 
@@ -171,9 +176,10 @@ suite "UnboundedSipmuc":
     check(queue.len == 0)
 
   test "batch pop from empty":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipmuc[8, int](manager)
-    var consumer = queue.getConsumer()
+    var manager = initDebraManager[4]()
+    var queue = newUnboundedSipmuc[8, int, 4](addr manager)
+    let handle = registerThread(manager)
+    var consumer = queue.getConsumer(handle)
 
     let items = consumer.pop(5)
     check(items.isNone)

@@ -1,33 +1,33 @@
 
 ## Unbounded single-producer, multiple-consumer (SPMC) queue using linked segments.
 ##
-## Uses epoch-based reclamation for safe memory deallocation.
+## Uses DEBRA+ epoch-based reclamation for safe memory deallocation.
 ##
 ## - S: Segment size (items per segment). Larger = less allocation, smaller = faster reclamation.
 ## - T: Type of data the queue holds.
+## - MaxThreads: Maximum number of threads (compile-time constant).
 ##
 ## Push is wait-free for the single producer.
 ## Pop is lock-free for multiple consumers (CAS coordination).
 ##
 ## ```nim
-## let manager = newEpochManager()
-## var queue = newUnboundedSipmuc[64, int](manager)
+## var manager = initDebraManager[4]()
+## var queue = newUnboundedSipmuc[64, int, 4](addr manager)
+## let handle = registerThread(manager)
+## var consumer = queue.getConsumer(handle)
 ##
 ## queue.push(42)
-## var consumer = queue.getConsumer()
 ## let item = consumer.pop()  # some(42)
 ## ```
 
 import atomics
 import options
 
-import ./epoch
+import debra
 
 # Use C stdlib for thread-safe cross-thread allocation
 proc c_calloc(n, size: csize_t): pointer {.importc: "calloc", header: "<stdlib.h>".}
 proc c_free(p: pointer) {.importc: "free", header: "<stdlib.h>".}
-
-const MaxConsumers* = 128  # Fixed size, matches MaxThreads in epoch.nim
 
 
 type
@@ -51,12 +51,13 @@ type
     tail: Atomic[int]  # Producer write position within segment
     prevConsumerIdx: Atomic[int]  # CAS coordination for consumers
 
-  UnboundedSipmuc*[S: static int, T] = object
+  UnboundedSipmuc*[S: static int; T; MaxThreads: static int] = object
     ## Unbounded SPMC queue using linked segments.
     ##
     ## - S: Segment size (compile-time constant).
     ## - T: Data type.
-    manager: EpochManager
+    ## - MaxThreads: Maximum number of threads (compile-time constant).
+    manager: ptr DebraManager[MaxThreads]
     headSegment: ptr Segment[S, T]  # Consumers read from here
     tailSegment: ptr Segment[S, T]  # Producer writes here
     strategy: DeallocationStrategy
@@ -64,17 +65,17 @@ type
     segments: Atomic[int]   # Number of segments
     # Consumer tracking
     consumerCount: Atomic[int]
-    consumerHeads: array[MaxConsumers, Atomic[int]]  # Per-consumer read position
+    consumerHeads: array[MaxThreads, Atomic[int]]  # Per-consumer read position
 
-  Consumer*[S: static int, T] = object
+  Consumer*[S: static int; T; MaxThreads: static int] = object
     ## Handle for a registered consumer.
     ##
     ## Consumers must call getConsumer() before popping.
     ## The consumer is automatically deregistered on destruction.
-    queue: ptr UnboundedSipmuc[S, T]
+    queue: ptr UnboundedSipmuc[S, T, MaxThreads]
     idx*: int
     localHead: int  # Local tracking of position
-    threadIdx: int  # Index for epoch manager
+    handle: ThreadHandle[MaxThreads]  # Thread handle for pin/unpin
 
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
@@ -85,13 +86,13 @@ proc newSegment[S: static int, T](): ptr Segment[S, T] =
   result.prevConsumerIdx.store(-1, moRelaxed)  # No consumer yet
 
 
-proc newUnboundedSipmuc*[S: static int, T](
-  manager: EpochManager,
+proc newUnboundedSipmuc*[S: static int; T; MaxThreads: static int](
+  manager: ptr DebraManager[MaxThreads],
   strategy: DeallocationStrategy = DefaultDeallocationStrategy
-): UnboundedSipmuc[S, T] =
+): UnboundedSipmuc[S, T, MaxThreads] =
   ## Create a new unbounded SPMC queue.
   ##
-  ## Requires an EpochManager for memory reclamation.
+  ## Requires a DebraManager pointer for memory reclamation.
   ## Deallocation strategy defaults based on memory management mode.
   ## Returns a new queue instance.
   result.manager = manager
@@ -106,21 +107,21 @@ proc newUnboundedSipmuc*[S: static int, T](
 
   # Initialize consumer tracking
   result.consumerCount.store(0, moRelaxed)
-  for i in 0..<MaxConsumers:
+  for i in 0..<MaxThreads:
     result.consumerHeads[i].store(0, moRelaxed)
 
 
-proc segmentCount*[S: static int, T](self: var UnboundedSipmuc[S, T]): int =
+proc segmentCount*[S: static int; T; MaxThreads: static int](self: var UnboundedSipmuc[S, T, MaxThreads]): int =
   ## Number of segments currently allocated.
   result = self.segments.load(moRelaxed)
 
 
-proc len*[S: static int, T](self: var UnboundedSipmuc[S, T]): int =
+proc len*[S: static int; T; MaxThreads: static int](self: var UnboundedSipmuc[S, T, MaxThreads]): int =
   ## Number of items currently in the queue.
   result = self.itemCount.load(moRelaxed)
 
 
-proc push*[S: static int, T](self: var UnboundedSipmuc[S, T], item: T) =
+proc push*[S: static int; T; MaxThreads: static int](self: var UnboundedSipmuc[S, T, MaxThreads], item: T) =
   ## Push a single item. Never blocks or fails (unbounded).
   var seg = self.tailSegment
   var tail = seg.tail.load(moRelaxed)
@@ -141,13 +142,16 @@ proc push*[S: static int, T](self: var UnboundedSipmuc[S, T], item: T) =
   discard self.itemCount.fetchAdd(1, moRelaxed)
 
 
-proc push*[S: static int, T](self: var UnboundedSipmuc[S, T], items: openArray[T]) =
+proc push*[S: static int; T; MaxThreads: static int](self: var UnboundedSipmuc[S, T, MaxThreads], items: openArray[T]) =
   ## Push multiple items.
   for item in items:
     self.push(item)
 
 
-proc getConsumer*[S: static int, T](self: var UnboundedSipmuc[S, T]): Consumer[S, T] =
+proc getConsumer*[S: static int; T; MaxThreads: static int](
+  self: var UnboundedSipmuc[S, T, MaxThreads],
+  handle: ThreadHandle[MaxThreads]
+): Consumer[S, T, MaxThreads] =
   ## Register a new consumer and get a handle.
   ##
   ## Returns a Consumer handle for popping items.
@@ -155,22 +159,24 @@ proc getConsumer*[S: static int, T](self: var UnboundedSipmuc[S, T]): Consumer[S
   ## Each consumer sees every item exactly once. Items are distributed
   ## among consumers in arrival order (not broadcast).
   let idx = self.consumerCount.fetchAdd(1, moAcquire)
-  assert idx < MaxConsumers, "Too many consumers (max " & $MaxConsumers & ")"
-
-  # Register with epoch manager for safe memory reclamation
-  let threadIdx = self.manager.registerThread()
+  assert idx < MaxThreads, "Too many consumers (max " & $MaxThreads & ")"
 
   result.queue = addr self
   result.idx = idx
   result.localHead = 0
-  result.threadIdx = threadIdx
+  result.handle = handle
 
 
-proc pop*[S: static int, T](self: var Consumer[S, T]): Option[T] =
+# Helper to wrap destructor for c_free
+proc segmentDestructor(p: pointer) {.nimcall.} =
+  c_free(p)
+
+
+proc pop*[S: static int; T; MaxThreads: static int](self: var Consumer[S, T, MaxThreads]): Option[T] =
   ## Pop a single item.
   ##
   ## Returns some(T) if available, none(T) if empty.
-  let guard {.used.} = self.queue.manager.pin(self.threadIdx)
+  let pinned = unpinned(self.handle).pin()
 
   var seg = self.queue.headSegment
 
@@ -184,6 +190,7 @@ proc pop*[S: static int, T](self: var Consumer[S, T]): Option[T] =
       # Segment exhausted, try next
       let nextSeg = seg.next.load(moAcquire)
       if nextSeg == nil:
+        discard pinned.unpin()
         return none(T)
       seg = nextSeg
       continue
@@ -196,18 +203,23 @@ proc pop*[S: static int, T](self: var Consumer[S, T]): Option[T] =
 
       # If we claimed the last slot (S-1), retire segment for reclamation
       if mySlot == S - 1 and self.queue.strategy != Manual:
-        self.queue.manager.retire(seg)
+        let ready = retireReady(pinned)
+        discard ready.retire(seg, segmentDestructor)
         discard self.queue.segments.fetchSub(1, moRelaxed)
 
-        if self.queue.strategy == Eager:
-          discard self.queue.manager.tryReclaim()
+      discard pinned.unpin()
+
+      if self.queue.strategy == Eager:
+        let reclaimOp = reclaimStart(self.queue.manager).loadEpochs().checkSafe()
+        if reclaimOp.kind == rReclaimReady:
+          discard reclaimOp.reclaimready.tryReclaim()
 
       return
 
     # Lost CAS, retry
 
 
-proc pop*[S: static int, T](self: var Consumer[S, T], count: int): Option[seq[T]] =
+proc pop*[S: static int; T; MaxThreads: static int](self: var Consumer[S, T, MaxThreads], count: int): Option[seq[T]] =
   ## Pop up to count items.
   ##
   ## Returns some(seq[T]) with at least one item, none if empty.
@@ -227,7 +239,7 @@ proc pop*[S: static int, T](self: var Consumer[S, T], count: int): Option[seq[T]
   return some(items)
 
 
-proc `=destroy`*[S: static int, T](self: UnboundedSipmuc[S, T]) =
+proc `=destroy`*[S: static int; T; MaxThreads: static int](self: var UnboundedSipmuc[S, T, MaxThreads]) =
   ## Clean up all segments.
   if self.headSegment != nil:
     var seg = self.headSegment
