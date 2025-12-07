@@ -1,11 +1,10 @@
-# lockfreequeues
+# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file "LICENSE", included in this distribution for details about the # copyright.# lockfreequeues
 # © Copyright 2020 Elijah Shaw-Rutschman
 #
 # See the file "LICENSE", included in this distribution for details about the
 # copyright.
 
 import ./t_atomic_dsl
-import ./t_epoch
 import ./t_mupmuc
 # import ./t_mupmuc_threaded  # DISABLED: Re-enable after typestate migration
 import ./t_mupsic
@@ -27,7 +26,6 @@ import ./t_wraparound
 
 export
   t_atomic_dsl,
-  t_epoch,
   t_mupmuc,
   # t_mupmuc_threaded,
   t_mupsic,
