@@ -11,7 +11,7 @@ entryPoints    = @["tests/test.nim"]
 # Dependencies
 requires "nim >= 2.0.0"
 requires "unittest2"
-requires "typestates"
+requires "typestates >= 0.2.1"
 requires "debra"
 
 # Tasks
