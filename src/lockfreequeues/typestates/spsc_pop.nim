@@ -35,6 +35,7 @@ type
 
 
 typestate SPSCPopOp[N: static int]:
+  consumeOnTransition = false
   states SPSCPopStart[N], SPSCPopPointersLoaded[N], SPSCPopNotEmpty[N],
          SPSCPopEmpty[N]
   transitions:

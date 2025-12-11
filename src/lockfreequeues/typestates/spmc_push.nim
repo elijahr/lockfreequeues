@@ -42,6 +42,7 @@ type
 
 
 typestate SPMCPushOp[N: static int]:
+  consumeOnTransition = false
   states SPMCPushStart[N], SPMCPushPointersLoaded[N], SPMCPushNotFull[N],
          SPMCPushDataWritten[N], SPMCPushFull[N]
   transitions:

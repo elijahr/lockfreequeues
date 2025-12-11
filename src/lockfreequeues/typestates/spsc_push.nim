@@ -38,6 +38,7 @@ type
 
 
 typestate SPSCPushOp[N: static int]:
+  consumeOnTransition = false
   states SPSCPushStart[N], SPSCPushPointersLoaded[N], SPSCPushNotFull[N],
          SPSCPushDataWritten[N], SPSCPushFull[N]
   transitions:

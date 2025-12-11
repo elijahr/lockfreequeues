@@ -14,7 +14,8 @@ type
   UnwrappedSumN1*[N: static int] = distinct VirtualValueN1[N]
   PhysicalSlotN1*[N: static int] = distinct VirtualValueN1[N]
 
-typestate VirtualValueN1[N]:
+typestate VirtualValueN1[N: static int]:
+  consumeOnTransition = false
   states RawLoadedN1[N], WrappedValueN1[N], UnwrappedSumN1[N], PhysicalSlotN1[N]
   transitions:
     RawLoadedN1[N] -> WrappedValueN1[N]

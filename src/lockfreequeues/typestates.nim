@@ -21,11 +21,6 @@ import ./typestates/spmc_push
 import ./typestates/spmc_pop
 import ./typestates/mpmc_pop
 
-# Old types for backward compatibility (will be removed after full migration)
-import ./typestates/fullness
-import ./typestates/atomic_values
-import ./typestates/index_types
-
 export virtual_values_n
 export storage_n
 export committed_flags_n
@@ -39,6 +34,3 @@ export spsc_pop
 export spmc_push
 export spmc_pop
 export mpmc_pop
-export fullness  # Backward compatibility
-export atomic_values  # Backward compatibility
-export index_types  # Backward compatibility

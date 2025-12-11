@@ -23,7 +23,8 @@ type
   PhysicalSlotN*[N: static int] = distinct VirtualValueN[N]
     ## Storage index in range 0..<N. Only obtainable via index().
 
-typestate VirtualValueN[N]:
+typestate VirtualValueN[N: static int]:
+  consumeOnTransition = false
   states RawLoadedN[N], WrappedValueN[N], UnwrappedSumN[N], PhysicalSlotN[N]
   transitions:
     RawLoadedN[N] -> WrappedValueN[N]      # validate()

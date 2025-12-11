@@ -173,23 +173,23 @@ proc pop*[N, C: static int, T](self: Consumer[N, C, T]): Option[T] =
 
     let emptyCheck = loaded.checkEmpty()
     case emptyCheck.kind:
-    of eSPMCPopEmpty:
+    of sSPMCPopEmpty:
       return none(T)
-    of eSPMCPopNotEmpty:
+    of sSPMCPopNotEmpty:
       let notEmpty = emptyCheck.spmcpopnotempty
       let committedCheck = notEmpty.checkCommitted(queueBase[])
       case committedCheck.kind:
-      of cSPMCPopStart:
+      of sSPMCPopStart:
         op = committedCheck.spmcpopstart  # Retry - producer still writing
         continue
-      of cSPMCPopSlotReady:
+      of sSPMCPopSlotReady:
         let ready = committedCheck.spmcpopslotready
         let claimResult = ready.tryClaim(queueBase[])
         case claimResult.kind:
-        of cSPMCPopStart:
+        of sSPMCPopStart:
           op = claimResult.spmcpopstart  # Retry - CAS contention
           continue
-        of cSPMCPopSlotClaimed:
+        of sSPMCPopSlotClaimed:
           let claimed = claimResult.spmcpopslotclaimed
           return some(claimed.complete(queueBase[]))
 

@@ -40,18 +40,19 @@ type
     newReservedHead*: WrappedValueN[N]
     slot*: PhysicalSlotN[N]
 
-  SPMCPopEmpty* = object
+  SPMCPopEmpty*[N: static int] = object
     ## Terminal: queue was empty.
 
 
-typestate SPMCPopOp[N]:
+typestate SPMCPopOp[N: static int]:
+  consumeOnTransition = false
   states SPMCPopStart[N], SPMCPopPointersLoaded[N], SPMCPopNotEmpty[N],
-         SPMCPopSlotReady[N], SPMCPopSlotClaimed[N], SPMCPopEmpty
+         SPMCPopSlotReady[N], SPMCPopSlotClaimed[N], SPMCPopEmpty[N]
   transitions:
     SPMCPopStart[N] -> SPMCPopPointersLoaded[N]
-    SPMCPopPointersLoaded[N] -> SPMCPopNotEmpty[N] | SPMCPopEmpty
-    SPMCPopNotEmpty[N] -> SPMCPopSlotReady[N] | SPMCPopStart[N]
-    SPMCPopSlotReady[N] -> SPMCPopSlotClaimed[N] | SPMCPopStart[N]
+    SPMCPopPointersLoaded[N] -> SPMCPopNotEmpty[N] | SPMCPopEmpty[N] as SPMCEmptyCheck[N]
+    SPMCPopNotEmpty[N] -> SPMCPopSlotReady[N] | SPMCPopStart[N] as SPMCCommittedCheck[N]
+    SPMCPopSlotReady[N] -> SPMCPopSlotClaimed[N] | SPMCPopStart[N] as SPMCClaimResult[N]
 
 
 # Forward declaration for Sipmuc (avoid circular import)
@@ -81,25 +82,25 @@ proc loadPointers*[N, C: static int, T](
 
 proc checkEmpty*[N: static int](
   op: SPMCPopPointersLoaded[N]
-): SPMCPopNotEmpty[N] | SPMCPopEmpty {.inline, transition.} =
-  ## Check if queue is empty.
+): SPMCEmptyCheck[N] {.inline, transition.} =
+  ## Check if queue is empty. Returns branch type.
   if emptyN(op.reservedHead, op.tail):
-    SPMCPopEmpty()
+    SPMCEmptyCheck[N] -> SPMCPopEmpty[N]()
   else:
     let slot = op.reservedHead.index()
-    SPMCPopNotEmpty[N](reservedHead: op.reservedHead, slot: slot)
+    SPMCEmptyCheck[N] -> SPMCPopNotEmpty[N](reservedHead: op.reservedHead, slot: slot)
 
 
 proc checkCommitted*[N, C: static int, T](
   op: SPMCPopNotEmpty[N],
   queue: var SipmucBase[N, C, T]
-): SPMCPopSlotReady[N] | SPMCPopStart[N] {.inline, transition.} =
+): SPMCCommittedCheck[N] {.inline, transition.} =
   ## Check if slot is committed. Uncommitted = retry from start.
   if not queue.committed.load(op.slot):
-    SPMCPopStart[N]()  # Producer still writing, retry
+    SPMCCommittedCheck[N] -> SPMCPopStart[N]()  # Producer still writing, retry
   else:
     let newReservedHead = op.reservedHead.incOrResetN(1)
-    SPMCPopSlotReady[N](
+    SPMCCommittedCheck[N] -> SPMCPopSlotReady[N](
       reservedHead: op.reservedHead,
       newReservedHead: newReservedHead,
       slot: op.slot
@@ -109,13 +110,13 @@ proc checkCommitted*[N, C: static int, T](
 proc tryClaim*[N, C: static int, T](
   op: SPMCPopSlotReady[N],
   queue: var SipmucBase[N, C, T]
-): SPMCPopSlotClaimed[N] | SPMCPopStart[N] {.inline, transition.} =
+): SPMCClaimResult[N] {.inline, transition.} =
   ## CAS to claim the slot. Failure = retry from start.
   var expected = op.reservedHead.value
   if queue.reservedHead.compareExchangeWeak(expected, op.newReservedHead.value, moRelease, moAcquire):
-    SPMCPopSlotClaimed[N](newReservedHead: op.newReservedHead, slot: op.slot)
+    SPMCClaimResult[N] -> SPMCPopSlotClaimed[N](newReservedHead: op.newReservedHead, slot: op.slot)
   else:
-    SPMCPopStart[N]()
+    SPMCClaimResult[N] -> SPMCPopStart[N]()
 
 
 proc complete*[N, C: static int, T](
@@ -132,6 +133,6 @@ proc complete*[N, C: static int, T](
   value
 
 
-proc extractNone*[T](op: SPMCPopEmpty): Option[T] {.inline.} =
+proc extractNone*[N: static int, T](op: SPMCPopEmpty[N]): Option[T] {.inline.} =
   ## Terminal: extract none result.
   none(T)
