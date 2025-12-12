@@ -27,14 +27,35 @@ proc freeTestSegment(seg: ptr TestSegment) =
 
 suite "SPSC Push Typestate":
 
-  test "typestate types exist and compile":
-    # Verify state types exist - now include T
-    var ready: SPSCPushReady[int, 64, 4]
-    var loaded: SPSCPushSegmentLoaded[int, 64, 4]
-    var full: SPSCPushSegmentFull[int, 64, 4]
-    var slotReady: SPSCPushSlotReady[int, 64, 4]
-    var complete: SPSCPushComplete[int, 64, 4]
-    check true  # Types compile
+  test "typestate types exist and are usable":
+    # Verify state types exist and fields are accessible
+    var manager = initDebraManager[4]()
+    let handle = registerThread(manager)
+
+    var seg = newTestSegment()
+    var queue: TestQueue
+    queue.manager = addr manager
+    queue.headSegment = seg
+    queue.tailSegment = seg
+    queue.itemCount.store(0, moRelaxed)
+    queue.segments.store(1, moRelaxed)
+
+    # Actually use the types with real data
+    let loaded = startPush[int, 64, 4](
+      unpinned(handle).pin(),
+      addr queue
+    ).loadSegment()
+
+    # Verify fields are accessible and have valid values
+    check loaded.tail >= 0
+    check loaded.segment != nil
+    check loaded.segment.head.load(moRelaxed) == 0
+    check loaded.segment.next.load(moRelaxed) == nil
+
+    # Clean up
+    let checkResult = loaded.checkFull()
+    discard checkResult.spscpushslotready.writeItem(0).extractPinned().unpin()
+    freeTestSegment(seg)
 
 
   test "loadSegment loads tail segment":
@@ -60,12 +81,18 @@ suite "SPSC Push Typestate":
     check loaded.tail == 10
     check loaded.segment == seg  # Now typed, not pointer comparison
 
+    # Verify segment structure is accessible and intact
+    check loaded.segment.head.load(moRelaxed) == 0
+    check loaded.segment.next.load(moRelaxed) == nil
+
     # Complete operation
     let checkResult = loaded.checkFull()
     check checkResult.kind == sSPSCPushSlotReady
 
-    # Clean up - write item and extract pinned for unpin
+    # Write item and VERIFY the value was written
     let complete = checkResult.spscpushslotready.writeItem(42)
+    check seg.data[10] == 42  # Consume: verify write to correct slot
+    check seg.tail.load(moRelaxed) == 11  # Verify tail advanced
     discard complete.extractPinned().unpin()
 
     freeTestSegment(seg)
@@ -91,9 +118,12 @@ suite "SPSC Push Typestate":
     check checkResult.kind == sSPSCPushSlotReady
     check checkResult.spscpushslotready.slot == 0
 
-    # Complete operation
+    # Write item and VERIFY the value was written
     discard checkResult.spscpushslotready.writeItem(42)
       .extractPinned().unpin()
+
+    check seg.data[0] == 42  # Consume: verify write happened
+    check seg.tail.load(moRelaxed) == 1  # Verify tail advanced
 
     freeTestSegment(seg)
 
@@ -131,6 +161,12 @@ suite "SPSC Push Typestate":
     discard checkResult2.spscpushslotready
       .writeItem(42)
       .extractPinned().unpin()
+
+    # Consume: verify write went to NEW segment, not old one
+    check newSeg.data[0] == 42  # Value written to new segment
+    check newSeg.tail.load(moRelaxed) == 1  # New segment tail advanced
+    check seg.next.load(moRelaxed) == newSeg  # Segments correctly linked
+    check seg.tail.load(moRelaxed) == 64  # Old segment unchanged
 
     freeTestSegment(seg)
     freeTestSegment(newSeg)

@@ -28,15 +28,38 @@ proc freeTestSegment(seg: ptr TestSegment) =
 
 suite "SPSC Pop Typestate":
 
-  test "typestate types exist and compile":
-    # Verify state types exist (using U prefix for Unbounded) - now include T
-    var ready: USPSCPopReady[int, 64, 4]
-    var loaded: USPSCPopSegmentLoaded[int, 64, 4]
-    var slotAvail: USPSCPopSlotAvailable[int, 64, 4]
-    var exhausted: USPSCPopSegmentExhausted[int, 64, 4]
-    var empty: USPSCPopEmpty[int, 64, 4]
-    var complete: USPSCPopComplete[int, 64, 4]
-    check true  # Types compile
+  test "typestate types exist and are usable":
+    # Verify state types exist and fields are accessible
+    var manager = initDebraManager[4]()
+    let handle = registerThread(manager)
+
+    var seg = newTestSegment()
+    seg.tail.store(1, moRelaxed)  # One item available
+    seg.data[0] = 99
+
+    var queue: TestQueue
+    queue.manager = addr manager
+    queue.headSegment = seg
+    queue.tailSegment = seg
+    queue.itemCount.store(1, moRelaxed)
+    queue.segments.store(1, moRelaxed)
+
+    # Actually use the types with real data
+    let loaded = startPop[int, 64, 4](
+      unpinned(handle).pin(),
+      addr queue
+    ).loadSegment()
+
+    # Verify fields are accessible and have valid values
+    check loaded.head >= 0
+    check loaded.tail >= loaded.head
+    check loaded.segment != nil
+    check loaded.segment.data[0] == 99  # Verify data array accessible
+
+    # Clean up
+    let checkResult = loaded.checkSlot()
+    discard checkResult.uspscpopslotavailable.readItem().extractPinned().unpin()
+    freeTestSegment(seg)
 
 
   test "loadSegment loads head segment":
@@ -63,11 +86,19 @@ suite "SPSC Pop Typestate":
     check loaded.tail == 10
     check loaded.segment == seg  # Now typed, not pointer comparison
 
-    # Complete operation - extract pinned for unpin
+    # Verify segment structure is accessible
+    check loaded.segment.next.load(moRelaxed) == nil
+
+    # Complete operation and VERIFY value read
     let checkResult = loaded.checkSlot()
     check checkResult.kind == uUSPSCPopSlotAvailable
 
+    # Pre-populate data for verification
+    seg.data[5] = 77
+
     let complete = checkResult.uspscpopslotavailable.readItem()
+    check complete.value == 77  # Consume: verify we read correct value
+    check seg.head.load(moRelaxed) == 6  # Verify head advanced
     discard complete.extractPinned().unpin()
 
     freeTestSegment(seg)
@@ -97,9 +128,11 @@ suite "SPSC Pop Typestate":
     check checkResult.kind == uUSPSCPopSlotAvailable
     check checkResult.uspscpopslotavailable.slot == 0
 
-    # Complete operation
-    discard checkResult.uspscpopslotavailable.readItem()
-      .extractPinned().unpin()
+    # Read item and VERIFY value
+    let complete = checkResult.uspscpopslotavailable.readItem()
+    check complete.value == 42  # Consume: verify we got correct value
+    check seg.head.load(moRelaxed) == 1  # Verify head advanced
+    discard complete.extractPinned().unpin()
 
     freeTestSegment(seg)
 
@@ -131,6 +164,10 @@ suite "SPSC Pop Typestate":
       .advanceSegment()
 
     check advanceResult.kind == uUSPSCPopEmpty
+
+    # Verify queue state remains consistent
+    check queue.itemCount.load(moRelaxed) == 0  # Queue still reports empty
+    check queue.headSegment == seg  # No advancement happened (expected - no next segment)
 
     discard advanceResult.uspscpopempty.extractPinned().unpin()
 
@@ -178,8 +215,11 @@ suite "SPSC Pop Typestate":
     let checkResult2 = loaded2.checkSlot()
     check checkResult2.kind == uUSPSCPopSlotAvailable
 
-    discard checkResult2.uspscpopslotavailable.readItem()
-      .extractPinned().unpin()
+    # Read item and VERIFY we're reading from seg2, not seg1
+    let complete = checkResult2.uspscpopslotavailable.readItem()
+    check complete.value == 100  # Consume: verify value from seg2
+    check seg2.head.load(moRelaxed) == 1  # Verify seg2's head advanced
+    discard complete.extractPinned().unpin()
 
     freeTestSegment(seg1)
     freeTestSegment(seg2)
