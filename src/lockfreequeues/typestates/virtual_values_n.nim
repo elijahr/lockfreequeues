@@ -24,7 +24,8 @@ type
     ## Storage index in range 0..<N. Only obtainable via index().
 
 typestate VirtualValueN[N: static int]:
-  consumeOnTransition = false
+  inheritsFromRootObj = true
+  consumeOnTransition = false  # Values can be reused after validation
   states RawLoadedN[N], WrappedValueN[N], UnwrappedSumN[N], PhysicalSlotN[N]
   transitions:
     RawLoadedN[N] -> WrappedValueN[N]      # validate()

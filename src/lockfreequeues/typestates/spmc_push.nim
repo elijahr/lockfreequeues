@@ -42,7 +42,7 @@ type
 
 
 typestate SPMCPushOp[N: static int]:
-  consumeOnTransition = false
+  inheritsFromRootObj = true
   states SPMCPushStart[N], SPMCPushPointersLoaded[N], SPMCPushNotFull[N],
          SPMCPushDataWritten[N], SPMCPushFull[N]
   transitions:

@@ -15,16 +15,18 @@ template testHeadAndTailReset*(queue: untyped) =
     queue.tail.sequential(17)
     when ((queue is Sipmuc)):
       queue.reservedHead.sequential(17)
-    queue.checkState(head = 17, tail = 17, storage = repeat(0, 8))
+    # N+1=9 slots
+    queue.checkState(head = 17, tail = 17, storage = repeat(0, 9))
 
     check(queue.push(@[1]).isNone)
 
-    # With mod (N+1) indexing: index(17, 8) = 17 mod 9 = 8 (in slot N, beyond visible storage[0..<N])
+    # With mod (N+1) indexing: index(17, 8) = 17 mod 9 = 8 (slot 8)
     # After push, tail becomes 18 which wraps to 0
     queue.checkState(
       head = 17,
       tail = 0,
-      storage = (@[0, 0, 0, 0, 0, 0, 0, 0]),  # item at slot 8, not visible in storage[0..<N]
+      # slot 8 has item 1
+      storage = (@[0, 0, 0, 0, 0, 0, 0, 0, 1]),
     )
 
     let res =
@@ -39,7 +41,7 @@ template testHeadAndTailReset*(queue: untyped) =
     queue.checkState(
       head = 0,
       tail = 0,
-      storage = (@[0, 0, 0, 0, 0, 0, 0, 0]),
+      storage = (@[0, 0, 0, 0, 0, 0, 0, 0, 1]),  # slot 8 still has old value
     )
 
 
@@ -67,14 +69,14 @@ template testWraps*(queue: untyped) =
   check(pushRes.isNone)
 
   # With mod (N+1) indexing: items 9,10,11,12 go to slots 8,0,1,2
-  # Item 9 is at slot 8 (beyond storage[0..<N]), so visible storage shows:
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(head = 4, reservedTail = 12)
   else:
     queue.checkState(
       head = 4,
       tail = 12,
-      storage = (@[10, 11, 12, 4, 5, 6, 7, 8]),
+      # slot 0: 10 (index 9 mod 9), slot 1: 11, slot 2: 12, slot 8: 9
+      storage = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]),
     )
 
   popRes =
@@ -91,7 +93,7 @@ template testWraps*(queue: untyped) =
     queue.checkState(
       head = 8,
       tail = 12,
-      storage = (@[10, 11, 12, 4, 5, 6, 7, 8]),
+      storage = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]),
     )
 
   popRes =
@@ -108,5 +110,5 @@ template testWraps*(queue: untyped) =
     queue.checkState(
       head = 12,
       tail = 12,
-      storage = (@[10, 11, 12, 4, 5, 6, 7, 8]),
+      storage = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]),
     )

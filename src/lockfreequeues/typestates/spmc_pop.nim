@@ -45,7 +45,7 @@ type
 
 
 typestate SPMCPopOp[N: static int]:
-  consumeOnTransition = false
+  inheritsFromRootObj = true
   states SPMCPopStart[N], SPMCPopPointersLoaded[N], SPMCPopNotEmpty[N],
          SPMCPopSlotReady[N], SPMCPopSlotClaimed[N], SPMCPopEmpty[N]
   transitions:

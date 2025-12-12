@@ -46,15 +46,15 @@ proc push*[N: static int, T](self: var Sipsic[N, T], item: T): bool =
 
   let op = spsc_push.start[N]()
   let loaded = op.loadPointers(queueBase[])
-  let fullCheck = loaded.checkFull()
+  var fullCheck = loaded.checkFull()
 
   case fullCheck.kind:
   of sSPSCPushFull:
-    return fullCheck.spscpushfull.extractFalse()
+    return move(fullCheck).spscpushfull.extractFalse()
   of sSPSCPushNotFull:
-    let notFull = fullCheck.spscpushnotfull
-    let written = notFull.writeData(queueBase[], item)
-    return written.complete(queueBase[])
+    return move(fullCheck).spscpushnotfull
+      .writeData(queueBase[], item)
+      .complete(queueBase[])
 
 
 proc push*[N: static int, T](
@@ -103,14 +103,13 @@ proc pop*[N: static int, T](self: var Sipsic[N, T]): Option[T] =
 
   let op = spsc_pop.start[N]()
   let loaded = op.loadPointers(queueBase[])
-  let emptyCheck = loaded.checkEmpty()
+  var emptyCheck = loaded.checkEmpty()
 
   case emptyCheck.kind:
   of sSPSCPopEmpty:
     return none(T)
   of sSPSCPopNotEmpty:
-    let notEmpty = emptyCheck.spscpopnotempty
-    return some(notEmpty.complete(queueBase[]))
+    return some(move(emptyCheck).spscpopnotempty.complete(queueBase[]))
 
 
 proc pop*[N: static int, T](self: var Sipsic[N, T], count: int): Option[seq[T]] =
@@ -157,7 +156,10 @@ when defined(testing):
     tail: int,
     storage: seq[T],
   ) =
+    ## Verify queue state. `storage` contains N+1 elements representing
+    ## the physical slot contents (indices 0..N).
     check(self.head.load(moRelaxed) == head)
     check(self.tail.load(moRelaxed) == tail)
-    for i in 0..<N:
-      check(self.storage.data[i] == storage[i])
+    for i in 0..N:
+      if i < storage.len:
+        check(self.storage.data[i] == storage[i])

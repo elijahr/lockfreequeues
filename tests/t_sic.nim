@@ -14,7 +14,8 @@ template testSicPopOne*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(head = 1, reservedTail = 8)
   else:
-    queue.checkState(head = 1, tail = 8, storage = (@[1, 2, 3, 4, 5, 6, 7, 8]))
+    # N+1=9 slots
+    queue.checkState(head = 1, tail = 8, storage = (@[1, 2, 3, 4, 5, 6, 7, 8, 0]))
 
 
 template testSicPopAll*(queue: untyped) =
@@ -34,7 +35,7 @@ template testSicPopAll*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(head = 8, reservedTail = 8)
   else:
-    queue.checkState(head = 8, tail = 8, storage = (@[1, 2, 3, 4, 5, 6, 7, 8]))
+    queue.checkState(head = 8, tail = 8, storage = (@[1, 2, 3, 4, 5, 6, 7, 8, 0]))
 
 
 template testSicPopEmpty*(queue: untyped) =
@@ -43,7 +44,7 @@ template testSicPopEmpty*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(head = 0, reservedTail = 0)
   else:
-    queue.checkState(head = 0, tail = 0, storage = repeat(0, 8))
+    queue.checkState(head = 0, tail = 0, storage = repeat(0, 9))
 
 
 template testSicPopTooMany*(queue: untyped) =
@@ -60,7 +61,7 @@ template testSicPopTooMany*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(head = 8, reservedTail = 8)
   else:
-    queue.checkState(head = 8, tail = 8, storage = (@[1, 2, 3, 4, 5, 6, 7, 8]))
+    queue.checkState(head = 8, tail = 8, storage = (@[1, 2, 3, 4, 5, 6, 7, 8, 0]))
 
 
 template testSicPopWrap*(queue: untyped) =
@@ -86,11 +87,12 @@ template testSicPopWrap*(queue: untyped) =
   check(items == @[5, 6, 7, 8, 9, 10, 11, 12])
 
   # MPSC: N-slot design wraps at 2*N (virtual slot 12 wraps to 12-16=-4+16=12)
-  # SPSC: N+1-slot design, items 9→slot 8, 10→slot 0, 11→slot 1, 12→slot 2
+  # SPSC: N+1-slot design with mod 9:
+  #   items 9→slot 8 (8 mod 9), 10→slot 0 (9 mod 9), 11→slot 1 (10 mod 9), 12→slot 2 (11 mod 9)
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(head = 12, reservedTail = 12)
   else:
-    queue.checkState(head = 12, tail = 12, storage = (@[10, 11, 12, 4, 5, 6, 7, 8]))
+    queue.checkState(head = 12, tail = 12, storage = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]))
 
 
 template testSicPopCountOne*(queue: untyped) =
@@ -106,7 +108,7 @@ template testSicPopCountOne*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(head = 8, reservedTail = 8)
   else:
-    queue.checkState(head = 8, tail = 8, storage = (@[1, 2, 3, 4, 5, 6, 7, 8]))
+    queue.checkState(head = 8, tail = 8, storage = (@[1, 2, 3, 4, 5, 6, 7, 8, 0]))
 
 
 template testSicPopCountAll*(queue: untyped) =
@@ -120,7 +122,7 @@ template testSicPopCountAll*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(head = 8, reservedTail = 8)
   else:
-    queue.checkState(head = 8, tail = 8, storage = (@[1, 2, 3, 4, 5, 6, 7, 8]))
+    queue.checkState(head = 8, tail = 8, storage = (@[1, 2, 3, 4, 5, 6, 7, 8, 0]))
 
 
 template testSicPopCountEmpty*(queue: untyped) =
@@ -129,7 +131,7 @@ template testSicPopCountEmpty*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(head = 0, reservedTail = 0)
   else:
-    queue.checkState(head = 0, tail = 0, storage = repeat(0, 8))
+    queue.checkState(head = 0, tail = 0, storage = repeat(0, 9))
 
 
 template testSicPopCountTooMany*(queue: untyped) =
@@ -145,7 +147,7 @@ template testSicPopCountTooMany*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(head = 8, reservedTail = 8)
   else:
-    queue.checkState(head = 8, tail = 8, storage = (@[1, 2, 3, 4, 5, 6, 7, 8]))
+    queue.checkState(head = 8, tail = 8, storage = (@[1, 2, 3, 4, 5, 6, 7, 8, 0]))
 
 
 template testSicPopCountWrap*(queue: untyped) =
@@ -166,8 +168,8 @@ template testSicPopCountWrap*(queue: untyped) =
   check(popped.get() == @[5, 6, 7, 8, 9, 10, 11, 12])
 
   # MPSC: N-slot design wraps at 2*N
-  # SPSC: N+1-slot design, items 9→slot 8, 10→slot 0, 11→slot 1, 12→slot 2
+  # SPSC: N+1-slot design with mod 9
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(head = 12, reservedTail = 12)
   else:
-    queue.checkState(head = 12, tail = 12, storage = (@[10, 11, 12, 4, 5, 6, 7, 8]))
+    queue.checkState(head = 12, tail = 12, storage = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]))

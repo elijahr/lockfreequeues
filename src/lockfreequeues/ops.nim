@@ -6,8 +6,9 @@ proc validateHeadOrTail*(
   capacity: int,
 ): bool
   {.inline.} =
-  ## Assert that the given `value` is in the range `0..<2*capacity`.
-  return (value in 0..<2*capacity)
+  ## Assert that the given `value` is in the range `0..<2*(capacity+1)`.
+  ## With N+1 physical slots, logical indices range from 0 to 2N+1.
+  return (value in 0..<2*(capacity+1))
 
 
 proc validateHeadAndTail*(
@@ -22,18 +23,9 @@ proc validateHeadAndTail*(
   assert validateHeadOrTail(tail, capacity)
   var count = tail - head
   if count < 0:
-    # Case when front in [Capacity, 2*Capacity)
-    # and tail in [0, Capacity) range
-    # for example for a queue of capacity 7 that rolled twice:
-    #
-    # | 14 |   |   | 10 | 11 | 12 | 13 |
-    #      ^       ^
-    #       back    front
-    #
-    # front is at index 10 (real 3)
-    # back is at index 15 (real 1)
-    # back - front + capacity = 1 - 3 + 7 = 5
-    count += 2 * capacity
+    # Case when head in [capacity+1, 2*(capacity+1))
+    # and tail in [0, capacity+1) range
+    count += 2 * (capacity + 1)
 
   result = count >= 0 and count <= capacity
 
@@ -51,18 +43,9 @@ proc used*(
   assert validateHeadOrTail(tail, capacity)
   result = tail - head
   if result < 0:
-    # Case when front in [Capacity, 2*Capacity)
-    # and tail in [0, Capacity) range
-    # for example for a queue of capacity 7 that rolled twice:
-    #
-    # | 14 |   |   | 10 | 11 | 12 | 13 |
-    #      ^       ^
-    #       back    front
-    #
-    # front is at index 10 (real 3)
-    # back is at index 15 (real 1)
-    # back - front + capacity = 1 - 3 + 7 = 5
-    result += 2 * capacity
+    # Case when head in [capacity+1, 2*(capacity+1))
+    # and tail in [0, capacity+1) range
+    result += 2 * (capacity + 1)
 
 
 proc available*(
@@ -81,14 +64,10 @@ proc index*(
   capacity: int,
 ): int
   {.inline.} =
-  ## Given a head or tail `value` in the range `0..<2*capacity`, determine its
-  ## actual index in storage.
-  assert validateHeadOrTail(value, capacity)
-  result =
-    if value >= capacity:
-      value - capacity
-    else:
-      value
+  ## Given a head or tail `value` in the range `0..<2*(capacity+1)`, determine its
+  ## actual index in storage. Uses mod (capacity + 1) to map to N+1 physical
+  ## slots, preventing collision between slots X and X+N.
+  result = value mod (capacity + 1)
 
 proc incOrReset*(
   original: int,
@@ -98,12 +77,12 @@ proc incOrReset*(
   {.inline.} =
   ## Given an `original` head or tail value and an `amount` to increment, either
   ## increment `original` by `amount`, or reset from zero if
-  ## `original + amount >= 2 * capacity`.
+  ## `original + amount >= 2 * (capacity + 1)`.
   assert validateHeadOrTail(original, capacity)
   assert amount in 0..capacity
   result = original + amount
-  if result >= 2 * capacity:
-    result -= 2 * capacity
+  if result >= 2 * (capacity + 1):
+    result -= 2 * (capacity + 1)
 
 
 proc full*(

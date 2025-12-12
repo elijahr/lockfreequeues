@@ -45,7 +45,7 @@ type
 
 
 typestate MPSCPushOp[N: static int]:
-  consumeOnTransition = false
+  inheritsFromRootObj = true
   states MPSCPushStart[N], MPSCPushPointersLoaded[N], MPSCPushNotFull[N],
          MPSCPushSlotClaimed[N], MPSCPushDataWritten[N], MPSCPushFull[N]
   transitions:

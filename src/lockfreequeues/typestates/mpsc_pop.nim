@@ -42,7 +42,7 @@ type
 
 
 typestate MPSCPopOp[N: static int]:
-  consumeOnTransition = false
+  inheritsFromRootObj = true
   states MPSCPopStart[N], MPSCPopPointersLoaded[N], MPSCPopNotEmpty[N],
          MPSCPopSlotReady[N], MPSCPopEmpty[N]
   transitions:

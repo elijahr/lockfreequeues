@@ -20,7 +20,7 @@ suite "Sipsic[N, T]":
     queue.checkState(
       head = 0,
       tail = 0,
-      storage = repeat(0, 8),
+      storage = repeat(0, 9),  # N+1 slots
     )
 
 

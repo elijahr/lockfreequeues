@@ -53,7 +53,7 @@ type
 
 
 typestate MPMCPopOp[N: static int]:
-  consumeOnTransition = false
+  inheritsFromRootObj = true
   states MPMCPopStart[N], MPMCPopPointersLoaded[N], MPMCPopNotEmpty[N],
          MPMCPopSlotReady[N], MPMCPopSlotClaimed[N], MPMCPopEmpty[N]
   transitions:
