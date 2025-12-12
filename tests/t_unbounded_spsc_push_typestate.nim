@@ -28,16 +28,16 @@ proc freeTestSegment(seg: ptr TestSegment) =
 suite "SPSC Push Typestate":
 
   test "typestate types exist and compile":
-    # Verify state types exist
-    var ready: SPSCPushReady[64, 4]
-    var loaded: SPSCPushSegmentLoaded[64, 4]
-    var full: SPSCPushSegmentFull[64, 4]
-    var slotReady: SPSCPushSlotReady[64, 4]
-    var complete: SPSCPushComplete[64, 4]
+    # Verify state types exist - now include T
+    var ready: SPSCPushReady[int, 64, 4]
+    var loaded: SPSCPushSegmentLoaded[int, 64, 4]
+    var full: SPSCPushSegmentFull[int, 64, 4]
+    var slotReady: SPSCPushSlotReady[int, 64, 4]
+    var complete: SPSCPushComplete[int, 64, 4]
     check true  # Types compile
 
 
-  test "loadSegmentTyped loads tail segment":
+  test "loadSegment loads tail segment":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
 
@@ -55,17 +55,17 @@ suite "SPSC Push Typestate":
     let loaded = startPush[int, 64, 4](
       unpinned(handle).pin(),
       addr queue
-    ).loadSegmentTyped[:int, 64, 4]()
+    ).loadSegment()
 
     check loaded.tail == 10
-    check loaded.segment == cast[pointer](seg)
+    check loaded.segment == seg  # Now typed, not pointer comparison
 
     # Complete operation
     let checkResult = loaded.checkFull()
     check checkResult.kind == sSPSCPushSlotReady
 
     # Clean up - write item and extract pinned for unpin
-    let complete = checkResult.spscpushslotready.writeItemTyped[:int, 64, 4](42)
+    let complete = checkResult.spscpushslotready.writeItem(42)
     discard complete.extractPinned().unpin()
 
     freeTestSegment(seg)
@@ -86,13 +86,13 @@ suite "SPSC Push Typestate":
     let checkResult = startPush[int, 64, 4](
       unpinned(handle).pin(),
       addr queue
-    ).loadSegmentTyped[:int, 64, 4]().checkFull()
+    ).loadSegment().checkFull()
 
     check checkResult.kind == sSPSCPushSlotReady
     check checkResult.spscpushslotready.slot == 0
 
     # Complete operation
-    discard checkResult.spscpushslotready.writeItemTyped[:int, 64, 4](42)
+    discard checkResult.spscpushslotready.writeItem(42)
       .extractPinned().unpin()
 
     freeTestSegment(seg)
@@ -115,28 +115,28 @@ suite "SPSC Push Typestate":
     let checkResult = startPush[int, 64, 4](
       unpinned(handle).pin(),
       addr queue
-    ).loadSegmentTyped[:int, 64, 4]().checkFull()
+    ).loadSegment().checkFull()
 
     check checkResult.kind == sSPSCPushSegmentFull
 
     # Allocate new segment and retry
     var newSeg = newTestSegment()
     let checkResult2 = checkResult.spscpushsegmentfull
-      .allocateNewSegmentTyped[:int, 64, 4](newSeg)
-      .loadSegmentTyped[:int, 64, 4]()
+      .allocateNewSegment(newSeg)
+      .loadSegment()
       .checkFull()
 
     check checkResult2.kind == sSPSCPushSlotReady
 
     discard checkResult2.spscpushslotready
-      .writeItemTyped[:int, 64, 4](42)
+      .writeItem(42)
       .extractPinned().unpin()
 
     freeTestSegment(seg)
     freeTestSegment(newSeg)
 
 
-  test "writeItemTyped writes data and publishes":
+  test "writeItem writes data and publishes":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
 
@@ -148,11 +148,12 @@ suite "SPSC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    discard startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
-      .loadSegmentTyped[:int, 64, 4]()
+    let checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+      .loadSegment()
       .checkFull()
-      .spscpushslotready
-      .writeItemTyped[:int, 64, 4](42)
+
+    discard checkResult.spscpushslotready
+      .writeItem(42)
       .extractPinned()
       .unpin()
 
