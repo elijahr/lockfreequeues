@@ -2,18 +2,14 @@
 .vscode/
 .DS_Store
 
+# Nim compiler cache and build artifacts
 nimcache/
 nimblecache/
+.tmp/
 
-/src/*
-/tests/*
-/examples/*
+# Generated documentation
 /htmldocs/
 /site/
-
-!**/*.nims
-!**/*.nim
-!**/*.cfg
 
 # Axiomantic - ignore user-specific instructions (personal preferences)
 .github/instructions/user.instructions.md
