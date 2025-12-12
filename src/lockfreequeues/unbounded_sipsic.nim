@@ -152,13 +152,13 @@ proc pop*[S: static int; T; MaxThreads: static int](self: var UnboundedSipsic[S,
     queueBase)
 
   while true:
-    let loaded = state.loadSegmentTyped[:T, S, MaxThreads]()
+    let loaded = state.loadSegment[:T, S, MaxThreads]()
     let slotCheck = loaded.checkSlot()
 
     case slotCheck.kind:
-    of sSPSCPopSlotAvailable:
+    of uUSPSCPopSlotAvailable:
       # Read the item
-      let complete = slotCheck.spscpopslotavailable.readItemTyped[:T, S, MaxThreads]()
+      let complete = slotCheck.uspscpopslotavailable.readItem[:T, S, MaxThreads]()
       let value = getValue[T, S, MaxThreads](complete)
 
       # Unpin
@@ -172,15 +172,15 @@ proc pop*[S: static int; T; MaxThreads: static int](self: var UnboundedSipsic[S,
 
       return some(value)
 
-    of sSPSCPopSegmentExhausted:
+    of uUSPSCPopSegmentExhausted:
       # Save old segment for retirement
-      let oldSeg = cast[ptr SipsicSegment[S, T]](slotCheck.spscpopsegmentexhausted.segment)
+      let oldSeg = cast[ptr SipsicSegment[S, T]](slotCheck.uspscpopsegmentexhausted.segment)
 
       # Try to advance to next segment
-      let advanceResult = slotCheck.spscpopsegmentexhausted.advanceSegmentTyped[:T, S, MaxThreads]()
+      let advanceResult = slotCheck.uspscpopsegmentexhausted.advanceSegment[:T, S, MaxThreads]()
 
       case advanceResult.kind:
-      of sSPSCPopReady:
+      of uUSPSCPopReady:
         # Retire old segment if not manual
         if self.strategy != Manual:
           # Note: We need to get pinned from state to retire
@@ -190,12 +190,12 @@ proc pop*[S: static int; T; MaxThreads: static int](self: var UnboundedSipsic[S,
           c_free(oldSeg)
 
         # Continue with new ready state
-        state = advanceResult.spscpopready
+        state = advanceResult.uspscpopready
         continue
 
-      of sSPSCPopEmpty:
+      of uUSPSCPopEmpty:
         # Unpin and return empty
-        discard advanceResult.spscpopempty.extractPinned().unpin()
+        discard advanceResult.uspscpopempty.extractPinned().unpin()
         return none(T)
 
 

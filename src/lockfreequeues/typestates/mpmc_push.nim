@@ -49,6 +49,7 @@ type
 
 typestate MPMCPushOp[N: static int]:
   inheritsFromRootObj = true
+  consumeOnTransition = false  # Allow values to be passed across case branches
   states MPMCPushStart[N], MPMCPushPointersLoaded[N], MPMCPushNotFull[N],
          MPMCPushSlotClaimed[N], MPMCPushDataWritten[N], MPMCPushFull[N]
   transitions:

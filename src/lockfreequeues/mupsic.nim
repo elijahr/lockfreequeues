@@ -12,11 +12,13 @@ import options
 import ./constants
 import ./exceptions
 import ./typestates
+import ./typestates/mpsc_push
+import ./typestates/mpsc_pop
 
 const NoSlice* = none(HSlice[int, int])
 
 type
-  Mupsic*[N, P: static int, T] = object of RootObj
+  Mupsic*[N, P: static int, T] = object
     ## A multi-producer, single-consumer bounded queue.
     ## Uses N slots + committed flags. Push is lock-free. Pop is wait-free.
     ##
@@ -99,39 +101,29 @@ proc push*[N, P: static int, T](
   ## If `item` is appended, `true` is returned.
   ##
   ## This operation is lock-free: producers never block on each other.
+  ## Uses typestate to ensure correct operation sequencing.
 
-  var reservedTail: WrappedValueN[N]
-  var newReservedTail: WrappedValueN[N]
+  # Cast queue to MupsicBase for typestate compatibility
+  var queueBase = cast[ptr MupsicBase[N, P, T]](self.queue)
 
-  # Claim a slot using CAS on reservedTail
+  var op = mpsc_push.start[N]()
+
   while true:
-    reservedTail = loadAcquireN[N](self.queue.reservedTail).validate()
-    let head = loadAcquireN[N](self.queue.head).validate()
+    let loaded = op.loadPointers(queueBase[])
+    let fullCheck = loaded.checkFull()
 
-    # MPSC: uses head vs reservedTail (single consumer, head is current)
-    if unlikely(fullN(head, reservedTail)):
-      return false
-
-    newReservedTail = reservedTail.incOrResetN(1)
-
-    let cas = prepareCAS(
-      addr self.queue.reservedTail,
-      reservedTail.value,
-      newReservedTail.value
-    ).executeCAS()
-
-    if cas.succeeded:
-      break
-
-  # Write the item to the claimed slot
-  let slot = reservedTail.index()
-  self.queue.storage[slot] = item
-
-  # Mark slot as committed (data ready to read)
-  # No ordered wait - this is what makes push lock-free
-  self.queue.committed.store(slot, true)
-
-  return true
+    case fullCheck.kind:
+    of mMPSCPushFull:
+      return fullCheck.mpscpushfull.extractFalse()
+    of mMPSCPushNotFull:
+      let claimResult = fullCheck.mpscpushnotfull.tryClaim(queueBase[])
+      case claimResult.kind:
+      of mMPSCPushStart:
+        op = claimResult.mpscpushstart  # CAS failed, retry
+        continue
+      of mMPSCPushSlotClaimed:
+        let written = claimResult.mpscpushslotclaimed.writeData(queueBase[], item)
+        return written.complete(queueBase[])
 
 
 proc push*[N, P: static int, T](
@@ -219,26 +211,25 @@ proc pop*[N, P: static int, T](
   ## Otherwise an item is popped, `some(T)` is returned.
   ##
   ## This operation is wait-free for the single consumer.
-  let head = loadAcquireN[N](self.head).validate()
-  let reservedTail = loadAcquireN[N](self.reservedTail).validate()
+  ## Uses typestate to ensure correct operation sequencing.
 
-  # Check if anything has been claimed
-  if unlikely(emptyN(head, reservedTail)):
+  # Cast queue to MupsicBase for typestate compatibility
+  var queueBase = cast[ptr MupsicBase[N, P, T]](addr self)
+
+  let op = mpsc_pop.start[N]()
+  let loaded = op.loadPointers(queueBase[])
+  let emptyCheck = loaded.checkEmpty()
+
+  case emptyCheck.kind:
+  of mMPSCPopEmpty:
     return none(T)
-
-  let slot = head.index()
-
-  # Check if head slot is committed (data ready to read)
-  if not self.committed.load(slot):
-    return none(T)  # Producer still writing
-
-  result = some(self.storage[slot])
-
-  # Clear committed flag for slot reuse
-  self.committed.store(slot, false)
-
-  let newHead = head.incOrResetN(1)
-  self.head.storeReleaseN(newHead)
+  of mMPSCPopNotEmpty:
+    let committedCheck = emptyCheck.mpscpopnotempty.checkCommitted(queueBase[])
+    case committedCheck.kind:
+    of mMPSCPopEmpty:
+      return none(T)  # Slot not committed - producer still writing
+    of mMPSCPopSlotReady:
+      return some(committedCheck.mpscpopslotready.complete(queueBase[]))
 
 
 proc pop*[N, P: static int, T](

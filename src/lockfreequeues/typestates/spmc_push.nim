@@ -43,6 +43,7 @@ type
 
 typestate SPMCPushOp[N: static int]:
   inheritsFromRootObj = true
+  consumeOnTransition = false  # Allow values to be passed across case branches
   states SPMCPushStart[N], SPMCPushPointersLoaded[N], SPMCPushNotFull[N],
          SPMCPushDataWritten[N], SPMCPushFull[N]
   transitions:

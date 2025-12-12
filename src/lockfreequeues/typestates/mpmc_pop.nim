@@ -54,6 +54,7 @@ type
 
 typestate MPMCPopOp[N: static int]:
   inheritsFromRootObj = true
+  consumeOnTransition = false  # Allow values to be passed across case branches
   states MPMCPopStart[N], MPMCPopPointersLoaded[N], MPMCPopNotEmpty[N],
          MPMCPopSlotReady[N], MPMCPopSlotClaimed[N], MPMCPopEmpty[N]
   transitions:

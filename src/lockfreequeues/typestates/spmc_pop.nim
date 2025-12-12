@@ -46,6 +46,7 @@ type
 
 typestate SPMCPopOp[N: static int]:
   inheritsFromRootObj = true
+  consumeOnTransition = false  # Allow values to be passed across case branches
   states SPMCPopStart[N], SPMCPopPointersLoaded[N], SPMCPopNotEmpty[N],
          SPMCPopSlotReady[N], SPMCPopSlotClaimed[N], SPMCPopEmpty[N]
   transitions:

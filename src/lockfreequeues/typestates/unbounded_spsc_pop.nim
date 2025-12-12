@@ -55,7 +55,7 @@ type
 
 typestate USPSCPopContext[T, S: static int, MT: static int]:
   inheritsFromRootObj = true
-  consumeOnTransition = true
+  consumeOnTransition = false  # Allow values to be passed across case branches
   states USPSCPopReady[T, S, MT], USPSCPopSegmentLoaded[T, S, MT],
          USPSCPopSlotAvailable[T, S, MT], USPSCPopSegmentExhausted[T, S, MT],
          USPSCPopEmpty[T, S, MT], USPSCPopComplete[T, S, MT]

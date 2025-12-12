@@ -12,6 +12,7 @@ import options
 import ./constants
 import ./exceptions
 import ./typestates
+import ./typestates/mpmc_push
 import ./typestates/mpmc_pop
 
 export exceptions
@@ -151,39 +152,29 @@ proc push*[N, P, C: static int, T](
   ## If `item` is appended, `true` is returned.
   ##
   ## This operation is lock-free: producers never block on each other.
+  ## Uses typestate to ensure correct operation sequencing.
 
-  var reservedTail: WrappedValueN[N]
-  var newReservedTail: WrappedValueN[N]
+  # Cast queue to MupmucPushBase for typestate compatibility
+  var queueBase = cast[ptr MupmucPushBase[N, P, C, T]](self.queue)
 
-  # Claim a slot using CAS on reservedTail
+  var op = mpmc_push.start[N]()
+
   while true:
-    reservedTail = loadAcquireN[N](self.queue.reservedTail).validate()
-    # MPMC KEY: Use reservedHead (not head) because consumers can lag
-    let reservedHead = loadAcquireN[N](self.queue.reservedHead).validate()
+    let loaded = op.loadPointers(queueBase[])
+    let fullCheck = loaded.checkFull()
 
-    # MPMC: uses reservedHead vs reservedTail (both can lag)
-    if unlikely(fullN(reservedHead, reservedTail)):
-      return false
-
-    newReservedTail = reservedTail.incOrResetN(1)
-
-    let cas = prepareCAS(
-      addr self.queue.reservedTail,
-      reservedTail.value,
-      newReservedTail.value
-    ).executeCAS()
-
-    if cas.succeeded:
-      break
-
-  # Write the item to the claimed slot
-  let slot = reservedTail.index()
-  self.queue.storage[slot] = item
-
-  # Mark slot as committed (data ready to read)
-  self.queue.committed.store(slot, true)
-
-  return true
+    case fullCheck.kind:
+    of mMPMCPushFull:
+      return fullCheck.mpmcpushfull.extractFalse()
+    of mMPMCPushNotFull:
+      let claimResult = fullCheck.mpmcpushnotfull.tryClaim(queueBase[])
+      case claimResult.kind:
+      of mMPMCPushStart:
+        op = claimResult.mpmcpushstart  # CAS failed, retry
+        continue
+      of mMPMCPushSlotClaimed:
+        let written = claimResult.mpmcpushslotclaimed.writeData(queueBase[], item)
+        return written.complete(queueBase[])
 
 
 proc push*[N, P, C: static int, T](
