@@ -29,17 +29,17 @@ proc freeTestSegment(seg: ptr TestSegment) =
 suite "SPSC Pop Typestate":
 
   test "typestate types exist and compile":
-    # Verify state types exist
-    var ready: SPSCPopReady[64, 4]
-    var loaded: SPSCPopSegmentLoaded[64, 4]
-    var slotAvail: SPSCPopSlotAvailable[64, 4]
-    var exhausted: SPSCPopSegmentExhausted[64, 4]
-    var empty: SPSCPopEmpty[64, 4]
-    var complete: SPSCPopComplete[64, 4]
+    # Verify state types exist (using U prefix for Unbounded) - now include T
+    var ready: USPSCPopReady[int, 64, 4]
+    var loaded: USPSCPopSegmentLoaded[int, 64, 4]
+    var slotAvail: USPSCPopSlotAvailable[int, 64, 4]
+    var exhausted: USPSCPopSegmentExhausted[int, 64, 4]
+    var empty: USPSCPopEmpty[int, 64, 4]
+    var complete: USPSCPopComplete[int, 64, 4]
     check true  # Types compile
 
 
-  test "loadSegmentTyped loads head segment":
+  test "loadSegment loads head segment":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
 
@@ -57,17 +57,17 @@ suite "SPSC Pop Typestate":
     let loaded = startPop[int, 64, 4](
       unpinned(handle).pin(),
       addr queue
-    ).loadSegmentTyped[:int, 64, 4]()
+    ).loadSegment()
 
     check loaded.head == 5
     check loaded.tail == 10
-    check loaded.segment == cast[pointer](seg)
+    check loaded.segment == seg  # Now typed, not pointer comparison
 
     # Complete operation - extract pinned for unpin
     let checkResult = loaded.checkSlot()
-    check checkResult.kind == sSPSCPopSlotAvailable
+    check checkResult.kind == uUSPSCPopSlotAvailable
 
-    let complete = checkResult.spscpopslotavailable.readItemTyped[:int, 64, 4]()
+    let complete = checkResult.uspscpopslotavailable.readItem()
     discard complete.extractPinned().unpin()
 
     freeTestSegment(seg)
@@ -92,13 +92,13 @@ suite "SPSC Pop Typestate":
     let checkResult = startPop[int, 64, 4](
       unpinned(handle).pin(),
       addr queue
-    ).loadSegmentTyped[:int, 64, 4]().checkSlot()
+    ).loadSegment().checkSlot()
 
-    check checkResult.kind == sSPSCPopSlotAvailable
-    check checkResult.spscpopslotavailable.slot == 0
+    check checkResult.kind == uUSPSCPopSlotAvailable
+    check checkResult.uspscpopslotavailable.slot == 0
 
     # Complete operation
-    discard checkResult.spscpopslotavailable.readItemTyped[:int, 64, 4]()
+    discard checkResult.uspscpopslotavailable.readItem()
       .extractPinned().unpin()
 
     freeTestSegment(seg)
@@ -122,17 +122,17 @@ suite "SPSC Pop Typestate":
     let checkResult = startPop[int, 64, 4](
       unpinned(handle).pin(),
       addr queue
-    ).loadSegmentTyped[:int, 64, 4]().checkSlot()
+    ).loadSegment().checkSlot()
 
-    check checkResult.kind == sSPSCPopSegmentExhausted
+    check checkResult.kind == uUSPSCPopSegmentExhausted
 
     # Try to advance - should return Empty since no next segment
-    let advanceResult = checkResult.spscpopsegmentexhausted
-      .advanceSegmentTyped[:int, 64, 4]()
+    let advanceResult = checkResult.uspscpopsegmentexhausted
+      .advanceSegment()
 
-    check advanceResult.kind == sSPSCPopEmpty
+    check advanceResult.kind == uUSPSCPopEmpty
 
-    discard advanceResult.spscpopempty.extractPinned().unpin()
+    discard advanceResult.uspscpopempty.extractPinned().unpin()
 
     freeTestSegment(seg)
 
@@ -160,32 +160,32 @@ suite "SPSC Pop Typestate":
     let checkResult = startPop[int, 64, 4](
       unpinned(handle).pin(),
       addr queue
-    ).loadSegmentTyped[:int, 64, 4]().checkSlot()
+    ).loadSegment().checkSlot()
 
-    check checkResult.kind == sSPSCPopSegmentExhausted
+    check checkResult.kind == uUSPSCPopSegmentExhausted
 
     # Advance to next segment
-    let advanceResult = checkResult.spscpopsegmentexhausted
-      .advanceSegmentTyped[:int, 64, 4]()
+    let advanceResult = checkResult.uspscpopsegmentexhausted
+      .advanceSegment()
 
-    check advanceResult.kind == sSPSCPopReady
+    check advanceResult.kind == uUSPSCPopReady
     check queue.headSegment == seg2  # Head advanced
 
     # Now load and read from the new segment
-    let loaded2 = advanceResult.spscpopready.loadSegmentTyped[:int, 64, 4]()
-    check loaded2.segment == cast[pointer](seg2)
+    let loaded2 = advanceResult.uspscpopready.loadSegment()
+    check loaded2.segment == seg2  # Now typed, not pointer comparison
 
     let checkResult2 = loaded2.checkSlot()
-    check checkResult2.kind == sSPSCPopSlotAvailable
+    check checkResult2.kind == uUSPSCPopSlotAvailable
 
-    discard checkResult2.spscpopslotavailable.readItemTyped[:int, 64, 4]()
+    discard checkResult2.uspscpopslotavailable.readItem()
       .extractPinned().unpin()
 
     freeTestSegment(seg1)
     freeTestSegment(seg2)
 
 
-  test "readItemTyped reads value and advances head":
+  test "readItem reads value and advances head":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
 
@@ -203,13 +203,13 @@ suite "SPSC Pop Typestate":
     queue.itemCount.store(3, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let complete = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
-      .loadSegmentTyped[:int, 64, 4]()
+    let checkResult = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
+      .loadSegment()
       .checkSlot()
-      .spscpopslotavailable
-      .readItemTyped[:int, 64, 4]()
 
-    check getValue[int, 64, 4](complete) == 42
+    let complete = checkResult.uspscpopslotavailable.readItem()
+
+    check complete.value == 42
     check seg.head.load(moRelaxed) == 1
     check queue.itemCount.load(moRelaxed) == 2
 
