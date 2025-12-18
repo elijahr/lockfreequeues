@@ -2,39 +2,30 @@ import atomics
 import options
 import unittest2
 
-import debra
 import lockfreequeues/unbounded_sipsic
 
 
 suite "UnboundedSipsic":
 
   test "newUnboundedSipsic creates valid instance":
-    var manager = initDebraManager[4]()
-    let handle = registerThread(manager)
-    var queue = newUnboundedSipsic[16, int, 4](addr manager, handle)
+    var queue = newUnboundedSipsic[16, int]()
     check(queue.segmentCount == 1)
 
   test "push single item":
-    var manager = initDebraManager[4]()
-    let handle = registerThread(manager)
-    var queue = newUnboundedSipsic[16, int, 4](addr manager, handle)
+    var queue = newUnboundedSipsic[16, int]()
 
     queue.push(42)
     check(queue.len == 1)
 
   test "push multiple items":
-    var manager = initDebraManager[4]()
-    let handle = registerThread(manager)
-    var queue = newUnboundedSipsic[16, int, 4](addr manager, handle)
+    var queue = newUnboundedSipsic[16, int]()
 
     for i in 1..10:
       queue.push(i)
     check(queue.len == 10)
 
   test "pop single item":
-    var manager = initDebraManager[4]()
-    let handle = registerThread(manager)
-    var queue = newUnboundedSipsic[16, int, 4](addr manager, handle)
+    var queue = newUnboundedSipsic[16, int]()
 
     queue.push(42)
     let item = queue.pop()
@@ -43,17 +34,13 @@ suite "UnboundedSipsic":
     check(queue.len == 0)
 
   test "pop from empty returns none":
-    var manager = initDebraManager[4]()
-    let handle = registerThread(manager)
-    var queue = newUnboundedSipsic[16, int, 4](addr manager, handle)
+    var queue = newUnboundedSipsic[16, int]()
 
     let item = queue.pop()
     check(item.isNone)
 
   test "FIFO order preserved":
-    var manager = initDebraManager[4]()
-    let handle = registerThread(manager)
-    var queue = newUnboundedSipsic[16, int, 4](addr manager, handle)
+    var queue = newUnboundedSipsic[16, int]()
 
     for i in 1..5:
       queue.push(i)
@@ -64,9 +51,7 @@ suite "UnboundedSipsic":
       check(item.get == i)
 
   test "grows beyond single segment":
-    var manager = initDebraManager[4]()
-    let handle = registerThread(manager)
-    var queue = newUnboundedSipsic[4, int, 4](addr manager, handle)  # Small segment
+    var queue = newUnboundedSipsic[4, int]()  # Small segment
 
     # Push more than segment capacity
     for i in 1..10:
@@ -80,10 +65,8 @@ suite "UnboundedSipsic":
       check(item.isSome)
       check(item.get == i)
 
-  test "segment reclamation with Manual":
-    var manager = initDebraManager[4]()
-    let handle = registerThread(manager)
-    var queue = newUnboundedSipsic[4, int, 4](addr manager, handle, Manual)
+  test "segment reclamation on pop":
+    var queue = newUnboundedSipsic[4, int]()
 
     # Fill and drain multiple segments
     for round in 1..3:
@@ -92,32 +75,11 @@ suite "UnboundedSipsic":
       for i in 1..8:
         discard queue.pop()
 
-    # Segments should accumulate
-    check(queue.segmentCount >= 1)
-
-  test "segment reclamation with Eager":
-    var manager = initDebraManager[4]()
-    let handle = registerThread(manager)
-    var queue = newUnboundedSipsic[4, int, 4](addr manager, handle, Eager)
-
-    # Fill and drain
-    for i in 1..8:
-      queue.push(i)
-    for i in 1..8:
-      discard queue.pop()
-
-    advance(manager)
-    let reclaimOp = reclaimStart(addr manager).loadEpochs().checkSafe()
-    if reclaimOp.kind == rReclaimReady:
-      discard reclaimOp.reclaimready.tryReclaim()
-
-    # Should have fewer segments after reclaim
+    # Should have reclaimed segments automatically (single consumer can free directly)
     check(queue.segmentCount >= 1)
 
   test "len tracks items correctly":
-    var manager = initDebraManager[4]()
-    let handle = registerThread(manager)
-    var queue = newUnboundedSipsic[8, int, 4](addr manager, handle)
+    var queue = newUnboundedSipsic[8, int]()
 
     check(queue.len == 0)
 
@@ -136,9 +98,7 @@ suite "UnboundedSipsic":
     check(queue.len == 0)
 
   test "batch push":
-    var manager = initDebraManager[4]()
-    let handle = registerThread(manager)
-    var queue = newUnboundedSipsic[8, int, 4](addr manager, handle)
+    var queue = newUnboundedSipsic[8, int]()
 
     queue.push(@[1, 2, 3, 4, 5])
     check(queue.len == 5)
@@ -147,9 +107,7 @@ suite "UnboundedSipsic":
       check(queue.pop().get == i)
 
   test "batch pop":
-    var manager = initDebraManager[4]()
-    let handle = registerThread(manager)
-    var queue = newUnboundedSipsic[8, int, 4](addr manager, handle)
+    var queue = newUnboundedSipsic[8, int]()
 
     for i in 1..10:
       queue.push(i)
@@ -160,9 +118,7 @@ suite "UnboundedSipsic":
     check(queue.len == 5)
 
   test "batch pop more than available":
-    var manager = initDebraManager[4]()
-    let handle = registerThread(manager)
-    var queue = newUnboundedSipsic[8, int, 4](addr manager, handle)
+    var queue = newUnboundedSipsic[8, int]()
 
     queue.push(@[1, 2, 3])
 
@@ -172,9 +128,7 @@ suite "UnboundedSipsic":
     check(queue.len == 0)
 
   test "batch pop from empty":
-    var manager = initDebraManager[4]()
-    let handle = registerThread(manager)
-    var queue = newUnboundedSipsic[8, int, 4](addr manager, handle)
+    var queue = newUnboundedSipsic[8, int]()
 
     let items = queue.pop(5)
     check(items.isNone)

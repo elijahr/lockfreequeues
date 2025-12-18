@@ -1,134 +1,176 @@
-## Tests for unbounded SPSC push typestate.
+## Tests for unbounded SPMC push typestate.
 ##
 ## These tests verify the typestate structure and transitions work correctly.
-## SPSC doesn't need DEBRA - single producer/consumer, no hazardous reclamation.
+## We use the high-level DEBRA API (registerThread) for setup.
 
 import unittest2
 import atomics
+import debra
 
-import lockfreequeues/typestates/unbounded_spsc_push
+import lockfreequeues/typestates/unbounded_spmc_push
 
 # Type aliases for our test types
 type
-  TestQueue = UnboundedSipsicBase[64, int]
+  TestQueue = UnboundedSipmuc[64, int, 4]
   TestSegment = Segment[64, int]
 
 # Test segment allocation
 proc newTestSegment(): ptr TestSegment =
   result = cast[ptr TestSegment](alloc0(sizeof(TestSegment)))
   result.next.store(nil, moRelaxed)
-  result.head.store(0, moRelaxed)
   result.tail.store(0, moRelaxed)
+  result.prevConsumerIdx.store(-1, moRelaxed)
 
 proc freeTestSegment(seg: ptr TestSegment) =
   dealloc(seg)
 
 
-suite "SPSC Push Typestate":
+suite "SPMC Push Typestate":
 
   test "typestate types exist and are usable":
     # Verify state types exist and fields are accessible
+    var manager = initDebraManager[4]()
+    let handle = registerThread(manager)
+
     var seg = newTestSegment()
     var queue: TestQueue
+    queue.manager = addr manager
     queue.headSegment = seg
     queue.tailSegment = seg
+    queue.strategy = 0  # Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
+    queue.consumerCount.store(0, moRelaxed)
 
     # Actually use the types with real data
-    let loaded = startPush[int, 64](addr queue).loadSegment()
+    let loaded = startPush[int, 64, 4](
+      unpinned(handle).pin(),
+      addr queue
+    ).loadSegment()
 
     # Verify fields are accessible and have valid values
     check loaded.tail >= 0
     check loaded.segment != nil
-    check loaded.segment.head.load(moRelaxed) == 0
+    check loaded.segment.prevConsumerIdx.load(moRelaxed) == -1
     check loaded.segment.next.load(moRelaxed) == nil
 
     # Clean up
     let checkResult = loaded.checkFull()
-    discard checkResult.spscpushslotready.writeItem(0)
+    discard checkResult.spmcpushslotready.writeItem(0).extractPinned().unpin()
     freeTestSegment(seg)
 
 
   test "loadSegment loads tail segment":
+    var manager = initDebraManager[4]()
+    let handle = registerThread(manager)
+
     var seg = newTestSegment()
     seg.tail.store(10, moRelaxed)  # Pre-set tail
 
     var queue: TestQueue
+    queue.manager = addr manager
     queue.headSegment = seg
     queue.tailSegment = seg
+    queue.strategy = 0  # Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
+    queue.consumerCount.store(0, moRelaxed)
 
-    let loaded = startPush[int, 64](addr queue).loadSegment()
+    # Use unpinned/pin from debra - chain to avoid copy issues
+    let loaded = startPush[int, 64, 4](
+      unpinned(handle).pin(),
+      addr queue
+    ).loadSegment()
 
     check loaded.tail == 10
     check loaded.segment == seg
 
     # Verify segment structure is accessible and intact
-    check loaded.segment.head.load(moRelaxed) == 0
+    check loaded.segment.prevConsumerIdx.load(moRelaxed) == -1
     check loaded.segment.next.load(moRelaxed) == nil
 
     # Complete operation
     let checkResult = loaded.checkFull()
-    check checkResult.kind == sSPSCPushSlotReady
+    check checkResult.kind == sSPMCPushSlotReady
 
     # Write item and VERIFY the value was written
-    discard checkResult.spscpushslotready.writeItem(42)
-    check seg.data[10] == 42  # Verify write to correct slot
+    let complete = checkResult.spmcpushslotready.writeItem(42)
+    check seg.data[10] == 42  # Consume: verify write to correct slot
     check seg.tail.load(moRelaxed) == 11  # Verify tail advanced
+    discard complete.extractPinned().unpin()
 
     freeTestSegment(seg)
 
 
   test "checkFull returns SlotReady when not full":
+    var manager = initDebraManager[4]()
+    let handle = registerThread(manager)
+
     var seg = newTestSegment()
     var queue: TestQueue
+    queue.manager = addr manager
     queue.headSegment = seg
     queue.tailSegment = seg
+    queue.strategy = 0  # Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
+    queue.consumerCount.store(0, moRelaxed)
 
-    let checkResult = startPush[int, 64](addr queue).loadSegment().checkFull()
+    let checkResult = startPush[int, 64, 4](
+      unpinned(handle).pin(),
+      addr queue
+    ).loadSegment().checkFull()
 
-    check checkResult.kind == sSPSCPushSlotReady
-    check checkResult.spscpushslotready.slot == 0
+    check checkResult.kind == sSPMCPushSlotReady
+    check checkResult.spmcpushslotready.slot == 0
 
     # Write item and VERIFY the value was written
-    discard checkResult.spscpushslotready.writeItem(42)
+    discard checkResult.spmcpushslotready.writeItem(42)
+      .extractPinned().unpin()
 
-    check seg.data[0] == 42  # Verify write happened
+    check seg.data[0] == 42  # Consume: verify write happened
     check seg.tail.load(moRelaxed) == 1  # Verify tail advanced
 
     freeTestSegment(seg)
 
 
   test "checkFull returns SegmentFull when full":
+    var manager = initDebraManager[4]()
+    let handle = registerThread(manager)
+
     var seg = newTestSegment()
     seg.tail.store(64, moRelaxed)  # Full segment
 
     var queue: TestQueue
+    queue.manager = addr manager
     queue.headSegment = seg
     queue.tailSegment = seg
+    queue.strategy = 0  # Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
+    queue.consumerCount.store(0, moRelaxed)
 
-    let checkResult = startPush[int, 64](addr queue).loadSegment().checkFull()
+    let checkResult = startPush[int, 64, 4](
+      unpinned(handle).pin(),
+      addr queue
+    ).loadSegment().checkFull()
 
-    check checkResult.kind == sSPSCPushSegmentFull
+    check checkResult.kind == sSPMCPushSegmentFull
 
     # Allocate new segment and retry
     var newSeg = newTestSegment()
-    let checkResult2 = checkResult.spscpushsegmentfull
+    let checkResult2 = checkResult.spmcpushsegmentfull
       .allocateNewSegment(newSeg)
       .loadSegment()
       .checkFull()
 
-    check checkResult2.kind == sSPSCPushSlotReady
+    check checkResult2.kind == sSPMCPushSlotReady
 
-    discard checkResult2.spscpushslotready.writeItem(42)
+    discard checkResult2.spmcpushslotready
+      .writeItem(42)
+      .extractPinned().unpin()
 
-    # Verify write went to NEW segment, not old one
+    # Consume: verify write went to NEW segment, not old one
     check newSeg.data[0] == 42  # Value written to new segment
     check newSeg.tail.load(moRelaxed) == 1  # New segment tail advanced
     check seg.next.load(moRelaxed) == newSeg  # Segments correctly linked
@@ -139,18 +181,27 @@ suite "SPSC Push Typestate":
 
 
   test "writeItem writes data and publishes":
+    var manager = initDebraManager[4]()
+    let handle = registerThread(manager)
+
     var seg = newTestSegment()
     var queue: TestQueue
+    queue.manager = addr manager
     queue.headSegment = seg
     queue.tailSegment = seg
+    queue.strategy = 0  # Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
+    queue.consumerCount.store(0, moRelaxed)
 
-    let checkResult = startPush[int, 64](addr queue)
+    let checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
       .loadSegment()
       .checkFull()
 
-    discard checkResult.spscpushslotready.writeItem(42)
+    discard checkResult.spmcpushslotready
+      .writeItem(42)
+      .extractPinned()
+      .unpin()
 
     check seg.data[0] == 42
     check seg.tail.load(moRelaxed) == 1

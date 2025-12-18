@@ -26,10 +26,6 @@ import options
 
 import debra
 
-# Use C stdlib for thread-safe cross-thread allocation
-proc c_calloc(n, size: csize_t): pointer {.importc: "calloc", header: "<stdlib.h>".}
-proc c_free(p: pointer) {.importc: "free", header: "<stdlib.h>".}
-
 type
   DeallocationStrategy* = enum
     ## Strategy for segment memory reclamation.
@@ -78,8 +74,8 @@ type
 
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
-  ## Allocate a new segment using C malloc (thread-safe cross-thread).
-  result = cast[ptr Segment[S, T]](c_calloc(1, csize_t(sizeof(Segment[S, T]))))
+  ## Allocate a new segment using Nim's alloc0 (zero-initialized).
+  result = cast[ptr Segment[S, T]](alloc0(sizeof(Segment[S, T])))
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
   result.head = 0
@@ -160,7 +156,7 @@ proc push*[S: static int; T; MaxThreads: static int](self: var Producer[S, T, Ma
           continue
         else:
           # Lost race, free our segment
-          c_free(newSeg)
+          dealloc(newSeg)
           continue
       else:
         # Someone else allocated, advance tail segment
@@ -187,9 +183,9 @@ proc push*[S: static int; T; MaxThreads: static int](self: var Producer[S, T, Ma
     self.push(item)
 
 
-# Helper to wrap destructor for c_free
+# Helper to wrap destructor for dealloc
 proc segmentDestructor(p: pointer) {.nimcall.} =
-  c_free(p)
+  dealloc(p)
 
 
 proc pop*[S: static int; T; MaxThreads: static int](self: var UnboundedMupsic[S, T, MaxThreads]): Option[T] =
@@ -233,7 +229,7 @@ proc pop*[S: static int; T; MaxThreads: static int](self: var UnboundedMupsic[S,
     # Retire old segment
     if self.strategy != Manual:
       let ready = retireReady(pinned)
-      discard ready.retire(seg, segmentDestructor)
+      discard ready.retire(cast[pointer](seg), segmentDestructor)
       discard self.segments.fetchSub(1, moRelaxed)
 
     self.headSegment = nextSeg
@@ -266,5 +262,5 @@ proc `=destroy`*[S: static int; T; MaxThreads: static int](self: var UnboundedMu
     var seg = self.headSegment
     while seg != nil:
       let next = seg.next.load(moRelaxed)
-      c_free(seg)
+      dealloc(seg)
       seg = next

@@ -1,117 +1,81 @@
 ## Typestate for unbounded SPSC pop operations.
 ##
-## Bridges from DEBRA's Pinned[MT] state, performs pop, bridges back.
+## SPSC doesn't need DEBRA - single producer/consumer means no hazardous
+## memory reclamation. Consumer can free segments directly with dealloc.
 ## Uses 'U' prefix (Unbounded) to avoid name collision with bounded spsc_pop.
 
 import atomics
 import typestates
-import debra
 
 import ./unbounded_spsc_push  # Reuse Segment, UnboundedSipsicBase
 
 type
-  # Base context - carries pinned state and queue pointer
-  USPSCPopContext*[T; S, MT: static int] = object of RootObj
-    pinnedHandle*: ThreadHandle[MT]
-    pinnedEpoch*: uint64
-    queue*: ptr UnboundedSipsicBase[S, T, MT]
+  # Base context - carries queue pointer
+  USPSCPopContext*[T; S: static int] = object of RootObj
+    queue*: ptr UnboundedSipsicBase[S, T]
 
   # States (prefixed with U for Unbounded to avoid collision)
-  USPSCPopReady*[T; S, MT: static int] = distinct USPSCPopContext[T, S, MT]
+  USPSCPopReady*[T; S: static int] = distinct USPSCPopContext[T, S]
 
-  USPSCPopSegmentLoaded*[T; S, MT: static int] = object
-    pinnedHandle*: ThreadHandle[MT]
-    pinnedEpoch*: uint64
-    queue*: ptr UnboundedSipsicBase[S, T, MT]
+  USPSCPopSegmentLoaded*[T; S: static int] = object
+    queue*: ptr UnboundedSipsicBase[S, T]
     segment*: ptr Segment[S, T]
     head*: int
     tail*: int
 
-  USPSCPopSlotAvailable*[T; S, MT: static int] = object
-    pinnedHandle*: ThreadHandle[MT]
-    pinnedEpoch*: uint64
-    queue*: ptr UnboundedSipsicBase[S, T, MT]
+  USPSCPopSlotAvailable*[T; S: static int] = object
+    queue*: ptr UnboundedSipsicBase[S, T]
     segment*: ptr Segment[S, T]
     slot*: int
 
-  USPSCPopSegmentExhausted*[T; S, MT: static int] = object
-    pinnedHandle*: ThreadHandle[MT]
-    pinnedEpoch*: uint64
-    queue*: ptr UnboundedSipsicBase[S, T, MT]
+  USPSCPopSegmentExhausted*[T; S: static int] = object
+    queue*: ptr UnboundedSipsicBase[S, T]
     segment*: ptr Segment[S, T]
 
-  USPSCPopEmpty*[T; S, MT: static int] = object
-    pinnedHandle*: ThreadHandle[MT]
-    pinnedEpoch*: uint64
-    queue*: ptr UnboundedSipsicBase[S, T, MT]
+  USPSCPopEmpty*[T; S: static int] = object
+    queue*: ptr UnboundedSipsicBase[S, T]
 
-  USPSCPopComplete*[T; S, MT: static int] = object
-    pinnedHandle*: ThreadHandle[MT]
-    pinnedEpoch*: uint64
-    queue*: ptr UnboundedSipsicBase[S, T, MT]
+  USPSCPopComplete*[T; S: static int] = object
+    queue*: ptr UnboundedSipsicBase[S, T]
     value*: T
     slot*: int
+    oldSegment*: ptr Segment[S, T]  # Segment to free if exhausted
 
 
-typestate USPSCPopContext[T, S: static int, MT: static int]:
+typestate USPSCPopContext[T, S: static int]:
   inheritsFromRootObj = true
   consumeOnTransition = false  # Allow values to be passed across case branches
-  states USPSCPopReady[T, S, MT], USPSCPopSegmentLoaded[T, S, MT],
-         USPSCPopSlotAvailable[T, S, MT], USPSCPopSegmentExhausted[T, S, MT],
-         USPSCPopEmpty[T, S, MT], USPSCPopComplete[T, S, MT]
+  states USPSCPopReady[T, S], USPSCPopSegmentLoaded[T, S],
+         USPSCPopSlotAvailable[T, S], USPSCPopSegmentExhausted[T, S],
+         USPSCPopEmpty[T, S], USPSCPopComplete[T, S]
   transitions:
-    USPSCPopReady[T, S, MT] -> USPSCPopSegmentLoaded[T, S, MT]
-    USPSCPopSegmentLoaded[T, S, MT] -> (USPSCPopSlotAvailable[T, S, MT] | USPSCPopSegmentExhausted[T, S, MT]) as USPSCSlotCheck[T, S, MT]
-    USPSCPopSegmentExhausted[T, S, MT] -> (USPSCPopReady[T, S, MT] | USPSCPopEmpty[T, S, MT]) as USPSCAdvanceResult[T, S, MT]
-    USPSCPopSlotAvailable[T, S, MT] -> USPSCPopComplete[T, S, MT]
+    USPSCPopReady[T, S] -> USPSCPopSegmentLoaded[T, S]
+    USPSCPopSegmentLoaded[T, S] -> (USPSCPopSlotAvailable[T, S] | USPSCPopSegmentExhausted[T, S]) as USPSCSlotCheck[T, S]
+    USPSCPopSegmentExhausted[T, S] -> (USPSCPopReady[T, S] | USPSCPopEmpty[T, S]) as USPSCAdvanceResult[T, S]
+    USPSCPopSlotAvailable[T, S] -> USPSCPopComplete[T, S]
 
 
-# Factory: Create pop typestate context from DEBRA's Pinned state
-proc startPop*[T; S, MT: static int](
-  pinned: sink Pinned[MT],
-  queue: ptr UnboundedSipsicBase[S, T, MT]
-): USPSCPopReady[T, S, MT] =
-  ## Create pop context from DEBRA's Pinned state.
-  USPSCPopReady[T, S, MT](
-    USPSCPopContext[T, S, MT](
-      pinnedHandle: pinned.handle,
-      pinnedEpoch: pinned.epoch,
+# Factory: Create pop typestate context
+proc startPop*[T; S: static int](
+  queue: ptr UnboundedSipsicBase[S, T]
+): USPSCPopReady[T, S] =
+  ## Create pop context for the queue.
+  USPSCPopReady[T, S](
+    USPSCPopContext[T, S](
       queue: queue))
 
 
-# Extract Pinned state from USPSCPopComplete for unpinning
-proc extractPinned*[T; S, MT: static int](
-  complete: sink USPSCPopComplete[T, S, MT]
-): Pinned[MT] =
-  ## Extract DEBRA's Pinned state for unpinning.
-  Pinned[MT](EpochGuardContext[MT](
-    handle: complete.pinnedHandle,
-    epoch: complete.pinnedEpoch))
-
-
-# Extract Pinned state from USPSCPopEmpty for unpinning
-proc extractPinned*[T; S, MT: static int](
-  empty: sink USPSCPopEmpty[T, S, MT]
-): Pinned[MT] =
-  ## Extract DEBRA's Pinned state for unpinning.
-  Pinned[MT](EpochGuardContext[MT](
-    handle: empty.pinnedHandle,
-    epoch: empty.pinnedEpoch))
-
-
 # Load segment transition
-proc loadSegment*[T; S, MT: static int](
-  ready: sink USPSCPopReady[T, S, MT]
-): USPSCPopSegmentLoaded[T, S, MT] {.transition.} =
+proc loadSegment*[T; S: static int](
+  ready: sink USPSCPopReady[T, S]
+): USPSCPopSegmentLoaded[T, S] {.transition.} =
   ## Load current head segment and positions.
-  let ctx = USPSCPopContext[T, S, MT](ready)
+  let ctx = USPSCPopContext[T, S](ready)
   let seg = ctx.queue.headSegment
   let head = seg.head.load(moRelaxed)
   let tail = seg.tail.load(moAcquire)
 
-  USPSCPopSegmentLoaded[T, S, MT](
-    pinnedHandle: ctx.pinnedHandle,
-    pinnedEpoch: ctx.pinnedEpoch,
+  USPSCPopSegmentLoaded[T, S](
     queue: ctx.queue,
     segment: seg,
     head: head,
@@ -119,54 +83,47 @@ proc loadSegment*[T; S, MT: static int](
 
 
 # Check slot availability transition
-proc checkSlot*[T; S, MT: static int](
-  loaded: sink USPSCPopSegmentLoaded[T, S, MT]
-): USPSCSlotCheck[T, S, MT] {.transition.} =
+proc checkSlot*[T; S: static int](
+  loaded: sink USPSCPopSegmentLoaded[T, S]
+): USPSCSlotCheck[T, S] {.transition.} =
   ## Check if there's data available. Returns SlotAvailable or SegmentExhausted.
   if loaded.head < loaded.tail:
-    USPSCSlotCheck[T, S, MT] -> USPSCPopSlotAvailable[T, S, MT](
-      pinnedHandle: loaded.pinnedHandle,
-      pinnedEpoch: loaded.pinnedEpoch,
+    USPSCSlotCheck[T, S] -> USPSCPopSlotAvailable[T, S](
       queue: loaded.queue,
       segment: loaded.segment,
       slot: loaded.head)
   else:
-    USPSCSlotCheck[T, S, MT] -> USPSCPopSegmentExhausted[T, S, MT](
-      pinnedHandle: loaded.pinnedHandle,
-      pinnedEpoch: loaded.pinnedEpoch,
+    USPSCSlotCheck[T, S] -> USPSCPopSegmentExhausted[T, S](
       queue: loaded.queue,
       segment: loaded.segment)
 
 
 # Advance segment transition
-proc advanceSegment*[T; S, MT: static int](
-  exhausted: sink USPSCPopSegmentExhausted[T, S, MT]
-): USPSCAdvanceResult[T, S, MT] {.transition.} =
+proc advanceSegment*[T; S: static int](
+  exhausted: sink USPSCPopSegmentExhausted[T, S]
+): USPSCAdvanceResult[T, S] {.transition.} =
   ## Try to advance to next segment.
   ## Returns Ready if next segment exists, Empty otherwise.
+  ## Note: Caller is responsible for freeing the old segment (returned in oldSegment field).
   let nextSeg = exhausted.segment.next.load(moAcquire)
 
   if nextSeg == nil:
-    return USPSCAdvanceResult[T, S, MT] -> USPSCPopEmpty[T, S, MT](
-      pinnedHandle: exhausted.pinnedHandle,
-      pinnedEpoch: exhausted.pinnedEpoch,
+    return USPSCAdvanceResult[T, S] -> USPSCPopEmpty[T, S](
       queue: exhausted.queue)
 
-  # Advance head segment
+  # Advance head segment (caller should dealloc old segment)
   exhausted.queue.headSegment = nextSeg
-  # Note: Segment retirement handled by caller
+  discard exhausted.queue.segments.fetchSub(1, moRelaxed)
 
-  USPSCAdvanceResult[T, S, MT] -> USPSCPopReady[T, S, MT](
-    USPSCPopContext[T, S, MT](
-      pinnedHandle: exhausted.pinnedHandle,
-      pinnedEpoch: exhausted.pinnedEpoch,
+  USPSCAdvanceResult[T, S] -> USPSCPopReady[T, S](
+    USPSCPopContext[T, S](
       queue: exhausted.queue))
 
 
 # Read item transition
-proc readItem*[T; S, MT: static int](
-  slotAvail: sink USPSCPopSlotAvailable[T, S, MT]
-): USPSCPopComplete[T, S, MT] {.transition.} =
+proc readItem*[T; S: static int](
+  slotAvail: sink USPSCPopSlotAvailable[T, S]
+): USPSCPopComplete[T, S] {.transition.} =
   ## Read item from slot and advance head.
   # Read value before advancing head
   let value = slotAvail.segment.data[slotAvail.slot]
@@ -175,17 +132,16 @@ proc readItem*[T; S, MT: static int](
   slotAvail.segment.head.store(slotAvail.slot + 1, moRelaxed)
   discard slotAvail.queue.itemCount.fetchSub(1, moRelaxed)
 
-  USPSCPopComplete[T, S, MT](
-    pinnedHandle: slotAvail.pinnedHandle,
-    pinnedEpoch: slotAvail.pinnedEpoch,
+  USPSCPopComplete[T, S](
     queue: slotAvail.queue,
     value: value,
-    slot: slotAvail.slot)
+    slot: slotAvail.slot,
+    oldSegment: nil)
 
 
 # Get value from completed pop
-proc getValue*[T; S, MT: static int](
-  complete: USPSCPopComplete[T, S, MT]
+proc getValue*[T; S: static int](
+  complete: USPSCPopComplete[T, S]
 ): T =
   ## Extract the popped value.
   complete.value

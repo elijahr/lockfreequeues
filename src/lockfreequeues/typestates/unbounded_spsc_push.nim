@@ -1,163 +1,129 @@
 ## Typestate for unbounded SPSC push operations.
 ##
-## Bridges from DEBRA's Pinned[MT] state, performs push, bridges back.
+## SPSC doesn't need DEBRA - single producer/consumer means no hazardous
+## memory reclamation. Consumer can free segments directly with dealloc.
 
 import atomics
 import typestates
-import debra
 
 type
-  # Forward declare Segment type (will import from parent module)
+  # Forward declare Segment type (matches parent module)
   Segment*[S: static int, T] = object
     data*: array[S, T]
     next*: Atomic[ptr Segment[S, T]]
     head*: Atomic[int]
     tail*: Atomic[int]
 
-  # Forward declare queue type
-  UnboundedSipsicBase*[S: static int; T; MaxThreads: static int] = object
-    manager*: ptr DebraManager[MaxThreads]
+  # Forward declare queue type (no DEBRA for SPSC)
+  UnboundedSipsicBase*[S: static int; T] = object
     headSegment*: ptr Segment[S, T]
     tailSegment*: ptr Segment[S, T]
     itemCount*: Atomic[int]
     segments*: Atomic[int]
 
-  # Base context - carries pinned state and queue pointer
-  SPSCPushContext*[T; S, MT: static int] = object of RootObj
-    pinnedHandle*: ThreadHandle[MT]
-    pinnedEpoch*: uint64
-    queue*: ptr UnboundedSipsicBase[S, T, MT]
+  # Base context - carries queue pointer
+  SPSCPushContext*[T; S: static int] = object of RootObj
+    queue*: ptr UnboundedSipsicBase[S, T]
 
   # States
-  SPSCPushReady*[T; S, MT: static int] = distinct SPSCPushContext[T, S, MT]
+  SPSCPushReady*[T; S: static int] = distinct SPSCPushContext[T, S]
 
-  SPSCPushSegmentLoaded*[T; S, MT: static int] = object
-    pinnedHandle*: ThreadHandle[MT]
-    pinnedEpoch*: uint64
-    queue*: ptr UnboundedSipsicBase[S, T, MT]
+  SPSCPushSegmentLoaded*[T; S: static int] = object
+    queue*: ptr UnboundedSipsicBase[S, T]
     segment*: ptr Segment[S, T]
     tail*: int
 
-  SPSCPushSegmentFull*[T; S, MT: static int] = object
-    pinnedHandle*: ThreadHandle[MT]
-    pinnedEpoch*: uint64
-    queue*: ptr UnboundedSipsicBase[S, T, MT]
+  SPSCPushSegmentFull*[T; S: static int] = object
+    queue*: ptr UnboundedSipsicBase[S, T]
     segment*: ptr Segment[S, T]
 
-  SPSCPushSlotReady*[T; S, MT: static int] = object
-    pinnedHandle*: ThreadHandle[MT]
-    pinnedEpoch*: uint64
-    queue*: ptr UnboundedSipsicBase[S, T, MT]
+  SPSCPushSlotReady*[T; S: static int] = object
+    queue*: ptr UnboundedSipsicBase[S, T]
     segment*: ptr Segment[S, T]
     slot*: int
 
-  SPSCPushComplete*[T; S, MT: static int] = object
-    pinnedHandle*: ThreadHandle[MT]
-    pinnedEpoch*: uint64
-    queue*: ptr UnboundedSipsicBase[S, T, MT]
+  SPSCPushComplete*[T; S: static int] = object
+    queue*: ptr UnboundedSipsicBase[S, T]
 
 
-typestate SPSCPushContext[T, S: static int, MT: static int]:
+typestate SPSCPushContext[T, S: static int]:
   inheritsFromRootObj = true
   consumeOnTransition = true
-  states SPSCPushReady[T, S, MT], SPSCPushSegmentLoaded[T, S, MT],
-         SPSCPushSegmentFull[T, S, MT], SPSCPushSlotReady[T, S, MT],
-         SPSCPushComplete[T, S, MT]
+  states SPSCPushReady[T, S], SPSCPushSegmentLoaded[T, S],
+         SPSCPushSegmentFull[T, S], SPSCPushSlotReady[T, S],
+         SPSCPushComplete[T, S]
   transitions:
-    SPSCPushReady[T, S, MT] -> SPSCPushSegmentLoaded[T, S, MT]
-    SPSCPushSegmentLoaded[T, S, MT] -> (SPSCPushSlotReady[T, S, MT] | SPSCPushSegmentFull[T, S, MT]) as SPSCSegmentCheck[T, S, MT]
-    SPSCPushSegmentFull[T, S, MT] -> SPSCPushReady[T, S, MT]
-    SPSCPushSlotReady[T, S, MT] -> SPSCPushComplete[T, S, MT]
+    SPSCPushReady[T, S] -> SPSCPushSegmentLoaded[T, S]
+    SPSCPushSegmentLoaded[T, S] -> (SPSCPushSlotReady[T, S] | SPSCPushSegmentFull[T, S]) as SPSCSegmentCheck[T, S]
+    SPSCPushSegmentFull[T, S] -> SPSCPushReady[T, S]
+    SPSCPushSlotReady[T, S] -> SPSCPushComplete[T, S]
 
 
-# Factory: Create push typestate context from DEBRA's Pinned state
-proc startPush*[T; S, MT: static int](
-  pinned: sink Pinned[MT],
-  queue: ptr UnboundedSipsicBase[S, T, MT]
-): SPSCPushReady[T, S, MT] =
-  ## Create push context from DEBRA's Pinned state.
-  SPSCPushReady[T, S, MT](
-    SPSCPushContext[T, S, MT](
-      pinnedHandle: pinned.handle,
-      pinnedEpoch: pinned.epoch,
+# Factory: Create push typestate context
+proc startPush*[T; S: static int](
+  queue: ptr UnboundedSipsicBase[S, T]
+): SPSCPushReady[T, S] =
+  ## Create push context for the queue.
+  SPSCPushReady[T, S](
+    SPSCPushContext[T, S](
       queue: queue))
 
 
-# Extract Pinned state from SPSCPushComplete for unpinning
-proc extractPinned*[T; S, MT: static int](
-  complete: sink SPSCPushComplete[T, S, MT]
-): Pinned[MT] =
-  ## Extract DEBRA's Pinned state for unpinning.
-  Pinned[MT](EpochGuardContext[MT](
-    handle: complete.pinnedHandle,
-    epoch: complete.pinnedEpoch))
-
-
 # Load segment transition
-proc loadSegment*[T; S, MT: static int](
-  ready: sink SPSCPushReady[T, S, MT]
-): SPSCPushSegmentLoaded[T, S, MT] {.transition.} =
+proc loadSegment*[T; S: static int](
+  ready: sink SPSCPushReady[T, S]
+): SPSCPushSegmentLoaded[T, S] {.transition.} =
   ## Load current tail segment and tail position.
-  let ctx = SPSCPushContext[T, S, MT](ready)
+  let ctx = SPSCPushContext[T, S](ready)
   let seg = ctx.queue.tailSegment
   let tail = seg.tail.load(moRelaxed)
 
-  SPSCPushSegmentLoaded[T, S, MT](
-    pinnedHandle: ctx.pinnedHandle,
-    pinnedEpoch: ctx.pinnedEpoch,
+  SPSCPushSegmentLoaded[T, S](
     queue: ctx.queue,
     segment: seg,
     tail: tail)
 
 
 # Check full transition
-proc checkFull*[T; S, MT: static int](
-  loaded: sink SPSCPushSegmentLoaded[T, S, MT]
-): SPSCSegmentCheck[T, S, MT] {.transition.} =
+proc checkFull*[T; S: static int](
+  loaded: sink SPSCPushSegmentLoaded[T, S]
+): SPSCSegmentCheck[T, S] {.transition.} =
   ## Check if segment is full. Returns SlotReady or SegmentFull.
   if loaded.tail >= S:
-    SPSCSegmentCheck[T, S, MT] -> SPSCPushSegmentFull[T, S, MT](
-      pinnedHandle: loaded.pinnedHandle,
-      pinnedEpoch: loaded.pinnedEpoch,
+    SPSCSegmentCheck[T, S] -> SPSCPushSegmentFull[T, S](
       queue: loaded.queue,
       segment: loaded.segment)
   else:
-    SPSCSegmentCheck[T, S, MT] -> SPSCPushSlotReady[T, S, MT](
-      pinnedHandle: loaded.pinnedHandle,
-      pinnedEpoch: loaded.pinnedEpoch,
+    SPSCSegmentCheck[T, S] -> SPSCPushSlotReady[T, S](
       queue: loaded.queue,
       segment: loaded.segment,
       slot: loaded.tail)
 
 
 # Allocate new segment transition
-proc allocateNewSegment*[T; S, MT: static int](
-  full: sink SPSCPushSegmentFull[T, S, MT],
+proc allocateNewSegment*[T; S: static int](
+  full: sink SPSCPushSegmentFull[T, S],
   newSegment: ptr Segment[S, T]
-): SPSCPushReady[T, S, MT] {.transition.} =
+): SPSCPushReady[T, S] {.transition.} =
   ## Link new segment and return to Ready state to retry.
   full.segment.next.store(newSegment, moRelease)
   full.queue.tailSegment = newSegment
   discard full.queue.segments.fetchAdd(1, moRelaxed)
 
-  SPSCPushReady[T, S, MT](
-    SPSCPushContext[T, S, MT](
-      pinnedHandle: full.pinnedHandle,
-      pinnedEpoch: full.pinnedEpoch,
+  SPSCPushReady[T, S](
+    SPSCPushContext[T, S](
       queue: full.queue))
 
 
 # Write item transition
-proc writeItem*[T; S, MT: static int](
-  slotReady: sink SPSCPushSlotReady[T, S, MT],
+proc writeItem*[T; S: static int](
+  slotReady: sink SPSCPushSlotReady[T, S],
   item: T
-): SPSCPushComplete[T, S, MT] {.transition.} =
+): SPSCPushComplete[T, S] {.transition.} =
   ## Write item to slot and publish.
   slotReady.segment.data[slotReady.slot] = item
   slotReady.segment.tail.store(slotReady.slot + 1, moRelease)
   discard slotReady.queue.itemCount.fetchAdd(1, moRelaxed)
 
-  SPSCPushComplete[T, S, MT](
-    pinnedHandle: slotReady.pinnedHandle,
-    pinnedEpoch: slotReady.pinnedEpoch,
+  SPSCPushComplete[T, S](
     queue: slotReady.queue)

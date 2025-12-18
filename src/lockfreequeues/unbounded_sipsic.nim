@@ -1,18 +1,15 @@
 
 ## Unbounded single-producer, single-consumer (SPSC) queue using linked segments.
 ##
-## Uses DEBRA+ epoch-based reclamation for safe memory deallocation.
+## Uses direct memory management (alloc0/dealloc). No DEBRA needed for SPSC.
 ##
 ## - S: Segment size (items per segment). Larger = less allocation, smaller = faster reclamation.
 ## - T: Type of data the queue holds.
-## - MaxThreads: Maximum number of threads (compile-time constant).
 ##
 ## Both push and pop are wait-free for SPSC.
 ##
 ## ```nim
-## var manager = initDebraManager[4]()
-## let handle = registerThread(manager)
-## var queue = newUnboundedSipsic[64, int, 4](addr manager, handle)
+## var queue = newUnboundedSipsic[64, int]()
 ##
 ## queue.push(42)
 ## let item = queue.pop()  # some(42)
@@ -21,73 +18,36 @@
 import atomics
 import options
 
-import debra
-
-import ./typestates/unbounded_spsc_push
-import ./typestates/unbounded_spsc_pop
-
-# Use C stdlib for thread-safe cross-thread allocation
-proc c_calloc(n, size: csize_t): pointer {.importc: "calloc", header: "<stdlib.h>".}
-proc c_free(p: pointer) {.importc: "free", header: "<stdlib.h>".}
-
-
 type
-  DeallocationStrategy* = enum
-    ## Strategy for segment memory reclamation.
-    Manual    ## Retire segments. User calls tryReclaim().
-              ## Best for --mm:none (no GC assistance).
-    Eager     ## Retire + immediate tryReclaim() after each segment retirement.
-              ## Best for GC environments.
+  Segment*[S: static int, T] = object
+    data*: array[S, T]
+    next*: Atomic[ptr Segment[S, T]]
+    head*: Atomic[int]
+    tail*: Atomic[int]
 
-when defined(gcNone):
-  const DefaultDeallocationStrategy* = Manual
-else:
-  const DefaultDeallocationStrategy* = Eager
-
-type
-  # Use Segment from typestate module (re-exported)
-  SipsicSegment[S: static int, T] = Segment[S, T]
-
-  UnboundedSipsic*[S: static int; T; MaxThreads: static int] = object
+  UnboundedSipsic*[S: static int; T] = object
     ## Unbounded SPSC queue using linked segments.
     ##
     ## - S: Segment size (compile-time constant).
     ## - T: Data type.
-    ## - MaxThreads: Maximum number of threads (compile-time constant).
-    ##
-    ## Layout matches UnboundedSipsicBase for the first 5 fields to allow casting.
-    manager: ptr DebraManager[MaxThreads]
-    headSegment: ptr SipsicSegment[S, T]  # Consumer reads from here
-    tailSegment: ptr SipsicSegment[S, T]  # Producer writes here
+    headSegment: ptr Segment[S, T]  # Consumer reads from here
+    tailSegment: ptr Segment[S, T]  # Producer writes here
     itemCount: Atomic[int]  # Total items in queue
     segments: Atomic[int]   # Number of segments
-    # Extension fields below base layout
-    strategy: DeallocationStrategy
-    handle: ThreadHandle[MaxThreads]  # Thread handle for pin/unpin
 
 
-proc newSegment[S: static int, T](): ptr SipsicSegment[S, T] =
-  ## Allocate a new segment using C malloc (thread-safe cross-thread).
-  result = cast[ptr SipsicSegment[S, T]](c_calloc(1, csize_t(sizeof(SipsicSegment[S, T]))))
+proc newSegment[S: static int, T](): ptr Segment[S, T] =
+  ## Allocate a new segment using Nim's alloc0 (zero-initialized).
+  result = cast[ptr Segment[S, T]](alloc0(sizeof(Segment[S, T])))
   result.next.store(nil, moRelaxed)
   result.head.store(0, moRelaxed)
   result.tail.store(0, moRelaxed)
 
 
-proc newUnboundedSipsic*[S: static int; T; MaxThreads: static int](
-  manager: ptr DebraManager[MaxThreads],
-  handle: ThreadHandle[MaxThreads],
-  strategy: DeallocationStrategy = DefaultDeallocationStrategy
-): UnboundedSipsic[S, T, MaxThreads] =
+proc newUnboundedSipsic*[S: static int; T](): UnboundedSipsic[S, T] =
   ## Create a new unbounded SPSC queue.
   ##
-  ## Requires a DebraManager pointer and ThreadHandle for memory reclamation.
-  ## Deallocation strategy defaults based on memory management mode.
   ## Returns a new queue instance.
-  result.manager = manager
-  result.strategy = strategy
-  result.handle = handle
-
   # Start with one segment
   let seg = newSegment[S, T]()
   result.headSegment = seg
@@ -96,17 +56,17 @@ proc newUnboundedSipsic*[S: static int; T; MaxThreads: static int](
   result.segments.store(1, moRelaxed)
 
 
-proc segmentCount*[S: static int; T; MaxThreads: static int](self: var UnboundedSipsic[S, T, MaxThreads]): int =
+proc segmentCount*[S: static int; T](self: var UnboundedSipsic[S, T]): int =
   ## Number of segments currently allocated.
   result = self.segments.load(moRelaxed)
 
 
-proc len*[S: static int; T; MaxThreads: static int](self: var UnboundedSipsic[S, T, MaxThreads]): int =
+proc len*[S: static int; T](self: var UnboundedSipsic[S, T]): int =
   ## Number of items currently in the queue.
   result = self.itemCount.load(moRelaxed)
 
 
-proc push*[S: static int; T; MaxThreads: static int](self: var UnboundedSipsic[S, T, MaxThreads], item: T) =
+proc push*[S: static int; T](self: var UnboundedSipsic[S, T], item: T) =
   ## Push a single item. Never blocks or fails (unbounded).
   var seg = self.tailSegment
 
@@ -127,79 +87,45 @@ proc push*[S: static int; T; MaxThreads: static int](self: var UnboundedSipsic[S
   discard self.itemCount.fetchAdd(1, moRelaxed)
 
 
-proc push*[S: static int; T; MaxThreads: static int](self: var UnboundedSipsic[S, T, MaxThreads], items: openArray[T]) =
+proc push*[S: static int; T](self: var UnboundedSipsic[S, T], items: openArray[T]) =
   ## Push multiple items.
   for item in items:
     self.push(item)
 
 
-# Helper to wrap destructor for c_free
-proc segmentDestructor(p: pointer) {.nimcall.} =
-  c_free(p)
-
-
-proc pop*[S: static int; T; MaxThreads: static int](self: var UnboundedSipsic[S, T, MaxThreads]): Option[T] =
-  ## Pop a single item using internal typestate for compile-time safety.
+proc pop*[S: static int; T](self: var UnboundedSipsic[S, T]): Option[T] =
+  ## Pop a single item.
   ##
   ## Returns some(T) if available, none(T) if empty.
-
-  # Cast to base type for typestate compatibility (first 5 fields match)
-  let queueBase = cast[ptr UnboundedSipsicBase[S, T, MaxThreads]](addr self)
-
-  # Start pop operation with pinned epoch
-  var state = startPop[T, S, MaxThreads](
-    unpinned(self.handle).pin(),
-    queueBase)
+  var seg = self.headSegment
 
   while true:
-    let loaded = state.loadSegment[:T, S, MaxThreads]()
-    let slotCheck = loaded.checkSlot()
+    let head = seg.head.load(moRelaxed)
+    let tail = seg.tail.load(moAcquire)
 
-    case slotCheck.kind:
-    of uUSPSCPopSlotAvailable:
-      # Read the item
-      let complete = slotCheck.uspscpopslotavailable.readItem[:T, S, MaxThreads]()
-      let value = getValue[T, S, MaxThreads](complete)
-
-      # Unpin
-      discard complete.extractPinned().unpin()
-
-      # Try to reclaim if eager
-      if self.strategy == Eager:
-        let reclaimOp = reclaimStart(self.manager).loadEpochs().checkSafe()
-        if reclaimOp.kind == rReclaimReady:
-          discard reclaimOp.reclaimready.tryReclaim()
-
+    # Check if there's data in current segment
+    if head < tail:
+      # Read value
+      let value = seg.data[head]
+      seg.head.store(head + 1, moRelaxed)
+      discard self.itemCount.fetchSub(1, moRelaxed)
       return some(value)
 
-    of uUSPSCPopSegmentExhausted:
-      # Save old segment for retirement
-      let oldSeg = cast[ptr SipsicSegment[S, T]](slotCheck.uspscpopsegmentexhausted.segment)
+    # Segment exhausted, try to advance
+    let nextSeg = seg.next.load(moAcquire)
+    if nextSeg == nil:
+      # Queue is empty
+      return none(T)
 
-      # Try to advance to next segment
-      let advanceResult = slotCheck.uspscpopsegmentexhausted.advanceSegment[:T, S, MaxThreads]()
-
-      case advanceResult.kind:
-      of uUSPSCPopReady:
-        # Retire old segment if not manual
-        if self.strategy != Manual:
-          # Note: We need to get pinned from state to retire
-          # But we've already consumed the state. For now, retire directly.
-          # TODO: Revisit retirement pattern with typestates
-          discard self.segments.fetchSub(1, moRelaxed)
-          c_free(oldSeg)
-
-        # Continue with new ready state
-        state = advanceResult.uspscpopready
-        continue
-
-      of uUSPSCPopEmpty:
-        # Unpin and return empty
-        discard advanceResult.uspscpopempty.extractPinned().unpin()
-        return none(T)
+    # Advance to next segment and free old one
+    let oldSeg = seg
+    self.headSegment = nextSeg
+    seg = nextSeg
+    discard self.segments.fetchSub(1, moRelaxed)
+    dealloc(oldSeg)
 
 
-proc pop*[S: static int; T; MaxThreads: static int](self: var UnboundedSipsic[S, T, MaxThreads], count: int): Option[seq[T]] =
+proc pop*[S: static int; T](self: var UnboundedSipsic[S, T], count: int): Option[seq[T]] =
   ## Pop up to count items.
   ##
   ## Returns some(seq[T]) with at least one item, none if empty.
@@ -219,11 +145,11 @@ proc pop*[S: static int; T; MaxThreads: static int](self: var UnboundedSipsic[S,
   return some(items)
 
 
-proc `=destroy`*[S: static int; T; MaxThreads: static int](self: var UnboundedSipsic[S, T, MaxThreads]) =
+proc `=destroy`*[S: static int; T](self: var UnboundedSipsic[S, T]) =
   ## Clean up all segments.
   if self.headSegment != nil:
     var seg = self.headSegment
     while seg != nil:
       let next = seg.next.load(moRelaxed)
-      c_free(seg)
+      dealloc(seg)
       seg = next

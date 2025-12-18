@@ -25,10 +25,6 @@ import options
 
 import debra
 
-# Use C stdlib for thread-safe cross-thread allocation
-proc c_calloc(n, size: csize_t): pointer {.importc: "calloc", header: "<stdlib.h>".}
-proc c_free(p: pointer) {.importc: "free", header: "<stdlib.h>".}
-
 
 type
   DeallocationStrategy* = enum
@@ -79,8 +75,8 @@ type
 
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
-  ## Allocate a new segment using C malloc (thread-safe cross-thread).
-  result = cast[ptr Segment[S, T]](c_calloc(1, csize_t(sizeof(Segment[S, T]))))
+  ## Allocate a new segment using Nim's alloc0 (zero-initialized).
+  result = cast[ptr Segment[S, T]](alloc0(sizeof(Segment[S, T])))
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
   result.prevConsumerIdx.store(-1, moRelaxed)  # No consumer yet
@@ -167,9 +163,9 @@ proc getConsumer*[S: static int; T; MaxThreads: static int](
   result.handle = handle
 
 
-# Helper to wrap destructor for c_free
+# Helper to wrap destructor for dealloc
 proc segmentDestructor(p: pointer) {.nimcall.} =
-  c_free(p)
+  dealloc(p)
 
 
 proc pop*[S: static int; T; MaxThreads: static int](self: var Consumer[S, T, MaxThreads]): Option[T] =
@@ -204,7 +200,7 @@ proc pop*[S: static int; T; MaxThreads: static int](self: var Consumer[S, T, Max
       # If we claimed the last slot (S-1), retire segment for reclamation
       if mySlot == S - 1 and self.queue.strategy != Manual:
         let ready = retireReady(pinned)
-        discard ready.retire(seg, segmentDestructor)
+        discard ready.retire(cast[pointer](seg), segmentDestructor)
         discard self.queue.segments.fetchSub(1, moRelaxed)
 
       discard pinned.unpin()
@@ -245,5 +241,5 @@ proc `=destroy`*[S: static int; T; MaxThreads: static int](self: var UnboundedSi
     var seg = self.headSegment
     while seg != nil:
       let next = seg.next.load(moRelaxed)
-      c_free(seg)
+      dealloc(seg)
       seg = next
