@@ -60,8 +60,12 @@ jobs:
           export SANITIZE_ADDRESS=${{ matrix.sanitize-address }}
           . "${HOME}/.asdf/asdf.sh"
           nimble develop -y
+          echo "::group::Run test suite (includes arc, orc, refc, lock-free enforcement)"
           nimble test
+          echo "::endgroup::"
+          echo "::group::Run examples"
           nimble examples
+          echo "::endgroup::"
 
   test_non_x86:
     name: Test nim-${{ matrix.nim-version }} / debian-buster / ${{ matrix.arch }}

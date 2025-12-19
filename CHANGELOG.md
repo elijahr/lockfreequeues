@@ -7,11 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.0] - 2025-12-18
+
 ### Added
+
+- Unbounded queue implementations with DEBRA epoch-based reclamation
+  - `UnboundedSipsic` - Single-producer, single-consumer (no DEBRA needed)
+  - `UnboundedSipmuc` - Single-producer, multi-consumer
+  - `UnboundedMupsic` - Multi-producer, single-consumer
+  - `UnboundedMupmuc` - Multi-producer, multi-consumer
+- Typestate-enforced push/pop operations for all unbounded queues
+- Compile-time lock-free type checking for queue item types
+  - Errors on `ref` types with arc/orc (uses spinlocks for refcounting)
+  - Use `-d:allowNonLockFreeQueueItems` to opt-out
+- Thread safety documentation in README
+- Slot-ownership typestates documentation
+- CI testing with multiple memory managers (arc, orc, refc)
+- CI testing with `-d:nimEnforceLockFreeAtomics` flag
 
 ### Changed
 
-### Removed
+- Test suite now runs with arc, orc, refc memory managers
+- Test suite now verifies lock-free enforcement
+- Stress tests updated with MM variants
+- Dependencies updated: `typestates >= 0.3.1`, `debra >= 0.2.0`
 
 ## [3.1.0] - 2024-09-28
 

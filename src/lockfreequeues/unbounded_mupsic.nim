@@ -21,8 +21,8 @@
 ## let item = queue.pop()  # some(42)
 ## ```
 
-import atomics
-import options
+import std/atomics
+import std/options
 
 import debra
 
@@ -93,6 +93,16 @@ proc newUnboundedMupsic*[S: static int; T; MaxThreads: static int](
   ## Requires a DebraManager pointer and consumer's ThreadHandle for memory reclamation.
   ## Deallocation strategy defaults based on memory management mode.
   ## Returns a new queue instance.
+
+  # Compile-time lock-free check
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "Queue item type '" & $T & "' is a ref type. " &
+                 "On arc/orc, ref types use spinlock-based atomic operations for reference counting. " &
+                 "Use a lock-free type (int, pointer, ptr T, etc.) or compile with " &
+                 "-d:allowNonLockFreeQueueItems to explicitly allow spinlock fallback.".}
+
   result.manager = manager
   result.strategy = strategy
   result.handle = handle
@@ -134,6 +144,14 @@ proc getProducer*[S: static int; T; MaxThreads: static int](
 
 proc push*[S: static int; T; MaxThreads: static int](self: var Producer[S, T, MaxThreads], item: T) =
   ## Push a single item. Never blocks or fails (unbounded).
+
+  # Compile-time lock-free check
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "Queue item type '" & $T & "' is a ref type. " &
+                 "Use -d:allowNonLockFreeQueueItems to allow.".}
+
   let pinned = unpinned(self.handle).pin()
 
   while true:
@@ -192,6 +210,14 @@ proc pop*[S: static int; T; MaxThreads: static int](self: var UnboundedMupsic[S,
   ## Pop a single item.
   ##
   ## Returns some(T) if available, none(T) if empty.
+
+  # Compile-time lock-free check
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "Queue item type '" & $T & "' is a ref type. " &
+                 "Use -d:allowNonLockFreeQueueItems to allow.".}
+
   let pinned = unpinned(self.handle).pin()
 
   var seg = self.headSegment

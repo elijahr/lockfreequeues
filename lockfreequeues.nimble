@@ -16,11 +16,19 @@ requires "debra >= 0.2.0"
 
 # Tasks
 task test, "Runs the test suite":
-  # C
+  # C with default MM (orc)
   exec "nim c --threads:on -r -f tests/test.nim"
 
   # C++
   exec "nim cpp --threads:on -r -f tests/test.nim"
+
+  # Test with different memory managers
+  exec "nim c --mm:arc --threads:on -r -f tests/test.nim"
+  exec "nim c --mm:refc --threads:on -r -f tests/test.nim"
+
+  # Test with lock-free enforcement (ensures no spinlock fallback)
+  exec "nim c --mm:arc -d:nimEnforceLockFreeAtomics --threads:on -r -f tests/test.nim"
+  exec "nim c --mm:orc -d:nimEnforceLockFreeAtomics --threads:on -r -f tests/test.nim"
 
   if getEnv("SANITIZE_THREADS") != "no":
     # C (with thread sanitization, requires atomicArc for thread-safe refcounting)
@@ -49,11 +57,18 @@ task benchmarks, "Runs the benchmark suite":
 
 
 task stresstests, "Runs the stress test suite (multi-threaded)":
-  # C
+  # C with default MM (orc)
   exec "nim c --path:src --threads:on -r -f stress-tests/stress_test.nim"
 
   # C++
   exec "nim cpp --path:src --threads:on -r -f stress-tests/stress_test.nim"
+
+  # Test with different memory managers
+  exec "nim c --mm:arc --path:src --threads:on -r -f stress-tests/stress_test.nim"
+  exec "nim c --mm:refc --path:src --threads:on -r -f stress-tests/stress_test.nim"
+
+  # Test with lock-free enforcement
+  exec "nim c --mm:arc -d:nimEnforceLockFreeAtomics --path:src --threads:on -r -f stress-tests/stress_test.nim"
 
   if getEnv("SANITIZE_THREADS") != "no":
     # C (with thread sanitization)

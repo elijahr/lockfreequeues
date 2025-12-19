@@ -15,8 +15,8 @@
 ## let item = queue.pop()  # some(42)
 ## ```
 
-import atomics
-import options
+import std/atomics
+import std/options
 
 type
   Segment*[S: static int, T] = object
@@ -48,6 +48,16 @@ proc newUnboundedSipsic*[S: static int; T](): UnboundedSipsic[S, T] =
   ## Create a new unbounded SPSC queue.
   ##
   ## Returns a new queue instance.
+
+  # Compile-time lock-free check
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "Queue item type '" & $T & "' is a ref type. " &
+                 "On arc/orc, ref types use spinlock-based atomic operations for reference counting. " &
+                 "Use a lock-free type (int, pointer, ptr T, etc.) or compile with " &
+                 "-d:allowNonLockFreeQueueItems to explicitly allow spinlock fallback.".}
+
   # Start with one segment
   let seg = newSegment[S, T]()
   result.headSegment = seg
@@ -68,6 +78,14 @@ proc len*[S: static int; T](self: var UnboundedSipsic[S, T]): int =
 
 proc push*[S: static int; T](self: var UnboundedSipsic[S, T], item: T) =
   ## Push a single item. Never blocks or fails (unbounded).
+
+  # Compile-time lock-free check
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "Queue item type '" & $T & "' is a ref type. " &
+                 "Use -d:allowNonLockFreeQueueItems to allow.".}
+
   var seg = self.tailSegment
 
   # Check if current segment is full
@@ -97,6 +115,14 @@ proc pop*[S: static int; T](self: var UnboundedSipsic[S, T]): Option[T] =
   ## Pop a single item.
   ##
   ## Returns some(T) if available, none(T) if empty.
+
+  # Compile-time lock-free check
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "Queue item type '" & $T & "' is a ref type. " &
+                 "Use -d:allowNonLockFreeQueueItems to allow.".}
+
   var seg = self.headSegment
 
   while true:

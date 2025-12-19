@@ -26,6 +26,61 @@ API documentation: https://elijahr.github.io/lockfreequeues
 nimble install lockfreequeues
 ```
 
+## Thread Safety and Lock-Free Guarantees
+
+### Item Type Requirements
+
+By default, lockfreequeues requires that queue item types are lock-free:
+
+```nim
+import lockfreequeues
+
+# These work - lock-free types
+var queue1 = newUnboundedSipsic[64, int]()
+var queue2 = newUnboundedSipsic[64, uint64]()
+var queue3 = newUnboundedSipsic[64, pointer]()
+
+type NodeObj = object
+  value: int
+var queue4 = newUnboundedSipsic[64, ptr NodeObj]()
+
+# This fails on arc/orc - ref uses spinlocks for refcounting
+type Node = ref object
+  value: int
+var queue5 = newUnboundedSipsic[64, Node]()  # Compile error!
+```
+
+### Why This Matters
+
+On arc/orc memory managers, `ref` types use reference counting. While the queue's CAS operations correctly serialize slot access, reference counting operations on ref types may use spinlock-based atomics on some platforms, potentially introducing subtle issues.
+
+### Allowing Non-Lock-Free Types
+
+If you understand the trade-offs and need to use non-lock-free types:
+
+```bash
+nim c -d:allowNonLockFreeQueueItems your_program.nim
+```
+
+### Recommended Patterns
+
+For maximum safety and portability:
+
+- **Value types**: Use int, uint64, float, enums, simple objects
+- **Pointers**: Use `ptr T` when you need indirection (you manage lifetime)
+- **Avoid ref types**: On arc/orc, prefer `ptr T` with manual memory management
+- **Test on target platform**: Always verify lock-free status on your deployment target
+
+### Testing Lock-Free Behavior
+
+Include tests with multiple memory managers:
+
+```bash
+nim c -r --mm:refc tests/mytest.nim
+nim c -r --mm:arc tests/mytest.nim
+nim c -r --mm:orc tests/mytest.nim
+```
+
 ## Examples
 
 Examples are located in the [examples](https://github.com/elijahr/lockfreequeues/tree/master/examples) directory and can be compiled and run with:
