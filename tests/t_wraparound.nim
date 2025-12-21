@@ -5,7 +5,6 @@ import unittest2
 import lockfreequeues
 
 suite "wraparound":
-
   test "basic":
     var q = initSipsic[2, string]()
     check q.head.load == 0

@@ -5,30 +5,25 @@ import unittest2
 import lockfreequeues/epoch
 import lockfreequeues/unbounded_sipsic
 
-
 const ItemCount = 10000
 
-
-type
-  TestContext[S: static int] = object
-    queue: ptr UnboundedSipsic[S, int]
-    received: ptr array[ItemCount, Atomic[bool]]
-    duplicateFound: ptr Atomic[bool]
-    producerDone: ptr Atomic[bool]
-
+type TestContext[S: static int] = object
+  queue: ptr UnboundedSipsic[S, int]
+  received: ptr array[ItemCount, Atomic[bool]]
+  duplicateFound: ptr Atomic[bool]
+  producerDone: ptr Atomic[bool]
 
 proc producer[S: static int](ctx: ptr TestContext[S]) {.thread.} =
-  for i in 1..ItemCount:
+  for i in 1 .. ItemCount:
     ctx.queue[].push(i)
   ctx.producerDone[].store(true, moRelease)
-
 
 proc consumer[S: static int](ctx: ptr TestContext[S]) {.thread.} =
   var consumed = 0
   while consumed < ItemCount:
     let item = ctx.queue[].pop()
     if item.isSome:
-      let val = item.get - 1  # Items are 1-indexed
+      let val = item.get - 1 # Items are 1-indexed
       if ctx.received[val].exchange(true, moRelaxed):
         ctx.duplicateFound[].store(true, moRelaxed)
       inc consumed
@@ -36,16 +31,14 @@ proc consumer[S: static int](ctx: ptr TestContext[S]) {.thread.} =
       # Producer done but we haven't consumed everything - keep trying
       discard
 
-
 suite "UnboundedSipsic threaded":
-
   var
     received: array[ItemCount, Atomic[bool]]
     duplicateFound: Atomic[bool]
     producerDone: Atomic[bool]
 
   setup:
-    for i in 0..<ItemCount:
+    for i in 0 ..< ItemCount:
       received[i].store(false, moRelaxed)
     duplicateFound.store(false, moRelaxed)
     producerDone.store(false, moRelaxed)
@@ -57,7 +50,7 @@ suite "UnboundedSipsic threaded":
       queue: addr queue,
       received: addr received,
       duplicateFound: addr duplicateFound,
-      producerDone: addr producerDone
+      producerDone: addr producerDone,
     )
 
     var prodThread, consThread: Thread[ptr TestContext[8]]
@@ -68,7 +61,7 @@ suite "UnboundedSipsic threaded":
     joinThread(consThread)
 
     check(not duplicateFound.load(moRelaxed))
-    for i in 0..<ItemCount:
+    for i in 0 ..< ItemCount:
       check(received[i].load(moRelaxed))
 
   test "normal segment size":
@@ -78,7 +71,7 @@ suite "UnboundedSipsic threaded":
       queue: addr queue,
       received: addr received,
       duplicateFound: addr duplicateFound,
-      producerDone: addr producerDone
+      producerDone: addr producerDone,
     )
 
     var prodThread, consThread: Thread[ptr TestContext[64]]
@@ -89,7 +82,7 @@ suite "UnboundedSipsic threaded":
     joinThread(consThread)
 
     check(not duplicateFound.load(moRelaxed))
-    for i in 0..<ItemCount:
+    for i in 0 ..< ItemCount:
       check(received[i].load(moRelaxed))
 
   test "segment retirement (NeverDeallocate)":
@@ -97,12 +90,12 @@ suite "UnboundedSipsic threaded":
     var queue = newUnboundedSipsic[8, int](manager, NeverDeallocate)
 
     # Push items to create segments
-    for i in 1..1000:
+    for i in 1 .. 1000:
       queue.push(i)
     let peakSegments = queue.segmentCount()
 
     # Pop all items
-    for i in 1..1000:
+    for i in 1 .. 1000:
       discard queue.pop()
 
     # Segments should NOT be freed with NeverDeallocate
@@ -113,11 +106,11 @@ suite "UnboundedSipsic threaded":
     var queue = newUnboundedSipsic[8, int](manager, EagerDeallocate)
 
     # Push items to create segments
-    for i in 1..1000:
+    for i in 1 .. 1000:
       queue.push(i)
 
     # Pop all items
-    for i in 1..1000:
+    for i in 1 .. 1000:
       discard queue.pop()
 
     # Segments SHOULD be freed with EagerDeallocate

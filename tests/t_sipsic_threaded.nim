@@ -4,31 +4,26 @@ import unittest2
 
 import lockfreequeues
 
-
 const ItemCount = 10000
 
-
-type
-  TestContext[N: static int] = object
-    queue: ptr Sipsic[N, int]
-    received: ptr array[ItemCount, Atomic[bool]]
-    duplicateFound: ptr Atomic[bool]
-    producerDone: ptr Atomic[bool]
-
+type TestContext[N: static int] = object
+  queue: ptr Sipsic[N, int]
+  received: ptr array[ItemCount, Atomic[bool]]
+  duplicateFound: ptr Atomic[bool]
+  producerDone: ptr Atomic[bool]
 
 proc producer[N: static int](ctx: ptr TestContext[N]) {.thread.} =
-  for i in 1..ItemCount:
+  for i in 1 .. ItemCount:
     while not ctx.queue[].push(i):
       discard
   ctx.producerDone[].store(true, moRelease)
-
 
 proc consumer[N: static int](ctx: ptr TestContext[N]) {.thread.} =
   var consumed = 0
   while consumed < ItemCount:
     let item = ctx.queue[].pop()
     if item.isSome:
-      let val = item.get - 1  # Items are 1-indexed
+      let val = item.get - 1 # Items are 1-indexed
       if ctx.received[val].exchange(true, moRelaxed):
         ctx.duplicateFound[].store(true, moRelaxed)
       inc consumed
@@ -36,16 +31,14 @@ proc consumer[N: static int](ctx: ptr TestContext[N]) {.thread.} =
       # Producer done but we haven't consumed everything - keep trying
       discard
 
-
 suite "Sipsic threaded":
-
   var
     received: array[ItemCount, Atomic[bool]]
     duplicateFound: Atomic[bool]
     producerDone: Atomic[bool]
 
   setup:
-    for i in 0..<ItemCount:
+    for i in 0 ..< ItemCount:
       received[i].store(false, moRelaxed)
     duplicateFound.store(false, moRelaxed)
     producerDone.store(false, moRelaxed)
@@ -56,7 +49,7 @@ suite "Sipsic threaded":
       queue: addr queue,
       received: addr received,
       duplicateFound: addr duplicateFound,
-      producerDone: addr producerDone
+      producerDone: addr producerDone,
     )
 
     var prodThread, consThread: Thread[ptr TestContext[16]]
@@ -67,7 +60,7 @@ suite "Sipsic threaded":
     joinThread(consThread)
 
     check(not duplicateFound.load(moRelaxed))
-    for i in 0..<ItemCount:
+    for i in 0 ..< ItemCount:
       check(received[i].load(moRelaxed))
 
   test "normal capacity":
@@ -76,7 +69,7 @@ suite "Sipsic threaded":
       queue: addr queue,
       received: addr received,
       duplicateFound: addr duplicateFound,
-      producerDone: addr producerDone
+      producerDone: addr producerDone,
     )
 
     var prodThread, consThread: Thread[ptr TestContext[64]]
@@ -87,5 +80,5 @@ suite "Sipsic threaded":
     joinThread(consThread)
 
     check(not duplicateFound.load(moRelaxed))
-    for i in 0..<ItemCount:
+    for i in 0 ..< ItemCount:
       check(received[i].load(moRelaxed))

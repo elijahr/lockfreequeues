@@ -7,7 +7,7 @@
 import atomics
 import typestates
 
-import ./unbounded_spsc_push  # Reuse Segment, UnboundedSipsicBase
+import ./unbounded_spsc_push # Reuse Segment, UnboundedSipsicBase
 
 type
   # Base context - carries queue pointer
@@ -39,35 +39,36 @@ type
     queue*: ptr UnboundedSipsicBase[S, T]
     value*: T
     slot*: int
-    oldSegment*: ptr Segment[S, T]  # Segment to free if exhausted
-
+    oldSegment*: ptr Segment[S, T] # Segment to free if exhausted
 
 typestate USPSCPopContext[T, S: static int]:
   inheritsFromRootObj = true
-  consumeOnTransition = false  # Allow values to be passed across case branches
-  states USPSCPopReady[T, S], USPSCPopSegmentLoaded[T, S],
-         USPSCPopSlotAvailable[T, S], USPSCPopSegmentExhausted[T, S],
-         USPSCPopEmpty[T, S], USPSCPopComplete[T, S]
+  consumeOnTransition = false # Allow values to be passed across case branches
+  states USPSCPopReady[T, S],
+    USPSCPopSegmentLoaded[T, S],
+    USPSCPopSlotAvailable[T, S],
+    USPSCPopSegmentExhausted[T, S],
+    USPSCPopEmpty[T, S],
+    USPSCPopComplete[T, S]
   transitions:
     USPSCPopReady[T, S] -> USPSCPopSegmentLoaded[T, S]
-    USPSCPopSegmentLoaded[T, S] -> (USPSCPopSlotAvailable[T, S] | USPSCPopSegmentExhausted[T, S]) as USPSCSlotCheck[T, S]
-    USPSCPopSegmentExhausted[T, S] -> (USPSCPopReady[T, S] | USPSCPopEmpty[T, S]) as USPSCAdvanceResult[T, S]
+    USPSCPopSegmentLoaded[T, S] ->
+      (USPSCPopSlotAvailable[T, S] | USPSCPopSegmentExhausted[T, S]) as
+      USPSCSlotCheck[T, S]
+    USPSCPopSegmentExhausted[T, S] ->
+      (USPSCPopReady[T, S] | USPSCPopEmpty[T, S]) as USPSCAdvanceResult[T, S]
     USPSCPopSlotAvailable[T, S] -> USPSCPopComplete[T, S]
-
 
 # Factory: Create pop typestate context
 proc startPop*[T; S: static int](
-  queue: ptr UnboundedSipsicBase[S, T]
+    queue: ptr UnboundedSipsicBase[S, T]
 ): USPSCPopReady[T, S] =
   ## Create pop context for the queue.
-  USPSCPopReady[T, S](
-    USPSCPopContext[T, S](
-      queue: queue))
-
+  USPSCPopReady[T, S](USPSCPopContext[T, S](queue: queue))
 
 # Load segment transition
 proc loadSegment*[T; S: static int](
-  ready: sink USPSCPopReady[T, S]
+    ready: sink USPSCPopReady[T, S]
 ): USPSCPopSegmentLoaded[T, S] {.transition.} =
   ## Load current head segment and positions.
   let ctx = USPSCPopContext[T, S](ready)
@@ -75,32 +76,25 @@ proc loadSegment*[T; S: static int](
   let head = seg.head.load(moRelaxed)
   let tail = seg.tail.load(moAcquire)
 
-  USPSCPopSegmentLoaded[T, S](
-    queue: ctx.queue,
-    segment: seg,
-    head: head,
-    tail: tail)
-
+  USPSCPopSegmentLoaded[T, S](queue: ctx.queue, segment: seg, head: head, tail: tail)
 
 # Check slot availability transition
 proc checkSlot*[T; S: static int](
-  loaded: sink USPSCPopSegmentLoaded[T, S]
+    loaded: sink USPSCPopSegmentLoaded[T, S]
 ): USPSCSlotCheck[T, S] {.transition.} =
   ## Check if there's data available. Returns SlotAvailable or SegmentExhausted.
   if loaded.head < loaded.tail:
-    USPSCSlotCheck[T, S] -> USPSCPopSlotAvailable[T, S](
-      queue: loaded.queue,
-      segment: loaded.segment,
-      slot: loaded.head)
+    USPSCSlotCheck[T, S] ->
+      USPSCPopSlotAvailable[T, S](
+        queue: loaded.queue, segment: loaded.segment, slot: loaded.head
+      )
   else:
-    USPSCSlotCheck[T, S] -> USPSCPopSegmentExhausted[T, S](
-      queue: loaded.queue,
-      segment: loaded.segment)
-
+    USPSCSlotCheck[T, S] ->
+      USPSCPopSegmentExhausted[T, S](queue: loaded.queue, segment: loaded.segment)
 
 # Advance segment transition
 proc advanceSegment*[T; S: static int](
-  exhausted: sink USPSCPopSegmentExhausted[T, S]
+    exhausted: sink USPSCPopSegmentExhausted[T, S]
 ): USPSCAdvanceResult[T, S] {.transition.} =
   ## Try to advance to next segment.
   ## Returns Ready if next segment exists, Empty otherwise.
@@ -108,21 +102,18 @@ proc advanceSegment*[T; S: static int](
   let nextSeg = exhausted.segment.next.load(moAcquire)
 
   if nextSeg == nil:
-    return USPSCAdvanceResult[T, S] -> USPSCPopEmpty[T, S](
-      queue: exhausted.queue)
+    return USPSCAdvanceResult[T, S] -> USPSCPopEmpty[T, S](queue: exhausted.queue)
 
   # Advance head segment (caller should dealloc old segment)
   exhausted.queue.headSegment = nextSeg
   discard exhausted.queue.segments.fetchSub(1, moRelaxed)
 
-  USPSCAdvanceResult[T, S] -> USPSCPopReady[T, S](
-    USPSCPopContext[T, S](
-      queue: exhausted.queue))
-
+  USPSCAdvanceResult[T, S] ->
+    USPSCPopReady[T, S](USPSCPopContext[T, S](queue: exhausted.queue))
 
 # Read item transition
 proc readItem*[T; S: static int](
-  slotAvail: sink USPSCPopSlotAvailable[T, S]
+    slotAvail: sink USPSCPopSlotAvailable[T, S]
 ): USPSCPopComplete[T, S] {.transition.} =
   ## Read item from slot and advance head.
   # Read value before advancing head
@@ -133,15 +124,10 @@ proc readItem*[T; S: static int](
   discard slotAvail.queue.itemCount.fetchSub(1, moRelaxed)
 
   USPSCPopComplete[T, S](
-    queue: slotAvail.queue,
-    value: value,
-    slot: slotAvail.slot,
-    oldSegment: nil)
-
+    queue: slotAvail.queue, value: value, slot: slotAvail.slot, oldSegment: nil
+  )
 
 # Get value from completed pop
-proc getValue*[T; S: static int](
-  complete: USPSCPopComplete[T, S]
-): T =
+proc getValue*[T; S: static int](complete: USPSCPopComplete[T, S]): T =
   ## Extract the popped value.
   complete.value

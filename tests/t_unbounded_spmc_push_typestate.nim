@@ -24,9 +24,7 @@ proc newTestSegment(): ptr TestSegment =
 proc freeTestSegment(seg: ptr TestSegment) =
   dealloc(seg)
 
-
 suite "SPMC Push Typestate":
-
   test "typestate types exist and are usable":
     # Verify state types exist and fields are accessible
     var manager = initDebraManager[4]()
@@ -37,16 +35,13 @@ suite "SPMC Push Typestate":
     queue.manager = addr manager
     queue.headSegment = seg
     queue.tailSegment = seg
-    queue.strategy = 0  # Manual
+    queue.strategy = 0 # Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
 
     # Actually use the types with real data
-    let loaded = startPush[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment()
+    let loaded = startPush[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
 
     # Verify fields are accessible and have valid values
     check loaded.tail >= 0
@@ -59,28 +54,24 @@ suite "SPMC Push Typestate":
     discard checkResult.spmcpushslotready.writeItem(0).extractPinned().unpin()
     freeTestSegment(seg)
 
-
   test "loadSegment loads tail segment":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.tail.store(10, moRelaxed)  # Pre-set tail
+    seg.tail.store(10, moRelaxed) # Pre-set tail
 
     var queue: TestQueue
     queue.manager = addr manager
     queue.headSegment = seg
     queue.tailSegment = seg
-    queue.strategy = 0  # Manual
+    queue.strategy = 0 # Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
 
     # Use unpinned/pin from debra - chain to avoid copy issues
-    let loaded = startPush[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment()
+    let loaded = startPush[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
 
     check loaded.tail == 10
     check loaded.segment == seg
@@ -95,12 +86,11 @@ suite "SPMC Push Typestate":
 
     # Write item and VERIFY the value was written
     let complete = checkResult.spmcpushslotready.writeItem(42)
-    check seg.data[10] == 42  # Consume: verify write to correct slot
-    check seg.tail.load(moRelaxed) == 11  # Verify tail advanced
+    check seg.data[10] == 42 # Consume: verify write to correct slot
+    check seg.tail.load(moRelaxed) == 11 # Verify tail advanced
     discard complete.extractPinned().unpin()
 
     freeTestSegment(seg)
-
 
   test "checkFull returns SlotReady when not full":
     var manager = initDebraManager[4]()
@@ -111,49 +101,45 @@ suite "SPMC Push Typestate":
     queue.manager = addr manager
     queue.headSegment = seg
     queue.tailSegment = seg
-    queue.strategy = 0  # Manual
+    queue.strategy = 0 # Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
 
-    let checkResult = startPush[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment().checkFull()
+    let checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+      .loadSegment()
+      .checkFull()
 
     check checkResult.kind == sSPMCPushSlotReady
     check checkResult.spmcpushslotready.slot == 0
 
     # Write item and VERIFY the value was written
-    discard checkResult.spmcpushslotready.writeItem(42)
-      .extractPinned().unpin()
+    discard checkResult.spmcpushslotready.writeItem(42).extractPinned().unpin()
 
-    check seg.data[0] == 42  # Consume: verify write happened
-    check seg.tail.load(moRelaxed) == 1  # Verify tail advanced
+    check seg.data[0] == 42 # Consume: verify write happened
+    check seg.tail.load(moRelaxed) == 1 # Verify tail advanced
 
     freeTestSegment(seg)
-
 
   test "checkFull returns SegmentFull when full":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.tail.store(64, moRelaxed)  # Full segment
+    seg.tail.store(64, moRelaxed) # Full segment
 
     var queue: TestQueue
     queue.manager = addr manager
     queue.headSegment = seg
     queue.tailSegment = seg
-    queue.strategy = 0  # Manual
+    queue.strategy = 0 # Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
 
-    let checkResult = startPush[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment().checkFull()
+    let checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+      .loadSegment()
+      .checkFull()
 
     check checkResult.kind == sSPMCPushSegmentFull
 
@@ -166,19 +152,16 @@ suite "SPMC Push Typestate":
 
     check checkResult2.kind == sSPMCPushSlotReady
 
-    discard checkResult2.spmcpushslotready
-      .writeItem(42)
-      .extractPinned().unpin()
+    discard checkResult2.spmcpushslotready.writeItem(42).extractPinned().unpin()
 
     # Consume: verify write went to NEW segment, not old one
-    check newSeg.data[0] == 42  # Value written to new segment
-    check newSeg.tail.load(moRelaxed) == 1  # New segment tail advanced
-    check seg.next.load(moRelaxed) == newSeg  # Segments correctly linked
-    check seg.tail.load(moRelaxed) == 64  # Old segment unchanged
+    check newSeg.data[0] == 42 # Value written to new segment
+    check newSeg.tail.load(moRelaxed) == 1 # New segment tail advanced
+    check seg.next.load(moRelaxed) == newSeg # Segments correctly linked
+    check seg.tail.load(moRelaxed) == 64 # Old segment unchanged
 
     freeTestSegment(seg)
     freeTestSegment(newSeg)
-
 
   test "writeItem writes data and publishes":
     var manager = initDebraManager[4]()
@@ -189,7 +172,7 @@ suite "SPMC Push Typestate":
     queue.manager = addr manager
     queue.headSegment = seg
     queue.tailSegment = seg
-    queue.strategy = 0  # Manual
+    queue.strategy = 0 # Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
@@ -198,10 +181,7 @@ suite "SPMC Push Typestate":
       .loadSegment()
       .checkFull()
 
-    discard checkResult.spmcpushslotready
-      .writeItem(42)
-      .extractPinned()
-      .unpin()
+    discard checkResult.spmcpushslotready.writeItem(42).extractPinned().unpin()
 
     check seg.data[0] == 42
     check seg.tail.load(moRelaxed) == 1

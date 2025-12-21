@@ -23,9 +23,7 @@ proc newTestSegment(): ptr TestSegment =
 proc freeTestSegment(seg: ptr TestSegment) =
   dealloc(seg)
 
-
 suite "SPSC Push Typestate":
-
   test "typestate types exist and are usable":
     # Verify state types exist and fields are accessible
     var seg = newTestSegment()
@@ -49,10 +47,9 @@ suite "SPSC Push Typestate":
     discard checkResult.spscpushslotready.writeItem(0)
     freeTestSegment(seg)
 
-
   test "loadSegment loads tail segment":
     var seg = newTestSegment()
-    seg.tail.store(10, moRelaxed)  # Pre-set tail
+    seg.tail.store(10, moRelaxed) # Pre-set tail
 
     var queue: TestQueue
     queue.headSegment = seg
@@ -75,11 +72,10 @@ suite "SPSC Push Typestate":
 
     # Write item and VERIFY the value was written
     discard checkResult.spscpushslotready.writeItem(42)
-    check seg.data[10] == 42  # Verify write to correct slot
-    check seg.tail.load(moRelaxed) == 11  # Verify tail advanced
+    check seg.data[10] == 42 # Verify write to correct slot
+    check seg.tail.load(moRelaxed) == 11 # Verify tail advanced
 
     freeTestSegment(seg)
-
 
   test "checkFull returns SlotReady when not full":
     var seg = newTestSegment()
@@ -97,15 +93,14 @@ suite "SPSC Push Typestate":
     # Write item and VERIFY the value was written
     discard checkResult.spscpushslotready.writeItem(42)
 
-    check seg.data[0] == 42  # Verify write happened
-    check seg.tail.load(moRelaxed) == 1  # Verify tail advanced
+    check seg.data[0] == 42 # Verify write happened
+    check seg.tail.load(moRelaxed) == 1 # Verify tail advanced
 
     freeTestSegment(seg)
 
-
   test "checkFull returns SegmentFull when full":
     var seg = newTestSegment()
-    seg.tail.store(64, moRelaxed)  # Full segment
+    seg.tail.store(64, moRelaxed) # Full segment
 
     var queue: TestQueue
     queue.headSegment = seg
@@ -129,14 +124,13 @@ suite "SPSC Push Typestate":
     discard checkResult2.spscpushslotready.writeItem(42)
 
     # Verify write went to NEW segment, not old one
-    check newSeg.data[0] == 42  # Value written to new segment
-    check newSeg.tail.load(moRelaxed) == 1  # New segment tail advanced
-    check seg.next.load(moRelaxed) == newSeg  # Segments correctly linked
-    check seg.tail.load(moRelaxed) == 64  # Old segment unchanged
+    check newSeg.data[0] == 42 # Value written to new segment
+    check newSeg.tail.load(moRelaxed) == 1 # New segment tail advanced
+    check seg.next.load(moRelaxed) == newSeg # Segments correctly linked
+    check seg.tail.load(moRelaxed) == 64 # Old segment unchanged
 
     freeTestSegment(seg)
     freeTestSegment(newSeg)
-
 
   test "writeItem writes data and publishes":
     var seg = newTestSegment()
@@ -146,9 +140,7 @@ suite "SPSC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let checkResult = startPush[int, 64](addr queue)
-      .loadSegment()
-      .checkFull()
+    let checkResult = startPush[int, 64](addr queue).loadSegment().checkFull()
 
     discard checkResult.spscpushslotready.writeItem(42)
 

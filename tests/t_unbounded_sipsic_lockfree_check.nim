@@ -4,9 +4,8 @@
 
 import ../src/lockfreequeues/unbounded_sipsic
 
-type
-  Node = ref object
-    value: int
+type Node = ref object
+  value: int
 
 # This should error on arc/orc
 var queue = newUnboundedSipsic[64, Node]()

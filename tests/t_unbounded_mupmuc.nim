@@ -5,9 +5,7 @@ import unittest2
 import debra
 import lockfreequeues/unbounded_mupmuc
 
-
 suite "UnboundedMupmuc":
-
   test "newUnboundedMupmuc creates valid instance":
     var manager = initDebraManager[4]()
     var queue = newUnboundedMupmuc[16, int, 4](addr manager)
@@ -67,10 +65,10 @@ suite "UnboundedMupmuc":
     var producer = queue.getProducer(producerHandle)
     var consumer = queue.getConsumer(consumerHandle)
 
-    for i in 1..5:
+    for i in 1 .. 5:
       producer.push(i)
 
-    for i in 1..5:
+    for i in 1 .. 5:
       let item = consumer.pop()
       check(item.isSome)
       check(item.get == i)
@@ -86,14 +84,14 @@ suite "UnboundedMupmuc":
     var producer2 = queue.getProducer(producerHandle2)
     var consumer = queue.getConsumer(consumerHandle)
 
-    for i in 1..5:
+    for i in 1 .. 5:
       producer1.push(i)
       producer2.push(i + 100)
 
     check(queue.len == 10)
 
     var total = 0
-    for _ in 1..10:
+    for _ in 1 .. 10:
       let item = consumer.pop()
       check(item.isSome)
       total += item.get
@@ -106,7 +104,7 @@ suite "UnboundedMupmuc":
     let producerHandle = registerThread(manager)
     var producer = queue.getProducer(producerHandle)
 
-    for i in 1..10:
+    for i in 1 .. 10:
       producer.push(i)
 
     let consumerHandle1 = registerThread(manager)
@@ -117,7 +115,7 @@ suite "UnboundedMupmuc":
     var count1, count2 = 0
     var total = 0
 
-    for _ in 1..5:
+    for _ in 1 .. 5:
       let item1 = consumer1.pop()
       if item1.isSome:
         inc count1
@@ -138,12 +136,12 @@ suite "UnboundedMupmuc":
     var producer = queue.getProducer(producerHandle)
     var consumer = queue.getConsumer(consumerHandle)
 
-    for i in 1..10:
+    for i in 1 .. 10:
       producer.push(i)
 
     check(queue.segmentCount >= 3)
 
-    for i in 1..10:
+    for i in 1 .. 10:
       let item = consumer.pop()
       check(item.isSome)
       check(item.get == i)
@@ -183,7 +181,7 @@ suite "UnboundedMupmuc":
     producer.push(@[1, 2, 3, 4, 5])
     check(queue.len == 5)
 
-    for i in 1..5:
+    for i in 1 .. 5:
       check(consumer.pop().get == i)
 
   test "batch pop":
@@ -194,7 +192,7 @@ suite "UnboundedMupmuc":
     var producer = queue.getProducer(producerHandle)
     var consumer = queue.getConsumer(consumerHandle)
 
-    for i in 1..10:
+    for i in 1 .. 10:
       producer.push(i)
 
     let items = consumer.pop(5)

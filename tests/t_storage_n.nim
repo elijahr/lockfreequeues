@@ -3,7 +3,6 @@ import lockfreequeues/typestates/virtual_values_n
 import lockfreequeues/typestates/storage_n
 
 suite "StorageN[N, T]":
-
   test "init sets all slots to default":
     var s: StorageN[4, int]
     s.init()
@@ -21,9 +20,9 @@ suite "StorageN[N, T]":
   test "all N slots accessible":
     var s: StorageN[4, string]
     s.init()
-    for i in 0..<4:
+    for i in 0 ..< 4:
       let slot = initRawN[4](i).validate().index()
       s[slot] = "slot" & $i
-    for i in 0..<4:
+    for i in 0 ..< 4:
       let slot = initRawN[4](i).validate().index()
       check(s[slot] == "slot" & $i)

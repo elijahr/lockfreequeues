@@ -1,6 +1,5 @@
 ## Shared test templates for single-consumer queues (Sipsic, Mupsic).
 
-
 template testSicPopOne*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
     discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
@@ -17,7 +16,6 @@ template testSicPopOne*(queue: untyped) =
     # N+1=9 slots
     queue.checkState(head = 1, tail = 8, storage = (@[1, 2, 3, 4, 5, 6, 7, 8, 0]))
 
-
 template testSicPopAll*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
     discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
@@ -25,7 +23,7 @@ template testSicPopAll*(queue: untyped) =
     discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
   var items = newSeq[int]()
-  for i in 1..8:
+  for i in 1 .. 8:
     let res = queue.pop()
     check(res.isSome)
     items.add(res.get)
@@ -37,7 +35,6 @@ template testSicPopAll*(queue: untyped) =
   else:
     queue.checkState(head = 8, tail = 8, storage = (@[1, 2, 3, 4, 5, 6, 7, 8, 0]))
 
-
 template testSicPopEmpty*(queue: untyped) =
   check(queue.pop().isNone)
 
@@ -46,14 +43,13 @@ template testSicPopEmpty*(queue: untyped) =
   else:
     queue.checkState(head = 0, tail = 0, storage = repeat(0, 9))
 
-
 template testSicPopTooMany*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
     discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
   else:
     discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
-  for i in 1..8:
+  for i in 1 .. 8:
     discard queue.pop()
 
   check(queue.pop().isNone)
@@ -63,14 +59,13 @@ template testSicPopTooMany*(queue: untyped) =
   else:
     queue.checkState(head = 8, tail = 8, storage = (@[1, 2, 3, 4, 5, 6, 7, 8, 0]))
 
-
 template testSicPopWrap*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
     discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
   else:
     discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
-  for i in 1..4:
+  for i in 1 .. 4:
     discard queue.pop()
 
   when ((queue is Mupsic) or (queue is Mupmuc)):
@@ -79,7 +74,7 @@ template testSicPopWrap*(queue: untyped) =
     discard queue.push(@[9, 10, 11, 12])
 
   var items = newSeq[int]()
-  for i in 1..8:
+  for i in 1 .. 8:
     let res = queue.pop()
     check(res.isSome)
     items.add(res.get)
@@ -94,13 +89,12 @@ template testSicPopWrap*(queue: untyped) =
   else:
     queue.checkState(head = 12, tail = 12, storage = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]))
 
-
 template testSicPopCountOne*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
     discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
   else:
     discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
-  for i in 1..8:
+  for i in 1 .. 8:
     let popped = queue.pop(1)
     check(popped.isSome)
     check(popped.get() == @[i])
@@ -109,7 +103,6 @@ template testSicPopCountOne*(queue: untyped) =
     queue.checkState(head = 8, reservedTail = 8)
   else:
     queue.checkState(head = 8, tail = 8, storage = (@[1, 2, 3, 4, 5, 6, 7, 8, 0]))
-
 
 template testSicPopCountAll*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
@@ -124,7 +117,6 @@ template testSicPopCountAll*(queue: untyped) =
   else:
     queue.checkState(head = 8, tail = 8, storage = (@[1, 2, 3, 4, 5, 6, 7, 8, 0]))
 
-
 template testSicPopCountEmpty*(queue: untyped) =
   let popped = queue.pop(1)
   check(popped.isNone)
@@ -132,7 +124,6 @@ template testSicPopCountEmpty*(queue: untyped) =
     queue.checkState(head = 0, reservedTail = 0)
   else:
     queue.checkState(head = 0, tail = 0, storage = repeat(0, 9))
-
 
 template testSicPopCountTooMany*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
@@ -148,7 +139,6 @@ template testSicPopCountTooMany*(queue: untyped) =
     queue.checkState(head = 8, reservedTail = 8)
   else:
     queue.checkState(head = 8, tail = 8, storage = (@[1, 2, 3, 4, 5, 6, 7, 8, 0]))
-
 
 template testSicPopCountWrap*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):

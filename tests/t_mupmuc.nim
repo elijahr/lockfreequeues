@@ -8,9 +8,7 @@ import ./t_integration
 import ./t_muc
 import ./t_mup
 
-
 var queue = initMupmuc[8, 4, 4, int]()
-
 
 suite "Mupmuc[N, P, C, T]":
   test "capacity":
@@ -20,12 +18,7 @@ suite "Mupmuc[N, P, C, T]":
     check(queue.producerCount == 4)
 
   test "initial state":
-    queue.checkState(
-      head = 0,
-      tail = 0,
-      storage = repeat(0, 8),
-    )
-
+    queue.checkState(head = 0, tail = 0, storage = repeat(0, 8))
 
 suite "getProducer(Mupmuc[N, P, C, T])":
   setup:
@@ -43,7 +36,6 @@ suite "getProducer(Mupmuc[N, P, C, T])":
   test "throws NoProducersAvailableError":
     testMupGetProducerThrowsNoProducersAvailable(queue)
 
-
 suite "push(Mupmuc[N, P, C, T])":
   setup:
     queue.reset()
@@ -55,7 +47,6 @@ suite "push(Mupmuc[N, P, C, T])":
   test "T should fail":
     expect InvalidCallDefect:
       discard queue.push(@[1])
-
 
 suite "push(Producer[N, P, T], T)":
   setup:
@@ -70,7 +61,6 @@ suite "push(Producer[N, P, T], T)":
   test "wrap":
     testMupPushWrap(queue)
 
-
 suite "push(Producer[N, P, T], seq[T])":
   setup:
     queue.reset()
@@ -83,7 +73,6 @@ suite "push(Producer[N, P, T], seq[T])":
 
   test "wrap":
     testMupPushSeqWrap(queue)
-
 
 suite "pop(Mupmuc[N, P, C, T])":
   setup:
@@ -104,7 +93,6 @@ suite "pop(Mupmuc[N, P, C, T])":
   test "wrap":
     testMucPopWrap(queue)
 
-
 suite "pop(Mupmuc[N, P, C, T], int)":
   setup:
     queue.reset()
@@ -124,11 +112,9 @@ suite "pop(Mupmuc[N, P, C, T], int)":
   test "wrap":
     testMucPopCountWrap(queue)
 
-
 suite "capacity(Mupmuc[N, P, C, T])":
   test "basic":
     testCapacity(queue)
-
 
 suite "Mupmuc integration":
   setup:
@@ -149,28 +135,16 @@ suite "Mupmuc integration":
 
     check(pushRes.isNone)
 
-    queue.checkState(
-      head = 4,
-      tail = 12,
-      storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
-    )
+    queue.checkState(head = 4, tail = 12, storage = (@[9, 10, 11, 12, 5, 6, 7, 8]))
 
     popRes = queue.getConsumer(0).pop(4)
     check(popRes.isSome)
     check(popRes.get == @[5, 6, 7, 8])
 
-    queue.checkState(
-      head = 8,
-      tail = 12,
-      storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
-    )
+    queue.checkState(head = 8, tail = 12, storage = (@[9, 10, 11, 12, 5, 6, 7, 8]))
 
     popRes = queue.getConsumer(1).pop(4)
     check(popRes.isSome)
     check(popRes.get == @[9, 10, 11, 12])
 
-    queue.checkState(
-      head = 12,
-      tail = 12,
-      storage = (@[9, 10, 11, 12, 5, 6, 7, 8]),
-    )
+    queue.checkState(head = 12, tail = 12, storage = (@[9, 10, 11, 12, 5, 6, 7, 8]))

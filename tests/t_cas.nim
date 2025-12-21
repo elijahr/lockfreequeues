@@ -3,7 +3,6 @@ import atomics
 import lockfreequeues/typestates/cas
 
 suite "CAS Typestate":
-
   test "prepareCAS creates CASPending":
     var atom: Atomic[int]
     atom.store(5, moRelaxed)
@@ -21,12 +20,12 @@ suite "CAS Typestate":
 
   test "executeCAS fails when expected doesn't match":
     var atom: Atomic[int]
-    atom.store(7, moRelaxed)  # Different from expected
+    atom.store(7, moRelaxed) # Different from expected
     let pending = prepareCAS(addr atom, expected = 5, desired = 10)
     let result = pending.executeCAS()
     check(not result.succeeded)
     check(result.actualVal == 7)
-    check(atom.load(moRelaxed) == 7)  # Unchanged
+    check(atom.load(moRelaxed) == 7) # Unchanged
 
   test "handleSuccess extracts from CASSucceeded":
     var atom: Atomic[int]

@@ -11,28 +11,24 @@ import ./typestates/spsc_pop
 
 const NoSlice* = none(HSlice[int, int])
 
-type
-  Sipsic*[N: static int, T] = object
-    ## A single-producer, single-consumer (SPSC) bounded queue.
-    ## Uses N+1 slots to distinguish full from empty.
-    ##
-    ## * `N` is the capacity (number of items that can be stored).
-    ## * `T` is the type of data the queue will hold.
-    head* {.align: CacheLineBytes.}: Atomic[int]
-    tail* {.align: CacheLineBytes.}: Atomic[int]
-    storage*: StorageN1[N, T]
-
+type Sipsic*[N: static int, T] = object
+  ## A single-producer, single-consumer (SPSC) bounded queue.
+  ## Uses N+1 slots to distinguish full from empty.
+  ##
+  ## * `N` is the capacity (number of items that can be stored).
+  ## * `T` is the type of data the queue will hold.
+  head* {.align: CacheLineBytes.}: Atomic[int]
+  tail* {.align: CacheLineBytes.}: Atomic[int]
+  storage*: StorageN1[N, T]
 
 proc clear[N: static int, T](self: var Sipsic[N, T]) =
   self.head.store(0, moRelaxed)
   self.tail.store(0, moRelaxed)
   self.storage.init()
 
-
 proc initSipsic*[N: static int, T](): Sipsic[N, T] =
   ## Initialize a new Sipsic queue.
   result.clear()
-
 
 proc push*[N: static int, T](self: var Sipsic[N, T], item: T): bool =
   ## Append a single item to the queue.
@@ -48,18 +44,15 @@ proc push*[N: static int, T](self: var Sipsic[N, T], item: T): bool =
   let loaded = op.loadPointers(queueBase[])
   var fullCheck = loaded.checkFull()
 
-  case fullCheck.kind:
+  case fullCheck.kind
   of sSPSCPushFull:
     return move(fullCheck).spscpushfull.extractFalse()
   of sSPSCPushNotFull:
-    return move(fullCheck).spscpushnotfull
-      .writeData(queueBase[], item)
-      .complete(queueBase[])
-
+    return
+      move(fullCheck).spscpushnotfull.writeData(queueBase[], item).complete(queueBase[])
 
 proc push*[N: static int, T](
-  self: var Sipsic[N, T],
-  items: openArray[T],
+    self: var Sipsic[N, T], items: openArray[T]
 ): Option[HSlice[int, int]] =
   ## Append multiple items to the queue.
   ## Batch push doesn't use typestate yet - uses inline implementation.
@@ -70,7 +63,7 @@ proc push*[N: static int, T](
   let head = loadSequentialN1[N](self.head).validate()
 
   if unlikely(fullN1(head, tail)):
-    return some(0..items.len - 1)
+    return some(0 .. items.len - 1)
 
   let avail = availableN1(head, tail)
   var count: int
@@ -79,17 +72,16 @@ proc push*[N: static int, T](
     result = NoSlice
     count = items.len
   else:
-    result = some(avail..items.len - 1)
+    result = some(avail .. items.len - 1)
     count = min(avail, N)
 
   # Write each item
-  for i in 0..<count:
+  for i in 0 ..< count:
     let currentTail = tail.incOrResetN1(i)
     self.storage[currentTail.index()] = items[i]
 
   let newTail = tail.incOrResetN1(count)
   self.tail.storeReleaseN1(newTail)
-
 
 proc pop*[N: static int, T](self: var Sipsic[N, T]): Option[T] =
   ## Pop a single item from the queue.
@@ -105,12 +97,11 @@ proc pop*[N: static int, T](self: var Sipsic[N, T]): Option[T] =
   let loaded = op.loadPointers(queueBase[])
   var emptyCheck = loaded.checkEmpty()
 
-  case emptyCheck.kind:
+  case emptyCheck.kind
   of sSPSCPopEmpty:
     return none(T)
   of sSPSCPopNotEmpty:
     return some(move(emptyCheck).spscpopnotempty.complete(queueBase[]))
-
 
 proc pop*[N: static int, T](self: var Sipsic[N, T], count: int): Option[seq[T]] =
   ## Pop `count` items from the queue.
@@ -130,7 +121,7 @@ proc pop*[N: static int, T](self: var Sipsic[N, T], count: int): Option[seq[T]] 
 
   var res = newSeq[T](actualCount)
 
-  for i in 0..<actualCount:
+  for i in 0 ..< actualCount:
     let currentHead = head.incOrResetN1(i)
     res[i] = self.storage[currentHead.index()]
 
@@ -138,11 +129,9 @@ proc pop*[N: static int, T](self: var Sipsic[N, T], count: int): Option[seq[T]] 
   let newHead = head.incOrResetN1(actualCount)
   self.head.storeReleaseN1(newHead)
 
-
 proc capacity*[N: static int, T](self: var Sipsic[N, T]): int {.inline.} =
   ## Returns the queue's storage capacity (`N`).
   result = N
-
 
 when defined(testing):
   from unittest import check
@@ -151,15 +140,12 @@ when defined(testing):
     self.clear()
 
   proc checkState*[N: static int, T](
-    self: var Sipsic[N, T],
-    head: int,
-    tail: int,
-    storage: seq[T],
+      self: var Sipsic[N, T], head: int, tail: int, storage: seq[T]
   ) =
     ## Verify queue state. `storage` contains N+1 elements representing
     ## the physical slot contents (indices 0..N).
     check(self.head.load(moRelaxed) == head)
     check(self.tail.load(moRelaxed) == tail)
-    for i in 0..N:
+    for i in 0 .. N:
       if i < storage.len:
         check(self.storage.data[i] == storage[i])

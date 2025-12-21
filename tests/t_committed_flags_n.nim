@@ -3,7 +3,6 @@ import lockfreequeues/typestates/virtual_values_n
 import lockfreequeues/typestates/committed_flags_n
 
 suite "CommittedFlagsN[N]":
-
   test "init sets all flags to false":
     var c: CommittedFlagsN[4]
     c.init()

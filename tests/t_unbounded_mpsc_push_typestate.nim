@@ -27,9 +27,7 @@ proc newTestSegment(): ptr TestSegment =
 proc freeTestSegment(seg: ptr TestSegment) =
   dealloc(seg)
 
-
 suite "MPSC Push Typestate":
-
   test "typestate types exist and are usable":
     # Verify state types exist and fields are accessible
     var manager = initDebraManager[4]()
@@ -44,10 +42,7 @@ suite "MPSC Push Typestate":
     queue.segments.store(1, moRelaxed)
 
     # Actually use the types with real data
-    let loaded = startPush[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment()
+    let loaded = startPush[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
 
     # Verify fields are accessible and have valid values
     check loaded.tail >= 0
@@ -58,19 +53,19 @@ suite "MPSC Push Typestate":
     # Clean up
     let claimResult = loaded.tryClaimSlot()
     check claimResult.kind == mMPSCPushSlotClaimed
-    discard claimResult.mpscpushslotclaimed.writeItem(0)
+    discard claimResult.mpscpushslotclaimed
+      .writeItem(0)
       .markCommitted()
       .extractPinned()
       .unpin()
     freeTestSegment(seg)
-
 
   test "loadSegment loads tail segment":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.tail.store(10, moRelaxed)  # Pre-set tail
+    seg.tail.store(10, moRelaxed) # Pre-set tail
 
     var queue: TestQueue
     queue.manager = addr manager
@@ -79,10 +74,7 @@ suite "MPSC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let loaded = startPush[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment()
+    let loaded = startPush[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
 
     check loaded.tail == 10
     check loaded.segment == seg
@@ -96,15 +88,13 @@ suite "MPSC Push Typestate":
     check claimResult.kind == mMPSCPushSlotClaimed
 
     # Write item and VERIFY the value was written
-    let complete = claimResult.mpscpushslotclaimed.writeItem(42)
-      .markCommitted()
-    check seg.data[10] == 42  # Verify write to correct slot
-    check seg.committed[10].load(moRelaxed) == true  # Verify committed
-    check seg.tail.load(moRelaxed) == 11  # Verify tail advanced
+    let complete = claimResult.mpscpushslotclaimed.writeItem(42).markCommitted()
+    check seg.data[10] == 42 # Verify write to correct slot
+    check seg.committed[10].load(moRelaxed) == true # Verify committed
+    check seg.tail.load(moRelaxed) == 11 # Verify tail advanced
     discard complete.extractPinned().unpin()
 
     freeTestSegment(seg)
-
 
   test "tryClaimSlot returns SlotClaimed when CAS succeeds":
     var manager = initDebraManager[4]()
@@ -118,16 +108,16 @@ suite "MPSC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let claimResult = startPush[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment().tryClaimSlot()
+    let claimResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+      .loadSegment()
+      .tryClaimSlot()
 
     check claimResult.kind == mMPSCPushSlotClaimed
     check claimResult.mpscpushslotclaimed.slot == 0
 
     # Write item and VERIFY
-    discard claimResult.mpscpushslotclaimed.writeItem(42)
+    discard claimResult.mpscpushslotclaimed
+      .writeItem(42)
       .markCommitted()
       .extractPinned()
       .unpin()
@@ -138,13 +128,12 @@ suite "MPSC Push Typestate":
 
     freeTestSegment(seg)
 
-
   test "tryClaimSlot returns SegmentFull when segment full":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.tail.store(64, moRelaxed)  # Full segment
+    seg.tail.store(64, moRelaxed) # Full segment
 
     var queue: TestQueue
     queue.manager = addr manager
@@ -153,10 +142,9 @@ suite "MPSC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let claimResult = startPush[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment().tryClaimSlot()
+    let claimResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+      .loadSegment()
+      .tryClaimSlot()
 
     check claimResult.kind == mMPSCPushSegmentFull
 
@@ -179,12 +167,11 @@ suite "MPSC Push Typestate":
     check newSeg.data[0] == 42
     check newSeg.committed[0].load(moRelaxed) == true
     check newSeg.tail.load(moRelaxed) == 1
-    check seg.next.load(moRelaxed) == newSeg  # Segments correctly linked
-    check seg.tail.load(moRelaxed) == 64  # Old segment unchanged
+    check seg.next.load(moRelaxed) == newSeg # Segments correctly linked
+    check seg.tail.load(moRelaxed) == 64 # Old segment unchanged
 
     freeTestSegment(seg)
     freeTestSegment(newSeg)
-
 
   test "tryClaimSlot returns Ready when CAS fails (retry path)":
     var manager = initDebraManager[4]()
@@ -201,24 +188,19 @@ suite "MPSC Push Typestate":
     queue.segments.store(1, moRelaxed)
 
     # Load segment with tail=5
-    let loaded = startPush[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment()
+    let loaded = startPush[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
 
     check loaded.tail == 5
 
     # Simulate another thread advancing tail (race condition)
-    discard seg.tail.fetchAdd(1, moRelaxed)  # Now tail is 6
+    discard seg.tail.fetchAdd(1, moRelaxed) # Now tail is 6
 
     # tryClaimSlot should detect CAS failure and return Ready for retry
     let claimResult = loaded.tryClaimSlot()
     check claimResult.kind == mMPSCPushReady
 
     # Clean up - do a successful operation
-    let claimResult2 = claimResult.mpscpushready
-      .loadSegment()
-      .tryClaimSlot()
+    let claimResult2 = claimResult.mpscpushready.loadSegment().tryClaimSlot()
     check claimResult2.kind == mMPSCPushSlotClaimed
     discard claimResult2.mpscpushslotclaimed
       .writeItem(99)
@@ -227,7 +209,6 @@ suite "MPSC Push Typestate":
       .unpin()
 
     freeTestSegment(seg)
-
 
   test "allocateNewSegment handles allocation race":
     var manager = initDebraManager[4]()
@@ -249,18 +230,16 @@ suite "MPSC Push Typestate":
 
     # Now try to allocate our own segment
     var seg3 = newTestSegment()
-    let claimResult = startPush[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment().tryClaimSlot()
+    let claimResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+      .loadSegment()
+      .tryClaimSlot()
 
     check claimResult.kind == mMPSCPushSegmentFull
 
     # Use tryAllocateNewSegment to detect the race
-    let (ready, allocated) = claimResult.mpscpushsegmentfull
-      .tryAllocateNewSegment(seg3)
+    let (ready, allocated) = claimResult.mpscpushsegmentfull.tryAllocateNewSegment(seg3)
 
-    check allocated == false  # Lost the race, another thread allocated
+    check allocated == false # Lost the race, another thread allocated
 
     # Should still work - retry and use the winner's segment
     let claimResult2 = ready.loadSegment().tryClaimSlot()
@@ -280,7 +259,6 @@ suite "MPSC Push Typestate":
     freeTestSegment(seg2)
     freeTestSegment(seg3)
 
-
   test "writeItem writes data correctly":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
@@ -293,10 +271,9 @@ suite "MPSC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let claimResult = startPush[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment().tryClaimSlot()
+    let claimResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+      .loadSegment()
+      .tryClaimSlot()
 
     check claimResult.kind == mMPSCPushSlotClaimed
 
@@ -314,7 +291,6 @@ suite "MPSC Push Typestate":
 
     freeTestSegment(seg)
 
-
   test "markCommitted sets committed flag and updates itemCount":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
@@ -327,15 +303,11 @@ suite "MPSC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let claimResult = startPush[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment()
+    let claimResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+      .loadSegment()
       .tryClaimSlot()
 
-    let complete = claimResult.mpscpushslotclaimed
-      .writeItem(42)
-      .markCommitted()
+    let complete = claimResult.mpscpushslotclaimed.writeItem(42).markCommitted()
 
     check seg.data[0] == 42
     check seg.committed[0].load(moRelaxed) == true

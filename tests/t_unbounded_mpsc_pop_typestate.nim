@@ -27,9 +27,7 @@ proc newTestSegment(): ptr TestSegment =
 proc freeTestSegment(seg: ptr TestSegment) =
   dealloc(seg)
 
-
 suite "MPSC Pop Typestate":
-
   test "typestate types exist and are usable":
     # Verify state types exist and fields are accessible
     var manager = initDebraManager[4]()
@@ -48,10 +46,7 @@ suite "MPSC Pop Typestate":
     queue.segments.store(1, moRelaxed)
 
     # Actually use the types with real data
-    let loaded = startPop[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment()
+    let loaded = startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
 
     # Verify fields are accessible and have valid values
     check loaded.head >= 0
@@ -63,11 +58,8 @@ suite "MPSC Pop Typestate":
     let checkResult = loaded.checkSlot()
     check checkResult.kind == mMPSCPopSlotAvailable
     let commitResult = checkResult.mpscpopslotavailable.checkCommitted()
-    discard commitResult.mpscpopcomplete
-      .extractPinned()
-      .unpin()
+    discard commitResult.mpscpopcomplete.extractPinned().unpin()
     freeTestSegment(seg)
-
 
   test "loadSegment loads head segment":
     var manager = initDebraManager[4]()
@@ -84,10 +76,7 @@ suite "MPSC Pop Typestate":
     queue.itemCount.store(5, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let loaded = startPop[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment()
+    let loaded = startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
 
     check loaded.head == 5
     check loaded.tail == 10
@@ -107,11 +96,10 @@ suite "MPSC Pop Typestate":
     let complete = checkResult.mpscpopslotavailable.checkCommitted()
     check complete.kind == mMPSCPopComplete
     check complete.mpscpopcomplete.value == 77
-    check seg.head == 6  # Verify head advanced
+    check seg.head == 6 # Verify head advanced
     discard complete.mpscpopcomplete.extractPinned().unpin()
 
     freeTestSegment(seg)
-
 
   test "checkSlot returns SlotAvailable when items exist":
     var manager = initDebraManager[4]()
@@ -130,10 +118,8 @@ suite "MPSC Pop Typestate":
     queue.itemCount.store(5, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let checkResult = startPop[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment().checkSlot()
+    let checkResult =
+      startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment().checkSlot()
 
     check checkResult.kind == mMPSCPopSlotAvailable
     check checkResult.mpscpopslotavailable.slot == 0
@@ -142,11 +128,10 @@ suite "MPSC Pop Typestate":
     let complete = checkResult.mpscpopslotavailable.checkCommitted()
     check complete.kind == mMPSCPopComplete
     check complete.mpscpopcomplete.value == 42
-    check seg.head == 1  # Verify head advanced
+    check seg.head == 1 # Verify head advanced
     discard complete.mpscpopcomplete.extractPinned().unpin()
 
     freeTestSegment(seg)
-
 
   test "checkSlot returns SegmentExhausted when empty":
     var manager = initDebraManager[4]()
@@ -154,7 +139,7 @@ suite "MPSC Pop Typestate":
 
     var seg = newTestSegment()
     seg.head = 5
-    seg.tail.store(5, moRelaxed)  # head == tail, no items
+    seg.tail.store(5, moRelaxed) # head == tail, no items
 
     var queue: TestQueue
     queue.manager = addr manager
@@ -163,16 +148,13 @@ suite "MPSC Pop Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let checkResult = startPop[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment().checkSlot()
+    let checkResult =
+      startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment().checkSlot()
 
     check checkResult.kind == mMPSCPopSegmentExhausted
 
     # Try to advance - should return Empty since no next segment
-    let advanceResult = checkResult.mpscpopsegmentexhausted
-      .advanceSegment()
+    let advanceResult = checkResult.mpscpopsegmentexhausted.advanceSegment()
 
     check advanceResult.kind == mMPSCPopEmpty
 
@@ -183,7 +165,6 @@ suite "MPSC Pop Typestate":
     discard advanceResult.mpscpopempty.extractPinned().unpin()
 
     freeTestSegment(seg)
-
 
   test "checkCommitted returns Complete when slot is committed":
     var manager = initDebraManager[4]()
@@ -202,10 +183,8 @@ suite "MPSC Pop Typestate":
     queue.itemCount.store(3, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let slotAvail = startPop[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment().checkSlot()
+    let slotAvail =
+      startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment().checkSlot()
 
     check slotAvail.kind == mMPSCPopSlotAvailable
 
@@ -220,7 +199,6 @@ suite "MPSC Pop Typestate":
 
     freeTestSegment(seg)
 
-
   test "checkCommitted returns SlotUncommitted when not ready":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
@@ -229,7 +207,7 @@ suite "MPSC Pop Typestate":
     seg.head = 0
     seg.tail.store(3, moRelaxed)
     seg.data[0] = 42
-    seg.committed[0].store(false, moRelaxed)  # NOT committed yet
+    seg.committed[0].store(false, moRelaxed) # NOT committed yet
 
     var queue: TestQueue
     queue.manager = addr manager
@@ -238,10 +216,8 @@ suite "MPSC Pop Typestate":
     queue.itemCount.store(3, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let slotAvail = startPop[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment().checkSlot()
+    let slotAvail =
+      startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment().checkSlot()
 
     check slotAvail.kind == mMPSCPopSlotAvailable
 
@@ -256,7 +232,6 @@ suite "MPSC Pop Typestate":
     discard uncommitted.mpscpopslotuncommitted.extractPinned().unpin()
 
     freeTestSegment(seg)
-
 
   test "advanceSegment returns Ready when next segment exists":
     var manager = initDebraManager[4]()
@@ -279,19 +254,16 @@ suite "MPSC Pop Typestate":
     queue.itemCount.store(3, moRelaxed)
     queue.segments.store(2, moRelaxed)
 
-    let checkResult = startPop[int, 64, 4](
-      unpinned(handle).pin(),
-      addr queue
-    ).loadSegment().checkSlot()
+    let checkResult =
+      startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment().checkSlot()
 
     check checkResult.kind == mMPSCPopSegmentExhausted
 
     # Advance to next segment
-    let advanceResult = checkResult.mpscpopsegmentexhausted
-      .advanceSegment()
+    let advanceResult = checkResult.mpscpopsegmentexhausted.advanceSegment()
 
     check advanceResult.kind == mMPSCPopReady
-    check queue.headSegment == seg2  # Head advanced
+    check queue.headSegment == seg2 # Head advanced
 
     # Now load and read from the new segment
     let loaded2 = advanceResult.mpscpopready.loadSegment()

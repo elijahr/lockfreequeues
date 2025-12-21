@@ -2,31 +2,25 @@
 
 import atomics
 
-
 proc relaxed*[T](location: var Atomic[T]): T {.inline.} =
   ## Load the value from location using moRelaxed
   result = location.load(moRelaxed)
-
 
 proc acquire*[T](location: var Atomic[T]): T {.inline.} =
   ## Load the value from location using moAcquire
   result = location.load(moAcquire)
 
-
 proc sequential*[T](location: var Atomic[T]): T {.inline.} =
   ## Load the value from location using moSequentiallyConsistent
   result = location.load(moSequentiallyConsistent)
-
 
 proc relaxed*[T](location: var Atomic[T], value: T) {.inline.} =
   ## Store the value in location using moRelaxed
   location.store(value, moRelaxed)
 
-
 proc release*[T](location: var Atomic[T], value: T) {.inline.} =
   ## Store the value in location using moRelease
   location.store(value, moRelease)
-
 
 proc sequential*[T](location: var Atomic[T], value: T) {.inline.} =
   ## Store the value in location using moSequentiallyConsistent

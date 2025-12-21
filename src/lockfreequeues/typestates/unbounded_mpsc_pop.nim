@@ -7,7 +7,7 @@ import atomics
 import typestates
 import debra
 
-import ./unbounded_mpsc_push  # Reuse MPSCSegment, UnboundedMupsicBase
+import ./unbounded_mpsc_push # Reuse MPSCSegment, UnboundedMupsicBase
 
 type
   # Base context - carries pinned state and queue pointer
@@ -58,63 +58,68 @@ type
     value*: T
     slot*: int
 
-
 typestate MPSCPopContext[T, S: static int, MT: static int]:
   inheritsFromRootObj = true
   consumeOnTransition = true
-  states MPSCPopReady[T, S, MT], MPSCPopSegmentLoaded[T, S, MT],
-         MPSCPopSlotAvailable[T, S, MT], MPSCPopSlotUncommitted[T, S, MT],
-         MPSCPopSegmentExhausted[T, S, MT], MPSCPopEmpty[T, S, MT],
-         MPSCPopComplete[T, S, MT]
+  states MPSCPopReady[T, S, MT],
+    MPSCPopSegmentLoaded[T, S, MT],
+    MPSCPopSlotAvailable[T, S, MT],
+    MPSCPopSlotUncommitted[T, S, MT],
+    MPSCPopSegmentExhausted[T, S, MT],
+    MPSCPopEmpty[T, S, MT],
+    MPSCPopComplete[T, S, MT]
   transitions:
     MPSCPopReady[T, S, MT] -> MPSCPopSegmentLoaded[T, S, MT]
-    MPSCPopSegmentLoaded[T, S, MT] -> (MPSCPopSlotAvailable[T, S, MT] | MPSCPopSegmentExhausted[T, S, MT]) as MPSCSlotCheck[T, S, MT]
-    MPSCPopSlotAvailable[T, S, MT] -> (MPSCPopComplete[T, S, MT] | MPSCPopSlotUncommitted[T, S, MT]) as MPSCCommitCheck[T, S, MT]
-    MPSCPopSegmentExhausted[T, S, MT] -> (MPSCPopReady[T, S, MT] | MPSCPopEmpty[T, S, MT]) as MPSCAdvanceResult[T, S, MT]
-
+    MPSCPopSegmentLoaded[T, S, MT] ->
+      (MPSCPopSlotAvailable[T, S, MT] | MPSCPopSegmentExhausted[T, S, MT]) as
+      MPSCSlotCheck[T, S, MT]
+    MPSCPopSlotAvailable[T, S, MT] ->
+      (MPSCPopComplete[T, S, MT] | MPSCPopSlotUncommitted[T, S, MT]) as
+      MPSCCommitCheck[T, S, MT]
+    MPSCPopSegmentExhausted[T, S, MT] ->
+      (MPSCPopReady[T, S, MT] | MPSCPopEmpty[T, S, MT]) as MPSCAdvanceResult[T, S, MT]
 
 # Factory: Create pop typestate context from DEBRA's Pinned state
 proc startPop*[T; S, MT: static int](
-  pinned: sink Pinned[MT],
-  queue: ptr UnboundedMupsicBase[S, T, MT]
+    pinned: sink Pinned[MT], queue: ptr UnboundedMupsicBase[S, T, MT]
 ): MPSCPopReady[T, S, MT] =
   ## Create pop context from DEBRA's Pinned state.
   MPSCPopReady[T, S, MT](
     MPSCPopContext[T, S, MT](
-      pinnedHandle: pinned.handle,
-      pinnedEpoch: pinned.epoch,
-      queue: queue))
-
+      pinnedHandle: pinned.handle, pinnedEpoch: pinned.epoch, queue: queue
+    )
+  )
 
 # Extract Pinned state from terminal states
 proc extractPinned*[T; S, MT: static int](
-  complete: sink MPSCPopComplete[T, S, MT]
+    complete: sink MPSCPopComplete[T, S, MT]
 ): Pinned[MT] =
   ## Extract DEBRA's Pinned state for unpinning.
-  Pinned[MT](EpochGuardContext[MT](
-    handle: complete.pinnedHandle,
-    epoch: complete.pinnedEpoch))
+  Pinned[MT](
+    EpochGuardContext[MT](handle: complete.pinnedHandle, epoch: complete.pinnedEpoch)
+  )
 
 proc extractPinned*[T; S, MT: static int](
-  empty: sink MPSCPopEmpty[T, S, MT]
+    empty: sink MPSCPopEmpty[T, S, MT]
 ): Pinned[MT] =
   ## Extract DEBRA's Pinned state for unpinning.
-  Pinned[MT](EpochGuardContext[MT](
-    handle: empty.pinnedHandle,
-    epoch: empty.pinnedEpoch))
+  Pinned[MT](
+    EpochGuardContext[MT](handle: empty.pinnedHandle, epoch: empty.pinnedEpoch)
+  )
 
 proc extractPinned*[T; S, MT: static int](
-  uncommitted: sink MPSCPopSlotUncommitted[T, S, MT]
+    uncommitted: sink MPSCPopSlotUncommitted[T, S, MT]
 ): Pinned[MT] =
   ## Extract DEBRA's Pinned state for unpinning.
-  Pinned[MT](EpochGuardContext[MT](
-    handle: uncommitted.pinnedHandle,
-    epoch: uncommitted.pinnedEpoch))
-
+  Pinned[MT](
+    EpochGuardContext[MT](
+      handle: uncommitted.pinnedHandle, epoch: uncommitted.pinnedEpoch
+    )
+  )
 
 # Load segment transition
 proc loadSegment*[T; S, MT: static int](
-  ready: sink MPSCPopReady[T, S, MT]
+    ready: sink MPSCPopReady[T, S, MT]
 ): MPSCPopSegmentLoaded[T, S, MT] {.transition.} =
   ## Load current head segment and positions.
   let ctx = MPSCPopContext[T, S, MT](ready)
@@ -128,32 +133,35 @@ proc loadSegment*[T; S, MT: static int](
     queue: ctx.queue,
     segment: seg,
     head: head,
-    tail: tail)
-
+    tail: tail,
+  )
 
 # Check slot availability transition
 proc checkSlot*[T; S, MT: static int](
-  loaded: sink MPSCPopSegmentLoaded[T, S, MT]
+    loaded: sink MPSCPopSegmentLoaded[T, S, MT]
 ): MPSCSlotCheck[T, S, MT] {.transition.} =
   ## Check if there's data available. Returns SlotAvailable or SegmentExhausted.
   if loaded.head < loaded.tail:
-    MPSCSlotCheck[T, S, MT] -> MPSCPopSlotAvailable[T, S, MT](
-      pinnedHandle: loaded.pinnedHandle,
-      pinnedEpoch: loaded.pinnedEpoch,
-      queue: loaded.queue,
-      segment: loaded.segment,
-      slot: loaded.head)
+    MPSCSlotCheck[T, S, MT] ->
+      MPSCPopSlotAvailable[T, S, MT](
+        pinnedHandle: loaded.pinnedHandle,
+        pinnedEpoch: loaded.pinnedEpoch,
+        queue: loaded.queue,
+        segment: loaded.segment,
+        slot: loaded.head,
+      )
   else:
-    MPSCSlotCheck[T, S, MT] -> MPSCPopSegmentExhausted[T, S, MT](
-      pinnedHandle: loaded.pinnedHandle,
-      pinnedEpoch: loaded.pinnedEpoch,
-      queue: loaded.queue,
-      segment: loaded.segment)
-
+    MPSCSlotCheck[T, S, MT] ->
+      MPSCPopSegmentExhausted[T, S, MT](
+        pinnedHandle: loaded.pinnedHandle,
+        pinnedEpoch: loaded.pinnedEpoch,
+        queue: loaded.queue,
+        segment: loaded.segment,
+      )
 
 # Check if slot is committed and read item if ready
 proc checkCommitted*[T; S, MT: static int](
-  slotAvail: sink MPSCPopSlotAvailable[T, S, MT]
+    slotAvail: sink MPSCPopSlotAvailable[T, S, MT]
 ): MPSCCommitCheck[T, S, MT] {.transition.} =
   ## Check committed flag and read item if ready.
   if slotAvail.segment.committed[slotAvail.slot].load(moAcquire):
@@ -164,48 +172,56 @@ proc checkCommitted*[T; S, MT: static int](
     slotAvail.segment.head = slotAvail.slot + 1
     discard slotAvail.queue.itemCount.fetchSub(1, moRelaxed)
 
-    return MPSCCommitCheck[T, S, MT] -> MPSCPopComplete[T, S, MT](
-      pinnedHandle: slotAvail.pinnedHandle,
-      pinnedEpoch: slotAvail.pinnedEpoch,
-      queue: slotAvail.queue,
-      value: value,
-      slot: slotAvail.slot)
+    return
+      MPSCCommitCheck[T, S, MT] ->
+      MPSCPopComplete[T, S, MT](
+        pinnedHandle: slotAvail.pinnedHandle,
+        pinnedEpoch: slotAvail.pinnedEpoch,
+        queue: slotAvail.queue,
+        value: value,
+        slot: slotAvail.slot,
+      )
   else:
     # Producer hasn't finished writing yet
-    return MPSCCommitCheck[T, S, MT] -> MPSCPopSlotUncommitted[T, S, MT](
-      pinnedHandle: slotAvail.pinnedHandle,
-      pinnedEpoch: slotAvail.pinnedEpoch,
-      queue: slotAvail.queue)
-
+    return
+      MPSCCommitCheck[T, S, MT] ->
+      MPSCPopSlotUncommitted[T, S, MT](
+        pinnedHandle: slotAvail.pinnedHandle,
+        pinnedEpoch: slotAvail.pinnedEpoch,
+        queue: slotAvail.queue,
+      )
 
 # Advance segment transition
 proc advanceSegment*[T; S, MT: static int](
-  exhausted: sink MPSCPopSegmentExhausted[T, S, MT]
+    exhausted: sink MPSCPopSegmentExhausted[T, S, MT]
 ): MPSCAdvanceResult[T, S, MT] {.transition.} =
   ## Try to advance to next segment.
   ## Returns Ready if next segment exists, Empty otherwise.
   let nextSeg = exhausted.segment.next.load(moAcquire)
 
   if nextSeg == nil:
-    return MPSCAdvanceResult[T, S, MT] -> MPSCPopEmpty[T, S, MT](
-      pinnedHandle: exhausted.pinnedHandle,
-      pinnedEpoch: exhausted.pinnedEpoch,
-      queue: exhausted.queue)
+    return
+      MPSCAdvanceResult[T, S, MT] ->
+      MPSCPopEmpty[T, S, MT](
+        pinnedHandle: exhausted.pinnedHandle,
+        pinnedEpoch: exhausted.pinnedEpoch,
+        queue: exhausted.queue,
+      )
 
   # Advance head segment
   exhausted.queue.headSegment = nextSeg
   # Note: Segment retirement handled by caller
 
-  MPSCAdvanceResult[T, S, MT] -> MPSCPopReady[T, S, MT](
-    MPSCPopContext[T, S, MT](
-      pinnedHandle: exhausted.pinnedHandle,
-      pinnedEpoch: exhausted.pinnedEpoch,
-      queue: exhausted.queue))
-
+  MPSCAdvanceResult[T, S, MT] ->
+    MPSCPopReady[T, S, MT](
+      MPSCPopContext[T, S, MT](
+        pinnedHandle: exhausted.pinnedHandle,
+        pinnedEpoch: exhausted.pinnedEpoch,
+        queue: exhausted.queue,
+      )
+    )
 
 # Get value from completed pop
-proc getValue*[T; S, MT: static int](
-  complete: MPSCPopComplete[T, S, MT]
-): T =
+proc getValue*[T; S, MT: static int](complete: MPSCPopComplete[T, S, MT]): T =
   ## Extract the popped value.
   complete.value

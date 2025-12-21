@@ -5,7 +5,6 @@ import lockfreequeues/typestates/virtual_values_n1
 import lockfreequeues/typestates/atomic_loaders
 
 suite "Atomic loaders for N-slot":
-
   test "loadAcquireN returns RawLoadedN":
     var atom: Atomic[int]
     atom.store(5, moRelaxed)
@@ -19,7 +18,6 @@ suite "Atomic loaders for N-slot":
     check(wrapped.value == 10)
 
 suite "Atomic loaders for N+1-slot":
-
   test "loadAcquireN1 returns RawLoadedN1":
     var atom: Atomic[int]
     atom.store(5, moRelaxed)
@@ -28,12 +26,11 @@ suite "Atomic loaders for N+1-slot":
 
   test "loadAcquireN1 can validate":
     var atom: Atomic[int]
-    atom.store(17, moRelaxed)  # Valid for N=8: 0..<18
+    atom.store(17, moRelaxed) # Valid for N=8: 0..<18
     let wrapped = loadAcquireN1[8](atom).validate()
     check(wrapped.value == 17)
 
 suite "Store helpers":
-
   test "storeReleaseN stores WrappedValueN":
     var atom: Atomic[int]
     let wrapped = initRawN[8](10).validate()

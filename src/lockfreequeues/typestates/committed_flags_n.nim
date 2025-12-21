@@ -5,17 +5,19 @@
 import atomics
 import ./virtual_values_n
 
-type
-  CommittedFlagsN*[N: static int] = object
-    flags*: array[N, Atomic[bool]]
-
+type CommittedFlagsN*[N: static int] = object
+  flags*: array[N, Atomic[bool]]
 
 proc init*[N: static int](c: var CommittedFlagsN[N]) =
-  for i in 0..<N:
+  for i in 0 ..< N:
     c.flags[i].store(false, moRelaxed)
 
-proc load*[N: static int](c: var CommittedFlagsN[N], idx: PhysicalSlotN[N]): bool {.inline.} =
+proc load*[N: static int](
+    c: var CommittedFlagsN[N], idx: PhysicalSlotN[N]
+): bool {.inline.} =
   c.flags[idx.slotValue].load(moAcquire)
 
-proc store*[N: static int](c: var CommittedFlagsN[N], idx: PhysicalSlotN[N], val: bool) {.inline.} =
+proc store*[N: static int](
+    c: var CommittedFlagsN[N], idx: PhysicalSlotN[N], val: bool
+) {.inline.} =
   c.flags[idx.slotValue].store(val, moRelease)

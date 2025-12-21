@@ -25,7 +25,6 @@ type
     ## * `N` is the capacity of the queue.
     ## * `P` is the number of producer threads.
     ## * `T` is the type of data the queue will hold.
-
     head* {.align: CacheLineBytes.}: Atomic[int]
     reservedTail* {.align: CacheLineBytes.}: Atomic[int]
     storage*: StorageN[N, T]
@@ -38,24 +37,20 @@ type
     idx*: int
     queue*: ptr Mupsic[N, P, T]
 
-
 proc clear[N, P: static int, T](self: var Mupsic[N, P, T]) =
   self.head.store(0, moRelaxed)
   self.reservedTail.store(0, moRelaxed)
   self.storage.init()
   self.committed.init()
-  for p in 0..<P:
+  for p in 0 ..< P:
     self.producerThreadIds[p].store(0, moRelaxed)
-
 
 proc initMupsic*[N, P: static int, T](): Mupsic[N, P, T] =
   ## Initialize a new Mupsic queue.
   result.clear()
 
-
 proc getProducer*[N, P: static int, T](
-  self: var Mupsic[N, P, T],
-  idx: int = -1,
+    self: var Mupsic[N, P, T], idx: int = -1
 ): Producer[N, P, T] {.raises: [NoProducersAvailableError].} =
   ## Assigns and returns a `Producer` instance for the current thread.
   result.queue = addr(self)
@@ -68,19 +63,16 @@ proc getProducer*[N, P: static int, T](
   let threadId = getThreadId()
 
   # Try to find existing mapping of threadId -> producerIdx
-  for i in 0..<P:
+  for i in 0 ..< P:
     if self.producerThreadIds[i].load(moAcquire) == threadId:
       result.idx = i
       return
 
   # Try to create new mapping of threadId -> producerIdx
-  for i in 0..<P:
+  for i in 0 ..< P:
     var expected = 0
     if self.producerThreadIds[i].compareExchangeWeak(
-      expected,
-      threadId,
-      moRelease,
-      moAcquire,
+      expected, threadId, moRelease, moAcquire
     ):
       result.idx = i
       return
@@ -89,13 +81,10 @@ proc getProducer*[N, P: static int, T](
   raise newException(
     NoProducersAvailableError,
     "All producers have been assigned. " &
-    "Increase your producer count (P) or setMaxPoolSize(P).")
+      "Increase your producer count (P) or setMaxPoolSize(P).",
+  )
 
-
-proc push*[N, P: static int, T](
-  self: Producer[N, P, T],
-  item: T,
-): bool =
+proc push*[N, P: static int, T](self: Producer[N, P, T], item: T): bool =
   ## Append a single item to the queue.
   ## If the queue is full, `false` is returned.
   ## If `item` is appended, `true` is returned.
@@ -112,23 +101,21 @@ proc push*[N, P: static int, T](
     let loaded = op.loadPointers(queueBase[])
     let fullCheck = loaded.checkFull()
 
-    case fullCheck.kind:
+    case fullCheck.kind
     of mMPSCPushFull:
       return fullCheck.mpscpushfull.extractFalse()
     of mMPSCPushNotFull:
       let claimResult = fullCheck.mpscpushnotfull.tryClaim(queueBase[])
-      case claimResult.kind:
+      case claimResult.kind
       of mMPSCPushStart:
-        op = claimResult.mpscpushstart  # CAS failed, retry
+        op = claimResult.mpscpushstart # CAS failed, retry
         continue
       of mMPSCPushSlotClaimed:
         let written = claimResult.mpscpushslotclaimed.writeData(queueBase[], item)
         return written.complete(queueBase[])
 
-
 proc push*[N, P: static int, T](
-  self: Producer[N, P, T],
-  items: openArray[T],
+    self: Producer[N, P, T], items: openArray[T]
 ): Option[HSlice[int, int]] =
   ## Append multiple items to the queue.
   ## If the queue is already full or is filled by this call, `some(unpushed)`
@@ -151,7 +138,7 @@ proc push*[N, P: static int, T](
 
     # MPSC: uses head vs reservedTail (single consumer, head is current)
     if unlikely(fullN(head, reservedTail)):
-      return some(0..items.len - 1)
+      return some(0 .. items.len - 1)
 
     let avail = availableN(head, reservedTail)
 
@@ -163,49 +150,39 @@ proc push*[N, P: static int, T](
     newReservedTail = reservedTail.incOrResetN(actualCount)
 
     let cas = prepareCAS(
-      addr self.queue.reservedTail,
-      reservedTail.value,
-      newReservedTail.value
-    ).executeCAS()
+        addr self.queue.reservedTail, reservedTail.value, newReservedTail.value
+      )
+      .executeCAS()
 
     if cas.succeeded:
       break
 
   if actualCount < items.len:
-    result = some(actualCount..items.len - 1)
+    result = some(actualCount .. items.len - 1)
   else:
     result = NoSlice
 
   # Write each item
-  for i in 0..<actualCount:
+  for i in 0 ..< actualCount:
     let currentTail = reservedTail.incOrResetN(i)
     self.queue.storage[currentTail.index()] = items[i]
 
   # Mark all claimed slots as committed
-  for i in 0..<actualCount:
+  for i in 0 ..< actualCount:
     let slot = reservedTail.incOrResetN(i).index()
     self.queue.committed.store(slot, true)
 
-
-proc push*[N, P: static int, T](
-  self: var Mupsic[N, P, T],
-  item: T,
-): bool =
+proc push*[N, P: static int, T](self: var Mupsic[N, P, T], item: T): bool =
   ## Raises `InvalidCallDefect`. Use `Producer.push()` instead.
   raise newException(InvalidCallDefect, "Use Producer.push()")
 
-
 proc push*[N, P: static int, T](
-  self: var Mupsic[N, P, T],
-  items: openArray[T],
+    self: var Mupsic[N, P, T], items: openArray[T]
 ): Option[HSlice[int, int]] =
   ## Raises `InvalidCallDefect`. Use `Producer.push()` instead.
   raise newException(InvalidCallDefect, "Use Producer.push()")
 
-
-proc pop*[N, P: static int, T](
-  self: var Mupsic[N, P, T],
-): Option[T] =
+proc pop*[N, P: static int, T](self: var Mupsic[N, P, T]): Option[T] =
   ## Pop a single item from the queue.
   ## If the queue is empty or head slot is not yet committed, `none(T)` is returned.
   ## Otherwise an item is popped, `some(T)` is returned.
@@ -220,22 +197,18 @@ proc pop*[N, P: static int, T](
   let loaded = op.loadPointers(queueBase[])
   let emptyCheck = loaded.checkEmpty()
 
-  case emptyCheck.kind:
+  case emptyCheck.kind
   of mMPSCPopEmpty:
     return none(T)
   of mMPSCPopNotEmpty:
     let committedCheck = emptyCheck.mpscpopnotempty.checkCommitted(queueBase[])
-    case committedCheck.kind:
+    case committedCheck.kind
     of mMPSCPopEmpty:
-      return none(T)  # Slot not committed - producer still writing
+      return none(T) # Slot not committed - producer still writing
     of mMPSCPopSlotReady:
       return some(committedCheck.mpscpopslotready.complete(queueBase[]))
 
-
-proc pop*[N, P: static int, T](
-  self: var Mupsic[N, P, T],
-  count: int,
-): Option[seq[T]] =
+proc pop*[N, P: static int, T](self: var Mupsic[N, P, T], count: int): Option[seq[T]] =
   ## Pop up to `count` items from the queue.
   ## If the queue is empty, `none(seq[T])` is returned.
   ## Otherwise `some(seq[T])` is returned containing at least one item.
@@ -256,12 +229,12 @@ proc pop*[N, P: static int, T](
   var items = newSeq[T]()
   var currentHead = head
 
-  for i in 0..<min(count, usedCount):
+  for i in 0 ..< min(count, usedCount):
     let slot = currentHead.index()
 
     # Check if this slot is committed
     if not self.committed.load(slot):
-      break  # Stop at first uncommitted slot
+      break # Stop at first uncommitted slot
 
     items.add(self.storage[slot])
 
@@ -276,16 +249,13 @@ proc pop*[N, P: static int, T](
   self.head.storeReleaseN(currentHead)
   return some(items)
 
-
 proc capacity*[N, P: static int, T](self: var Mupsic[N, P, T]): int {.inline.} =
   ## Returns the queue's storage capacity (`N`).
   result = N
 
-
 proc producerCount*[N, P: static int, T](self: var Mupsic[N, P, T]): int {.inline.} =
   ## Returns the queue's number of producers (`P`).
   result = P
-
 
 when defined(testing):
   from unittest import check
@@ -296,9 +266,7 @@ when defined(testing):
     self.clear()
 
   proc checkState*[N, P: static int, T](
-    self: var Mupsic[N, P, T],
-    head: int,
-    reservedTail: int,
+      self: var Mupsic[N, P, T], head: int, reservedTail: int
   ) =
     ## Check internal queue state for testing.
     check(self.head.load(moRelaxed) == head)

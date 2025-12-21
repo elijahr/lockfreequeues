@@ -7,25 +7,18 @@ import ./t_integration
 import ./t_sic
 import ./t_sip
 
-
 var queue = initSipsic[8, int]()
 
-
 suite "Sipsic[N, T]":
-
   test "capacity":
     check(queue.capacity == 8)
 
   test "initial state":
     queue.checkState(
-      head = 0,
-      tail = 0,
-      storage = repeat(0, 9),  # N+1 slots
+      head = 0, tail = 0, storage = repeat(0, 9) # N+1 slots
     )
 
-
 suite "push(Sipsic[N, T], T)":
-
   setup:
     queue.reset()
 
@@ -38,9 +31,7 @@ suite "push(Sipsic[N, T], T)":
   test "wrap":
     testSipPushWrap(queue)
 
-
 suite "push(Sipsic[N, T], seq[T])":
-
   setup:
     queue.reset()
 
@@ -53,9 +44,7 @@ suite "push(Sipsic[N, T], seq[T])":
   test "wrap":
     testSipPushSeqWrap(queue)
 
-
 suite "pop(Sipsic)":
-
   setup:
     queue.reset()
 
@@ -74,9 +63,7 @@ suite "pop(Sipsic)":
   test "wrap":
     testSicPopWrap(queue)
 
-
 suite "pop(Sipsic, int)":
-
   setup:
     queue.reset()
 
@@ -95,15 +82,11 @@ suite "pop(Sipsic, int)":
   test "wrap":
     testSicPopCountWrap(queue)
 
-
 suite "capacity(Sipsic)":
-
   test "basic":
     testCapacity(queue)
 
-
 suite "Sipsic integration":
-
   setup:
     queue.reset()
 
@@ -112,4 +95,3 @@ suite "Sipsic integration":
 
   test "wraps":
     testWraps(queue)
-

@@ -19,4 +19,4 @@ suite "Typestates module exports":
     # CAS
     var casPending: CASPending
 
-    check(true)  # Just verify it compiles
+    check(true) # Just verify it compiles

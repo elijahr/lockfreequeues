@@ -15,19 +15,16 @@ import ./storage_n
 import ./committed_flags_n
 import ./atomic_loaders
 import ./fullness_checks
-import ./spmc_pop  # For SipmucBase
+import ./spmc_pop # For SipmucBase
 
 type
-  SPMCPushStart*[N: static int] = object
-    ## Entry point. No data yet.
+  SPMCPushStart*[N: static int] = object ## Entry point. No data yet.
 
-  SPMCPushPointersLoaded*[N: static int] = object
-    ## Loaded tail and reservedHead.
+  SPMCPushPointersLoaded*[N: static int] = object ## Loaded tail and reservedHead.
     tail*: WrappedValueN[N]
     reservedHead*: WrappedValueN[N]
 
-  SPMCPushNotFull*[N: static int] = object
-    ## Confirmed queue has space.
+  SPMCPushNotFull*[N: static int] = object ## Confirmed queue has space.
     tail*: WrappedValueN[N]
     slot*: PhysicalSlotN[N]
 
@@ -37,38 +34,37 @@ type
     newTail*: WrappedValueN[N]
     slot*: PhysicalSlotN[N]
 
-  SPMCPushFull*[N: static int] = object
-    ## Terminal: queue was full.
-
+  SPMCPushFull*[N: static int] = object ## Terminal: queue was full.
 
 typestate SPMCPushOp[N: static int]:
   inheritsFromRootObj = true
-  consumeOnTransition = false  # Allow values to be passed across case branches
-  states SPMCPushStart[N], SPMCPushPointersLoaded[N], SPMCPushNotFull[N],
-         SPMCPushDataWritten[N], SPMCPushFull[N]
+  consumeOnTransition = false # Allow values to be passed across case branches
+  states SPMCPushStart[N],
+    SPMCPushPointersLoaded[N],
+    SPMCPushNotFull[N],
+    SPMCPushDataWritten[N],
+    SPMCPushFull[N]
   transitions:
     SPMCPushStart[N] -> SPMCPushPointersLoaded[N]
-    SPMCPushPointersLoaded[N] -> SPMCPushNotFull[N] | SPMCPushFull[N] as SPMCFullCheck[N]
+    SPMCPushPointersLoaded[N] -> SPMCPushNotFull[N] | SPMCPushFull[N] as SPMCFullCheck[
+      N
+    ]
     SPMCPushNotFull[N] -> SPMCPushDataWritten[N]
-
 
 proc start*[N: static int](): SPMCPushStart[N] {.inline.} =
   ## Begin a push operation.
   SPMCPushStart[N]()
 
-
 proc loadPointers*[N, C: static int, T](
-  op: SPMCPushStart[N],
-  queue: var SipmucBase[N, C, T]
+    op: SPMCPushStart[N], queue: var SipmucBase[N, C, T]
 ): SPMCPushPointersLoaded[N] {.inline, transition.} =
   ## Load tail and reservedHead atomically.
   let tail = loadAcquireN[N](queue.tail).validate()
   let reservedHead = loadAcquireN[N](queue.reservedHead).validate()
   SPMCPushPointersLoaded[N](tail: tail, reservedHead: reservedHead)
 
-
 proc checkFull*[N: static int](
-  op: SPMCPushPointersLoaded[N]
+    op: SPMCPushPointersLoaded[N]
 ): SPMCFullCheck[N] {.inline, transition.} =
   ## Check if queue is full. Returns branch type.
   if fullN(op.reservedHead, op.tail):
@@ -77,27 +73,21 @@ proc checkFull*[N: static int](
     let slot = op.tail.index()
     SPMCFullCheck[N] -> SPMCPushNotFull[N](tail: op.tail, slot: slot)
 
-
 proc writeData*[N, C: static int, T](
-  op: SPMCPushNotFull[N],
-  queue: var SipmucBase[N, C, T],
-  item: T
+    op: SPMCPushNotFull[N], queue: var SipmucBase[N, C, T], item: T
 ): SPMCPushDataWritten[N] {.inline, transition.} =
   ## Write item to the slot.
   queue.storage[op.slot] = item
   let newTail = op.tail.incOrResetN(1)
   SPMCPushDataWritten[N](tail: op.tail, newTail: newTail, slot: op.slot)
 
-
 proc complete*[N, C: static int, T](
-  op: SPMCPushDataWritten[N],
-  queue: var SipmucBase[N, C, T]
+    op: SPMCPushDataWritten[N], queue: var SipmucBase[N, C, T]
 ): bool {.inline.} =
   ## Mark committed and advance tail. Returns success.
   queue.committed.store(op.slot, true)
   queue.tail.storeReleaseN(op.newTail)
   true
-
 
 proc extractFalse*[N: static int](op: SPMCPushFull[N]): bool {.inline.} =
   ## Terminal: extract false result (queue was full).

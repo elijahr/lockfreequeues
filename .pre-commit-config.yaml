@@ -1,0 +1,10 @@
+repos:
+  - repo: local
+    hooks:
+      - id: nph
+        name: nph (Nim formatter)
+        entry: /Users/elijahrutschman/.local/share/mise/installs/nim/2.2.4/nimble/pkgs2/nph-0.6.1-759d4b85d3011637d3e99582a10f6a7260c6b7aa/nph
+        language: system
+        types: [file]
+        files: \.nim$
+        pass_filenames: true

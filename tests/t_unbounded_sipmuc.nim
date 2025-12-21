@@ -4,9 +4,7 @@ import unittest2
 import debra
 import lockfreequeues/unbounded_sipmuc
 
-
 suite "UnboundedSipmuc":
-
   test "newUnboundedSipmuc creates valid instance":
     var manager = initDebraManager[4]()
     var queue = newUnboundedSipmuc[16, int, 4](addr manager)
@@ -23,7 +21,7 @@ suite "UnboundedSipmuc":
     var manager = initDebraManager[4]()
     var queue = newUnboundedSipmuc[16, int, 4](addr manager)
 
-    for i in 1..10:
+    for i in 1 .. 10:
       queue.push(i)
     check(queue.len == 10)
 
@@ -58,12 +56,12 @@ suite "UnboundedSipmuc":
     var manager = initDebraManager[4]()
     var queue = newUnboundedSipmuc[16, int, 4](addr manager)
 
-    for i in 1..5:
+    for i in 1 .. 5:
       queue.push(i)
 
     let handle = registerThread(manager)
     var consumer = queue.getConsumer(handle)
-    for i in 1..5:
+    for i in 1 .. 5:
       let item = consumer.pop()
       check(item.isSome)
       check(item.get == i)
@@ -72,7 +70,7 @@ suite "UnboundedSipmuc":
     var manager = initDebraManager[4]()
     var queue = newUnboundedSipmuc[16, int, 4](addr manager)
 
-    for i in 1..10:
+    for i in 1 .. 10:
       queue.push(i)
 
     let handle1 = registerThread(manager)
@@ -84,7 +82,7 @@ suite "UnboundedSipmuc":
     var total = 0
 
     # Each consumer tries to pop
-    for _ in 1..5:
+    for _ in 1 .. 5:
       let item1 = consumer1.pop()
       if item1.isSome:
         inc count1
@@ -95,20 +93,20 @@ suite "UnboundedSipmuc":
         total += item2.get
 
     check(count1 + count2 == 10)
-    check(total == 55)  # sum of 1..10
+    check(total == 55) # sum of 1..10
 
   test "grows beyond single segment":
     var manager = initDebraManager[4]()
     var queue = newUnboundedSipmuc[4, int, 4](addr manager)
 
-    for i in 1..10:
+    for i in 1 .. 10:
       queue.push(i)
 
     check(queue.segmentCount >= 3)
 
     let handle = registerThread(manager)
     var consumer = queue.getConsumer(handle)
-    for i in 1..10:
+    for i in 1 .. 10:
       let item = consumer.pop()
       check(item.isSome)
       check(item.get == i)
@@ -144,7 +142,7 @@ suite "UnboundedSipmuc":
 
     let handle = registerThread(manager)
     var consumer = queue.getConsumer(handle)
-    for i in 1..5:
+    for i in 1 .. 5:
       check(consumer.pop().get == i)
 
   test "batch pop":
@@ -153,7 +151,7 @@ suite "UnboundedSipmuc":
     let handle = registerThread(manager)
     var consumer = queue.getConsumer(handle)
 
-    for i in 1..10:
+    for i in 1 .. 10:
       queue.push(i)
 
     let items = consumer.pop(5)

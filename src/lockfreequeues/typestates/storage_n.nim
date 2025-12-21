@@ -4,25 +4,26 @@
 
 import ./virtual_values_n
 
-type
-  StorageN*[N: static int, T] = object
-    ## Storage with exactly N slots.
-    data*: array[N, T]
-
+type StorageN*[N: static int, T] = object ## Storage with exactly N slots.
+  data*: array[N, T]
 
 proc init*[N: static int, T](s: var StorageN[N, T]) =
   ## Initialize all slots to default value.
-  for i in 0..<N:
+  for i in 0 ..< N:
     s.data[i].reset()
 
 proc `[]`*[N: static int, T](s: StorageN[N, T], idx: PhysicalSlotN[N]): T {.inline.} =
   ## Read from storage (requires PhysicalSlotN).
   s.data[idx.slotValue]
 
-proc `[]`*[N: static int, T](s: var StorageN[N, T], idx: PhysicalSlotN[N]): var T {.inline.} =
+proc `[]`*[N: static int, T](
+    s: var StorageN[N, T], idx: PhysicalSlotN[N]
+): var T {.inline.} =
   ## Read as var (requires PhysicalSlotN).
   s.data[idx.slotValue]
 
-proc `[]=`*[N: static int, T](s: var StorageN[N, T], idx: PhysicalSlotN[N], val: T) {.inline.} =
+proc `[]=`*[N: static int, T](
+    s: var StorageN[N, T], idx: PhysicalSlotN[N], val: T
+) {.inline.} =
   ## Write to storage (requires PhysicalSlotN).
   s.data[idx.slotValue] = val

@@ -3,7 +3,6 @@ import unittest2
 
 import lockfreequeues
 
-
 suite "atomic_dsl":
   var atom: Atomic[int]
 

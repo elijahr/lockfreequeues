@@ -5,9 +5,7 @@ import unittest2
 import debra
 import lockfreequeues/unbounded_mupsic
 
-
 suite "UnboundedMupsic":
-
   test "newUnboundedMupsic creates valid instance":
     var manager = initDebraManager[4]()
     let consumerHandle = registerThread(manager)
@@ -39,7 +37,7 @@ suite "UnboundedMupsic":
     let producerHandle = registerThread(manager)
     var producer = queue.getProducer(producerHandle)
 
-    for i in 1..10:
+    for i in 1 .. 10:
       producer.push(i)
     check(queue.len == 10)
 
@@ -71,10 +69,10 @@ suite "UnboundedMupsic":
     let producerHandle = registerThread(manager)
     var producer = queue.getProducer(producerHandle)
 
-    for i in 1..5:
+    for i in 1 .. 5:
       producer.push(i)
 
-    for i in 1..5:
+    for i in 1 .. 5:
       let item = queue.pop()
       check(item.isSome)
       check(item.get == i)
@@ -90,7 +88,7 @@ suite "UnboundedMupsic":
     var producer2 = queue.getProducer(producerHandle2)
 
     # Each producer pushes
-    for i in 1..5:
+    for i in 1 .. 5:
       producer1.push(i)
       producer2.push(i + 100)
 
@@ -98,12 +96,12 @@ suite "UnboundedMupsic":
 
     # Pop all items
     var total = 0
-    for _ in 1..10:
+    for _ in 1 .. 10:
       let item = queue.pop()
       check(item.isSome)
       total += item.get
 
-    check(total == 15 + 515)  # sum(1..5) + sum(101..105)
+    check(total == 15 + 515) # sum(1..5) + sum(101..105)
 
   test "grows beyond single segment":
     var manager = initDebraManager[4]()
@@ -112,12 +110,12 @@ suite "UnboundedMupsic":
     let producerHandle = registerThread(manager)
     var producer = queue.getProducer(producerHandle)
 
-    for i in 1..10:
+    for i in 1 .. 10:
       producer.push(i)
 
     check(queue.segmentCount >= 3)
 
-    for i in 1..10:
+    for i in 1 .. 10:
       let item = queue.pop()
       check(item.isSome)
       check(item.get == i)
@@ -155,7 +153,7 @@ suite "UnboundedMupsic":
     producer.push(@[1, 2, 3, 4, 5])
     check(queue.len == 5)
 
-    for i in 1..5:
+    for i in 1 .. 5:
       check(queue.pop().get == i)
 
   test "batch pop":
@@ -165,7 +163,7 @@ suite "UnboundedMupsic":
     let producerHandle = registerThread(manager)
     var producer = queue.getProducer(producerHandle)
 
-    for i in 1..10:
+    for i in 1 .. 10:
       producer.push(i)
 
     let items = queue.pop(5)

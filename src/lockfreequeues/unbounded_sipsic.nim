@@ -1,4 +1,3 @@
-
 ## Unbounded single-producer, single-consumer (SPSC) queue using linked segments.
 ##
 ## Uses direct memory management (alloc0/dealloc). No DEBRA needed for SPSC.
@@ -25,16 +24,15 @@ type
     head*: Atomic[int]
     tail*: Atomic[int]
 
-  UnboundedSipsic*[S: static int; T] = object
+  UnboundedSipsic*[S: static int, T] = object
     ## Unbounded SPSC queue using linked segments.
     ##
     ## - S: Segment size (compile-time constant).
     ## - T: Data type.
-    headSegment: ptr Segment[S, T]  # Consumer reads from here
-    tailSegment: ptr Segment[S, T]  # Producer writes here
-    itemCount: Atomic[int]  # Total items in queue
-    segments: Atomic[int]   # Number of segments
-
+    headSegment: ptr Segment[S, T] # Consumer reads from here
+    tailSegment: ptr Segment[S, T] # Producer writes here
+    itemCount: Atomic[int] # Total items in queue
+    segments: Atomic[int] # Number of segments
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
   ## Allocate a new segment using Nim's alloc0 (zero-initialized).
@@ -43,8 +41,7 @@ proc newSegment[S: static int, T](): ptr Segment[S, T] =
   result.head.store(0, moRelaxed)
   result.tail.store(0, moRelaxed)
 
-
-proc newUnboundedSipsic*[S: static int; T](): UnboundedSipsic[S, T] =
+proc newUnboundedSipsic*[S: static int, T](): UnboundedSipsic[S, T] =
   ## Create a new unbounded SPSC queue.
   ##
   ## Returns a new queue instance.
@@ -53,10 +50,13 @@ proc newUnboundedSipsic*[S: static int; T](): UnboundedSipsic[S, T] =
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
       when T is ref:
-        {.error: "Queue item type '" & $T & "' is a ref type. " &
-                 "On arc/orc, ref types use spinlock-based atomic operations for reference counting. " &
-                 "Use a lock-free type (int, pointer, ptr T, etc.) or compile with " &
-                 "-d:allowNonLockFreeQueueItems to explicitly allow spinlock fallback.".}
+        {.
+          error:
+            "Queue item type '" & $T & "' is a ref type. " &
+            "On arc/orc, ref types use spinlock-based atomic operations for reference counting. " &
+            "Use a lock-free type (int, pointer, ptr T, etc.) or compile with " &
+            "-d:allowNonLockFreeQueueItems to explicitly allow spinlock fallback."
+        .}
 
   # Start with one segment
   let seg = newSegment[S, T]()
@@ -65,26 +65,26 @@ proc newUnboundedSipsic*[S: static int; T](): UnboundedSipsic[S, T] =
   result.itemCount.store(0, moRelaxed)
   result.segments.store(1, moRelaxed)
 
-
-proc segmentCount*[S: static int; T](self: var UnboundedSipsic[S, T]): int =
+proc segmentCount*[S: static int, T](self: var UnboundedSipsic[S, T]): int =
   ## Number of segments currently allocated.
   result = self.segments.load(moRelaxed)
 
-
-proc len*[S: static int; T](self: var UnboundedSipsic[S, T]): int =
+proc len*[S: static int, T](self: var UnboundedSipsic[S, T]): int =
   ## Number of items currently in the queue.
   result = self.itemCount.load(moRelaxed)
 
-
-proc push*[S: static int; T](self: var UnboundedSipsic[S, T], item: T) =
+proc push*[S: static int, T](self: var UnboundedSipsic[S, T], item: T) =
   ## Push a single item. Never blocks or fails (unbounded).
 
   # Compile-time lock-free check
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
       when T is ref:
-        {.error: "Queue item type '" & $T & "' is a ref type. " &
-                 "Use -d:allowNonLockFreeQueueItems to allow.".}
+        {.
+          error:
+            "Queue item type '" & $T & "' is a ref type. " &
+            "Use -d:allowNonLockFreeQueueItems to allow."
+        .}
 
   var seg = self.tailSegment
 
@@ -104,14 +104,12 @@ proc push*[S: static int; T](self: var UnboundedSipsic[S, T], item: T) =
   seg.tail.store(pos + 1, moRelease)
   discard self.itemCount.fetchAdd(1, moRelaxed)
 
-
-proc push*[S: static int; T](self: var UnboundedSipsic[S, T], items: openArray[T]) =
+proc push*[S: static int, T](self: var UnboundedSipsic[S, T], items: openArray[T]) =
   ## Push multiple items.
   for item in items:
     self.push(item)
 
-
-proc pop*[S: static int; T](self: var UnboundedSipsic[S, T]): Option[T] =
+proc pop*[S: static int, T](self: var UnboundedSipsic[S, T]): Option[T] =
   ## Pop a single item.
   ##
   ## Returns some(T) if available, none(T) if empty.
@@ -120,8 +118,11 @@ proc pop*[S: static int; T](self: var UnboundedSipsic[S, T]): Option[T] =
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
       when T is ref:
-        {.error: "Queue item type '" & $T & "' is a ref type. " &
-                 "Use -d:allowNonLockFreeQueueItems to allow.".}
+        {.
+          error:
+            "Queue item type '" & $T & "' is a ref type. " &
+            "Use -d:allowNonLockFreeQueueItems to allow."
+        .}
 
   var seg = self.headSegment
 
@@ -150,8 +151,9 @@ proc pop*[S: static int; T](self: var UnboundedSipsic[S, T]): Option[T] =
     discard self.segments.fetchSub(1, moRelaxed)
     dealloc(oldSeg)
 
-
-proc pop*[S: static int; T](self: var UnboundedSipsic[S, T], count: int): Option[seq[T]] =
+proc pop*[S: static int, T](
+    self: var UnboundedSipsic[S, T], count: int
+): Option[seq[T]] =
   ## Pop up to count items.
   ##
   ## Returns some(seq[T]) with at least one item, none if empty.
@@ -160,7 +162,7 @@ proc pop*[S: static int; T](self: var UnboundedSipsic[S, T], count: int): Option
 
   var items = newSeq[T]()
 
-  for i in 0..<count:
+  for i in 0 ..< count:
     let item = self.pop()
     if item.isNone:
       break
@@ -170,8 +172,7 @@ proc pop*[S: static int; T](self: var UnboundedSipsic[S, T], count: int): Option
     return none(seq[T])
   return some(items)
 
-
-proc `=destroy`*[S: static int; T](self: var UnboundedSipsic[S, T]) =
+proc `=destroy`*[S: static int, T](self: var UnboundedSipsic[S, T]) =
   ## Clean up all segments.
   if self.headSegment != nil:
     var seg = self.headSegment

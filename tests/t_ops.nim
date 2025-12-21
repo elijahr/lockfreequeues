@@ -2,12 +2,10 @@ import unittest2
 
 import lockfreequeues/ops
 
-
 when (NimMajor, NimMinor) < (1, 3):
   type AssertionDefect = AssertionError
 
 suite "validateHeadAndTail(head, tail, 4)":
-
   test "valid":
     check(validateHeadAndTail(0, 0, 4) == true)
     check(validateHeadAndTail(0, 1, 4) == true)
@@ -113,7 +111,6 @@ suite "validateHeadAndTail(head, tail, 4)":
     check(validateHeadAndTail(9, 8, 4) == false)
 
 suite "validateHeadOrTail(headOrTail, 4)":
-
   test "valid":
     check(validateHeadOrTail(0, 4) == true)
     check(validateHeadOrTail(1, 4) == true)
@@ -133,7 +130,6 @@ suite "validateHeadOrTail(headOrTail, 4)":
     check(validateHeadOrTail(-2, 4) == false)
 
 suite "index(value, 4)":
-
   test "all":
     check(index(0, 4) == 0)
     check(index(1, 4) == 1)
@@ -248,7 +244,6 @@ suite "incOrReset(original, amount, 4)":
       discard incOrReset(7, 6, 4)
     expect(AssertionDefect):
       discard incOrReset(7, 7, 4)
-
 
 suite "used(head, tail, 4)":
   test "valid":

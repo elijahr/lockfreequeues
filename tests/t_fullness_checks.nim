@@ -4,7 +4,6 @@ import lockfreequeues/typestates/virtual_values_n1
 import lockfreequeues/typestates/fullness_checks
 
 suite "N-slot fullness (for MPSC/SPMC/MPMC)":
-
   test "empty when head == tail":
     let head = initRawN[4](0).validate()
     let tail = initRawN[4](0).validate()
@@ -13,7 +12,7 @@ suite "N-slot fullness (for MPSC/SPMC/MPMC)":
 
   test "full when used == N":
     let head = initRawN[4](0).validate()
-    let tail = initRawN[4](4).validate()  # 4 items = full
+    let tail = initRawN[4](4).validate() # 4 items = full
     check(fullN(head, tail))
     check(not emptyN(head, tail))
 
@@ -24,8 +23,8 @@ suite "N-slot fullness (for MPSC/SPMC/MPMC)":
 
   test "usedN handles wrap":
     let head = initRawN[4](6).validate()
-    let tail = initRawN[4](1).validate()  # Wrapped
-    check(usedN(head, tail) == 3)  # 8 - 6 + 1 = 3? No: (1 - 6 + 8) = 3
+    let tail = initRawN[4](1).validate() # Wrapped
+    check(usedN(head, tail) == 3) # 8 - 6 + 1 = 3? No: (1 - 6 + 8) = 3
 
   test "availableN calculates correctly":
     let head = initRawN[4](0).validate()
@@ -33,7 +32,6 @@ suite "N-slot fullness (for MPSC/SPMC/MPMC)":
     check(availableN(head, tail) == 2)
 
 suite "N+1-slot fullness (for SPSC)":
-
   test "empty when head == tail":
     let head = initRawN1[4](0).validate()
     let tail = initRawN1[4](0).validate()

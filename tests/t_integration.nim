@@ -1,9 +1,7 @@
 import lockfreequeues/sipmuc
 
-
 template testCapacity*(queue: untyped) =
   check(queue.capacity == 8)
-
 
 template testHeadAndTailReset*(queue: untyped) =
   # SPSC: Virtual space is 2*(N+1) = 18 for N=8, so valid values are 0..17
@@ -41,9 +39,8 @@ template testHeadAndTailReset*(queue: untyped) =
     queue.checkState(
       head = 0,
       tail = 0,
-      storage = (@[0, 0, 0, 0, 0, 0, 0, 0, 1]),  # slot 8 still has old value
+      storage = (@[0, 0, 0, 0, 0, 0, 0, 0, 1]), # slot 8 still has old value
     )
-
 
 template testWraps*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
@@ -62,8 +59,8 @@ template testWraps*(queue: untyped) =
 
   let pushRes =
     when ((queue is Mupsic) or (queue is Mupmuc)):
-       queue.getProducer(0).push(@[9, 10, 11, 12])
-     else:
+      queue.getProducer(0).push(@[9, 10, 11, 12])
+    else:
       queue.push(@[9, 10, 11, 12])
 
   check(pushRes.isNone)
@@ -90,11 +87,7 @@ template testWraps*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(head = 8, reservedTail = 12)
   else:
-    queue.checkState(
-      head = 8,
-      tail = 12,
-      storage = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]),
-    )
+    queue.checkState(head = 8, tail = 12, storage = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]))
 
   popRes =
     when ((queue is Mupmuc) or (queue is Sipmuc)):
@@ -107,8 +100,4 @@ template testWraps*(queue: untyped) =
   when ((queue is Mupsic) or (queue is Mupmuc)):
     queue.checkState(head = 12, reservedTail = 12)
   else:
-    queue.checkState(
-      head = 12,
-      tail = 12,
-      storage = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]),
-    )
+    queue.checkState(head = 12, tail = 12, storage = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]))

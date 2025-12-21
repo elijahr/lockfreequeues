@@ -16,33 +16,30 @@ const
   Count10k = 10_000
   Count100k = 100_000
 
-type
-  TestObject = object
-    id: int
-    payload: string
-    checksum: uint32
+type TestObject = object
+  id: int
+  payload: string
+  checksum: uint32
 
 proc computeChecksum(id: int, payload: string): uint32 =
   result = uint32(id)
   for c in payload:
     result = result xor uint32(ord(c))
 
-
 # =============================================================================
 # Sipsic (SPSC) Stress Tests
 # =============================================================================
 
 suite "Stress - Sipsic (SPSC)":
-
   test "Sipsic 100k int":
     var queue = initSipsic[StandardBuffer, int]()
 
     # Push all items
-    for i in 0..<Count100k:
+    for i in 0 ..< Count100k:
       while not queue.push(i):
         # Pop to make room
         let _ = queue.pop()
-      check queue.push(i) or true  # Already pushed in while loop
+      check queue.push(i) or true # Already pushed in while loop
 
     # Pop remaining items
     var popped = 0
@@ -60,7 +57,7 @@ suite "Stress - Sipsic (SPSC)":
     var popped = 0
 
     # Interleaved push/pop to stress wraparound
-    for i in 0..<Count100k:
+    for i in 0 ..< Count100k:
       if queue.push(i):
         inc pushed
       let item = queue.pop()
@@ -81,7 +78,7 @@ suite "Stress - Sipsic (SPSC)":
     var pushed = 0
     var popped = 0
 
-    for i in 0..<Count100k:
+    for i in 0 ..< Count100k:
       if queue.push("message_" & $i):
         inc pushed
       let item = queue.pop()
@@ -102,13 +99,10 @@ suite "Stress - Sipsic (SPSC)":
     var pushed = 0
     var verified = 0
 
-    for i in 0..<Count100k:
+    for i in 0 ..< Count100k:
       let payload = "payload_" & $i
-      let obj = TestObject(
-        id: i,
-        payload: payload,
-        checksum: computeChecksum(i, payload)
-      )
+      let obj =
+        TestObject(id: i, payload: payload, checksum: computeChecksum(i, payload))
       if queue.push(obj):
         inc pushed
 
@@ -129,7 +123,6 @@ suite "Stress - Sipsic (SPSC)":
 
     check pushed == verified
 
-
 # =============================================================================
 # Mupmuc (MPMC) Stress Tests
 # =============================================================================
@@ -149,7 +142,7 @@ type
 
 proc mupmucProducer[N, P, C: static int](ctx: ptr MupmucPCtx[N, P, C, int]) {.thread.} =
   let p = ctx.queue[].getProducer(idx = ctx.producerIdx)
-  for i in 0..<ctx.count:
+  for i in 0 ..< ctx.count:
     while not p.push(i):
       discard
     ctx.sent[].atomicInc()
@@ -163,9 +156,7 @@ proc mupmucConsumer[N, P, C: static int](ctx: ptr MupmucCCtx[N, P, C, int]) {.th
       inc localReceived
       ctx.received[].atomicInc()
 
-
 suite "Stress - Mupmuc (MPMC)":
-
   test "Mupmuc 1P/1C 10k int":
     var queue = initMupmuc[StandardBuffer, 1, 1, int]()
     var sent, received: Atomic[int]
@@ -173,9 +164,11 @@ suite "Stress - Mupmuc (MPMC)":
     received.store(0)
 
     var pctx = MupmucPCtx[StandardBuffer, 1, 1, int](
-      queue: addr queue, count: Count10k, producerIdx: 0, sent: addr sent)
+      queue: addr queue, count: Count10k, producerIdx: 0, sent: addr sent
+    )
     var cctx = MupmucCCtx[StandardBuffer, 1, 1, int](
-      queue: addr queue, count: Count10k, consumerIdx: 0, received: addr received)
+      queue: addr queue, count: Count10k, consumerIdx: 0, received: addr received
+    )
 
     var pThread: Thread[ptr MupmucPCtx[StandardBuffer, 1, 1, int]]
     var cThread: Thread[ptr MupmucCCtx[StandardBuffer, 1, 1, int]]
@@ -198,13 +191,17 @@ suite "Stress - Mupmuc (MPMC)":
     const PerThread = Count10k div 2
 
     var pctx0 = MupmucPCtx[StandardBuffer, 2, 2, int](
-      queue: addr queue, count: PerThread, producerIdx: 0, sent: addr sent)
+      queue: addr queue, count: PerThread, producerIdx: 0, sent: addr sent
+    )
     var pctx1 = MupmucPCtx[StandardBuffer, 2, 2, int](
-      queue: addr queue, count: PerThread, producerIdx: 1, sent: addr sent)
+      queue: addr queue, count: PerThread, producerIdx: 1, sent: addr sent
+    )
     var cctx0 = MupmucCCtx[StandardBuffer, 2, 2, int](
-      queue: addr queue, count: PerThread, consumerIdx: 0, received: addr received)
+      queue: addr queue, count: PerThread, consumerIdx: 0, received: addr received
+    )
     var cctx1 = MupmucCCtx[StandardBuffer, 2, 2, int](
-      queue: addr queue, count: PerThread, consumerIdx: 1, received: addr received)
+      queue: addr queue, count: PerThread, consumerIdx: 1, received: addr received
+    )
 
     var pThreads: array[2, Thread[ptr MupmucPCtx[StandardBuffer, 2, 2, int]]]
     var cThreads: array[2, Thread[ptr MupmucCCtx[StandardBuffer, 2, 2, int]]]
@@ -231,13 +228,17 @@ suite "Stress - Mupmuc (MPMC)":
     const PerThread = Count10k div 2
 
     var pctx0 = MupmucPCtx[SmallBuffer, 2, 2, int](
-      queue: addr queue, count: PerThread, producerIdx: 0, sent: addr sent)
+      queue: addr queue, count: PerThread, producerIdx: 0, sent: addr sent
+    )
     var pctx1 = MupmucPCtx[SmallBuffer, 2, 2, int](
-      queue: addr queue, count: PerThread, producerIdx: 1, sent: addr sent)
+      queue: addr queue, count: PerThread, producerIdx: 1, sent: addr sent
+    )
     var cctx0 = MupmucCCtx[SmallBuffer, 2, 2, int](
-      queue: addr queue, count: PerThread, consumerIdx: 0, received: addr received)
+      queue: addr queue, count: PerThread, consumerIdx: 0, received: addr received
+    )
     var cctx1 = MupmucCCtx[SmallBuffer, 2, 2, int](
-      queue: addr queue, count: PerThread, consumerIdx: 1, received: addr received)
+      queue: addr queue, count: PerThread, consumerIdx: 1, received: addr received
+    )
 
     var pThreads: array[2, Thread[ptr MupmucPCtx[SmallBuffer, 2, 2, int]]]
     var cThreads: array[2, Thread[ptr MupmucCCtx[SmallBuffer, 2, 2, int]]]
@@ -255,17 +256,15 @@ suite "Stress - Mupmuc (MPMC)":
     check sent.load() == Count10k
     check received.load() == Count10k
 
-
 # =============================================================================
 # Sipmuc (SPMC) Stress Tests
 # =============================================================================
 
-type
-  SipmucCCtx[N, C: static int, T] = object
-    queue: ptr Sipmuc[N, C, T]
-    count: int
-    consumerIdx: int
-    received: ptr Atomic[int]
+type SipmucCCtx[N, C: static int, T] = object
+  queue: ptr Sipmuc[N, C, T]
+  count: int
+  consumerIdx: int
+  received: ptr Atomic[int]
 
 proc sipmucConsumer[N, C: static int](ctx: ptr SipmucCCtx[N, C, int]) {.thread.} =
   let c = ctx.queue[].getConsumer(idx = ctx.consumerIdx)
@@ -276,9 +275,7 @@ proc sipmucConsumer[N, C: static int](ctx: ptr SipmucCCtx[N, C, int]) {.thread.}
       inc localReceived
       ctx.received[].atomicInc()
 
-
 suite "Stress - Sipmuc (SPMC)":
-
   test "Sipmuc 1P/2C 10k int":
     var queue = initSipmuc[StandardBuffer, 2, int]()
     var received: Atomic[int]
@@ -287,9 +284,11 @@ suite "Stress - Sipmuc (SPMC)":
     const PerConsumer = Count10k div 2
 
     var cctx0 = SipmucCCtx[StandardBuffer, 2, int](
-      queue: addr queue, count: PerConsumer, consumerIdx: 0, received: addr received)
+      queue: addr queue, count: PerConsumer, consumerIdx: 0, received: addr received
+    )
     var cctx1 = SipmucCCtx[StandardBuffer, 2, int](
-      queue: addr queue, count: PerConsumer, consumerIdx: 1, received: addr received)
+      queue: addr queue, count: PerConsumer, consumerIdx: 1, received: addr received
+    )
 
     var cThreads: array[2, Thread[ptr SipmucCCtx[StandardBuffer, 2, int]]]
 
@@ -297,7 +296,7 @@ suite "Stress - Sipmuc (SPMC)":
     createThread(cThreads[1], sipmucConsumer[StandardBuffer, 2], addr cctx1)
 
     # Producer runs in main thread
-    for i in 0..<Count10k:
+    for i in 0 ..< Count10k:
       while not queue.push(i):
         discard
 
@@ -306,28 +305,24 @@ suite "Stress - Sipmuc (SPMC)":
 
     check received.load() == Count10k
 
-
 # =============================================================================
 # Mupsic (MPSC) Stress Tests
 # =============================================================================
 
-type
-  MupsicPCtx[N, P: static int, T] = object
-    queue: ptr Mupsic[N, P, T]
-    count: int
-    producerIdx: int
-    sent: ptr Atomic[int]
+type MupsicPCtx[N, P: static int, T] = object
+  queue: ptr Mupsic[N, P, T]
+  count: int
+  producerIdx: int
+  sent: ptr Atomic[int]
 
 proc mupsicProducer[N, P: static int](ctx: ptr MupsicPCtx[N, P, int]) {.thread.} =
   let p = ctx.queue[].getProducer(idx = ctx.producerIdx)
-  for i in 0..<ctx.count:
+  for i in 0 ..< ctx.count:
     while not p.push(i):
       discard
     ctx.sent[].atomicInc()
 
-
 suite "Stress - Mupsic (MPSC)":
-
   test "Mupsic 2P/1C 10k int":
     var queue = initMupsic[StandardBuffer, 2, int]()
     var sent: Atomic[int]
@@ -336,9 +331,11 @@ suite "Stress - Mupsic (MPSC)":
     const PerProducer = Count10k div 2
 
     var pctx0 = MupsicPCtx[StandardBuffer, 2, int](
-      queue: addr queue, count: PerProducer, producerIdx: 0, sent: addr sent)
+      queue: addr queue, count: PerProducer, producerIdx: 0, sent: addr sent
+    )
     var pctx1 = MupsicPCtx[StandardBuffer, 2, int](
-      queue: addr queue, count: PerProducer, producerIdx: 1, sent: addr sent)
+      queue: addr queue, count: PerProducer, producerIdx: 1, sent: addr sent
+    )
 
     var pThreads: array[2, Thread[ptr MupsicPCtx[StandardBuffer, 2, int]]]
 
@@ -366,9 +363,11 @@ suite "Stress - Mupsic (MPSC)":
     const PerProducer = Count10k div 2
 
     var pctx0 = MupsicPCtx[SmallBuffer, 2, int](
-      queue: addr queue, count: PerProducer, producerIdx: 0, sent: addr sent)
+      queue: addr queue, count: PerProducer, producerIdx: 0, sent: addr sent
+    )
     var pctx1 = MupsicPCtx[SmallBuffer, 2, int](
-      queue: addr queue, count: PerProducer, producerIdx: 1, sent: addr sent)
+      queue: addr queue, count: PerProducer, producerIdx: 1, sent: addr sent
+    )
 
     var pThreads: array[2, Thread[ptr MupsicPCtx[SmallBuffer, 2, int]]]
 
