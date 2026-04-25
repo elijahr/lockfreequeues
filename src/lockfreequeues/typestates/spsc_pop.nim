@@ -7,7 +7,6 @@
 ##
 ## Uses N+1 slot arithmetic (no committed flags needed for SPSC).
 
-import atomics
 import typestates
 
 import ./virtual_values_n1

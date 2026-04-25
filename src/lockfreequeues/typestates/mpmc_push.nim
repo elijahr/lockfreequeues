@@ -18,7 +18,6 @@ import ./storage_n
 import ./committed_flags_n
 import ./atomic_loaders
 import ./fullness_checks
-import ./cas
 
 type
   MPMCPushStart*[N: static int] = object ## Entry point. No data yet.
