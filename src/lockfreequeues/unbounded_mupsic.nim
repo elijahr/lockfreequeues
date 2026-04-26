@@ -260,6 +260,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
       seg = nextSeg
 
   if self.strategy == Eager:
+    self.handle.advanceEvery(64)
     discard reclaimNow(self.manager[])
 
 proc pop*[S: static int, T; MaxThreads: static int](

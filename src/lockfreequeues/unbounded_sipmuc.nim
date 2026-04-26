@@ -238,6 +238,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
       # Lost CAS, retry
 
   if self.queue.strategy == Eager:
+    self.handle.advanceEvery(64)
     discard reclaimNow(self.queue.manager[])
 
 proc pop*[S: static int, T; MaxThreads: static int](
