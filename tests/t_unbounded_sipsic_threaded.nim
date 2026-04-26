@@ -2,7 +2,6 @@ import lockfreequeues/atomic_dsl
 import options
 import unittest2
 
-import lockfreequeues/epoch
 import lockfreequeues/unbounded_sipsic
 
 const ItemCount = 10000
@@ -44,8 +43,7 @@ suite "UnboundedSipsic threaded":
     producerDone.store(false, moRelaxed)
 
   test "high segment turnover":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipsic[8, int](manager)
+    var queue = newUnboundedSipsic[8, int]()
     var ctx = TestContext[8](
       queue: addr queue,
       received: addr received,
@@ -65,8 +63,7 @@ suite "UnboundedSipsic threaded":
       check(received[i].load(moRelaxed))
 
   test "normal segment size":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipsic[64, int](manager)
+    var queue = newUnboundedSipsic[64, int]()
     var ctx = TestContext[64](
       queue: addr queue,
       received: addr received,
@@ -85,25 +82,10 @@ suite "UnboundedSipsic threaded":
     for i in 0 ..< ItemCount:
       check(received[i].load(moRelaxed))
 
-  test "segment retirement (NeverDeallocate)":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipsic[8, int](manager, NeverDeallocate)
-
-    # Push items to create segments
-    for i in 1 .. 1000:
-      queue.push(i)
-    let peakSegments = queue.segmentCount()
-
-    # Pop all items
-    for i in 1 .. 1000:
-      discard queue.pop()
-
-    # Segments should NOT be freed with NeverDeallocate
-    check(queue.segmentCount() == peakSegments)
-
-  test "segment retirement (EagerDeallocate)":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipsic[8, int](manager, EagerDeallocate)
+  test "segment retirement bounded after drain":
+    # UnboundedSipsic deallocates segments inline (no strategy). After draining
+    # the queue, segment count should be small (only the active tail segment).
+    var queue = newUnboundedSipsic[8, int]()
 
     # Push items to create segments
     for i in 1 .. 1000:
@@ -113,5 +95,5 @@ suite "UnboundedSipsic threaded":
     for i in 1 .. 1000:
       discard queue.pop()
 
-    # Segments SHOULD be freed with EagerDeallocate
+    # Segments should have been freed inline
     check(queue.segmentCount() <= 3)
