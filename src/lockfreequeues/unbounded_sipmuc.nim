@@ -246,12 +246,18 @@ proc pop*[S: static int, T; MaxThreads: static int](
         if self.queue.headSegment.compareExchange(
           expected, nextSeg, moAcquireRelease, moAcquire
         ):
+          # Always retire so DEBRA owns the detached segment: Manual mode
+          # leaves it in limbo for `tryReclaim` (or `manager.=destroy` at
+          # scope exit) to drain; Eager mode reclaims it shortly via the
+          # `reclaimNow` call after the pin block. Without retiring, the
+          # segment is detached from the head chain but reachable from no
+          # root, and leaks at process exit.
+          it.retire(cast[pointer](seg), segmentDestructor)
           if self.queue.strategy != Manual:
-            it.retire(cast[pointer](seg), segmentDestructor)
             discard self.queue.segments.fetchSub(1, moRelaxed)
-          # With Manual strategy, the segment is detached from the active
-          # chain but still allocated; segmentCount reflects allocated
-          # segments, so leave the counter alone.
+          # With Manual strategy the segment is in limbo (retired but not
+          # yet reclaimed); segmentCount keeps reflecting the peak count
+          # until the user calls `tryReclaim`.
           seg = nextSeg
         else:
           # Another consumer already advanced. expected now points at the

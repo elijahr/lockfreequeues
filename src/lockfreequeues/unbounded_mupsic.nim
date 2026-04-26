@@ -269,13 +269,19 @@ proc pop*[S: static int, T; MaxThreads: static int](
       # Single consumer, so no race on headSegment. Advance with release
       # semantics and retire under the active pin so a follow-up reclaim
       # cannot free this segment until every pinned thread observes the
-      # advance.
+      # advance. Always retire (regardless of strategy) so DEBRA owns the
+      # detached segment: Manual mode leaves it in limbo for `tryReclaim`
+      # (or `manager.=destroy` at scope exit) to drain; Eager mode reclaims
+      # it shortly via the `reclaimNow` call after the pin block. Without
+      # retiring, the segment is detached from the head chain but reachable
+      # from no root, and leaks at process exit.
       self.headSegment.store(nextSeg, moRelease)
+      it.retire(cast[pointer](seg), segmentDestructor)
       if self.strategy != Manual:
-        it.retire(cast[pointer](seg), segmentDestructor)
         discard self.segments.fetchSub(1, moRelaxed)
-      # With Manual strategy the segment is detached from the active chain
-      # but remains allocated; leave segmentCount unchanged.
+      # With Manual strategy the segment is in limbo (retired but not yet
+      # reclaimed); segmentCount keeps reflecting the peak count until the
+      # user calls `tryReclaim`.
       seg = nextSeg
 
   if self.strategy == Eager:
