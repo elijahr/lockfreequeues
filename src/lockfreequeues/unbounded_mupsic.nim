@@ -230,8 +230,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
-  let handle = self.handle
-  handle.withPin(pinScope):
+  self.handle.withPin:
     var seg = self.headSegment
 
     while true:
@@ -254,7 +253,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
 
       # Retire old segment
       if self.strategy != Manual:
-        pinScope.retire(cast[pointer](seg), segmentDestructor)
+        it.retire(cast[pointer](seg), segmentDestructor)
         discard self.segments.fetchSub(1, moRelaxed)
 
       self.headSegment = nextSeg

@@ -205,8 +205,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
-  let handle = self.handle
-  handle.withPin(pinScope):
+  self.handle.withPin:
     var seg = self.queue.headSegment
 
     while true:
@@ -231,7 +230,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
 
         # If we claimed the last slot (S-1), retire segment for reclamation
         if mySlot == S - 1 and self.queue.strategy != Manual:
-          pinScope.retire(cast[pointer](seg), segmentDestructor)
+          it.retire(cast[pointer](seg), segmentDestructor)
           discard self.queue.segments.fetchSub(1, moRelaxed)
 
         break
