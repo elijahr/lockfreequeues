@@ -16,10 +16,10 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  test_x86:
-    name: Test nim-${{ matrix.nim-version }} / ${{ matrix.runs-on }} / x86_64
+  test:
+    name: Test nim-${{ matrix.nim-version }} / ${{ matrix.runs-on }}
     runs-on: ${{ matrix.runs-on }}
-    timeout-minutes: ${{ matrix.timeout-minutes }}
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false
@@ -29,12 +29,14 @@ jobs:
             nim-version: 'stable'
             sanitize-threads: 'yes'
             sanitize-address: 'yes'
-            timeout-minutes: 10
+          - runs-on: ubuntu-24.04-arm
+            nim-version: 'stable'
+            sanitize-threads: 'yes'
+            sanitize-address: 'yes'
 
     steps:
-      # Optimization: re-use cached Nim->C compilation
       - name: Restore cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${HOME}/.cache
           key: cache-${{ matrix.runs-on }}-${{ matrix.nim-version }}
@@ -48,7 +50,6 @@ jobs:
           nim-version: ${{ matrix.nim-version }}
 
       - name: Install dependencies
-        if: runner.os == 'Linux'
         run: |
           sudo apt-get update -q -y
           sudo apt-get -qq install -y clang
@@ -64,75 +65,3 @@ jobs:
           echo "::group::Run examples"
           nimble examples
           echo "::endgroup::"
-
-  test_non_x86:
-    name: Test nim-${{ matrix.nim-version }} / ubuntu / ${{ matrix.arch }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: aarch64
-            nim-version: '2.2.4'
-
-    steps:
-      # Optimization: re-use cached Nim->C compilation
-      - name: Restore cache
-        uses: actions/cache@v4
-        with:
-          path: ${HOME}/.cache
-          key: cache-${{ matrix.arch }}-${{ matrix.nim-version }}
-
-      - name: Checkout Nim project
-        uses: actions/checkout@v4
-
-      # Install & run tests on non-x86
-      - uses: uraimo/run-on-arch-action@v3
-        name: Install Nim & run tests
-        with:
-          arch: ${{ matrix.arch }}
-          distro: ubuntu24.04
-
-          dockerRunArgs: |
-            --volume "${HOME}/.cache:/root/.cache"
-
-          setup: mkdir -p "${HOME}/.cache"
-
-          shell: /usr/bin/env bash
-
-          install: |
-            set -uexo pipefail
-            apt-get update -q -y
-            apt-get -qq install -y build-essential curl git xz-utils
-
-          env: |
-            SANITIZE_THREADS: no
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-          run: |
-            set -uexo pipefail
-
-            # Install Nim from upstream source release tarball (no choosenim:
-            # choosenim does not support linux_arm64; asdf-nim requires fragile
-            # dep-install machinery across base-image versions).
-            echo "::group::Install Nim ${{ matrix.nim-version }}"
-            curl -sSfL "https://nim-lang.org/download/nim-${{ matrix.nim-version }}.tar.xz" -o /tmp/nim.tar.xz
-            mkdir -p /opt/nim
-            tar -xf /tmp/nim.tar.xz -C /opt/nim --strip-components=1
-            cd /opt/nim
-            sh build.sh
-            bin/nim c koch
-            ./koch tools
-            export PATH="/opt/nim/bin:${PATH}"
-            cd -
-            nim --version
-            echo "::endgroup::"
-
-            # Run tests
-            echo "::group::Run tests"
-            git config --global --add safe.directory ${PWD}
-            nimble develop -y
-            nimble test
-            nimble examples
-            echo "::endgroup::"
