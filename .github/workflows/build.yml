@@ -59,6 +59,22 @@ jobs:
           sudo apt-get update -q -y
           sudo apt-get -qq install -y clang
 
+      - name: Clone and install sibling deps (nim-debra, nim-typestates)
+        # nim.cfg uses --path:"../nim-debra/src" and --path:"../nim-typestates/src"
+        # for compiler-side resolution. Nimble's dep resolver runs BEFORE
+        # the compiler though, and `nimble test` will refuse to launch if
+        # `requires "debra >= 0.3.0"` is unsatisfiable from nimble's
+        # package store. So fetch the matching branches and `nimble install`
+        # them locally to satisfy the resolver. Once debra 0.3.0 publishes
+        # this whole step can go away.
+        run: |
+          set -e
+          cd ..
+          git clone --depth 1 --branch feature/lockfreequeues-driven https://github.com/elijahr/nim-debra.git
+          git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
+          (cd nim-typestates && nimble install -y)
+          (cd nim-debra && nimble install -y)
+
       - name: Run tests
         run: |
           set -o pipefail
@@ -81,7 +97,10 @@ jobs:
               return 1
             fi
           }
-          nimble_run nimble develop -y
+          # Skip `nimble develop -y` — nim.cfg's --noNimblePath +
+          # explicit --path: directives mean nimble's package resolver is
+          # not used. Going through develop would only add a dep-resolution
+          # round trip that fails until debra 0.3.0 publishes.
           echo "::group::Run test suite (includes arc, orc, refc, lock-free enforcement)"
           nimble_run nimble test
           echo "::endgroup::"
