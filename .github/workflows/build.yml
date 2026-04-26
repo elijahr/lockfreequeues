@@ -74,7 +74,7 @@ jobs:
       matrix:
         include:
           - arch: aarch64
-            nim-version: 'ref:version-2-2'
+            nim-version: '2.2.4'
 
     steps:
       # Optimization: re-use cached Nim->C compilation
@@ -113,15 +113,20 @@ jobs:
           run: |
             set -uexo pipefail
 
-            # Install Nim via choosenim (asdf-nim required xz-utils + dep
-            # install machinery that became fragile across base-image bumps;
-            # choosenim is upstream-supported and just works).
-            echo "::group::Install Nim"
-            export CHOOSENIM_NO_ANALYTICS=1
-            curl -sSf https://nim-lang.org/choosenim/init.sh -o /tmp/choosenim.sh
-            sh /tmp/choosenim.sh -y
-            export PATH="${HOME}/.nimble/bin:${PATH}"
-            choosenim ${{ matrix.nim-version }}
+            # Install Nim from upstream source release tarball (no choosenim:
+            # choosenim does not support linux_arm64; asdf-nim requires fragile
+            # dep-install machinery across base-image versions).
+            echo "::group::Install Nim ${{ matrix.nim-version }}"
+            curl -sSfL "https://nim-lang.org/download/nim-${{ matrix.nim-version }}.tar.xz" -o /tmp/nim.tar.xz
+            mkdir -p /opt/nim
+            tar -xf /tmp/nim.tar.xz -C /opt/nim --strip-components=1
+            cd /opt/nim
+            sh build.sh
+            bin/nim c koch
+            ./koch tools
+            export PATH="/opt/nim/bin:${PATH}"
+            cd -
+            nim --version
             echo "::endgroup::"
 
             # Run tests
