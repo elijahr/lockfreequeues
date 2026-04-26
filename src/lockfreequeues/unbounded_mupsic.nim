@@ -20,7 +20,7 @@
 ## let item = queue.pop()  # some(42)
 ## ```
 
-import std/atomics
+import ./atomic_dsl
 import std/options
 
 import debra

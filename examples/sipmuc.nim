@@ -3,7 +3,7 @@
 ## This demonstrates a fan-out pattern where one producer
 ## distributes work to multiple consumers.
 
-import atomics
+import lockfreequeues/atomic_dsl
 import os
 import options
 

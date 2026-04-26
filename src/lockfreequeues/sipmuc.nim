@@ -6,10 +6,9 @@
 when not compileOption("threads"):
   {.error: "lockfreequeues/sipmuc requires --threads:on option.".}
 
-import atomics
+import ./atomic_dsl
 import options
 
-import ./constants
 import ./exceptions
 import ./typestates
 import ./typestates/spmc_push

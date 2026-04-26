@@ -17,7 +17,7 @@
 ## - Build system task execution
 ## - Database query scheduling
 
-import atomics
+import lockfreequeues/atomic_dsl
 import os
 import options
 import random

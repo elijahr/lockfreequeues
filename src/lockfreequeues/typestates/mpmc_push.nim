@@ -10,7 +10,7 @@
 ##
 ## Uses N-slot arithmetic with committed flags. CAS on reservedTail.
 
-import atomics
+import ../atomic_dsl
 import typestates
 
 import ./virtual_values_n

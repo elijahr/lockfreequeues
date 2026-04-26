@@ -3,7 +3,7 @@
 ## SPSC doesn't need DEBRA - single producer/consumer means no hazardous
 ## memory reclamation. Consumer can free segments directly with dealloc.
 
-import atomics
+import ../atomic_dsl
 import typestates
 
 type

@@ -4,7 +4,7 @@
 ## Multiple consumers use CAS on prevConsumerIdx to coordinate.
 
 import unittest2
-import atomics
+import lockfreequeues/atomic_dsl
 import debra
 
 import lockfreequeues/typestates/unbounded_spmc_pop

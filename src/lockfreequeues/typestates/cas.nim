@@ -2,7 +2,7 @@
 ##
 ## Forces explicit handling of success and failure paths.
 
-import atomics
+import ../atomic_dsl
 import typestates
 
 type

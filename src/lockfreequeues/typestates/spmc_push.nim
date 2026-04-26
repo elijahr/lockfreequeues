@@ -7,7 +7,7 @@
 ##
 ## Uses N-slot arithmetic with committed flags.
 
-import atomics
+import ../atomic_dsl
 import typestates
 
 import ./virtual_values_n

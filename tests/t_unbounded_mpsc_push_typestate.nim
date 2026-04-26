@@ -4,7 +4,7 @@
 ## We use the high-level DEBRA API (registerThread) for setup.
 
 import unittest2
-import atomics
+import lockfreequeues/atomic_dsl
 import debra
 
 import lockfreequeues/typestates/unbounded_mpsc_push

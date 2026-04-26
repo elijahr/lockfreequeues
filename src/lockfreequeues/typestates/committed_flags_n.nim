@@ -2,7 +2,7 @@
 ##
 ## Only accepts PhysicalSlotN[N] for type-safe slot access.
 
-import atomics
+import ../atomic_dsl
 import ./virtual_values_n
 
 type CommittedFlagsN*[N: static int] = object

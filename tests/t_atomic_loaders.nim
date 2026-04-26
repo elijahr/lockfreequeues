@@ -1,5 +1,5 @@
 import unittest2
-import atomics
+import lockfreequeues/atomic_dsl
 import lockfreequeues/typestates/virtual_values_n
 import lockfreequeues/typestates/virtual_values_n1
 import lockfreequeues/typestates/atomic_loaders

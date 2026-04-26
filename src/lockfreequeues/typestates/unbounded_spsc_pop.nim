@@ -4,7 +4,7 @@
 ## memory reclamation. Consumer can free segments directly with dealloc.
 ## Uses 'U' prefix (Unbounded) to avoid name collision with bounded spsc_pop.
 
-import atomics
+import ../atomic_dsl
 import typestates
 
 import ./unbounded_spsc_push # Reuse Segment, UnboundedSipsicBase

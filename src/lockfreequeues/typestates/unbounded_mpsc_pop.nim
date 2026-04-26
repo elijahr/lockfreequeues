@@ -3,7 +3,7 @@
 ## Bridges from DEBRA's Pinned[MT] state, performs pop with committed flag check,
 ## bridges back. Single consumer checks committed flag before reading.
 
-import atomics
+import ../atomic_dsl
 import typestates
 import debra
 

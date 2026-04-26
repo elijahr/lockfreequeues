@@ -4,7 +4,7 @@
 ## MPMC pop combines CAS coordination (like SPMC) with committed flag checking (like MPSC).
 
 import unittest2
-import atomics
+import lockfreequeues/atomic_dsl
 import debra
 
 import lockfreequeues/typestates/unbounded_mpmc_push

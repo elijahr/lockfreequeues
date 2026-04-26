@@ -13,7 +13,7 @@
 ## - CommittedCheck for checkCommitted (-> SlotReady | Start)
 ## - ClaimResult for tryClaim (-> SlotClaimed | Start)
 
-import atomics
+import ../atomic_dsl
 import typestates
 
 import ./virtual_values_n

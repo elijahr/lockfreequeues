@@ -3,7 +3,7 @@
 ## Bridges from DEBRA's Pinned[MT] state, performs push with CAS coordination
 ## and committed flags, bridges back. Multiple producers coordinate via CAS on tail.
 
-import atomics
+import ../atomic_dsl
 import typestates
 import debra
 

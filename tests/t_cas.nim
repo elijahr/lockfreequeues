@@ -1,5 +1,5 @@
 import unittest2
-import atomics
+import lockfreequeues/atomic_dsl
 import lockfreequeues/typestates/cas
 
 suite "CAS Typestate":

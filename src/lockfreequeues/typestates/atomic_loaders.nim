@@ -1,6 +1,6 @@
 ## Type-safe atomic load/store for queue pointers.
 
-import atomics
+import ../atomic_dsl
 import ./virtual_values_n
 import ./virtual_values_n1
 

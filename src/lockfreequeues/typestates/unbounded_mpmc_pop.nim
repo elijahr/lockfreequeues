@@ -4,7 +4,7 @@
 ## and committed flag check, bridges back. Multiple consumers coordinate via
 ## CAS on prevConsumerIdx, and must check committed flag before reading.
 
-import atomics
+import ../atomic_dsl
 import typestates
 import debra
 

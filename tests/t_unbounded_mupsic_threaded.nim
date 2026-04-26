@@ -1,4 +1,4 @@
-import atomics
+import lockfreequeues/atomic_dsl
 import options
 import unittest2
 

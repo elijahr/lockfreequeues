@@ -3,7 +3,7 @@
 ## Bridges from DEBRA's Pinned[MT] state, performs pop with CAS coordination,
 ## bridges back. Multiple consumers coordinate via CAS on prevConsumerIdx.
 
-import atomics
+import ../atomic_dsl
 import typestates
 import debra
 

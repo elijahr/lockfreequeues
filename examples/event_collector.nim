@@ -17,7 +17,7 @@
 ## - Network packet capture from multiple interfaces
 ## - User activity tracking across browser tabs
 
-import atomics
+import lockfreequeues/atomic_dsl
 import os
 import options
 import random

@@ -4,7 +4,7 @@
 ## MPMC push uses CAS coordination and committed flags like MPSC.
 
 import unittest2
-import atomics
+import lockfreequeues/atomic_dsl
 import debra
 
 import lockfreequeues/typestates/unbounded_mpmc_push

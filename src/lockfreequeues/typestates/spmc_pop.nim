@@ -5,7 +5,7 @@
 ##
 ## Key invariant: Once a slot is claimed, it MUST be consumed. No abandonment.
 
-import atomics
+import ../atomic_dsl
 import options
 import typestates
 

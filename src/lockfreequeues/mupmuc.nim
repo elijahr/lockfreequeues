@@ -6,10 +6,9 @@
 when not compileOption("threads"):
   {.error: "lockfreequeues/mupmuc requires --threads:on option.".}
 
-import atomics
+import ./atomic_dsl
 import options
 
-import ./constants
 import ./exceptions
 import ./typestates
 import ./typestates/mpmc_push

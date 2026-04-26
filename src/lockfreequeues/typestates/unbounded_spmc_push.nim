@@ -2,7 +2,7 @@
 ##
 ## Bridges from DEBRA's Pinned[MT] state, performs push, bridges back.
 
-import atomics
+import ../atomic_dsl
 import typestates
 import debra
 

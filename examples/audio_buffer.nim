@@ -13,7 +13,7 @@
 ## - Glitches from GC pauses or allocation are unacceptable
 ## - Sample rate is fixed and known
 
-import atomics
+import lockfreequeues/atomic_dsl
 import math
 import os
 import options

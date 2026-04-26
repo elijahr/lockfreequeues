@@ -1,10 +1,9 @@
 ## A single-producer, single-consumer (SPSC) bounded queue implemented as a
 ## ring buffer.
 
-import atomics
+import ./atomic_dsl
 import options
 
-import ./constants
 import ./typestates
 import ./typestates/spsc_push
 import ./typestates/spsc_pop
