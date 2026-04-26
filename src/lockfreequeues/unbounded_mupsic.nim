@@ -19,12 +19,23 @@
 ## producer.push(42)
 ## let item = queue.pop()  # some(42)
 ## ```
+##
+## See `unbounded_sipmuc` for documentation of the
+## `-d:LockFreeQueuesAdvanceEvery=N` compile-time knob, which also tunes
+## this queue's Eager reclamation cadence.
 
 import ./atomic_dsl
 import std/options
 from system/ansi_c import c_calloc, c_free
 
 import debra
+
+const LockFreeQueuesAdvanceEvery {.intdefine.}: int = 64
+  ## Cadence for `advanceEvery` calls in this file's Eager reclamation path.
+  ## Override at compile time with `-d:LockFreeQueuesAdvanceEvery=N`.
+static:
+  assert LockFreeQueuesAdvanceEvery > 0,
+    "LockFreeQueuesAdvanceEvery must be a positive integer"
 
 type DeallocationStrategy* = enum
   ## Strategy for segment memory reclamation.
@@ -268,7 +279,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
       seg = nextSeg
 
   if self.strategy == Eager:
-    self.handle.advanceEvery(64)
+    self.handle.advanceEvery(LockFreeQueuesAdvanceEvery)
     discard reclaimNow(self.handle)
 
 proc pop*[S: static int, T; MaxThreads: static int](

@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Thread safety section and slot-ownership typestate documentation in README
 - CI matrix across arc, orc, refc memory managers
 - CI matrix with `-d:nimEnforceLockFreeAtomics`
+- New compile-time knob `-d:LockFreeQueuesAdvanceEvery=N` (default 64) to tune epoch-advance cadence in unbounded queue retirement paths.
 
 ### Changed
 

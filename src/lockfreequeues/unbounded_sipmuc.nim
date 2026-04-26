@@ -18,12 +18,28 @@
 ## queue.push(42)
 ## let item = consumer.pop()  # some(42)
 ## ```
+##
+## **Compile-time knobs**
+##
+## - `-d:LockFreeQueuesAdvanceEvery=N` (default 64): cadence at which the
+##   unbounded queues' Eager reclamation paths call `advanceEvery` on their
+##   DEBRA handle. Lower values advance the global epoch more aggressively
+##   (more reclamation work per pop), higher values amortize epoch advancement
+##   across more pops at the cost of delaying reclamation. Must be a positive
+##   integer.
 
 import ./atomic_dsl
 import std/options
 from system/ansi_c import c_calloc, c_free
 
 import debra
+
+const LockFreeQueuesAdvanceEvery {.intdefine.}: int = 64
+  ## Cadence for `advanceEvery` calls in this file's Eager reclamation path.
+  ## Override at compile time with `-d:LockFreeQueuesAdvanceEvery=N`.
+static:
+  assert LockFreeQueuesAdvanceEvery > 0,
+    "LockFreeQueuesAdvanceEvery must be a positive integer"
 
 type DeallocationStrategy* = enum
   ## Strategy for segment memory reclamation.
@@ -253,7 +269,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
       # Lost CAS, retry
 
   if self.queue.strategy == Eager:
-    self.handle.advanceEvery(64)
+    self.handle.advanceEvery(LockFreeQueuesAdvanceEvery)
     discard reclaimNow(self.handle)
 
 proc pop*[S: static int, T; MaxThreads: static int](
