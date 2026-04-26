@@ -75,6 +75,10 @@ jobs:
           (cd nim-typestates && nimble install -y)
           (cd nim-debra && nimble install -y)
 
+      - name: Vendor unittest2 (nim.cfg expects deps/unittest2)
+        # deps/ is gitignored. nim.cfg has --path:"deps/unittest2".
+        run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
+
       - name: Run tests
         run: |
           set -o pipefail
