@@ -33,6 +33,10 @@ jobs:
             nim-version: 'stable'
             sanitize-threads: 'yes'
             sanitize-address: 'yes'
+          - runs-on: macos-latest
+            nim-version: 'stable'
+            sanitize-threads: 'yes'
+            sanitize-address: 'yes'
 
     steps:
       - name: Restore cache
@@ -49,7 +53,8 @@ jobs:
         with:
           nim-version: ${{ matrix.nim-version }}
 
-      - name: Install dependencies
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update -q -y
           sudo apt-get -qq install -y clang
