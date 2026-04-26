@@ -22,6 +22,7 @@
 
 import ./atomic_dsl
 import std/options
+from system/ansi_c import c_calloc, c_free
 
 import debra
 
@@ -54,7 +55,7 @@ type
     ## - T: Data type.
     ## - MaxThreads: Maximum number of threads (compile-time constant).
     manager: ptr DebraManager[MaxThreads]
-    headSegment: ptr Segment[S, T] # Consumer reads from here
+    headSegment: Atomic[ptr Segment[S, T]] # Consumer reads from here
     tailSegment: Atomic[ptr Segment[S, T]] # Producers write here (atomic for CAS)
     strategy: DeallocationStrategy
     handle: ThreadHandle[MaxThreads] # Consumer's handle (single consumer)
@@ -72,8 +73,8 @@ type
     handle: ThreadHandle[MaxThreads] # Each producer has its own handle
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
-  ## Allocate a new segment using Nim's alloc0 (zero-initialized).
-  result = cast[ptr Segment[S, T]](alloc0(sizeof(Segment[S, T])))
+  ## Allocate a new segment via libc calloc (zero-initialized, truly shared).
+  result = cast[ptr Segment[S, T]](c_calloc(1.csize_t, sizeof(Segment[S, T]).csize_t))
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
   result.head = 0
@@ -109,7 +110,7 @@ proc newUnboundedMupsic*[S: static int, T; MaxThreads: static int](
 
   # Start with one segment
   let seg = newSegment[S, T]()
-  result.headSegment = seg
+  result.headSegment.store(seg, moRelaxed)
   result.tailSegment.store(seg, moRelaxed)
   result.itemCount.store(0, moRelaxed)
   result.segments.store(1, moRelaxed)
@@ -180,7 +181,7 @@ proc push*[S: static int, T; MaxThreads: static int](
           continue
         else:
           # Lost race, free our segment
-          dealloc(newSeg)
+          c_free(newSeg)
           continue
       else:
         # Someone else allocated, advance tail segment
@@ -209,9 +210,9 @@ proc push*[S: static int, T; MaxThreads: static int](
   for item in items:
     self.push(item)
 
-# Helper to wrap destructor for dealloc
+# Helper to wrap destructor for c_free
 proc segmentDestructor(p: pointer) {.nimcall.} =
-  dealloc(p)
+  c_free(p)
 
 proc pop*[S: static int, T; MaxThreads: static int](
     self: var UnboundedMupsic[S, T, MaxThreads]
@@ -231,7 +232,10 @@ proc pop*[S: static int, T; MaxThreads: static int](
         .}
 
   self.handle.withPin:
-    var seg = self.headSegment
+    # Re-read headSegment under the pin. Acquire load synchronises with
+    # the release store performed when this consumer last advanced the
+    # head, ensuring we never observe a freed pointer.
+    var seg = self.headSegment.load(moAcquire)
 
     while true:
       let tail = seg.tail.load(moAcquire)
@@ -251,12 +255,16 @@ proc pop*[S: static int, T; MaxThreads: static int](
       if nextSeg == nil:
         break
 
-      # Retire old segment
+      # Single consumer, so no race on headSegment. Advance with release
+      # semantics and retire under the active pin so a follow-up reclaim
+      # cannot free this segment until every pinned thread observes the
+      # advance.
+      self.headSegment.store(nextSeg, moRelease)
       if self.strategy != Manual:
         it.retire(cast[pointer](seg), segmentDestructor)
         discard self.segments.fetchSub(1, moRelaxed)
-
-      self.headSegment = nextSeg
+      # With Manual strategy the segment is detached from the active chain
+      # but remains allocated; leave segmentCount unchanged.
       seg = nextSeg
 
   if self.strategy == Eager:
@@ -288,9 +296,8 @@ proc `=destroy`*[S: static int, T; MaxThreads: static int](
     self: var UnboundedMupsic[S, T, MaxThreads]
 ) =
   ## Clean up all segments.
-  if self.headSegment != nil:
-    var seg = self.headSegment
-    while seg != nil:
-      let next = seg.next.load(moRelaxed)
-      dealloc(seg)
-      seg = next
+  var seg = self.headSegment.load(moRelaxed)
+  while seg != nil:
+    let next = seg.next.load(moRelaxed)
+    c_free(seg)
+    seg = next

@@ -1,6 +1,7 @@
 ## Unbounded single-producer, single-consumer (SPSC) queue using linked segments.
 ##
-## Uses direct memory management (alloc0/dealloc). No DEBRA needed for SPSC.
+## Uses libc malloc/free for segment storage (truly process-shared, no
+## per-thread heap routing). No DEBRA needed for SPSC.
 ##
 ## - S: Segment size (items per segment). Larger = less allocation, smaller = faster reclamation.
 ## - T: Type of data the queue holds.
@@ -16,6 +17,7 @@
 
 import ./atomic_dsl
 import std/options
+from system/ansi_c import c_calloc, c_free
 
 type
   Segment*[S: static int, T] = object
@@ -29,14 +31,14 @@ type
     ##
     ## - S: Segment size (compile-time constant).
     ## - T: Data type.
-    headSegment: ptr Segment[S, T] # Consumer reads from here
-    tailSegment: ptr Segment[S, T] # Producer writes here
+    headSegment: Atomic[ptr Segment[S, T]] # Consumer reads from here
+    tailSegment: Atomic[ptr Segment[S, T]] # Producer writes here
     itemCount: Atomic[int] # Total items in queue
     segments: Atomic[int] # Number of segments
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
-  ## Allocate a new segment using Nim's alloc0 (zero-initialized).
-  result = cast[ptr Segment[S, T]](alloc0(sizeof(Segment[S, T])))
+  ## Allocate a new segment via libc calloc (zero-initialized, truly shared).
+  result = cast[ptr Segment[S, T]](c_calloc(1.csize_t, sizeof(Segment[S, T]).csize_t))
   result.next.store(nil, moRelaxed)
   result.head.store(0, moRelaxed)
   result.tail.store(0, moRelaxed)
@@ -60,8 +62,8 @@ proc newUnboundedSipsic*[S: static int, T](): UnboundedSipsic[S, T] =
 
   # Start with one segment
   let seg = newSegment[S, T]()
-  result.headSegment = seg
-  result.tailSegment = seg
+  result.headSegment.store(seg, moRelaxed)
+  result.tailSegment.store(seg, moRelaxed)
   result.itemCount.store(0, moRelaxed)
   result.segments.store(1, moRelaxed)
 
@@ -86,15 +88,17 @@ proc push*[S: static int, T](self: var UnboundedSipsic[S, T], item: T) =
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
-  var seg = self.tailSegment
+  var seg = self.tailSegment.load(moRelaxed)
 
   # Check if current segment is full
   let tail = seg.tail.load(moRelaxed)
   if tail >= S:
-    # Allocate new segment
+    # Allocate new segment. Publish via seg.next first (release) so a
+    # concurrent consumer that observes the new next pointer also sees
+    # the segment's initialized fields. Then publish via tailSegment.
     let newSeg = newSegment[S, T]()
     seg.next.store(newSeg, moRelease)
-    self.tailSegment = newSeg
+    self.tailSegment.store(newSeg, moRelease)
     seg = newSeg
     discard self.segments.fetchAdd(1, moRelaxed)
 
@@ -124,7 +128,9 @@ proc pop*[S: static int, T](self: var UnboundedSipsic[S, T]): Option[T] =
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
-  var seg = self.headSegment
+  # SPSC: only the consumer reads/writes headSegment. Acquire load picks up
+  # the producer's release stores to seg.next when we cross segments.
+  var seg = self.headSegment.load(moAcquire)
 
   while true:
     let head = seg.head.load(moRelaxed)
@@ -144,12 +150,13 @@ proc pop*[S: static int, T](self: var UnboundedSipsic[S, T]): Option[T] =
       # Queue is empty
       return none(T)
 
-    # Advance to next segment and free old one
+    # Advance to next segment and free old one. Publish the advance via
+    # release store so any future readers see the up-to-date head.
     let oldSeg = seg
-    self.headSegment = nextSeg
+    self.headSegment.store(nextSeg, moRelease)
     seg = nextSeg
     discard self.segments.fetchSub(1, moRelaxed)
-    dealloc(oldSeg)
+    c_free(oldSeg)
 
 proc pop*[S: static int, T](
     self: var UnboundedSipsic[S, T], count: int
@@ -174,9 +181,8 @@ proc pop*[S: static int, T](
 
 proc `=destroy`*[S: static int, T](self: var UnboundedSipsic[S, T]) =
   ## Clean up all segments.
-  if self.headSegment != nil:
-    var seg = self.headSegment
-    while seg != nil:
-      let next = seg.next.load(moRelaxed)
-      dealloc(seg)
-      seg = next
+  var seg = self.headSegment.load(moRelaxed)
+  while seg != nil:
+    let next = seg.next.load(moRelaxed)
+    c_free(seg)
+    seg = next

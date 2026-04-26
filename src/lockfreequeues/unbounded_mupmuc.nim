@@ -21,6 +21,7 @@
 
 import ./atomic_dsl
 import std/options
+from system/ansi_c import c_calloc, c_free
 
 import debra
 
@@ -53,7 +54,7 @@ type
     ## - T: Data type.
     ## - MaxThreads: Maximum number of threads (compile-time constant).
     manager: ptr DebraManager[MaxThreads]
-    headSegment: ptr Segment[S, T] # Consumers read from here
+    headSegment: Atomic[ptr Segment[S, T]] # Consumers read from here
     tailSegment: Atomic[ptr Segment[S, T]] # Producers write here
     strategy: DeallocationStrategy
     itemCount: Atomic[int] # Total items in queue
@@ -78,8 +79,8 @@ type
     handle: ThreadHandle[MaxThreads]
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
-  ## Allocate a new segment using Nim's alloc0 (zero-initialized).
-  result = cast[ptr Segment[S, T]](alloc0(sizeof(Segment[S, T])))
+  ## Allocate a new segment via libc calloc (zero-initialized, truly shared).
+  result = cast[ptr Segment[S, T]](c_calloc(1.csize_t, sizeof(Segment[S, T]).csize_t))
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
   result.prevConsumerIdx.store(-1, moRelaxed)
@@ -113,7 +114,7 @@ proc newUnboundedMupmuc*[S: static int, T; MaxThreads: static int](
 
   # Start with one segment
   let seg = newSegment[S, T]()
-  result.headSegment = seg
+  result.headSegment.store(seg, moRelaxed)
   result.tailSegment.store(seg, moRelaxed)
   result.itemCount.store(0, moRelaxed)
   result.segments.store(1, moRelaxed)
@@ -190,7 +191,7 @@ proc push*[S: static int, T; MaxThreads: static int](
           discard self.queue.segments.fetchAdd(1, moRelaxed)
           continue
         else:
-          dealloc(newSeg)
+          c_free(newSeg)
           continue
       else:
         var expectedSeg = seg
@@ -215,9 +216,9 @@ proc push*[S: static int, T; MaxThreads: static int](
   for item in items:
     self.push(item)
 
-# Helper to wrap destructor for dealloc
+# Helper to wrap destructor for c_free
 proc segmentDestructor(p: pointer) {.nimcall.} =
-  dealloc(p)
+  c_free(p)
 
 proc pop*[S: static int, T; MaxThreads: static int](
     self: var Consumer[S, T, MaxThreads]
@@ -237,7 +238,10 @@ proc pop*[S: static int, T; MaxThreads: static int](
         .}
 
   self.handle.withPin:
-    var seg = self.queue.headSegment
+    # Re-read headSegment under the pin so a concurrent consumer's
+    # retire+advance from a previous pop cannot pull this segment out
+    # from under us before we read it.
+    var seg = self.queue.headSegment.load(moAcquire)
 
     while true:
       let tail = seg.tail.load(moAcquire)
@@ -254,11 +258,25 @@ proc pop*[S: static int, T; MaxThreads: static int](
           # Try again
           continue
 
-        # Segment exhausted, try next
+        # Segment exhausted, try to advance to the next one. CAS
+        # headSegment from seg to nextSeg; the winner retires.
         let nextSeg = seg.next.load(moAcquire)
         if nextSeg == nil:
           break
-        seg = nextSeg
+
+        var expected = seg
+        if self.queue.headSegment.compareExchangeStrong(
+          expected, nextSeg, moAcquireRelease, moAcquire
+        ):
+          if self.queue.strategy != Manual:
+            it.retire(cast[pointer](seg), segmentDestructor)
+            discard self.queue.segments.fetchSub(1, moRelaxed)
+          # With Manual strategy the segment is still allocated; do not
+          # decrement segmentCount.
+          seg = nextSeg
+        else:
+          # Another consumer already advanced. Pick up its observation.
+          seg = expected
         continue
 
       # Check if this slot is committed
@@ -269,12 +287,6 @@ proc pop*[S: static int, T; MaxThreads: static int](
       if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
         result = some(seg.data[mySlot])
         discard self.queue.itemCount.fetchSub(1, moRelaxed)
-
-        # If we claimed the last slot (S-1), retire segment for reclamation
-        if mySlot == S - 1 and self.queue.strategy != Manual:
-          it.retire(cast[pointer](seg), segmentDestructor)
-          discard self.queue.segments.fetchSub(1, moRelaxed)
-
         break
 
   if self.queue.strategy == Eager:
@@ -306,9 +318,8 @@ proc `=destroy`*[S: static int, T; MaxThreads: static int](
     self: var UnboundedMupmuc[S, T, MaxThreads]
 ) =
   ## Clean up all segments.
-  if self.headSegment != nil:
-    var seg = self.headSegment
-    while seg != nil:
-      let next = seg.next.load(moRelaxed)
-      dealloc(seg)
-      seg = next
+  var seg = self.headSegment.load(moRelaxed)
+  while seg != nil:
+    let next = seg.next.load(moRelaxed)
+    c_free(seg)
+    seg = next
