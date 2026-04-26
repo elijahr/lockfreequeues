@@ -61,12 +61,30 @@ jobs:
 
       - name: Run tests
         run: |
+          set -o pipefail
           export SANITIZE_THREADS=${{ matrix.sanitize-threads }}
           export SANITIZE_ADDRESS=${{ matrix.sanitize-address }}
-          nimble develop -y
+          # Workaround for nimble v0.20.x: `nimble <task>` exits 0 even when
+          # an inner `exec` aborts the script (it logs `Error:` but does not
+          # propagate the failure). Tee output and grep for nimble's error
+          # markers to force a non-zero exit. See Item 8 / nimble issue.
+          nimble_run() {
+            local logfile
+            logfile="$(mktemp)"
+            "$@" 2>&1 | tee "$logfile"
+            local rc=${PIPESTATUS[0]}
+            if [[ $rc -ne 0 ]]; then
+              return $rc
+            fi
+            if grep -Eq '^[[:space:]]*Error:' "$logfile"; then
+              echo "::error::nimble reported an error but exited 0; failing the step."
+              return 1
+            fi
+          }
+          nimble_run nimble develop -y
           echo "::group::Run test suite (includes arc, orc, refc, lock-free enforcement)"
-          nimble test
+          nimble_run nimble test
           echo "::endgroup::"
           echo "::group::Run examples"
-          nimble examples
+          nimble_run nimble examples
           echo "::endgroup::"
