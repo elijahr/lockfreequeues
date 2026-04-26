@@ -113,6 +113,17 @@ proc writeData*[N, P, C: static int, T](
     op: MPMCPushSlotClaimed[N], queue: var MupmucPushBase[N, P, C, T], item: T
 ): MPMCPushDataWritten[N] {.inline, transition.} =
   ## Write item to the claimed slot.
+  ##
+  ## Wait for `committed[slot]` to be `false` before writing. The fullness
+  ## check via `head` already establishes the cross-cycle happens-before
+  ## chain, so this load is functionally redundant. It exists to give TSAN
+  ## a direct release/acquire pair on the slot's `committed` flag between
+  ## a consumer's `committed.store(false, release)` and this write. TSAN
+  ## on weakly-ordered arm64 was flakily failing to track the transitive
+  ## chain through `head` alone. See `mpsc_push.writeData` for the same
+  ## pattern.
+  while queue.committed.load(op.slot):
+    discard
   queue.storage[op.slot] = item
   MPMCPushDataWritten[N](slot: op.slot)
 

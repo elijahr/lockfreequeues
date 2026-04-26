@@ -77,6 +77,16 @@ proc writeData*[N, C: static int, T](
     op: SPMCPushNotFull[N], queue: var SipmucBase[N, C, T], item: T
 ): SPMCPushDataWritten[N] {.inline, transition.} =
   ## Write item to the slot.
+  ##
+  ## Wait for `committed[slot]` to be `false` before writing. The fullness
+  ## check via `reservedHead` already establishes the cross-cycle
+  ## happens-before chain, so this load is functionally redundant. It
+  ## exists to give TSAN a direct release/acquire pair on the slot's
+  ## `committed` flag between a consumer's
+  ## `committed.store(false, release)` and this write. See
+  ## `mpsc_push.writeData` for the same pattern.
+  while queue.committed.load(op.slot):
+    discard
   queue.storage[op.slot] = item
   let newTail = op.tail.incOrResetN(1)
   SPMCPushDataWritten[N](tail: op.tail, newTail: newTail, slot: op.slot)
