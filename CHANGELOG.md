@@ -7,30 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [3.2.0] - 2025-12-18
+## [3.2.0] - 2026-04-25
 
 ### Added
 
-- Unbounded queue implementations with DEBRA epoch-based reclamation
-  - `UnboundedSipsic` - Single-producer, single-consumer (no DEBRA needed)
-  - `UnboundedSipmuc` - Single-producer, multi-consumer
-  - `UnboundedMupsic` - Multi-producer, single-consumer
-  - `UnboundedMupmuc` - Multi-producer, multi-consumer
-- Typestate-enforced push/pop operations for all unbounded queues
+- New queue implementations
+  - `Sipmuc`: bounded single-producer, multi-consumer queue
+  - `UnboundedSipsic`: single-producer, single-consumer (no reclamation needed)
+  - `UnboundedSipmuc`: single-producer, multi-consumer with DEBRA reclamation
+  - `UnboundedMupsic`: multi-producer, single-consumer with DEBRA reclamation
+  - `UnboundedMupmuc`: multi-producer, multi-consumer with DEBRA reclamation
+- Typestate-driven push and pop operation modules under `src/lockfreequeues/typestates/`
 - Compile-time lock-free type checking for queue item types
-  - Errors on `ref` types with arc/orc (uses spinlocks for refcounting)
-  - Use `-d:allowNonLockFreeQueueItems` to opt-out
-- Thread safety documentation in README
-- Slot-ownership typestates documentation
-- CI testing with multiple memory managers (arc, orc, refc)
-- CI testing with `-d:nimEnforceLockFreeAtomics` flag
+  - Errors on `ref` item types under arc/orc (which fall back to spinlock refcounting)
+  - Opt-out via `-d:allowNonLockFreeQueueItems`
+- Threaded reclamation tests for all four unbounded queue variants (`t_unbounded_*_threaded`), exercised under arc, orc, refc, and the TSAN/ASAN matrix
+- Thread safety section and slot-ownership typestate documentation in README
+- CI matrix across arc, orc, refc memory managers
+- CI matrix with `-d:nimEnforceLockFreeAtomics`
 
 ### Changed
 
-- Test suite now runs with arc, orc, refc memory managers
-- Test suite now verifies lock-free enforcement
-- Stress tests updated with MM variants
-- Dependencies updated: `typestates >= 0.3.1`, `debra >= 0.2.0`
+- `atomic_dsl.nim` now re-exports `debra/atomics` instead of wrapping `std/atomics`. The call-site DSL is unchanged.
+- Unbounded queue retirement sites now use `withPin` plus `retireBatch` from nim-debra's batched retire API instead of explicit typestate transitions.
+- `headSegment` and related segment-pointer fields are `Atomic[ptr Segment]` and are advanced via CAS before the previous segment is retired.
+- Segment storage uses libc `c_calloc` / `c_free` instead of `allocShared0` / `deallocShared` to avoid TLS-routed cross-thread allocator issues.
+- Test suite runs across arc, orc, refc memory managers.
+- Test suite verifies lock-free enforcement with `-d:nimEnforceLockFreeAtomics`.
+- Stress tests updated with memory manager variants.
+- Dependencies: `typestates >= 0.3.1`, `debra >= 0.3.0`.
+
+### Removed
+
+- `std/atomics` dependency.
+- `src/lockfreequeues/constants.nim`. `CacheLineBytes` is now sourced from `debra/atomics`.
+
+### Fixed
+
+- Eager reclamation no-op in unbounded queues: pops now call `advanceEvery(64)` so the global epoch actually advances and reclamation can fire.
+- Use-after-free under concurrent reclamation in unbounded queues: `headSegment` is now atomic and CAS-advanced before retirement, so consumers cannot read a freed segment pointer.
+- refc use-after-free in `unbounded_sipsic`'s inline reclamation path (resolved by the `headSegment` fix above).
 
 ## [3.1.0] - 2024-09-28
 
