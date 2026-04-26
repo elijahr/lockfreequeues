@@ -24,12 +24,14 @@ import random
 import std/monotimes
 import times
 
+import debra
 import lockfreequeues
 
 const
   SegmentSize = 64
   NumSources = 4
   DurationMs = 200
+  MaxThreads = NumSources + 4  # sources + main/consumer + slack
 
 type
   EventKind = enum
@@ -44,82 +46,96 @@ type
     timestamp: int64
     value: int
 
+  SourceContext = object
+    queue: ptr UnboundedMupsic[SegmentSize, Event, MaxThreads]
+    manager: ptr DebraManager[MaxThreads]
+    sourceId: int
+    startTime: MonoTime
+
+  ProcessorContext = object
+    queue: ptr UnboundedMupsic[SegmentSize, Event, MaxThreads]
+    manager: ptr DebraManager[MaxThreads]
+    consumerHandle: ThreadHandle[MaxThreads]
+
 var
-  manager = newEpochManager()
-  queue = newUnboundedMupsic[SegmentSize, Event](manager)
+  manager = initDebraManager[MaxThreads]()
+  consumerHandle = registerThread(manager)
+  queue = newUnboundedMupsic[SegmentSize, Event, MaxThreads](addr manager, consumerHandle)
   running: Atomic[bool]
   eventsProduced: array[NumSources, Atomic[int]]
   eventsConsumed: Atomic[int]
   maxQueueDepth: Atomic[int]
 
 
-proc eventSourceThread(sourceId: int) {.thread.} =
+proc eventSourceThread(ctx: ptr SourceContext) {.thread.} =
   ## Simulates an event source generating events at variable rates.
   ## Sources occasionally burst to simulate real traffic patterns.
-  var producer = queue.getProducer()
-  var produced = 0
-  let startTime = getMonoTime()
+  {.cast(gcsafe).}:
+    let handle = registerThread(ctx.manager[])
+    var producer = ctx.queue[].getProducer(handle)
+    var produced = 0
 
-  while running.load(moAcquire):
-    # Simulate variable event rate with occasional bursts
-    let burstMode = rand(100) < 10  # 10% chance of burst
-    let eventCount = if burstMode: rand(10..20) else: rand(1..3)
+    while running.load(moAcquire):
+      # Simulate variable event rate with occasional bursts
+      let burstMode = rand(100) < 10  # 10% chance of burst
+      let eventCount = if burstMode: rand(10..20) else: rand(1..3)
 
-    for _ in 0..<eventCount:
-      let event = Event(
-        sourceId: sourceId,
-        kind: EventKind(rand(ord(EventKind.high))),
-        timestamp: (getMonoTime() - startTime).inMicroseconds,
-        value: rand(1000)
-      )
+      for _ in 0..<eventCount:
+        let event = Event(
+          sourceId: ctx.sourceId,
+          kind: EventKind(rand(ord(EventKind.high))),
+          timestamp: (getMonoTime() - ctx.startTime).inMicroseconds,
+          value: rand(1000)
+        )
 
-      producer.push(event)
-      inc produced
+        producer.push(event)
+        inc produced
 
-    # Variable delay between event batches
-    let delayMs = if burstMode: 1 else: rand(5..15)
-    sleep(delayMs)
+      # Variable delay between event batches
+      let delayMs = if burstMode: 1 else: rand(5..15)
+      sleep(delayMs)
 
-  eventsProduced[sourceId].store(produced, moRelease)
+    eventsProduced[ctx.sourceId].store(produced, moRelease)
 
 
-proc processorThread() {.thread.} =
+proc processorThread(ctx: ptr ProcessorContext) {.thread.} =
   ## Single processor consumes and processes all events.
   ## Periodically triggers memory reclamation.
-  var consumed = 0
-  var maxDepth = 0
-  var lastReclaim = getMonoTime()
-  var eventCounts: array[EventKind, int]
+  {.cast(gcsafe).}:
+    var consumed = 0
+    var maxDepth = 0
+    var lastReclaim = getMonoTime()
+    var eventCounts: array[EventKind, int]
 
-  while running.load(moAcquire) or queue.len() > 0:
-    let event = queue.pop()
+    while running.load(moAcquire) or ctx.queue[].len() > 0:
+      let event = ctx.queue[].pop()
 
-    if event.isSome:
-      # Process the event
-      inc eventCounts[event.get.kind]
-      inc consumed
+      if event.isSome:
+        # Process the event
+        inc eventCounts[event.get.kind]
+        inc consumed
 
-      # Track queue depth
-      let depth = queue.len()
-      if depth > maxDepth:
-        maxDepth = depth
+        # Track queue depth
+        let depth = ctx.queue[].len()
+        if depth > maxDepth:
+          maxDepth = depth
 
-      # Periodic memory reclamation (every 10ms)
-      if (getMonoTime() - lastReclaim).inMilliseconds > 10:
-        manager.advance()
-        discard manager.tryReclaim()
-        lastReclaim = getMonoTime()
-    else:
-      # No events, brief pause
-      sleep(1)
+        # Periodic memory reclamation (every 10ms)
+        if (getMonoTime() - lastReclaim).inMilliseconds > 10:
+          ctx.manager[].advance()
+          discard reclaimNow(ctx.consumerHandle)
+          lastReclaim = getMonoTime()
+      else:
+        # No events, brief pause
+        sleep(1)
 
-  eventsConsumed.store(consumed, moRelease)
-  maxQueueDepth.store(maxDepth, moRelease)
+    eventsConsumed.store(consumed, moRelease)
+    maxQueueDepth.store(maxDepth, moRelease)
 
-  echo ""
-  echo "Event breakdown:"
-  for kind in EventKind:
-    echo "  ", kind, ": ", eventCounts[kind]
+    echo ""
+    echo "Event breakdown:"
+    for kind in EventKind:
+      echo "  ", kind, ": ", eventCounts[kind]
 
 
 when isMainModule:
@@ -141,13 +157,27 @@ when isMainModule:
   let startTime = getMonoTime()
 
   # Start processor
-  var processor: Thread[void]
-  createThread(processor, processorThread)
+  var procCtx = ProcessorContext(
+    queue: addr queue,
+    manager: addr manager,
+    consumerHandle: consumerHandle,
+  )
+  var processor: Thread[ptr ProcessorContext]
+  createThread(processor, processorThread, addr procCtx)
 
   # Start event sources
-  var sources: array[NumSources, Thread[int]]
+  var sourceContexts: array[NumSources, SourceContext]
   for i in 0..<NumSources:
-    createThread(sources[i], eventSourceThread, i)
+    sourceContexts[i] = SourceContext(
+      queue: addr queue,
+      manager: addr manager,
+      sourceId: i,
+      startTime: startTime,
+    )
+
+  var sources: array[NumSources, Thread[ptr SourceContext]]
+  for i in 0..<NumSources:
+    createThread(sources[i], eventSourceThread, addr sourceContexts[i])
 
   # Run for specified duration
   sleep(DurationMs)

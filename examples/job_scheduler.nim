@@ -25,6 +25,7 @@ import std/monotimes
 import strutils
 import times
 
+import debra
 import lockfreequeues
 
 const
@@ -32,6 +33,7 @@ const
   NumSubmitters = 3
   NumWorkers = 4
   JobsPerSubmitter = 50
+  MaxThreads = NumSubmitters + NumWorkers + 4  # producers + consumers + main + slack
 
 type
   Priority = enum
@@ -45,78 +47,92 @@ type
     priority: Priority
     workMs: int  # Simulated work duration
 
+  SubmitterContext = object
+    queue: ptr UnboundedMupmuc[SegmentSize, Job, MaxThreads]
+    manager: ptr DebraManager[MaxThreads]
+    submitterId: int
+
+  WorkerContext = object
+    queue: ptr UnboundedMupmuc[SegmentSize, Job, MaxThreads]
+    manager: ptr DebraManager[MaxThreads]
+    workerId: int
+
 var
-  manager = newEpochManager()
-  queue = newUnboundedMupmuc[SegmentSize, Job](manager)
+  manager = initDebraManager[MaxThreads]()
+  queue = newUnboundedMupmuc[SegmentSize, Job, MaxThreads](addr manager)
   running: Atomic[bool]
   jobsSubmitted: array[NumSubmitters, Atomic[int]]
   jobsCompleted: array[NumWorkers, Atomic[int]]
   nextJobId: Atomic[int]
 
 
-proc submitterThread(submitterId: int) {.thread.} =
+proc submitterThread(ctx: ptr SubmitterContext) {.thread.} =
   ## Job submitter - creates and enqueues jobs.
-  var producer = queue.getProducer()
-  var submitted = 0
+  {.cast(gcsafe).}:
+    let handle = registerThread(ctx.manager[])
+    var producer = ctx.queue[].getProducer(handle)
+    var submitted = 0
 
-  for i in 0..<JobsPerSubmitter:
-    let jobId = nextJobId.fetchAdd(1, moRelaxed)
+    for i in 0..<JobsPerSubmitter:
+      let jobId = nextJobId.fetchAdd(1, moRelaxed)
 
-    # Varied job characteristics
-    let priority = case rand(10)
-      of 0: pHigh
-      of 1..3: pNormal
-      else: pLow
+      # Varied job characteristics
+      let priority = case rand(10)
+        of 0: pHigh
+        of 1..3: pNormal
+        else: pLow
 
-    let workMs = case priority
-      of pHigh: rand(1..5)
-      of pNormal: rand(5..15)
-      of pLow: rand(10..30)
+      let workMs = case priority
+        of pHigh: rand(1..5)
+        of pNormal: rand(5..15)
+        of pLow: rand(10..30)
 
-    let job = Job(
-      id: jobId,
-      submitterId: submitterId,
-      priority: priority,
-      workMs: workMs
-    )
+      let job = Job(
+        id: jobId,
+        submitterId: ctx.submitterId,
+        priority: priority,
+        workMs: workMs
+      )
 
-    producer.push(job)
-    inc submitted
+      producer.push(job)
+      inc submitted
 
-    # Variable submission rate
-    sleep(rand(1..10))
+      # Variable submission rate
+      sleep(rand(1..10))
 
-  jobsSubmitted[submitterId].store(submitted, moRelease)
+    jobsSubmitted[ctx.submitterId].store(submitted, moRelease)
 
 
-proc workerThread(workerId: int) {.thread.} =
+proc workerThread(ctx: ptr WorkerContext) {.thread.} =
   ## Worker - fetches and executes jobs.
-  var consumer = queue.getConsumer()
-  var completed = 0
-  var workTime: int64 = 0
+  {.cast(gcsafe).}:
+    let handle = registerThread(ctx.manager[])
+    var consumer = ctx.queue[].getConsumer(handle)
+    var completed = 0
+    var workTime: int64 = 0
 
-  while running.load(moAcquire) or queue.len() > 0:
-    let job = consumer.pop()
+    while running.load(moAcquire) or ctx.queue[].len() > 0:
+      let job = consumer.pop()
 
-    if job.isSome:
-      let j = job.get
+      if job.isSome:
+        let j = job.get
 
-      # Simulate work
-      let start = getMonoTime()
-      sleep(j.workMs)
-      workTime += (getMonoTime() - start).inMilliseconds
+        # Simulate work
+        let start = getMonoTime()
+        sleep(j.workMs)
+        workTime += (getMonoTime() - start).inMilliseconds
 
-      inc completed
+        inc completed
 
-      # Periodic reclamation
-      if completed mod 10 == 0:
-        manager.advance()
-        discard manager.tryReclaim()
-    else:
-      sleep(1)
+        # Periodic reclamation
+        if completed mod 10 == 0:
+          ctx.manager[].advance()
+          discard reclaimNow(handle)
+      else:
+        sleep(1)
 
-  jobsCompleted[workerId].store(completed, moRelease)
-  echo "Worker ", workerId, " completed ", completed, " jobs (", workTime, "ms work)"
+    jobsCompleted[ctx.workerId].store(completed, moRelease)
+    echo "Worker ", ctx.workerId, " completed ", completed, " jobs (", workTime, "ms work)"
 
 
 when isMainModule:
@@ -141,14 +157,30 @@ when isMainModule:
   let startTime = getMonoTime()
 
   # Start workers
-  var workers: array[NumWorkers, Thread[int]]
+  var workerContexts: array[NumWorkers, WorkerContext]
   for i in 0..<NumWorkers:
-    createThread(workers[i], workerThread, i)
+    workerContexts[i] = WorkerContext(
+      queue: addr queue,
+      manager: addr manager,
+      workerId: i,
+    )
+
+  var workers: array[NumWorkers, Thread[ptr WorkerContext]]
+  for i in 0..<NumWorkers:
+    createThread(workers[i], workerThread, addr workerContexts[i])
 
   # Start submitters
-  var submitters: array[NumSubmitters, Thread[int]]
+  var submitterContexts: array[NumSubmitters, SubmitterContext]
   for i in 0..<NumSubmitters:
-    createThread(submitters[i], submitterThread, i)
+    submitterContexts[i] = SubmitterContext(
+      queue: addr queue,
+      manager: addr manager,
+      submitterId: i,
+    )
+
+  var submitters: array[NumSubmitters, Thread[ptr SubmitterContext]]
+  for i in 0..<NumSubmitters:
+    createThread(submitters[i], submitterThread, addr submitterContexts[i])
 
   # Wait for submitters to finish
   for i in 0..<NumSubmitters:
