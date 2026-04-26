@@ -279,7 +279,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
 
   if self.queue.strategy == Eager:
     self.handle.advanceEvery(64)
-    discard reclaimNow(self.queue.manager[])
+    discard reclaimNow(self.handle)
 
 proc pop*[S: static int, T; MaxThreads: static int](
     self: var Consumer[S, T, MaxThreads], count: int

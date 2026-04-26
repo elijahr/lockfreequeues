@@ -261,7 +261,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
 
   if self.strategy == Eager:
     self.handle.advanceEvery(64)
-    discard reclaimNow(self.manager[])
+    discard reclaimNow(self.handle)
 
 proc pop*[S: static int, T; MaxThreads: static int](
     self: var UnboundedMupsic[S, T, MaxThreads], count: int
