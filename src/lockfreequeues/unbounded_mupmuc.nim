@@ -236,58 +236,50 @@ proc pop*[S: static int, T; MaxThreads: static int](
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
-  let pinned = unpinned(self.handle).pin()
+  let handle = self.handle
+  handle.withPin(pinScope):
+    var seg = self.queue.headSegment
 
-  var seg = self.queue.headSegment
+    while true:
+      let tail = seg.tail.load(moAcquire)
+      var prevIdx = seg.prevConsumerIdx.load(moAcquire)
 
-  while true:
-    let tail = seg.tail.load(moAcquire)
-    var prevIdx = seg.prevConsumerIdx.load(moAcquire)
+      # Try to claim the next slot
+      let mySlot = prevIdx + 1
+      if mySlot >= tail:
+        # Check if there might be uncommitted items (producer still writing)
+        if mySlot < S and seg.tail.load(moAcquire) > mySlot:
+          # Slot reserved but maybe not committed yet
+          if not seg.committed[mySlot].load(moAcquire):
+            break
+          # Try again
+          continue
 
-    # Try to claim the next slot
-    let mySlot = prevIdx + 1
-    if mySlot >= tail:
-      # Check if there might be uncommitted items (producer still writing)
-      if mySlot < S and seg.tail.load(moAcquire) > mySlot:
-        # Slot reserved but maybe not committed yet
-        if not seg.committed[mySlot].load(moAcquire):
-          discard pinned.unpin()
-          return none(T)
-        # Try again
+        # Segment exhausted, try next
+        let nextSeg = seg.next.load(moAcquire)
+        if nextSeg == nil:
+          break
+        seg = nextSeg
         continue
 
-      # Segment exhausted, try next
-      let nextSeg = seg.next.load(moAcquire)
-      if nextSeg == nil:
-        discard pinned.unpin()
-        return none(T)
-      seg = nextSeg
-      continue
+      # Check if this slot is committed
+      if not seg.committed[mySlot].load(moAcquire):
+        break # Producer still writing
 
-    # Check if this slot is committed
-    if not seg.committed[mySlot].load(moAcquire):
-      discard pinned.unpin()
-      return none(T) # Producer still writing
+      # CAS to claim slot
+      if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
+        result = some(seg.data[mySlot])
+        discard self.queue.itemCount.fetchSub(1, moRelaxed)
 
-    # CAS to claim slot
-    if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
-      result = some(seg.data[mySlot])
-      discard self.queue.itemCount.fetchSub(1, moRelaxed)
+        # If we claimed the last slot (S-1), retire segment for reclamation
+        if mySlot == S - 1 and self.queue.strategy != Manual:
+          pinScope.retire(cast[pointer](seg), segmentDestructor)
+          discard self.queue.segments.fetchSub(1, moRelaxed)
 
-      # If we claimed the last slot (S-1), retire segment for reclamation
-      if mySlot == S - 1 and self.queue.strategy != Manual:
-        let ready = retireReady(pinned)
-        discard ready.retire(cast[pointer](seg), segmentDestructor)
-        discard self.queue.segments.fetchSub(1, moRelaxed)
+        break
 
-      discard pinned.unpin()
-
-      if self.queue.strategy == Eager:
-        let reclaimOp = reclaimStart(self.queue.manager).loadEpochs().checkSafe()
-        if reclaimOp.kind == rReclaimReady:
-          discard reclaimOp.reclaimready.tryReclaim()
-
-      return
+  if self.queue.strategy == Eager:
+    discard reclaimNow(self.queue.manager[])
 
 proc pop*[S: static int, T; MaxThreads: static int](
     self: var Consumer[S, T, MaxThreads], count: int

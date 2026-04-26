@@ -230,48 +230,38 @@ proc pop*[S: static int, T; MaxThreads: static int](
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
-  let pinned = unpinned(self.handle).pin()
+  let handle = self.handle
+  handle.withPin(pinScope):
+    var seg = self.headSegment
 
-  var seg = self.headSegment
+    while true:
+      let tail = seg.tail.load(moAcquire)
 
-  while true:
-    let tail = seg.tail.load(moAcquire)
+      # Check if there's data to read
+      if seg.head < tail:
+        # Check if this slot is committed (producer finished writing)
+        if seg.committed[seg.head].load(moAcquire):
+          result = some(seg.data[seg.head])
+          inc seg.head
+          discard self.itemCount.fetchSub(1, moRelaxed)
+        # If not committed, producer hasn't finished writing yet; result stays none
+        break
 
-    # Check if there's data to read
-    if seg.head < tail:
-      # Check if this slot is committed (producer finished writing)
-      if seg.committed[seg.head].load(moAcquire):
-        result = some(seg.data[seg.head])
-        inc seg.head
-        discard self.itemCount.fetchSub(1, moRelaxed)
-        discard pinned.unpin()
+      # Segment exhausted, try next
+      let nextSeg = seg.next.load(moAcquire)
+      if nextSeg == nil:
+        break
 
-        # Try to reclaim if eager
-        if self.strategy == Eager:
-          let reclaimOp = reclaimStart(self.manager).loadEpochs().checkSafe()
-          if reclaimOp.kind == rReclaimReady:
-            discard reclaimOp.reclaimready.tryReclaim()
+      # Retire old segment
+      if self.strategy != Manual:
+        pinScope.retire(cast[pointer](seg), segmentDestructor)
+        discard self.segments.fetchSub(1, moRelaxed)
 
-        return
-      else:
-        # Producer hasn't finished writing yet, spin
-        discard pinned.unpin()
-        return none(T)
+      self.headSegment = nextSeg
+      seg = nextSeg
 
-    # Segment exhausted, try next
-    let nextSeg = seg.next.load(moAcquire)
-    if nextSeg == nil:
-      discard pinned.unpin()
-      return none(T)
-
-    # Retire old segment
-    if self.strategy != Manual:
-      let ready = retireReady(pinned)
-      discard ready.retire(cast[pointer](seg), segmentDestructor)
-      discard self.segments.fetchSub(1, moRelaxed)
-
-    self.headSegment = nextSeg
-    seg = nextSeg
+  if self.strategy == Eager:
+    discard reclaimNow(self.manager[])
 
 proc pop*[S: static int, T; MaxThreads: static int](
     self: var UnboundedMupsic[S, T, MaxThreads], count: int
