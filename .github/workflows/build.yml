@@ -26,7 +26,7 @@ jobs:
       matrix:
         include:
           - runs-on: ubuntu-latest
-            nim-version: '2.0.8'
+            nim-version: 'stable'
             sanitize-threads: 'yes'
             sanitize-address: 'yes'
             timeout-minutes: 10
@@ -42,11 +42,10 @@ jobs:
       - name: Checkout project
         uses: actions/checkout@v4
 
-      - name: Install Nim
-        uses: asdf-vm/actions/install@v3
+      - name: Setup Nim ${{ matrix.nim-version }}
+        uses: jiro4989/setup-nim-action@v2
         with:
-          tool_versions: |
-            nim ${{ matrix.nim-version }}
+          nim-version: ${{ matrix.nim-version }}
 
       - name: Install dependencies
         if: runner.os == 'Linux'
@@ -58,7 +57,6 @@ jobs:
         run: |
           export SANITIZE_THREADS=${{ matrix.sanitize-threads }}
           export SANITIZE_ADDRESS=${{ matrix.sanitize-address }}
-          . "${HOME}/.asdf/asdf.sh"
           nimble develop -y
           echo "::group::Run test suite (includes arc, orc, refc, lock-free enforcement)"
           nimble test
@@ -76,7 +74,7 @@ jobs:
       matrix:
         include:
           - arch: aarch64
-            nim-version: 'ref:version-2-0'
+            nim-version: 'ref:version-2-2'
 
     steps:
       # Optimization: re-use cached Nim->C compilation
