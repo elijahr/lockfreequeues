@@ -1,10 +1,29 @@
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: check-merge-conflict
+      - id: check-yaml
+        args: ["--unsafe"]
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+      - id: check-executables-have-shebangs
+      - id: check-case-conflict
   - repo: local
     hooks:
       - id: nph
         name: nph (Nim formatter)
         entry: nph
         language: system
-        types: [file]
+        types_or: [file]
         files: \.nim$
         pass_filenames: true
+      - id: nimble-check
+        name: nimble check
+        entry: nimble check
+        language: system
+        files: \.(nim|nimble)$
+        pass_filenames: false

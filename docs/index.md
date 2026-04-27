@@ -50,18 +50,25 @@ let item = queue.pop()  # some(42)
 
 ### Unbounded Queue
 
+`UnboundedSipsic` (single producer, single consumer) does not need a
+`DebraManager` — with one reader and one writer, no concurrent reclamation
+is required.
+
 ```nim
 import lockfreequeues
 
-# Create epoch manager for memory reclamation
-let manager = newEpochManager()
+# Unbounded SPSC queue with segment size 64.
+var queue = newUnboundedSipsic[64, int]()
 
-# Unbounded SPSC queue with segment size 64
-var queue = newUnboundedSipsic[64, int](manager)
-
-queue.push(42)  # Never fails - grows as needed
-let item = queue.pop()  # some(42)
+queue.push(42)            # never fails, grows as needed
+let item = queue.pop()    # some(42)
 ```
+
+The other unbounded queues (`UnboundedSipmuc`, `UnboundedMupsic`,
+`UnboundedMupmuc`) need a `DebraManager` and per-thread handles for safe
+memory reclamation. See the [README's Quick Start](../README.md#quick-start)
+for an `UnboundedMupmuc` example, or the worked examples under
+[`examples/`](https://github.com/elijahr/lockfreequeues/tree/master/examples).
 
 ## Choosing a Queue
 

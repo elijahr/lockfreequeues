@@ -56,6 +56,10 @@ task benchmarks, "Runs the benchmark suite":
   exec "benchmarks/nim/bench_main --runs=10 -o=benchmarks/results/latest.json"
 
 
+task `benchmarks:readme`, "Regenerate the benchmark table in README.md":
+  exec "nim r --hints:off --warnings:off benchmarks/render_readme.nim"
+
+
 task stresstests, "Runs the stress test suite (multi-threaded)":
   # C with default MM (orc)
   exec "nim c --path:src --threads:on -r -f stress-tests/stress_test.nim"
