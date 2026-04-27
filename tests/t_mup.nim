@@ -26,7 +26,12 @@ template testMupGetProducerThrowsNoProducersAvailable*(queue: untyped) =
   var threads: array[4, Thread[void]]
   for i in 0 .. 3:
     threads[i].createThread(assignProducer)
-  joinThreads(threads)
+  # Per-element joinThread, not varargs joinThreads. The varargs form
+  # memcpy's the Thread array, which TSAN on aarch64 flags as a race
+  # against the exiting threads' final stores to `thrd.core`/`dataFn`
+  # in `system/threadimpl.nim` (`threadProcWrapper`).
+  for i in 0 .. 3:
+    joinThread(threads[i])
   expect NoProducersAvailableError:
     discard queue.getProducer()
 
