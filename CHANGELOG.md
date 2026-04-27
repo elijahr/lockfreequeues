@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `std/atomics` dependency. `Atomic[T]` and the memory-order primitives are now sourced from `debra/atomics`.
 - `src/lockfreequeues/constants.nim`. `CacheLineBytes` is now sourced from `debra/atomics`.
+- Removed the internal `lockfreequeues/ops` submodule. It was documented as internal, had no callers inside the library, and its `index` helper had silently shifted from `value mod capacity` (3.1.0) to `value mod (capacity + 1)` during the queue refactor. External code that imported `lockfreequeues/ops` directly should migrate to the public typestate API or inline the small helpers it contained.
 
 ## [3.1.0] - 2024-09-28
 

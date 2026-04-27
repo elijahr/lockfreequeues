@@ -3,7 +3,6 @@ import ./t_mupmuc
 # import ./t_mupmuc_threaded  # DISABLED: pre-existing deadlock unrelated to typestate migration
 import ./t_mupsic
 import ./t_mupsic_threaded
-import ./t_ops
 import ./t_sipmuc
 # import ./t_sipmuc_threaded  # DISABLED: pre-existing deadlock unrelated to typestate migration
 import ./t_sipsic
@@ -25,7 +24,6 @@ export
   # t_mupmuc_threaded,
   t_mupsic,
   t_mupsic_threaded,
-  t_ops,
   t_sipmuc,
   # t_sipmuc_threaded,
   t_sipsic,
