@@ -2,23 +2,31 @@
 
 # lockfreequeues
 
-Lock-free queues for Nim, implemented as ring buffers (bounded) and linked segments (unbounded).
+Lock-free queues for Nim. Bounded queues are ring buffers; unbounded queues are
+linked segments reclaimed via [DEBRA](https://github.com/elijahr/nim-debra).
+All variants cover SPSC, SPMC, MPSC, and MPMC.
 
-**Bounded queues** (fixed capacity):
+API documentation: <https://elijahr.github.io/lockfreequeues>
 
-- `Sipsic` - Single-producer, single-consumer (SPSC). Wait-free operations.
-- `Sipmuc` - Single-producer, multi-consumer (SPMC). Wait-free push, lock-free pop.
-- `Mupsic` - Multi-producer, single-consumer (MPSC). Lock-free push, wait-free pop.
-- `Mupmuc` - Multi-producer, multi-consumer (MPMC). Lock-free operations.
+## Why this library
 
-**Unbounded queues** (dynamic capacity with epoch-based memory reclamation):
+If two threads need to hand items to each other and you cannot afford a mutex,
+the answer is a lock-free queue. Picking the right one is the hard part: do you
+have one producer or many, one consumer or many, a fixed capacity or not? Each
+choice changes the algorithm and the cost. `lockfreequeues` ships eight queues
+covering every cell of that grid, with a uniform API and verified ordering
+guarantees.
 
-- `UnboundedSipsic` - Single-producer, single-consumer (SPSC). Wait-free operations.
-- `UnboundedSipmuc` - Single-producer, multi-consumer (SPMC). Wait-free push, lock-free pop.
-- `UnboundedMupsic` - Multi-producer, single-consumer (MPSC). Lock-free push, wait-free pop.
-- `UnboundedMupmuc` - Multi-producer, multi-consumer (MPMC). Lock-free operations.
+A short vocabulary first.
 
-API documentation: https://elijahr.github.io/lockfreequeues
+- **Wait-free**: every thread completes its operation in a bounded number of
+  steps, regardless of what other threads do. The strongest progress guarantee.
+- **Lock-free**: at least one thread makes progress on every step. Individual
+  threads may retry, but the system never stalls.
+
+Wait-free is preferable when you can get it; lock-free is what you get with
+contended CAS loops. Both are stronger than mutex-based code, which can stall
+the whole system if a holder is preempted.
 
 ## Installation
 
@@ -26,89 +34,195 @@ API documentation: https://elijahr.github.io/lockfreequeues
 nimble install lockfreequeues
 ```
 
-## Thread Safety and Lock-Free Guarantees
+## Quick Start
 
-### Item Type Requirements
-
-By default, lockfreequeues requires that queue item types are lock-free:
+### Bounded SPSC
 
 ```nim
+import options
 import lockfreequeues
 
-# These work - lock-free types
-var queue1 = newUnboundedSipsic[64, int]()
-var queue2 = newUnboundedSipsic[64, uint64]()
-var queue3 = newUnboundedSipsic[64, pointer]()
+# Bounded single-producer, single-consumer queue, capacity 16
+var queue = initSipsic[16, int]()
 
-type NodeObj = object
-  value: int
-var queue4 = newUnboundedSipsic[64, ptr NodeObj]()
+discard queue.push(42)
+discard queue.push(123)
 
-# This fails on arc/orc - ref uses spinlocks for refcounting
-type Node = ref object
-  value: int
-var queue5 = newUnboundedSipsic[64, Node]()  # Compile error!
+let item = queue.pop()  # some(42)
+assert item == some(42)
 ```
 
-### Why This Matters
+### Unbounded MPMC
 
-On arc/orc memory managers, `ref` types use reference counting. While the queue's CAS operations correctly serialize slot access, reference counting operations on ref types may use spinlock-based atomics on some platforms, potentially introducing subtle issues.
+The MP/MC unbounded variants need a `DebraManager` for safe segment
+reclamation and a per-thread handle for every producer and consumer.
 
-### Allowing Non-Lock-Free Types
+```nim
+import options
+import debra
+import lockfreequeues
 
-If you understand the trade-offs and need to use non-lock-free types:
+var manager = initDebraManager[4]()
+var queue = newUnboundedMupmuc[64, int, 4](addr manager)
 
-```bash
-nim c -d:allowNonLockFreeQueueItems your_program.nim
+let producerHandle = registerThread(manager)
+let consumerHandle = registerThread(manager)
+
+var producer = queue.getProducer(producerHandle)
+var consumer = queue.getConsumer(consumerHandle)
+
+producer.push(42)
+let item = consumer.pop()  # some(42)
+assert item == some(42)
 ```
 
-### Recommended Patterns
+See [`examples/`](examples/) for full multi-threaded examples and patterns
+(audio buffer, job scheduler, event collector, task fan-out).
 
-For maximum safety and portability:
+## Choosing a queue
 
-- **Value types**: Use int, uint64, float, enums, simple objects
-- **Pointers**: Use `ptr T` when you need indirection (you manage lifetime)
-- **Avoid ref types**: On arc/orc, prefer `ptr T` with manual memory management
-- **Test on target platform**: Always verify lock-free status on your deployment target
+| Queue              | P    | C    | Push      | Pop       | Bounded? | Needs `DebraManager`? | Per-thread handle? |
+|--------------------|------|------|-----------|-----------|----------|-----------------------|--------------------|
+| `Sipsic`           | 1    | 1    | wait-free | wait-free | yes      | no                    | no                 |
+| `Sipmuc`           | 1    | many | wait-free | lock-free | yes      | no                    | no                 |
+| `Mupsic`           | many | 1    | lock-free | wait-free | yes      | no                    | no                 |
+| `Mupmuc`           | many | many | lock-free | lock-free | yes      | no                    | no                 |
+| `UnboundedSipsic`  | 1    | 1    | wait-free | wait-free | no       | no                    | no                 |
+| `UnboundedSipmuc`  | 1    | many | wait-free | lock-free | no       | yes                   | consumer side      |
+| `UnboundedMupsic`  | many | 1    | lock-free | wait-free | no       | yes                   | producer side      |
+| `UnboundedMupmuc`  | many | many | lock-free | lock-free | no       | yes                   | both               |
 
-### Testing Lock-Free Behavior
+`UnboundedSipsic` is special: with one producer and one consumer the consumer
+is the only freer, so it does not need DEBRA. Every other unbounded variant
+does, because multiple threads can race to detach a segment.
 
-Include tests with multiple memory managers:
+### Bounded vs unbounded
 
-```bash
-nim c -r --mm:refc tests/mytest.nim
-nim c -r --mm:arc tests/mytest.nim
-nim c -r --mm:orc tests/mytest.nim
-```
+Bounded queues are ring buffers with compile-time capacity. Use them when:
+
+- memory usage must be predictable;
+- you are working in embedded or real-time systems;
+- producer and consumer counts are known at compile time.
+
+Unbounded queues are linked segments that grow as needed. Use them when:
+
+- workload is bursty or unpredictable;
+- producer or consumer threads are created dynamically;
+- some memory growth is acceptable in exchange for never blocking on a full queue.
+
+## Dependencies
+
+- [`debra`](https://github.com/elijahr/nim-debra) `>= 0.3.0` for epoch-based
+  reclamation in the unbounded multi-thread queues. `nim-debra` is a
+  general-purpose DEBRA+ implementation; nothing about it is specific to this
+  library, and it can be reused as the reclamation backend for any lock-free
+  data structure you build.
+- [`typestates`](https://github.com/elijahr/nim-typestates) `>= 0.3.1` for the
+  slot-ownership state machines that back push and pop.
+
+## Compile-time options
+
+| Flag                                       | Default | Effect                                                                                  |
+|--------------------------------------------|---------|-----------------------------------------------------------------------------------------|
+| `-d:allowNonLockFreeQueueItems`            | off     | Disable the arc/orc compile-time check that rejects `ref` item types.                   |
+| `-d:nimEnforceLockFreeAtomics`             | off     | Nim flag; fail compilation if any atomic operation falls back to spinlocks.             |
+| `-d:LockFreeQueuesAdvanceEvery=N`          | 64      | DEBRA epoch-advance cadence for unbounded queues' Eager reclamation per-pop fast path.  |
+
+## Thread safety
+
+The one rule that bites first: on `arc` / `orc`, `ref` item types fail to
+compile. Reference counting on those memory managers can fall back to
+spinlocks, which would defeat the lock-free guarantee. Use a value type, a
+`ptr T`, or compile with `-d:allowNonLockFreeQueueItems` if you accept the
+trade-off.
+
+The full safety model — slot-ownership typestates, why the queue itself is
+lock-free even when items are not, and the matrix of MM x sanitiser
+combinations under CI — lives in
+[`docs/safety-model.md`](docs/safety-model.md). The typestate transitions are
+documented in
+[`docs/slot-ownership-typestates.md`](docs/slot-ownership-typestates.md).
+
+## Benchmarks
+
+Throughput and latency results are checked into
+[`benchmarks/results/latest.json`](benchmarks/results/latest.json) and rendered
+into the table below. Re-run the suite with `nimble benchmarks`, then update
+this section with `nim r benchmarks/render_readme.nim`.
+
+<!-- BENCHMARKS:start -->
+_Platform: macosx arm64, 8 cores, 2025-12-03T22:24:55Z._
+
+| implementation | threads | throughput (ops/ms) | p50 latency (ns) |
+|----------------|---------|---------------------|------------------|
+| `lockfreequeues/Sipsic` | 1P/1C | 7411.0 | 292 |
+| `nim/channels` | 1P/1C | 1199.7 | — |
+| `nim/channels` | 2P/2C | 815.8 | — |
+| `nim/channels` | 4P/4C | 1779.5 | — |
+
+_Numbers regenerated by `nim r benchmarks/render_readme.nim` from `benchmarks/results/latest.json`._
+
+<!-- BENCHMARKS:end -->
+
+See [`benchmarks/`](benchmarks/) for the full suite, methodology, and
+adapter implementations.
 
 ## Examples
 
-Examples are located in the [examples](https://github.com/elijahr/lockfreequeues/tree/master/examples) directory and can be compiled and run with:
+Examples are in [`examples/`](examples/) and can be run with:
 
 ```sh
 nimble examples
 ```
 
-## Reference
+## Running tests
 
-- Juho Snellman's post ["I've been writing ring buffers wrong all these years"](https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/) ([alt](https://web.archive.org/web/20200530040210/https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/))
-- Mamy Ratsimbazafy's [research on SPSC channels](https://github.com/mratsim/weave/blob/master/weave/cross_thread_com/channels_spsc.md#litterature) for weave.
-- Henrique F Bucher's post ["Yes, You Have Been Writing SPSC Queues Wrong Your Entire Life"](http://www.vitorian.com/x1/archives/370) ([alt](https://web.archive.org/web/20191225164231/http://www.vitorian.com/x1/archives/370))
+```sh
+nimble test
+```
 
-Many thanks to Mamy Ratsimbazafy for reviewing the initial release and offering suggestions.
+CI (see [`.github/workflows/build.yml`](.github/workflows/build.yml)) runs the
+suite on:
+
+- Runners: `ubuntu-24.04` (x86_64), `ubuntu-24.04-arm` (native arm64),
+  `macos-latest` (arm64).
+- Memory managers: `arc`, `orc`, `refc`, `atomicArc`.
+- Backends: C and C++.
+- Sanitisers: ThreadSanitizer (TSAN) on `atomicArc`, AddressSanitizer (ASAN).
+- Lock-free atomic enforcement: `-d:nimEnforceLockFreeAtomics` lane on `arc`
+  and `orc`.
+
+192 tests across the bounded, unbounded, threaded, and lock-free-check suites.
 
 ## Contributing
 
-- Pull requests and feature requests are welcome!
-- Please file any issues you encounter.
-- For pull requests, please see the [contribution guidelines](https://github.com/elijahr/lockfreequeues/tree/master/CONTRIBUTING.md).
+Pull requests and issues welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow.
 
-## Running tests
+## Changelog
 
-Tests can be run locally with `nimble test`.
+See [CHANGELOG.md](CHANGELOG.md). The current release is
+[3.2.0](CHANGELOG.md#320---2026-04-27).
 
-CI runs the test suite for both C and C++ targets on:
-- Linux `x86_64` and `aarch64`
-- macOS `x86_64`
+## References
 
-The test suite is also run with [LLVM thread sanitization](https://clang.llvm.org/docs/ThreadSanitizer.html) to check for data races.
+- Juho Snellman, ["I've been writing ring buffers wrong all these years"](https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/)
+  ([alt](https://web.archive.org/web/20200530040210/https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/)).
+- Mamy Ratsimbazafy, [research on SPSC channels](https://github.com/mratsim/weave/blob/master/weave/cross_thread_com/channels_spsc.md#litterature)
+  for weave.
+- Henrique F. Bucher, ["Yes, You Have Been Writing SPSC Queues Wrong Your Entire Life"](http://www.vitorian.com/x1/archives/370)
+  ([alt](https://web.archive.org/web/20191225164231/http://www.vitorian.com/x1/archives/370)).
+- Maged M. Michael and Michael L. Scott, "Simple, Fast, and Practical
+  Non-Blocking and Blocking Concurrent Queue Algorithms" (PODC 1996).
+- Dmitry Vyukov's writings on bounded MPMC ring buffers and CAS-based
+  coordination patterns.
+- Trevor Brown, ["Reclaiming Memory for Lock-Free Data Structures: There has to
+  be a Better Way"](https://www.cs.utoronto.ca/~tabrown/debra/) (DEBRA, the
+  reclamation scheme used by the unbounded queues).
+
+Many thanks to Mamy Ratsimbazafy for reviewing the initial release and
+offering suggestions.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

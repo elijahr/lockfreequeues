@@ -48,19 +48,43 @@ queue.push(123)
 let item = queue.pop()  # some(42)
 ```
 
-### Unbounded Queue
+### Unbounded Queue (single-producer, single-consumer)
+
+`UnboundedSipsic` does not need DEBRA reclamation: the producer and consumer
+each hold their own segment pointer and the consumer-side advance is the only
+freer.
 
 ```nim
 import lockfreequeues
 
-# Create epoch manager for memory reclamation
-let manager = newEpochManager()
-
 # Unbounded SPSC queue with segment size 64
-var queue = newUnboundedSipsic[64, int](manager)
+var queue = newUnboundedSipsic[64, int]()
 
 queue.push(42)  # Never fails - grows as needed
 let item = queue.pop()  # some(42)
+```
+
+### Unbounded Queue (multi-producer, multi-consumer)
+
+The MP/MC unbounded variants need a `DebraManager` for safe segment
+reclamation, plus a per-thread handle for each producer and consumer:
+
+```nim
+import options
+import debra
+import lockfreequeues
+
+var manager = initDebraManager[4]()
+var queue = newUnboundedMupmuc[64, int, 4](addr manager)
+
+let producerHandle = registerThread(manager)
+let consumerHandle = registerThread(manager)
+
+var producer = queue.getProducer(producerHandle)
+var consumer = queue.getConsumer(consumerHandle)
+
+producer.push(42)
+let item = consumer.pop()  # some(42)
 ```
 
 ## Choosing a Queue
