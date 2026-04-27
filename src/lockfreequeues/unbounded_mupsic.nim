@@ -295,8 +295,8 @@ proc pop*[S: static int, T; MaxThreads: static int](
       seg = nextSeg
 
   if self.strategy == Eager:
-    self.handle.advanceEvery(LockFreeQueuesAdvanceEvery)
-    discard reclaimNow(self.handle)
+    if self.handle.advanceEvery(LockFreeQueuesAdvanceEvery):
+      discard reclaimNow(self.handle)
 
 proc pop*[S: static int, T; MaxThreads: static int](
     self: var UnboundedMupsic[S, T, MaxThreads], count: int

@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Eager-strategy unbounded queues now gate `reclaimNow` on `advanceEvery` returning `true`, eliminating per-pop epoch-safety atomic loads when the global epoch hasn't advanced. Reclamation latency is bounded by `LockFreeQueuesAdvanceEvery` (default 64), the same cadence the user already controls.
 - Bounded queues (`Sipsic`, `Mupsic`, `Mupmuc`) reimplemented on the typestate layer. SPSC uses N+1 storage slots to distinguish empty from full; MPSC, SPMC, and MPMC use N storage slots paired with per-slot committed flags so producers can publish before consumers observe the slot. Surface API (push/pop, `head`/`tail`, capacity semantics) is unchanged for SPSC; the multi-producer / multi-consumer variants gain a published-before-visible ordering guarantee they did not previously provide.
 - `atomic_dsl.nim` now re-exports `debra/atomics` instead of wrapping `std/atomics`. Call-site DSL (`relaxed`, `acquire`, `release`, `sequential`) is unchanged.
 - Stress test runner exercises all three memory managers.

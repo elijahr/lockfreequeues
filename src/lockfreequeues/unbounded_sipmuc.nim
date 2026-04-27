@@ -285,8 +285,8 @@ proc pop*[S: static int, T; MaxThreads: static int](
       # Lost CAS, retry
 
   if self.queue.strategy == Eager:
-    self.handle.advanceEvery(LockFreeQueuesAdvanceEvery)
-    discard reclaimNow(self.handle)
+    if self.handle.advanceEvery(LockFreeQueuesAdvanceEvery):
+      discard reclaimNow(self.handle)
 
 proc pop*[S: static int, T; MaxThreads: static int](
     self: var Consumer[S, T, MaxThreads], count: int
