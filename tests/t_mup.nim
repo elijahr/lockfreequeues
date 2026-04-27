@@ -40,7 +40,13 @@ template testMupGetProducerThrowsNoProducersAvailable*(queue: untyped) =
   # to the standard `joinThread` API.
   when defined(posix):
     for i in 0 .. 3:
-      discard pthread_join(threads[i].sys, cast[ptr pointer](nil))
+      # `threads[i].sys` is `SysThread` (distinct culong on Linux,
+      # importc'd object on macOS), and `posix.pthread_join` wants `Pthread`
+      # (a separate distinct type). Both wrap the same `pthread_t`, so a
+      # bitwise cast is the right conversion.
+      discard pthread_join(
+        cast[Pthread](threads[i].sys), cast[ptr pointer](nil)
+      )
   else:
     for i in 0 .. 3:
       joinThread(threads[i])
