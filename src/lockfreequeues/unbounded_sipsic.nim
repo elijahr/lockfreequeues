@@ -17,6 +17,7 @@
 
 import ./atomic_dsl
 import std/options
+import std/typetraits
 from system/ansi_c import c_calloc, c_free
 
 type
@@ -39,6 +40,8 @@ type
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
   ## Allocate a new segment via libc calloc (zero-initialized, truly shared).
   result = cast[ptr Segment[S, T]](c_calloc(1.csize_t, sizeof(Segment[S, T]).csize_t))
+  if result == nil:
+    raise newException(OutOfMemDefect, "newSegment: c_calloc returned nil")
   result.next.store(nil, moRelaxed)
   result.head.store(0, moRelaxed)
   result.tail.store(0, moRelaxed)
@@ -184,5 +187,11 @@ proc `=destroy`*[S: static int, T](self: var UnboundedSipsic[S, T]) =
   var seg = self.headSegment.load(moRelaxed)
   while seg != nil:
     let next = seg.next.load(moRelaxed)
+    when not supportsCopyMem(T):
+      # Run the destructor for any managed slots (string/seq/ref) before
+      # `c_free`'s away the segment block — otherwise their internal
+      # allocations leak.
+      for i in 0 ..< S:
+        reset(seg.data[i])
     c_free(seg)
     seg = next

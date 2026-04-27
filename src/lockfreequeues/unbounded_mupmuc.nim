@@ -25,6 +25,7 @@
 
 import ./atomic_dsl
 import std/options
+import std/typetraits
 from system/ansi_c import c_calloc, c_free
 
 import debra
@@ -92,6 +93,8 @@ type
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
   ## Allocate a new segment via libc calloc (zero-initialized, truly shared).
   result = cast[ptr Segment[S, T]](c_calloc(1.csize_t, sizeof(Segment[S, T]).csize_t))
+  if result == nil:
+    raise newException(OutOfMemDefect, "newSegment: c_calloc returned nil")
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
   result.prevConsumerIdx.store(-1, moRelaxed)
@@ -227,8 +230,16 @@ proc push*[S: static int, T; MaxThreads: static int](
   for item in items:
     self.push(item)
 
-# Helper to wrap destructor for c_free
-proc segmentDestructor(p: pointer) {.nimcall.} =
+# Typed destructor for retired segments. Must be generic over `(S, T)`
+# because the segment's `data: array[S, T]` slots may hold managed types
+# (`string`, `seq`, `ref`, ...) whose internal allocations would leak if
+# we just `c_free`'d the segment block. For POD `T` (`supportsCopyMem`),
+# the `reset` loop is compile-time-elided, so this costs nothing.
+proc segmentDestructor[S: static int, T](p: pointer) {.nimcall, raises: [].} =
+  when not supportsCopyMem(T):
+    let seg = cast[ptr Segment[S, T]](p)
+    for i in 0 ..< S:
+      reset(seg.data[i])
   c_free(p)
 
 proc pop*[S: static int, T; MaxThreads: static int](
@@ -286,7 +297,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
           # is detached from the head chain but reachable from no root, and
           # leaks at process exit. Only the live segmentCount is mode-
           # dependent.
-          it.retire(cast[pointer](seg), segmentDestructor)
+          it.retire(cast[pointer](seg), segmentDestructor[S, T])
           if self.queue.strategy != Manual:
             discard self.queue.segments.fetchSub(1, moRelaxed)
           # With Manual strategy the segment is in limbo (retired but not
@@ -340,5 +351,11 @@ proc `=destroy`*[S: static int, T; MaxThreads: static int](
   var seg = self.headSegment.load(moRelaxed)
   while seg != nil:
     let next = seg.next.load(moRelaxed)
+    when not supportsCopyMem(T):
+      # Run the destructor for any managed slots (string/seq/ref) before
+      # `c_free`'s away the segment block — otherwise their internal
+      # allocations leak.
+      for i in 0 ..< S:
+        reset(seg.data[i])
     c_free(seg)
     seg = next

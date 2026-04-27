@@ -26,6 +26,7 @@
 
 import ./atomic_dsl
 import std/options
+import std/typetraits
 from system/ansi_c import c_calloc, c_free
 
 import debra
@@ -86,6 +87,8 @@ type
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
   ## Allocate a new segment via libc calloc (zero-initialized, truly shared).
   result = cast[ptr Segment[S, T]](c_calloc(1.csize_t, sizeof(Segment[S, T]).csize_t))
+  if result == nil:
+    raise newException(OutOfMemDefect, "newSegment: c_calloc returned nil")
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
   result.head = 0
@@ -221,8 +224,15 @@ proc push*[S: static int, T; MaxThreads: static int](
   for item in items:
     self.push(item)
 
-# Helper to wrap destructor for c_free
-proc segmentDestructor(p: pointer) {.nimcall.} =
+# Typed destructor for retired segments. Generic over `(S, T)` so we can
+# `reset` any managed slots (`string`, `seq`, `ref`, ...) before
+# `c_free`'s away the segment block. For POD `T` (`supportsCopyMem`),
+# the loop is compile-time-elided.
+proc segmentDestructor[S: static int, T](p: pointer) {.nimcall, raises: [].} =
+  when not supportsCopyMem(T):
+    let seg = cast[ptr Segment[S, T]](p)
+    for i in 0 ..< S:
+      reset(seg.data[i])
   c_free(p)
 
 proc pop*[S: static int, T; MaxThreads: static int](
@@ -276,7 +286,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
       # retiring, the segment is detached from the head chain but reachable
       # from no root, and leaks at process exit.
       self.headSegment.store(nextSeg, moRelease)
-      it.retire(cast[pointer](seg), segmentDestructor)
+      it.retire(cast[pointer](seg), segmentDestructor[S, T])
       if self.strategy != Manual:
         discard self.segments.fetchSub(1, moRelaxed)
       # With Manual strategy the segment is in limbo (retired but not yet
@@ -316,5 +326,11 @@ proc `=destroy`*[S: static int, T; MaxThreads: static int](
   var seg = self.headSegment.load(moRelaxed)
   while seg != nil:
     let next = seg.next.load(moRelaxed)
+    when not supportsCopyMem(T):
+      # Run the destructor for any managed slots (string/seq/ref) before
+      # `c_free`'s away the segment block — otherwise their internal
+      # allocations leak.
+      for i in 0 ..< S:
+        reset(seg.data[i])
     c_free(seg)
     seg = next
