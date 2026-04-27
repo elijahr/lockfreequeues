@@ -34,3 +34,11 @@ test_typed_introspection*
 benchmarks/nim/bench_latency
 benchmarks/nim/bench_main
 benchmarks/nim/bench_throughput
+
+# Compiled benchmark test binaries (extensionless executables)
+benchmarks/nim/tests/t_*
+!benchmarks/nim/tests/t_*.nim
+
+# Compiled stress-test binaries (extensionless executables)
+stress-tests/[a-z_]*
+!stress-tests/*.nim
