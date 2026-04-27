@@ -40,7 +40,7 @@ template testMupGetProducerThrowsNoProducersAvailable*(queue: untyped) =
   # to the standard `joinThread` API.
   when defined(posix):
     for i in 0 .. 3:
-      discard pthread_join(threads[i].sys, nil)
+      discard pthread_join(threads[i].sys, cast[ptr pointer](nil))
   else:
     for i in 0 .. 3:
       joinThread(threads[i])
