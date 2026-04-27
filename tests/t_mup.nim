@@ -1,5 +1,8 @@
 ## Shared test templates for multi-producer queues (Mupsic, Mupmuc).
 
+when defined(posix):
+  import posix # pthread_join, used by testMupGetProducerThrowsNoProducersAvailable
+
 template testMupGetProducerAssigns*(queue: untyped) =
   let producer = queue.getProducer()
   check(producer.idx == 0)
@@ -26,12 +29,21 @@ template testMupGetProducerThrowsNoProducersAvailable*(queue: untyped) =
   var threads: array[4, Thread[void]]
   for i in 0 .. 3:
     threads[i].createThread(assignProducer)
-  # Per-element joinThread, not varargs joinThreads. The varargs form
-  # memcpy's the Thread array, which TSAN on aarch64 flags as a race
-  # against the exiting threads' final stores to `thrd.core`/`dataFn`
-  # in `system/threadimpl.nim` (`threadProcWrapper`).
-  for i in 0 .. 3:
-    joinThread(threads[i])
+  # On POSIX, call `pthread_join` directly on the `sys` handle instead of
+  # `joinThread(threads[i])`. Nim's `joinThread` takes its `Thread[T]`
+  # argument by value, which the codegen emits as a memcpy of the whole
+  # struct. While the worker is finishing up, `threadProcWrapper` writes
+  # `thrd.core = nil` and `thrd.dataFn = nil` (system/threadimpl.nim:109-110),
+  # and aarch64 TSAN flags that memcpy as a race against those final
+  # stores. Reading only the `sys` field (set once at `createThread` and
+  # never touched again) avoids the copy. On non-POSIX targets, fall back
+  # to the standard `joinThread` API.
+  when defined(posix):
+    for i in 0 .. 3:
+      discard pthread_join(threads[i].sys, nil)
+  else:
+    for i in 0 .. 3:
+      joinThread(threads[i])
   expect NoProducersAvailableError:
     discard queue.getProducer()
 
