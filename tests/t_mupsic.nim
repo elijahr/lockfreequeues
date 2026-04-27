@@ -1,5 +1,4 @@
 import options
-import sequtils
 import unittest2
 
 import lockfreequeues

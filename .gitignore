@@ -2,6 +2,9 @@
 .vscode/
 .DS_Store
 
+# Local PR description scratch file (do not commit)
+.pr-description.md
+
 # Nim compiler cache and build artifacts
 nimcache/
 nimblecache/
