@@ -14,15 +14,15 @@ nimblecache/
 /htmldocs/
 /site/
 
-# Axiomantic - ignore user-specific instructions (personal preferences)
-.github/instructions/user.instructions.md
+# Personal IDE / chatmode tooling — keep out of the repo entirely.
+.github/instructions/
+.github/chatmodes/
 nimble.develop
 nimble.paths
 
 # Internal planning docs
 docs/plans/
 deps/
-nimble.paths
 
 # Embedded repositories (use as dependencies, not submodules)
 nim-typestates/
