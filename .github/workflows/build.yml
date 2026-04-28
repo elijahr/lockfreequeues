@@ -16,24 +16,31 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  test_x86:
-    name: Test nim-${{ matrix.nim-version }} / ${{ matrix.runs-on }} / x86_64
+  test:
+    name: Test nim-${{ matrix.nim-version }} / ${{ matrix.runs-on }}
     runs-on: ${{ matrix.runs-on }}
-    timeout-minutes: ${{ matrix.timeout-minutes }}
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false
       matrix:
         include:
           - runs-on: ubuntu-latest
-            nim-version: '2.0.8'
+            nim-version: 'stable'
             sanitize-threads: 'yes'
-            timeout-minutes: 5
+            sanitize-address: 'yes'
+          - runs-on: ubuntu-24.04-arm
+            nim-version: 'stable'
+            sanitize-threads: 'yes'
+            sanitize-address: 'yes'
+          - runs-on: macos-latest
+            nim-version: 'stable'
+            sanitize-threads: 'yes'
+            sanitize-address: 'yes'
 
     steps:
-      # Optimization: re-use cached Nim->C compilation
       - name: Restore cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${HOME}/.cache
           key: cache-${{ matrix.runs-on }}-${{ matrix.nim-version }}
@@ -41,98 +48,66 @@ jobs:
       - name: Checkout project
         uses: actions/checkout@v4
 
-      - name: Install Nim
-        uses: asdf-vm/actions/install@v3
+      - name: Setup Nim ${{ matrix.nim-version }}
+        uses: jiro4989/setup-nim-action@v2
         with:
-          tool_versions: |
-            nim ${{ matrix.nim-version }}
+          nim-version: ${{ matrix.nim-version }}
 
-      - name: Install dependencies
+      - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -q -y
           sudo apt-get -qq install -y clang
 
+      - name: Clone and install sibling deps (nim-debra, nim-typestates)
+        # nim.cfg uses --path:"../nim-debra/src" and --path:"../nim-typestates/src"
+        # for compiler-side resolution. Nimble's dep resolver runs BEFORE
+        # the compiler though, and `nimble test` will refuse to launch if
+        # `requires "debra >= 0.3.0"` is unsatisfiable from nimble's
+        # package store. So fetch the matching branches and `nimble install`
+        # them locally to satisfy the resolver. Once debra 0.3.0 publishes
+        # this whole step can go away.
+        run: |
+          set -e
+          cd ..
+          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
+          git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
+          (cd nim-typestates && nimble install -y)
+          (cd nim-debra && nimble install -y)
+
+      - name: Vendor unittest2 (nim.cfg expects deps/unittest2)
+        # deps/ is gitignored. nim.cfg has --path:"deps/unittest2".
+        run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
+
       - name: Run tests
         run: |
-          export SANITIZE_THREADS
-          SANITIZE_THREADS=${{ matrix.sanitize-threads }}
-          . "${HOME}/.asdf/asdf.sh"
-          nimble develop -y
-          nimble test
-          nimble examples
-
-  test_non_x86:
-    name: Test nim-${{ matrix.nim-version }} / debian-buster / ${{ matrix.arch }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: aarch64
-            nim-version: 'ref:version-2-0'
-
-    steps:
-      # Optimization: re-use cached Nim->C compilation
-      - name: Restore cache
-        uses: actions/cache@v3
-        with:
-          path: ${HOME}/.cache
-          key: cache-${{ matrix.arch }}-${{ matrix.nim-version }}
-
-      - name: Checkout Nim project
-        uses: actions/checkout@v4
-
-      # Install & run tests on non-x86
-      - uses: uraimo/run-on-arch-action@v2.7.2
-        name: Install Nim & run tests
-        with:
-          arch: ${{ matrix.arch }}
-          distro: buster
-
-          dockerRunArgs: |
-            --volume "${HOME}/.cache:/root/.cache"
-
-          setup: mkdir -p "${HOME}/.cache"
-
-          shell: /usr/bin/env bash
-
-          install: |
-            set -uexo pipefail
-            # Install asdf and dependencies
-            apt-get update -q -y
-            apt-get -qq install -y build-essential curl git
-            git clone https://github.com/asdf-vm/asdf.git \
-              "${HOME}/.asdf" \
-              --branch v0.10.2
-
-          env: |
-            SANITIZE_THREADS: no
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-          run: |
-            set -uexo pipefail
-            . "${HOME}/.asdf/asdf.sh"
-
-            # Install asdf-nim and dependencies
-            echo "::group::Install Nim"
-            git clone https://github.com/asdf-community/asdf-nim.git \
-              ~/asdf-nim \
-              --branch main \
-              --depth 1
-            asdf plugin add nim ~/asdf-nim
-            asdf nim install-deps -y
-
-            # Install Nim
-            asdf install nim ${{ matrix.nim-version }}
-            asdf local nim ${{ matrix.nim-version }}
-            echo "::endgroup::"
-
-            # Run tests
-            echo "::group::Run tests"
-            git config --global --add safe.directory ${PWD}
-            nimble develop -y
-            nimble test
-            nimble examples
-            echo "::endgroup::"
+          set -o pipefail
+          export SANITIZE_THREADS=${{ matrix.sanitize-threads }}
+          export SANITIZE_ADDRESS=${{ matrix.sanitize-address }}
+          # Workaround for nimble v0.20.x: `nimble <task>` exits 0 even when
+          # an inner `exec` aborts the script (it logs `Error:` but does not
+          # propagate the failure). Tee output and grep for nimble's error
+          # markers to force a non-zero exit. See Item 8 / nimble issue.
+          nimble_run() {
+            local logfile
+            logfile="$(mktemp)"
+            "$@" 2>&1 | tee "$logfile"
+            local rc=${PIPESTATUS[0]}
+            if [[ $rc -ne 0 ]]; then
+              return $rc
+            fi
+            if grep -Eq '^[[:space:]]*Error:' "$logfile"; then
+              echo "::error::nimble reported an error but exited 0; failing the step."
+              return 1
+            fi
+          }
+          # Skip `nimble develop -y` — nim.cfg's --noNimblePath +
+          # explicit --path: directives mean nimble's package resolver is
+          # not used. Going through develop would only add a dep-resolution
+          # round trip that fails until debra 0.3.0 publishes.
+          echo "::group::Run test suite (includes arc, orc, refc, lock-free enforcement)"
+          nimble_run nimble test
+          echo "::endgroup::"
+          echo "::group::Run examples"
+          nimble_run nimble examples
+          echo "::endgroup::"

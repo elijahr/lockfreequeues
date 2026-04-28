@@ -1,78 +1,56 @@
-# lockfreequeues
-# © Copyright 2020 Elijah Shaw-Rutschman
-#
-# See the file "LICENSE", included in this distribution for details about the
-# copyright.
-
-## A multi-producer, single-consumer bounded queue implemented as a ring buffer.
+## A multi-producer, single-consumer (MPSC) bounded queue.
+##
+## Push is lock-free for multiple producers (CAS coordination with committed flags).
+## Pop is wait-free for the single consumer.
 
 when not compileOption("threads"):
   {.error: "lockfreequeues/mupsic requires --threads:on option.".}
 
-import atomics
+import ./atomic_dsl
 import options
 
-import ./ops
-import ./sipsic
+import ./exceptions
+import ./typestates
+import ./typestates/mpsc_push
+import ./typestates/mpsc_pop
 
-
-const NoProducerIdx* = -1 ## The initial value of `Mupsic.prevProducerIdx`.
-
-
-type NoProducersAvailableError* = object of CatchableError ## \
-  ## Raised by `getProducer()` if all producers have been assigned to other
-  ## threads.
-
-type InvalidCallDefect* = object of Defect ## \
-  ## Raised by `Mupsic.push()`, `Mupmuc.push()`, and `Mupmuc.pop()` because
-  ## those should happen via `Producer.push()` or `Consumer.pop()`.
+const NoSlice* = none(HSlice[int, int])
 
 type
-  Mupsic*[N, P: static int, T] = object of Sipsic[N, T]
-    ## A multi-producer, single-consumer bounded queue implemented as a ring
-    ## buffer. Popping is wait-free.
+  Mupsic*[N, P: static int, T] = object
+    ## A multi-producer, single-consumer bounded queue.
+    ## Uses N slots + committed flags. Push is lock-free. Pop is wait-free.
     ##
     ## * `N` is the capacity of the queue.
     ## * `P` is the number of producer threads.
     ## * `T` is the type of data the queue will hold.
-
-    prevProducerIdx*: Atomic[int] ## The ID (index) of the most recent producer
-    producerTails*: array[P, Atomic[int]] ## Array of producer tails
-    producerThreadIds*: array[P, Atomic[int]] ## \
-      ## Array of producer thread IDs by index
+    head* {.align: CacheLineBytes.}: Atomic[int]
+    reservedTail* {.align: CacheLineBytes.}: Atomic[int]
+    storage*: StorageN[N, T]
+    committed*: CommittedFlagsN[N]
+    producerThreadIds*: array[P, Atomic[int]]
 
   Producer*[N, P: static int, T] = object
     ## A per-thread interface for pushing items to a queue.
     ## Retrieved via a call to `Mupsic.getProducer()`
-    idx*: int ## The producer's unique identifier.
-    queue*: ptr Mupsic[N, P, T] ## A reference to the producer's queue.
+    idx*: int
+    queue*: ptr Mupsic[N, P, T]
 
-
-proc clear[N, P: static int, T](
-  self: var Mupsic[N, P, T]
-) =
-  self.head.sequential(0)
-  self.tail.sequential(0)
-
-  for n in 0..<N:
-    self.storage[n].reset()
-
-  self.prevProducerIdx.sequential(NoProducerIdx)
-  for p in 0..<P:
-    self.producerTails[p].sequential(0)
-    self.producerThreadIds[p].sequential(0)
-
+proc clear[N, P: static int, T](self: var Mupsic[N, P, T]) =
+  self.head.store(0, moRelaxed)
+  self.reservedTail.store(0, moRelaxed)
+  self.storage.init()
+  self.committed.init()
+  for p in 0 ..< P:
+    self.producerThreadIds[p].store(0, moRelaxed)
 
 proc initMupsic*[N, P: static int, T](): Mupsic[N, P, T] =
   ## Initialize a new Mupsic queue.
   result.clear()
 
-
 proc getProducer*[N, P: static int, T](
-  self: var Mupsic[N, P, T],
-  idx: int = NoProducerIdx,
-): Producer[N, P, T]
-  {.raises: [NoProducersAvailableError].} =
+    self: var Mupsic[N, P, T], idx: int = -1
+): Producer[N, P, T] {.raises: [NoProducersAvailableError].} =
   ## Assigns and returns a `Producer` instance for the current thread.
   result.queue = addr(self)
 
@@ -84,231 +62,211 @@ proc getProducer*[N, P: static int, T](
   let threadId = getThreadId()
 
   # Try to find existing mapping of threadId -> producerIdx
-  for idx in 0..<P:
-    if self.producerThreadIds[idx].acquire == threadId:
-      result.idx = idx
+  for i in 0 ..< P:
+    if self.producerThreadIds[i].load(moAcquire) == threadId:
+      result.idx = i
       return
 
   # Try to create new mapping of threadId -> producerIdx
-  for idx in 0..<P:
+  for i in 0 ..< P:
     var expected = 0
-    if self.producerThreadIds[idx].compareExchangeWeak(
-      expected,
-      threadId,
-      moRelease,
-      moAcquire,
+    if self.producerThreadIds[i].compareExchangeWeak(
+      expected, threadId, moRelease, moAcquire
     ):
-      result.idx = idx
+      result.idx = i
       return
 
   # Producers are all spoken for by another thread
   raise newException(
     NoProducersAvailableError,
     "All producers have been assigned. " &
-    "Increase your producer count (P) or setMaxPoolSize(P).")
+      "Increase your producer count (P) or setMaxPoolSize(P).",
+  )
 
-
-proc push*[N, P: static int, T](
-  self: Producer[N, P, T],
-  item: T,
-): bool =
+proc push*[N, P: static int, T](self: Producer[N, P, T], item: T): bool =
   ## Append a single item to the queue.
   ## If the queue is full, `false` is returned.
   ## If `item` is appended, `true` is returned.
+  ##
+  ## This operation is lock-free: producers never block on each other.
+  ## Uses typestate to ensure correct operation sequencing.
 
-  var prevTail: int
-  var newTail: int
-  var prevProducerIdx: int
-  var isFirstProduction: bool
+  # Cast queue to MupsicBase for typestate compatibility
+  var queueBase = cast[ptr MupsicBase[N, P, T]](self.queue)
 
-  # spin until reservation is acquired
+  var op = mpsc_push.start[N]()
+
   while true:
-    prevProducerIdx = self.queue.prevProducerIdx.acquire
-    isFirstProduction = prevProducerIdx == NoProducerIdx
-    var head = self.queue.head.sequential
-    prevTail =
-      if isFirstProduction:
-        0
-      else:
-        self.queue.producerTails[prevProducerIdx].acquire
+    let loaded = op.loadPointers(queueBase[])
+    let fullCheck = loaded.checkFull()
 
-    if unlikely(full(head, prevTail, N)):
-      return false
-
-    newTail = incOrReset(prevTail, 1, N)
-    #assert validateHeadAndTail(head, newTail, N)
-    self.queue.producerTails[self.idx].release(newTail)
-
-    if self.queue.prevProducerIdx.compareExchangeWeak(
-      prevProducerIdx,
-      self.idx,
-      moRelease,
-      moAcquire,
-    ):
-      break
-
-  result = true
-
-  self.queue.storage[index(prevTail, N)] = item
-
-  # Wait for prev producer to update tail, then update tail
-  if not isFirstProduction:
-    while true:
-      var expectedTail = prevTail
-      if self.queue.tail.compareExchangeWeak(
-        expectedTail,
-        newTail,
-        moRelease,
-        moAcquire,
-      ):
-        break
-  else:
-    self.queue.tail.release(newTail)
-
+    case fullCheck.kind
+    of mMPSCPushFull:
+      return fullCheck.mpscpushfull.extractFalse()
+    of mMPSCPushNotFull:
+      let claimResult = fullCheck.mpscpushnotfull.tryClaim(queueBase[])
+      case claimResult.kind
+      of mMPSCPushStart:
+        op = claimResult.mpscpushstart # CAS failed, retry
+        continue
+      of mMPSCPushSlotClaimed:
+        let written = claimResult.mpscpushslotclaimed.writeData(queueBase[], item)
+        return written.complete(queueBase[])
 
 proc push*[N, P: static int, T](
-  self: Producer[N, P, T],
-  items: openArray[T],
+    self: Producer[N, P, T], items: openArray[T]
 ): Option[HSlice[int, int]] =
   ## Append multiple items to the queue.
   ## If the queue is already full or is filled by this call, `some(unpushed)`
   ## is returned, where `unpushed` is an `HSlice` corresponding to the
   ## chunk of items which could not be pushed.
   ## If all items are appended, `none(HSlice[int, int])` is returned.
+  ##
+  ## This operation is lock-free: producers never block on each other.
   if unlikely(items.len == 0):
-    # items is empty, nothing unpushed
     return NoSlice
 
-  var count: int
-  var avail: int
-  var prevTail: int
-  var newTail: int
-  var prevProducerIdx: int
-  var isFirstProduction: bool
+  var actualCount: int
+  var reservedTail: WrappedValueN[N]
+  var newReservedTail: WrappedValueN[N]
 
-  # spin until reservation is acquired
+  # Claim slots using CAS on reservedTail
   while true:
-    prevProducerIdx = self.queue.prevProducerIdx.acquire
-    isFirstProduction = prevProducerIdx == NoProducerIdx
-    var head = self.queue.head.sequential
-    prevTail =
-      if isFirstProduction:
-        0
-      else:
-        self.queue.producerTails[prevProducerIdx].acquire
+    reservedTail = loadAcquireN[N](self.queue.reservedTail).validate()
+    let head = loadAcquireN[N](self.queue.head).validate()
 
-    avail = available(head, prevTail, N)
+    # MPSC: uses head vs reservedTail (single consumer, head is current)
+    if unlikely(fullN(head, reservedTail)):
+      return some(0 .. items.len - 1)
+
+    let avail = availableN(head, reservedTail)
+
     if likely(avail >= items.len):
-      # enough room to push all items
-      count = items.len
+      actualCount = items.len
     else:
-      if avail <= 0:
-        # Queue is full, return
-        return some(0..items.len - 1)
-      else:
-        # not enough room to push all items
-        count = avail
+      actualCount = min(avail, N)
 
-    newTail = incOrReset(prevTail, count, N)
-    #assert validateHeadAndTail(head, newTail, N)
-    self.queue.producerTails[self.idx].release(newTail)
+    newReservedTail = reservedTail.incOrResetN(actualCount)
 
-    if self.queue.prevProducerIdx.compareExchangeWeak(
-      prevProducerIdx,
-      self.idx,
-      moRelease,
-      moAcquire,
-    ):
+    let cas = prepareCAS(
+        addr self.queue.reservedTail, reservedTail.value, newReservedTail.value
+      )
+      .executeCAS()
+
+    if cas.succeeded:
       break
 
-  if count < items.len:
-    # give back remainder
-    result = some(avail..items.len - 1)
+  if actualCount < items.len:
+    result = some(actualCount .. items.len - 1)
   else:
     result = NoSlice
 
-  let start = index(prevTail, N)
-  var stop = incOrReset(prevTail, count - 1, N)
-  stop = index(stop, N)
+  # Write each item
+  for i in 0 ..< actualCount:
+    let currentTail = reservedTail.incOrResetN(i)
+    self.queue.storage[currentTail.index()] = items[i]
 
-  if start > stop:
-    # data may wrap
-    let pivot = (N-1) - start
-    self.queue.storage[start..start+pivot] = items[0..pivot]
-    if stop > 0:
-      # data wraps
-      self.queue.storage[0..stop] = items[pivot+1..pivot+1+stop]
-  else:
-    # data does not wrap
-    self.queue.storage[start..stop] = items[0..stop-start]
+  # Mark all claimed slots as committed
+  for i in 0 ..< actualCount:
+    let slot = reservedTail.incOrResetN(i).index()
+    self.queue.committed.store(slot, true)
 
-  # Wait for prev producer to update tail, then update tail
-  if not isFirstProduction:
-    while true:
-      var expectedTail = prevTail
-      if self.queue.tail.compareExchangeWeak(
-        expectedTail,
-        newTail,
-        moRelease,
-        moAcquire,
-      ):
-        break
-
-  elif isFirstProduction:
-    self.queue.tail.release(newTail)
-
-
-proc push*[N, P: static int, T](
-  self: var Mupsic[N, P, T],
-  item: T,
-): bool =
-  ## Overload of `Sipsic.push()` that simply raises `InvalidCallDefect`.
-  ## Pushes should happen via `Producer.push()`.
+proc push*[N, P: static int, T](self: var Mupsic[N, P, T], item: T): bool =
+  ## Raises `InvalidCallDefect`. Use `Producer.push()` instead.
   raise newException(InvalidCallDefect, "Use Producer.push()")
 
-
 proc push*[N, P: static int, T](
-  self: var Mupsic[N, P, T],
-  items: openArray[T],
+    self: var Mupsic[N, P, T], items: openArray[T]
 ): Option[HSlice[int, int]] =
-  ## Overload of `Sipsic.push()` that simply raises `InvalidCallDefect`.
-  ## Pushes should happen via `Producer.push()`.
+  ## Raises `InvalidCallDefect`. Use `Producer.push()` instead.
   raise newException(InvalidCallDefect, "Use Producer.push()")
 
+proc pop*[N, P: static int, T](self: var Mupsic[N, P, T]): Option[T] =
+  ## Pop a single item from the queue.
+  ## If the queue is empty or head slot is not yet committed, `none(T)` is returned.
+  ## Otherwise an item is popped, `some(T)` is returned.
+  ##
+  ## This operation is wait-free for the single consumer.
+  ## Uses typestate to ensure correct operation sequencing.
 
-proc capacity*[N, P: static int, T](
-  self: var Mupsic[N, P, T],
-): int
-  {.inline.} =
+  # Cast queue to MupsicBase for typestate compatibility
+  var queueBase = cast[ptr MupsicBase[N, P, T]](addr self)
+
+  let op = mpsc_pop.start[N]()
+  let loaded = op.loadPointers(queueBase[])
+  let emptyCheck = loaded.checkEmpty()
+
+  case emptyCheck.kind
+  of mMPSCPopEmpty:
+    return none(T)
+  of mMPSCPopNotEmpty:
+    let committedCheck = emptyCheck.mpscpopnotempty.checkCommitted(queueBase[])
+    case committedCheck.kind
+    of mMPSCPopEmpty:
+      return none(T) # Slot not committed - producer still writing
+    of mMPSCPopSlotReady:
+      return some(committedCheck.mpscpopslotready.complete(queueBase[]))
+
+proc pop*[N, P: static int, T](self: var Mupsic[N, P, T], count: int): Option[seq[T]] =
+  ## Pop up to `count` items from the queue.
+  ## If the queue is empty, `none(seq[T])` is returned.
+  ## Otherwise `some(seq[T])` is returned containing at least one item.
+  ## May return fewer items than requested if some slots are not yet committed.
+  ##
+  ## This operation is wait-free for the single consumer.
+  if unlikely(count <= 0):
+    return none(seq[T])
+
+  let head = loadAcquireN[N](self.head).validate()
+  let reservedTail = loadAcquireN[N](self.reservedTail).validate()
+
+  let usedCount = usedN(head, reservedTail)
+  if usedCount <= 0:
+    return none(seq[T])
+
+  # Pop items until we hit an uncommitted slot or reach count
+  var items = newSeq[T]()
+  var currentHead = head
+
+  for i in 0 ..< min(count, usedCount):
+    let slot = currentHead.index()
+
+    # Check if this slot is committed
+    if not self.committed.load(slot):
+      break # Stop at first uncommitted slot
+
+    items.add(self.storage[slot])
+
+    # Clear committed flag for slot reuse
+    self.committed.store(slot, false)
+
+    currentHead = currentHead.incOrResetN(1)
+
+  if items.len == 0:
+    return none(seq[T])
+
+  self.head.storeReleaseN(currentHead)
+  return some(items)
+
+proc capacity*[N, P: static int, T](self: var Mupsic[N, P, T]): int {.inline.} =
   ## Returns the queue's storage capacity (`N`).
   result = N
 
-
-proc producerCount*[N, P: static int, T](
-  self: var Mupsic[N, P, T],
-): int
-  {.inline.} =
+proc producerCount*[N, P: static int, T](self: var Mupsic[N, P, T]): int {.inline.} =
   ## Returns the queue's number of producers (`P`).
   result = P
 
 when defined(testing):
-  import sugar
   from unittest import check
 
-  proc reset*[N, P: static int, T](
-    self: var Mupsic[N, P, T]
-  ) =
+  proc reset*[N, P: static int, T](self: var Mupsic[N, P, T]) =
     ## Resets the queue to its default state.
-    ## Probably only useful in single-threaded unit tests.
+    ## For single-threaded unit tests only.
     self.clear()
 
   proc checkState*[N, P: static int, T](
-    self: var Mupsic[N, P, T],
-    prevProducerIdx: int,
-    producerTails: seq[int],
+      self: var Mupsic[N, P, T], head: int, reservedTail: int
   ) =
-    let tails = collect(newSeq):
-      for p in 0..<P:
-        self.producerTails[p].acquire
-    check(self.prevProducerIdx.acquire == prevProducerIdx)
-    check(tails == producerTails)
+    ## Check internal queue state for testing.
+    check(self.head.load(moRelaxed) == head)
+    check(self.reservedTail.load(moRelaxed) == reservedTail)

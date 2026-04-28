@@ -1,10 +1,10 @@
 {
-	"folders": [
-		{
-			"path": "."
-		},
-	],
-	"settings": {
+    "folders": [
+        {
+            "path": "."
+        },
+    ],
+    "settings": {
         "files.associations": {
             "atomic": "cpp",
             "array": "cpp",
@@ -57,8 +57,8 @@
         ],
         "nim.lintOnSave": true,
         "nim.buildOnSave": true,
-        "nim.licenseString": "# lockfreequeues # © Copyright 2020 Elijah Shaw-Rutschman # # See the file \"LICENSE\", included in this distribution for details about the # copyright.",
+        "nim.licenseString": "",
         "search.useIgnoreFiles": false,
         "nimlsp.path": "/Users/elijahrutschman/.asdf/shims/nimlsp",
-	}
+    }
 }

@@ -1,21 +1,12 @@
-# lockfreequeues
-# © Copyright 2020 Elijah Shaw-Rutschman
-#
-# See the file "LICENSE", included in this distribution for details about the
-# copyright.
-
 import options
-import sequtils
-import unittest
+import unittest2
 
 import lockfreequeues
 import ./t_integration
 import ./t_mup
 import ./t_sic
 
-
 var queue = initMupsic[8, 4, int]()
-
 
 suite "Mupsic[N, P, T]":
   test "capacity":
@@ -25,16 +16,7 @@ suite "Mupsic[N, P, T]":
     check(queue.producerCount == 4)
 
   test "initial state":
-    queue.checkState(
-      head = 0,
-      tail = 0,
-      storage = repeat(0, 8),
-    )
-    queue.checkState(
-      prevProducerIdx = NoProducerIdx,
-      producerTails = repeat(0, 4),
-    )
-
+    queue.checkState(head = 0, reservedTail = 0)
 
 suite "getProducer(Mupsic[N, P, T])":
   setup:
@@ -52,7 +34,6 @@ suite "getProducer(Mupsic[N, P, T])":
   test "throws NoProducersAvailableError":
     testMupGetProducerThrowsNoProducersAvailable(queue)
 
-
 suite "push(Mupsic[N, P, T])":
   setup:
     queue.reset()
@@ -64,7 +45,6 @@ suite "push(Mupsic[N, P, T])":
   test "T should fail":
     expect InvalidCallDefect:
       discard queue.push(@[1])
-
 
 suite "push(Producer[N, P, T], T)":
   setup:
@@ -79,7 +59,6 @@ suite "push(Producer[N, P, T], T)":
   test "wrap":
     testMupPushWrap(queue)
 
-
 suite "push(Producer[N, P, T], seq[T])":
   setup:
     queue.reset()
@@ -92,7 +71,6 @@ suite "push(Producer[N, P, T], seq[T])":
 
   test "wrap":
     testMupPushSeqWrap(queue)
-
 
 suite "pop(Mupsic[N, P, T])":
   setup:
@@ -113,7 +91,6 @@ suite "pop(Mupsic[N, P, T])":
   test "wrap":
     testSicPopWrap(queue)
 
-
 suite "pop(Mupsic[N, P, T], int)":
   setup:
     queue.reset()
@@ -133,11 +110,9 @@ suite "pop(Mupsic[N, P, T], int)":
   test "wrap":
     testSicPopCountWrap(queue)
 
-
 suite "capacity(Mupsic[N, P, T])":
   test "basic":
     testCapacity(queue)
-
 
 suite "Mupsic integration":
   setup:
@@ -148,4 +123,3 @@ suite "Mupsic integration":
 
   test "wraps":
     testWraps(queue)
-

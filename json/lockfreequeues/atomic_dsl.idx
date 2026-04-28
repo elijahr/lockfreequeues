@@ -1,0 +1,9 @@
+nimTitle	atomic_dsl	lockfreequeues/atomic_dsl.html	module src/lockfreequeues/atomic_dsl		0
+nim	relaxed	lockfreequeues/atomic_dsl.html#relaxed,Atomic[T]	proc relaxed[T](location: var Atomic[T]): T		12
+nim	acquire	lockfreequeues/atomic_dsl.html#acquire,Atomic[T]	proc acquire[T](location: var Atomic[T]): T		17
+nim	sequential	lockfreequeues/atomic_dsl.html#sequential,Atomic[T]	proc sequential[T](location: var Atomic[T]): T		22
+nim	relaxed	lockfreequeues/atomic_dsl.html#relaxed,Atomic[T],T	proc relaxed[T](location: var Atomic[T]; value: T)		27
+nim	release	lockfreequeues/atomic_dsl.html#release,Atomic[T],T	proc release[T](location: var Atomic[T]; value: T)		32
+nim	sequential	lockfreequeues/atomic_dsl.html#sequential,Atomic[T],T	proc sequential[T](location: var Atomic[T]; value: T)		37
+nimgrp	relaxed	lockfreequeues/atomic_dsl.html#relaxed-procs-all	proc		12
+nimgrp	sequential	lockfreequeues/atomic_dsl.html#sequential-procs-all	proc		22

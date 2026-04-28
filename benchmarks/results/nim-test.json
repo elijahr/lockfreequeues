@@ -1,0 +1,109 @@
+{
+  "metadata": {
+    "timestamp": "2025-12-03T22:20:52Z",
+    "platform": "macosx arm64",
+    "cpu": "unknown",
+    "cores": 8,
+    "runner": "local"
+  },
+  "benchmark": {
+    "name": "nim-queues",
+    "queue_type": "all",
+    "message_count": 1000000,
+    "runs": 3
+  },
+  "results": [
+    {
+      "implementation": "lockfreequeues/Sipsic",
+      "language": "nim",
+      "version": "3.1.0",
+      "thread_config": "1P/1C",
+      "metrics": {
+        "throughput_ops_ms": {
+          "mean": 3568.780897297367,
+          "min": 1724.583358688984,
+          "max": 7108.531992854698,
+          "stddev": 3066.415190771691
+        },
+        "latency_ns": {
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      }
+    },
+    {
+      "implementation": "nim/channels",
+      "language": "nim",
+      "version": "2.2.4",
+      "thread_config": "1P/1C",
+      "metrics": {
+        "throughput_ops_ms": {
+          "mean": 495.8271466833723,
+          "min": 250.9300009883317,
+          "max": 650.6679722519686,
+          "stddev": 214.54653810660636
+        },
+        "latency_ns": {
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      }
+    },
+    {
+      "implementation": "nim/channels",
+      "language": "nim",
+      "version": "2.2.4",
+      "thread_config": "2P/2C",
+      "metrics": {
+        "throughput_ops_ms": {
+          "mean": 820.1670105498175,
+          "min": 628.439987581943,
+          "max": 930.4609596319244,
+          "stddev": 166.66636142715657
+        },
+        "latency_ns": {
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      }
+    },
+    {
+      "implementation": "nim/channels",
+      "language": "nim",
+      "version": "2.2.4",
+      "thread_config": "4P/4C",
+      "metrics": {
+        "throughput_ops_ms": {
+          "mean": 1073.4667472146505,
+          "min": 962.5027480054873,
+          "max": 1226.759075428808,
+          "stddev": 137.1189892869751
+        },
+        "latency_ns": {
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      }
+    }
+  ]
+}

@@ -1,54 +1,84 @@
-# lockfreequeues
-# © Copyright 2020 Elijah Shaw-Rutschman
-#
-# See the file "LICENSE", included in this distribution for details about the
-# copyright.
-
+import lockfreequeues/atomic_dsl
 import options
-import unittest
+import unittest2
 
 import lockfreequeues
 
-const capacity = 8
-const itemCount = 128
+const ItemCount = 10000
 
-var
-  queue = initSipsic[capacity, int]()
-  output = initSipsic[itemCount, int]()
+type TestContext[N: static int] = object
+  queue: ptr Sipsic[N, int]
+  received: ptr array[ItemCount, Atomic[bool]]
+  duplicateFound: ptr Atomic[bool]
+  producerDone: ptr Atomic[bool]
 
+proc producer[N: static int](ctx: ptr TestContext[N]) {.thread.} =
+  for i in 1 .. ItemCount:
+    while not ctx.queue[].push(i):
+      discard
+  ctx.producerDone[].store(true, moRelease)
 
-proc consumerFunc() {.thread.} =
-  var count = 0
-  while count < itemCount:
-    let res = queue.pop()
-    if res.isSome:
-      while not output.push(res.get):
-        discard
-      inc count
-
-
-proc producerFunc() {.thread.} =
-  for i in 0..<itemCount:
-    while not queue.push(i):
+proc consumer[N: static int](ctx: ptr TestContext[N]) {.thread.} =
+  var consumed = 0
+  while consumed < ItemCount:
+    let item = ctx.queue[].pop()
+    if item.isSome:
+      let val = item.get - 1 # Items are 1-indexed
+      if ctx.received[val].exchange(true, moRelaxed):
+        ctx.duplicateFound[].store(true, moRelaxed)
+      inc consumed
+    elif ctx.producerDone[].load(moAcquire):
+      # Producer done but we haven't consumed everything - keep trying
       discard
 
+suite "Sipsic threaded":
+  var
+    received: array[ItemCount, Atomic[bool]]
+    duplicateFound: Atomic[bool]
+    producerDone: Atomic[bool]
 
-suite "Sipsic[N, T] threaded":
+  setup:
+    for i in 0 ..< ItemCount:
+      received[i].store(false, moRelaxed)
+    duplicateFound.store(false, moRelaxed)
+    producerDone.store(false, moRelaxed)
 
-  test "basic":
-    var
-      consumer: Thread[void]
-      producer: Thread[void]
-      i = 0
+  test "high contention":
+    var queue = initSipsic[16, int]()
+    var ctx = TestContext[16](
+      queue: addr queue,
+      received: addr received,
+      duplicateFound: addr duplicateFound,
+      producerDone: addr producerDone,
+    )
 
-    consumer.createThread(consumerFunc)
-    producer.createThread(producerFunc)
+    var prodThread, consThread: Thread[ptr TestContext[16]]
+    createThread(prodThread, producer[16], addr ctx)
+    createThread(consThread, consumer[16], addr ctx)
 
-    while i < itemCount:
-      let msg = output.pop()
-      if msg.isSome:
-        require(msg.get == i)
-        inc i
+    joinThread(prodThread)
+    joinThread(consThread)
 
-    joinThread(producer)
-    joinThread(consumer)
+    check(not duplicateFound.load(moRelaxed))
+    for i in 0 ..< ItemCount:
+      check(received[i].load(moRelaxed))
+
+  test "normal capacity":
+    var queue = initSipsic[64, int]()
+    var ctx = TestContext[64](
+      queue: addr queue,
+      received: addr received,
+      duplicateFound: addr duplicateFound,
+      producerDone: addr producerDone,
+    )
+
+    var prodThread, consThread: Thread[ptr TestContext[64]]
+    createThread(prodThread, producer[64], addr ctx)
+    createThread(consThread, consumer[64], addr ctx)
+
+    joinThread(prodThread)
+    joinThread(consThread)
+
+    check(not duplicateFound.load(moRelaxed))
+    for i in 0 ..< ItemCount:
+      check(received[i].load(moRelaxed))

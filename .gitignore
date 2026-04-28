@@ -1,14 +1,44 @@
-.vscode/tags
+# IDE/editor config (machine-specific)
+.vscode/
 .DS_Store
 
+# Local PR description scratch file (do not commit)
+.pr-description.md
+
+# Nim compiler cache and build artifacts
 nimcache/
 nimblecache/
+.tmp/
 
-/src/*
-/tests/*
-/examples/*
-/htmldocs/*
+# Generated documentation
+/htmldocs/
+/site/
 
-!**/*.nims
-!**/*.nim
-!**/*.cfg
+# Personal IDE / chatmode tooling — keep out of the repo entirely.
+.github/instructions/
+.github/chatmodes/
+nimble.develop
+nimble.paths
+
+# Internal planning docs
+docs/plans/
+deps/
+
+# Embedded repositories (use as dependencies, not submodules)
+nim-typestates/
+nim-unittest2/
+
+# Temporary/generated files
+logs/
+test_typed_introspection*
+benchmarks/nim/bench_latency
+benchmarks/nim/bench_main
+benchmarks/nim/bench_throughput
+
+# Compiled benchmark test binaries (extensionless executables)
+benchmarks/nim/tests/t_*
+!benchmarks/nim/tests/t_*.nim
+
+# Compiled stress-test binaries (extensionless executables)
+stress-tests/[a-z_]*
+!stress-tests/*.nim

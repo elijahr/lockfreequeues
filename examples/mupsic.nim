@@ -1,10 +1,4 @@
-# lockfreequeues
-# © Copyright 2020 Elijah Shaw-Rutschman
-#
-# See the file "LICENSE", included in this distribution for details about the
-# copyright.
-
-## Example usage of Mupsic, a multi-producer, single-consumer bounded queue.
+## Example usage of Mupsic, a multi-producer, single-consumer (MPSC) bounded queue.
 
 import options
 import random
