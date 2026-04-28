@@ -171,51 +171,49 @@ proc push*[S: static int, T; MaxThreads: static int](
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
-  let pinned = unpinned(self.handle).pin()
+  self.handle.withPin:
+    while true:
+      var seg = self.queue.tailSegment.load(moAcquire)
+      var tail = seg.tail.load(moAcquire)
 
-  while true:
-    var seg = self.queue.tailSegment.load(moAcquire)
-    var tail = seg.tail.load(moAcquire)
-
-    # Check if current segment is full
-    if tail >= S:
-      # Try to allocate new segment
-      let nextSeg = seg.next.load(moAcquire)
-      if nextSeg == nil:
-        # No next segment, try to create one
-        let newSeg = newSegment[S, T]()
-        var expectedNext: ptr Segment[S, T] = nil
-        if seg.next.compareExchange(expectedNext, newSeg, moRelease, moRelaxed):
-          # Won the allocation race
+      # Check if current segment is full
+      if tail >= S:
+        # Try to allocate new segment
+        let nextSeg = seg.next.load(moAcquire)
+        if nextSeg == nil:
+          # No next segment, try to create one
+          let newSeg = newSegment[S, T]()
+          var expectedNext: ptr Segment[S, T] = nil
+          if seg.next.compareExchange(expectedNext, newSeg, moRelease, moRelaxed):
+            # Won the allocation race
+            var expectedSeg = seg
+            discard self.queue.tailSegment.compareExchange(
+              expectedSeg, newSeg, moRelease, moRelaxed
+            )
+            discard self.queue.segments.fetchAdd(1, moRelaxed)
+            continue
+          else:
+            # Lost race, free our segment
+            c_free(newSeg)
+            continue
+        else:
+          # Someone else allocated, advance tail segment
           var expectedSeg = seg
           discard self.queue.tailSegment.compareExchange(
-            expectedSeg, newSeg, moRelease, moRelaxed
+            expectedSeg, nextSeg, moRelease, moRelaxed
           )
-          discard self.queue.segments.fetchAdd(1, moRelaxed)
           continue
-        else:
-          # Lost race, free our segment
-          c_free(newSeg)
-          continue
-      else:
-        # Someone else allocated, advance tail segment
-        var expectedSeg = seg
-        discard self.queue.tailSegment.compareExchange(
-          expectedSeg, nextSeg, moRelease, moRelaxed
-        )
-        continue
 
-    # Try to claim a slot
-    var expected = tail
-    if seg.tail.compareExchange(expected, tail + 1, moAcquire, moRelaxed):
-      # Won the slot
-      seg.data[tail] = item
-      seg.committed[tail].store(true, moRelease) # Mark as ready to read
-      discard self.queue.itemCount.fetchAdd(1, moRelaxed)
-      discard pinned.unpin()
-      return
+      # Try to claim a slot
+      var expected = tail
+      if seg.tail.compareExchange(expected, tail + 1, moAcquire, moRelaxed):
+        # Won the slot
+        seg.data[tail] = item
+        seg.committed[tail].store(true, moRelease) # Mark as ready to read
+        discard self.queue.itemCount.fetchAdd(1, moRelaxed)
+        break
 
-    # Lost CAS, retry
+      # Lost CAS, retry
 
 proc push*[S: static int, T; MaxThreads: static int](
     self: var Producer[S, T, MaxThreads], items: openArray[T]
