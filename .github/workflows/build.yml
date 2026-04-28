@@ -70,7 +70,7 @@ jobs:
         run: |
           set -e
           cd ..
-          git clone --depth 1 --branch feature/lockfreequeues-driven https://github.com/elijahr/nim-debra.git
+          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
           git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
           (cd nim-typestates && nimble install -y)
           (cd nim-debra && nimble install -y)
