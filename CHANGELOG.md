@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Throughput bench harness for `UnboundedMupsic` (1P/1C, 2P/1C, 4P/1C) at `benchmarks/nim/bench_throughput.nim` plus a thin adapter at `benchmarks/nim/adapters/lockfreequeues_unbounded_mupsic.nim` that owns the queue and `DebraManager`. Producer threads register their own `ThreadHandle` in-thread (handles are per-thread by construction). The new variants run for 33 timed iterations + 3 warmup; existing Sipsic/Mupmuc/Channels run counts are unchanged.
+
 ## [3.2.0] - 2026-04-27
 
 ### Added

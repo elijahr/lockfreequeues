@@ -5,8 +5,11 @@ import std/[atomics, times, monotimes, strformat, options]
 import ./stats
 import ./results
 import ./adapter
-import ./adapters/[lockfreequeues_sipsic, channels_adapter]
+import
+  ./adapters/[lockfreequeues_sipsic, channels_adapter, lockfreequeues_unbounded_mupsic]
 import lockfreequeues/mupmuc
+import lockfreequeues/unbounded_mupsic
+import debra
 
 const
   MessageCount = 1_000_000
@@ -246,6 +249,150 @@ proc benchmarkMupmuc4P4C*(
     stddev: stddev(samples),
   )
 
+# UnboundedMupsic-specific benchmark types and procs.
+#
+# UnboundedMupsic is multi-producer, single-consumer with linked-segment
+# storage and DEBRA epoch-based reclamation. Producers must register a
+# per-thread ThreadHandle on their own thread and obtain a Producer via
+# getProducer; the consumer is implicit (a single thread driving pop on
+# the queue object directly).
+#
+# Run count for these variants is fixed at the followup-doc value below
+# (UnboundedMupsicRuns); the existing Mupmuc / Sipsic / Channels variants
+# keep their previous run counts.
+
+const
+  UnboundedMupsicRuns = 33
+  UnboundedMupsicSegmentSize = 64
+  UnboundedMupsicMaxThreads = 8
+    ## Headroom for the consumer + up to 4 producers + DEBRA bookkeeping.
+
+type
+  UMupsicProducerCtx[S: static int, T; MaxThreads: static int] = object
+    queue: ptr UnboundedMupsic[S, T, MaxThreads]
+    manager: ptr DebraManager[MaxThreads]
+    startIdx: int
+    count: int
+    done: ptr Atomic[int]
+
+  UMupsicConsumerCtx[S: static int, T; MaxThreads: static int] = object
+    queue: ptr UnboundedMupsic[S, T, MaxThreads]
+    count: int
+    consumed: ptr Atomic[int]
+
+proc uMupsicProducer[S: static int, T; MaxThreads: static int](
+    ctx: ptr UMupsicProducerCtx[S, T, MaxThreads]
+) {.thread.} =
+  {.cast(gcsafe).}:
+    let handle = registerThread(ctx.manager[])
+    var p = ctx.queue[].getProducer(handle)
+    for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
+      p.push(i)
+    discard ctx.done[].fetchAdd(1)
+
+proc uMupsicConsumer[S: static int, T; MaxThreads: static int](
+    ctx: ptr UMupsicConsumerCtx[S, T, MaxThreads]
+) {.thread.} =
+  {.cast(gcsafe).}:
+    var local = 0
+    while local < ctx.count:
+      let item = ctx.queue[].pop()
+      if item.isSome:
+        inc local
+    discard ctx.consumed[].fetchAdd(local)
+
+proc runUnboundedMupsicBenchmark[S: static int, T; MaxThreads: static int](
+    adapter: var UnboundedMupsicAdapter[S, T, MaxThreads],
+    numProducers: int,
+    messageCount: int = MessageCount,
+): float =
+  ## Spawn `numProducers` producers and one consumer. Each producer
+  ## pushes a disjoint range of `messagesPerProducer` items; the consumer
+  ## pops until it has seen `messagesPerProducer * numProducers` items.
+  ## Returns throughput in ops/ms.
+  let messagesPerProducer = messageCount div numProducers
+  let totalMessages = messagesPerProducer * numProducers
+
+  var done: Atomic[int]
+  var consumed: Atomic[int]
+  done.store(0)
+  consumed.store(0)
+
+  var producerThreads =
+    newSeq[Thread[ptr UMupsicProducerCtx[S, T, MaxThreads]]](numProducers)
+  var producerCtxs = newSeq[UMupsicProducerCtx[S, T, MaxThreads]](numProducers)
+  var consumerThread: Thread[ptr UMupsicConsumerCtx[S, T, MaxThreads]]
+  var consumerCtx = UMupsicConsumerCtx[S, T, MaxThreads](
+    queue: adapter.queue, count: totalMessages, consumed: addr consumed
+  )
+
+  for i in 0 ..< numProducers:
+    producerCtxs[i] = UMupsicProducerCtx[S, T, MaxThreads](
+      queue: adapter.queue,
+      manager: adapter.manager,
+      startIdx: i * messagesPerProducer,
+      count: messagesPerProducer,
+      done: addr done,
+    )
+
+  # Start timing. Monotonic clock; see runMupmucBenchmark for rationale.
+  let startTime = getMonoTime()
+
+  for i in 0 ..< numProducers:
+    createThread(
+      producerThreads[i], uMupsicProducer[S, T, MaxThreads], addr producerCtxs[i]
+    )
+  createThread(consumerThread, uMupsicConsumer[S, T, MaxThreads], addr consumerCtx)
+
+  for i in 0 ..< numProducers:
+    joinThread(producerThreads[i])
+  joinThread(consumerThread)
+
+  let elapsedMs = float(inMilliseconds(getMonoTime() - startTime))
+  result = float(totalMessages) / elapsedMs
+
+proc benchmarkUnboundedMupsicNP1C(
+    numProducers: int, runs: int = UnboundedMupsicRuns, warmup: int = WarmupRuns
+): ThroughputMetrics =
+  ## Helper for the fixed-thread-count wrappers below. The adapter
+  ## (and therefore manager + queue) is rebuilt per run; the consumer
+  ## is the calling thread for both warmup and timed runs, which keeps
+  ## the consumer ThreadHandle stable across all pops in a run.
+  var samples: seq[float] = @[]
+  for _ in 0 ..< warmup:
+    var a = initUnboundedMupsicAdapter[
+      UnboundedMupsicSegmentSize, int, UnboundedMupsicMaxThreads
+    ]()
+    discard runUnboundedMupsicBenchmark(a, numProducers)
+    deinitUnboundedMupsicAdapter(a)
+  for _ in 0 ..< runs:
+    var a = initUnboundedMupsicAdapter[
+      UnboundedMupsicSegmentSize, int, UnboundedMupsicMaxThreads
+    ]()
+    samples.add(runUnboundedMupsicBenchmark(a, numProducers))
+    deinitUnboundedMupsicAdapter(a)
+  ThroughputMetrics(
+    mean: mean(samples),
+    min: minVal(samples),
+    max: maxVal(samples),
+    stddev: stddev(samples),
+  )
+
+proc benchmarkUnboundedMupsic1P1C*(
+    runs: int = UnboundedMupsicRuns, warmup: int = WarmupRuns
+): ThroughputMetrics =
+  benchmarkUnboundedMupsicNP1C(1, runs, warmup)
+
+proc benchmarkUnboundedMupsic2P1C*(
+    runs: int = UnboundedMupsicRuns, warmup: int = WarmupRuns
+): ThroughputMetrics =
+  benchmarkUnboundedMupsicNP1C(2, runs, warmup)
+
+proc benchmarkUnboundedMupsic4P1C*(
+    runs: int = UnboundedMupsicRuns, warmup: int = WarmupRuns
+): ThroughputMetrics =
+  benchmarkUnboundedMupsicNP1C(4, runs, warmup)
+
 when isMainModule:
   echo "Throughput Benchmark"
   echo "===================="
@@ -280,6 +427,29 @@ when isMainModule:
     echo fmt"  mean: {metrics.mean:.0f} ops/ms"
     echo fmt"  stddev: {metrics.stddev:.0f}"
     echo ""
+
+  # UnboundedMupsic (unbounded MPSC) — new harness, 33 runs.
+  echo "==================================================="
+  echo "UnboundedMupsic (unbounded MPSC) — runs = ", UnboundedMupsicRuns
+  echo "==================================================="
+  for producers in [1, 2, 4]:
+    echo fmt"UnboundedMupsic (unbounded MPSC) {producers}P/1C:"
+    let metrics =
+      case producers
+      of 1:
+        benchmarkUnboundedMupsic1P1C()
+      of 2:
+        benchmarkUnboundedMupsic2P1C()
+      of 4:
+        benchmarkUnboundedMupsic4P1C()
+      else:
+        ThroughputMetrics()
+    echo fmt"  mean: {metrics.mean:.0f} ops/ms"
+    echo fmt"  min: {metrics.min:.0f}  max: {metrics.max:.0f}"
+    echo fmt"  stddev: {metrics.stddev:.0f}"
+    echo ""
+  echo "==================================================="
+  echo ""
 
   # Channels (MPMC)
   for threads in [1, 2, 4]:
