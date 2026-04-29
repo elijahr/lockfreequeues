@@ -74,15 +74,19 @@ jobs:
 
       - name: Compile bench_throughput (CI-tuned run shape)
         # Cloud runs use a tighter wall-clock budget than the local default
-        # (1M messages × 33 runs). 100k × 5 keeps the harness honest while
-        # finishing in single-digit minutes; warmup stays at 2 to absorb
-        # JIT/cache effects. UnboundedMupsicRuns mirrors DefaultRuns.
+        # (1M messages × 33 runs). Bounded variants (sipsic, channels) use
+        # 100k × 5 runs and finish in single-digit seconds. unbounded_mupsic
+        # is super-linear in message count and is gated separately via
+        # UnboundedMupsicMessageCount=5000 + UnboundedMupsicRuns=3 to keep
+        # the variant tractable inside the 30-min job budget. Warmup stays
+        # at 2 to absorb JIT/cache effects.
         run: |
           nim c -d:release -d:danger --threads:on \
             -d:MessageCount=100000 \
             -d:DefaultRuns=5 \
             -d:WarmupRuns=2 \
-            -d:UnboundedMupsicRuns=5 \
+            -d:UnboundedMupsicRuns=3 \
+            -d:UnboundedMupsicMessageCount=5000 \
             benchmarks/nim/bench_throughput.nim
 
       - name: Run bench_throughput
@@ -92,6 +96,10 @@ jobs:
         # Tracked in https://github.com/elijahr/lockfreequeues/issues/15.
         # Other variants (sipsic, unbounded_mupsic, channels) complete in
         # single-digit minutes and exercise the harness end-to-end.
+        # Step-level timeout: if any single variant hangs, fail fast inside
+        # the 30-min job budget so Bencher upload steps still run (or are
+        # visibly skipped) instead of burning the entire budget on one variant.
+        timeout-minutes: 20
         run: ./.tmp/bench_throughput sipsic unbounded_mupsic channels | tee bench_output.txt
 
       - name: Convert to BMF JSON

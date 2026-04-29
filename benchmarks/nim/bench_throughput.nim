@@ -271,6 +271,8 @@ const
   UnboundedMupsicSegmentSize {.intdefine.} = 64
   UnboundedMupsicMaxThreads {.intdefine.} = 8
     ## Headroom for the consumer + up to 4 producers + DEBRA bookkeeping.
+  # Override separately to keep CI runs tractable; unbounded_mupsic is super-linear in message count vs bounded variants.
+  UnboundedMupsicMessageCount {.intdefine.} = MessageCount
 
 type
   UMupsicProducerCtx[S: static int, T; MaxThreads: static int] = object
@@ -357,7 +359,10 @@ proc runUnboundedMupsicBenchmark[S: static int, T; MaxThreads: static int](
   result = float(totalMessages) / elapsedMs
 
 proc benchmarkUnboundedMupsicNP1C(
-    numProducers: int, runs: int = UnboundedMupsicRuns, warmup: int = WarmupRuns
+    numProducers: int,
+    runs: int = UnboundedMupsicRuns,
+    warmup: int = WarmupRuns,
+    messageCount: int = UnboundedMupsicMessageCount,
 ): ThroughputMetrics =
   ## Helper for the fixed-thread-count wrappers below. The adapter
   ## (and therefore manager + queue) is rebuilt per run; the consumer
@@ -368,13 +373,13 @@ proc benchmarkUnboundedMupsicNP1C(
     var a = initUnboundedMupsicAdapter[
       UnboundedMupsicSegmentSize, int, UnboundedMupsicMaxThreads
     ]()
-    discard runUnboundedMupsicBenchmark(a, numProducers)
+    discard runUnboundedMupsicBenchmark(a, numProducers, messageCount)
     deinitUnboundedMupsicAdapter(a)
   for _ in 0 ..< runs:
     var a = initUnboundedMupsicAdapter[
       UnboundedMupsicSegmentSize, int, UnboundedMupsicMaxThreads
     ]()
-    samples.add(runUnboundedMupsicBenchmark(a, numProducers))
+    samples.add(runUnboundedMupsicBenchmark(a, numProducers, messageCount))
     deinitUnboundedMupsicAdapter(a)
   ThroughputMetrics(
     mean: mean(samples),
@@ -386,17 +391,17 @@ proc benchmarkUnboundedMupsicNP1C(
 proc benchmarkUnboundedMupsic1P1C*(
     runs: int = UnboundedMupsicRuns, warmup: int = WarmupRuns
 ): ThroughputMetrics =
-  benchmarkUnboundedMupsicNP1C(1, runs, warmup)
+  benchmarkUnboundedMupsicNP1C(1, runs, warmup, UnboundedMupsicMessageCount)
 
 proc benchmarkUnboundedMupsic2P1C*(
     runs: int = UnboundedMupsicRuns, warmup: int = WarmupRuns
 ): ThroughputMetrics =
-  benchmarkUnboundedMupsicNP1C(2, runs, warmup)
+  benchmarkUnboundedMupsicNP1C(2, runs, warmup, UnboundedMupsicMessageCount)
 
 proc benchmarkUnboundedMupsic4P1C*(
     runs: int = UnboundedMupsicRuns, warmup: int = WarmupRuns
 ): ThroughputMetrics =
-  benchmarkUnboundedMupsicNP1C(4, runs, warmup)
+  benchmarkUnboundedMupsicNP1C(4, runs, warmup, UnboundedMupsicMessageCount)
 
 when isMainModule:
   # Unbuffer stdout so progress is visible when the bench is run under
