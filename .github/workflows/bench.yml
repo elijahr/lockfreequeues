@@ -79,29 +79,28 @@ jobs:
       - name: Compile bench_throughput (CI-tuned run shape)
         # Cloud runs use a tighter wall-clock budget than the local default
         # (1M messages × 33 runs). Bounded variants (sipsic, channels) use
-        # 100k × 5 runs and finish in single-digit seconds. unbounded_mupsic
+        # 1M × 5 runs and finish in single-digit seconds. unbounded_mupsic
         # is super-linear in message count and is gated separately via
-        # UnboundedMupsicMessageCount=50000 + UnboundedMupsicRuns=3 to keep
+        # UnboundedMupsicMessageCount=500000 + UnboundedMupsicRuns=3 to keep
         # the variant tractable inside the 30-min job budget. Warmup stays
         # at 2 to absorb JIT/cache effects.
         #
-        # Why 50000 (not 5000): bench_throughput.nim uses a millisecond-
-        # precision timer. At N=5000 the unbounded_mupsic variant finishes
-        # in well under 1 ms per run, so ops/ms is reported as `inf`, the
-        # BMF adapter discards the data points, and Bencher receives nothing
-        # for the variant we actually want to gate on. Local smoke at N=50000
-        # finishes in ~0.26s with stable per-topology numbers (1P/1C ~9.4k
-        # ops/ms, 2P/1C ~10.8k, 4P/1C ~8.9k). 50K × 3 runs × 3 topologies
-        # plus warmup costs roughly 4-10s on CI: well inside the 30-min job
-        # budget while giving the timer enough wall-clock to produce a
-        # stable signal.
+        # Counts are 10x the previous values (100k / 50k → 1M / 500k) and
+        # the bench timer is microsecond/nanosecond-precision (computed in
+        # ns, printed as `mean: <N>.1f ops/ms`). Together this gives non-zero
+        # stddev and >1-decimal resolution between runs on the fast CI
+        # runner; previously a 50k unbounded_mupsic run completed in ~3 ms,
+        # so multiple samples bucketed into the same integer ms and stddev
+        # was reported as 0. The new shape costs roughly 30-60s on CI: well
+        # inside the 30-min job budget while giving the timer enough
+        # wall-clock spread to produce a stable, comparable signal.
         run: |
           nim c -d:release -d:danger --threads:on \
-            -d:MessageCount=100000 \
+            -d:MessageCount=1000000 \
             -d:DefaultRuns=5 \
             -d:WarmupRuns=2 \
             -d:UnboundedMupsicRuns=3 \
-            -d:UnboundedMupsicMessageCount=50000 \
+            -d:UnboundedMupsicMessageCount=500000 \
             benchmarks/nim/bench_throughput.nim
 
       - name: Run bench_throughput

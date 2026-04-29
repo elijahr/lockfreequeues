@@ -193,6 +193,39 @@ class ParseBenchOutputTests(unittest.TestCase):
         actual = bmf_adapter.parse_bench_output(fixture)
         self.assertEqual(actual, expected)
 
+    def test_decimal_means_and_minmax(self) -> None:
+        """Microsecond/nanosecond-precision timer emits `:.1f` decimal values.
+
+        After the bench switched from `inMilliseconds` to `inNanoseconds`,
+        means and min/max gain a fractional component (e.g. 16666.7 instead
+        of 16667.). The adapter must capture decimal floats verbatim.
+        """
+        fixture = textwrap.dedent(
+            """\
+            Sipsic (bounded SPSC) 1P/1C:
+              mean: 12345.6 ops/ms
+              stddev: 12.3
+
+            UnboundedMupsic (unbounded MPSC) 2P/1C:
+              mean: 16666.7 ops/ms
+              min: 15555.4  max: 17777.8
+              stddev: 678.9
+            """
+        )
+
+        expected = {
+            "sipsic/1p1c": {"throughput": {"value": 12345.6}},
+            "unbounded_mupsic/2p1c": {
+                "throughput": {
+                    "value": 16666.7,
+                    "lower_value": 15555.4,
+                    "upper_value": 17777.8,
+                }
+            },
+        }
+        actual = bmf_adapter.parse_bench_output(fixture)
+        self.assertEqual(actual, expected)
+
     def test_partial_min_max_finite(self) -> None:
         """If only min is finite (max is inf), only lower_value is recorded."""
         fixture = textwrap.dedent(

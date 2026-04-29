@@ -80,6 +80,9 @@ proc runThroughputBenchmark*[Q](
 
   # Start timing. Monotonic clock — `epochTime` (wall clock) can step
   # backward across NTP adjustments and skew throughput numbers.
+  # Nanosecond precision: ms-precision buckets multiple short runs into
+  # the same integer ms, producing identical samples and stddev=0 on a
+  # fast CI runner. ops/ms is reconstructed as a float at print time.
   let startTime = getMonoTime()
 
   # Launch threads
@@ -94,8 +97,8 @@ proc runThroughputBenchmark*[Q](
   for i in 0 ..< numConsumers:
     joinThread(consumerThreads[i])
 
-  let elapsedMs = float(inMilliseconds(getMonoTime() - startTime))
-  result = float(messageCount) / elapsedMs
+  let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
+  result = float(messageCount) * 1_000_000.0 / elapsedNs
 
 proc benchmarkThroughput*[Q](
     initQueue: proc(): Q,
@@ -185,6 +188,7 @@ proc runMupmucBenchmark[N, P, C: static int, T](
 
   # Start timing. Monotonic clock — `epochTime` (wall clock) can step
   # backward across NTP adjustments and skew throughput numbers.
+  # See runThroughputBenchmark for the nanosecond-precision rationale.
   let startTime = getMonoTime()
 
   # Launch threads
@@ -199,8 +203,8 @@ proc runMupmucBenchmark[N, P, C: static int, T](
   for i in 0 ..< C:
     joinThread(consumerThreads[i])
 
-  let elapsedMs = float(inMilliseconds(getMonoTime() - startTime))
-  result = float(messageCount) / elapsedMs
+  let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
+  result = float(messageCount) * 1_000_000.0 / elapsedNs
 
 # Fixed-size Mupmuc benchmark functions for common thread counts
 proc benchmarkMupmuc1P1C*(
@@ -355,8 +359,8 @@ proc runUnboundedMupsicBenchmark[S: static int, T; MaxThreads: static int](
     joinThread(producerThreads[i])
   joinThread(consumerThread)
 
-  let elapsedMs = float(inMilliseconds(getMonoTime() - startTime))
-  result = float(totalMessages) / elapsedMs
+  let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
+  result = float(totalMessages) * 1_000_000.0 / elapsedNs
 
 proc benchmarkUnboundedMupsicNP1C(
     numProducers: int,
@@ -446,8 +450,8 @@ when isMainModule:
       numConsumers = 1,
       runs = 10,
     )
-    echo fmt"  mean: {sipsicMetrics.mean:.0f} ops/ms"
-    echo fmt"  stddev: {sipsicMetrics.stddev:.0f}"
+    echo fmt"  mean: {sipsicMetrics.mean:.1f} ops/ms"
+    echo fmt"  stddev: {sipsicMetrics.stddev:.1f}"
     echo ""
 
   # Mupmuc (bounded MPMC)
@@ -464,8 +468,8 @@ when isMainModule:
           benchmarkMupmuc4P4C(runs = 10)
         else:
           ThroughputMetrics()
-      echo fmt"  mean: {metrics.mean:.0f} ops/ms"
-      echo fmt"  stddev: {metrics.stddev:.0f}"
+      echo fmt"  mean: {metrics.mean:.1f} ops/ms"
+      echo fmt"  stddev: {metrics.stddev:.1f}"
       echo ""
 
   # UnboundedMupsic (unbounded MPSC) — new harness, 33 runs.
@@ -485,9 +489,9 @@ when isMainModule:
           benchmarkUnboundedMupsic4P1C()
         else:
           ThroughputMetrics()
-      echo fmt"  mean: {metrics.mean:.0f} ops/ms"
-      echo fmt"  min: {metrics.min:.0f}  max: {metrics.max:.0f}"
-      echo fmt"  stddev: {metrics.stddev:.0f}"
+      echo fmt"  mean: {metrics.mean:.1f} ops/ms"
+      echo fmt"  min: {metrics.min:.1f}  max: {metrics.max:.1f}"
+      echo fmt"  stddev: {metrics.stddev:.1f}"
       echo ""
     echo "==================================================="
     echo ""
@@ -503,6 +507,6 @@ when isMainModule:
         numConsumers = threads,
         runs = 10,
       )
-      echo fmt"  mean: {metrics.mean:.0f} ops/ms"
-      echo fmt"  stddev: {metrics.stddev:.0f}"
+      echo fmt"  mean: {metrics.mean:.1f} ops/ms"
+      echo fmt"  stddev: {metrics.stddev:.1f}"
       echo ""
