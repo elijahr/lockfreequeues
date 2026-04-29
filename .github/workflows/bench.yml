@@ -19,6 +19,10 @@ on:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # Exposed at job env so step-level `if:` expressions can gate on
+  # presence via `env.BENCHER_API_TOKEN`. GitHub Actions does not allow
+  # `secrets.*` directly in `if:`, so the env-var indirection is required.
+  BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
 
 jobs:
   benchmark:
@@ -77,16 +81,27 @@ jobs:
         # (1M messages × 33 runs). Bounded variants (sipsic, channels) use
         # 100k × 5 runs and finish in single-digit seconds. unbounded_mupsic
         # is super-linear in message count and is gated separately via
-        # UnboundedMupsicMessageCount=5000 + UnboundedMupsicRuns=3 to keep
+        # UnboundedMupsicMessageCount=50000 + UnboundedMupsicRuns=3 to keep
         # the variant tractable inside the 30-min job budget. Warmup stays
         # at 2 to absorb JIT/cache effects.
+        #
+        # Why 50000 (not 5000): bench_throughput.nim uses a millisecond-
+        # precision timer. At N=5000 the unbounded_mupsic variant finishes
+        # in well under 1 ms per run, so ops/ms is reported as `inf`, the
+        # BMF adapter discards the data points, and Bencher receives nothing
+        # for the variant we actually want to gate on. Local smoke at N=50000
+        # finishes in ~0.26s with stable per-topology numbers (1P/1C ~9.4k
+        # ops/ms, 2P/1C ~10.8k, 4P/1C ~8.9k). 50K × 3 runs × 3 topologies
+        # plus warmup costs roughly 4-10s on CI: well inside the 30-min job
+        # budget while giving the timer enough wall-clock to produce a
+        # stable signal.
         run: |
           nim c -d:release -d:danger --threads:on \
             -d:MessageCount=100000 \
             -d:DefaultRuns=5 \
             -d:WarmupRuns=2 \
             -d:UnboundedMupsicRuns=3 \
-            -d:UnboundedMupsicMessageCount=5000 \
+            -d:UnboundedMupsicMessageCount=50000 \
             benchmarks/nim/bench_throughput.nim
 
       - name: Run bench_throughput
@@ -111,9 +126,21 @@ jobs:
       - name: Install Bencher CLI
         uses: bencherdev/bencher@main
 
+      - name: Bencher token preflight
+        # Always runs. Surfaces a yellow PR-check warning when the upload
+        # secret is unset so it is obvious from the check summary why the
+        # downstream Bencher steps were skipped, rather than the bench
+        # silently appearing to "do nothing" with the data.
+        run: |
+          if [ -z "$BENCHER_API_TOKEN" ]; then
+            echo "::warning title=Bencher upload skipped::BENCHER_API_TOKEN secret is not set on this repo. The bench ran successfully and produced bench_results.json (visible in the 'Show BMF JSON (debug)' step), but no data is being uploaded to Bencher.dev. Set up the project at bencher.dev with slug 'lockfreequeues' and add BENCHER_API_TOKEN as a repo secret to enable upload."
+          else
+            echo "Bencher token present; proceeding with upload."
+          fi
+
       # PR runs: compare against base branch and post a comment.
       - name: Track PR benchmarks with Bencher
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && env.BENCHER_API_TOKEN != ''
         run: |
           bencher run \
             --project lockfreequeues \
@@ -131,7 +158,7 @@ jobs:
 
       # Push to main/devel: record the baseline for that branch.
       - name: Track base branch benchmarks with Bencher
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && env.BENCHER_API_TOKEN != ''
         run: |
           bencher run \
             --project lockfreequeues \
@@ -150,7 +177,7 @@ jobs:
 
       # workflow_dispatch: just upload, no comparison.
       - name: Track manual benchmarks with Bencher
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && env.BENCHER_API_TOKEN != ''
         run: |
           bencher run \
             --project lockfreequeues \
