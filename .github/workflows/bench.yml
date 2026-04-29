@@ -86,7 +86,13 @@ jobs:
             benchmarks/nim/bench_throughput.nim
 
       - name: Run bench_throughput
-        run: ./.tmp/bench_throughput | tee bench_output.txt
+        # Mupmuc 4P/4C is skipped on shared CI runners: 8 threads on a
+        # 4-vCPU runner with a small-capacity bounded MPMC livelocks under
+        # scheduler pressure and hangs the job to the 30-min timeout.
+        # Tracked in https://github.com/elijahr/lockfreequeues/issues/15.
+        # Other variants (sipsic, unbounded_mupsic, channels) complete in
+        # single-digit minutes and exercise the harness end-to-end.
+        run: ./.tmp/bench_throughput sipsic unbounded_mupsic channels | tee bench_output.txt
 
       - name: Convert to BMF JSON
         run: python3 benchmarks/bmf_adapter.py bench_output.txt bench_results.json
