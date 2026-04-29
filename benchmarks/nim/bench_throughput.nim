@@ -1,7 +1,7 @@
 ## Throughput benchmark: N producers, N consumers, shared queue.
 ## Measures ops/ms as thread count scales.
 
-import std/[atomics, times, monotimes, strformat, options]
+import std/[atomics, times, monotimes, strformat, options, os, sets]
 import ./stats
 import ./results
 import ./adapter
@@ -394,73 +394,98 @@ proc benchmarkUnboundedMupsic4P1C*(
   benchmarkUnboundedMupsicNP1C(4, runs, warmup)
 
 when isMainModule:
+  # CLI: optional variant-group filter. With no args, run everything
+  # (backward compatible). With one or more args from the supported
+  # set, run only those groups. Unknown args produce an error and
+  # exit non-zero.
+  const SupportedGroups = ["sipsic", "mupmuc", "unbounded_mupsic", "channels"]
+
+  let cliArgs = commandLineParams()
+  let supported = SupportedGroups.toHashSet
+  let runGroups =
+    if cliArgs.len == 0:
+      supported
+    else:
+      var groups = initHashSet[string]()
+      for arg in cliArgs:
+        if arg notin supported:
+          echo "Unknown variant group: ", arg
+          echo "Supported: ", SupportedGroups
+          quit 1
+        groups.incl arg
+      groups
+
   echo "Throughput Benchmark"
   echo "===================="
   echo ""
 
   # Bounded SPSC (1P/1C only)
-  echo "Sipsic (bounded SPSC) 1P/1C:"
-  let sipsicMetrics = benchmarkThroughput(
-    proc(): SipsicAdapter[1024, int] =
-      initSipsicAdapter[1024, int](),
-    numProducers = 1,
-    numConsumers = 1,
-    runs = 10,
-  )
-  echo fmt"  mean: {sipsicMetrics.mean:.0f} ops/ms"
-  echo fmt"  stddev: {sipsicMetrics.stddev:.0f}"
-  echo ""
-
-  # Mupmuc (bounded MPMC)
-  for threads in [1, 2, 4]:
-    echo fmt"Mupmuc (bounded MPMC) {threads}P/{threads}C:"
-    let metrics =
-      case threads
-      of 1:
-        benchmarkMupmuc1P1C(runs = 10)
-      of 2:
-        benchmarkMupmuc2P2C(runs = 10)
-      of 4:
-        benchmarkMupmuc4P4C(runs = 10)
-      else:
-        ThroughputMetrics()
-    echo fmt"  mean: {metrics.mean:.0f} ops/ms"
-    echo fmt"  stddev: {metrics.stddev:.0f}"
-    echo ""
-
-  # UnboundedMupsic (unbounded MPSC) — new harness, 33 runs.
-  echo "==================================================="
-  echo "UnboundedMupsic (unbounded MPSC) — runs = ", UnboundedMupsicRuns
-  echo "==================================================="
-  for producers in [1, 2, 4]:
-    echo fmt"UnboundedMupsic (unbounded MPSC) {producers}P/1C:"
-    let metrics =
-      case producers
-      of 1:
-        benchmarkUnboundedMupsic1P1C()
-      of 2:
-        benchmarkUnboundedMupsic2P1C()
-      of 4:
-        benchmarkUnboundedMupsic4P1C()
-      else:
-        ThroughputMetrics()
-    echo fmt"  mean: {metrics.mean:.0f} ops/ms"
-    echo fmt"  min: {metrics.min:.0f}  max: {metrics.max:.0f}"
-    echo fmt"  stddev: {metrics.stddev:.0f}"
-    echo ""
-  echo "==================================================="
-  echo ""
-
-  # Channels (MPMC)
-  for threads in [1, 2, 4]:
-    echo fmt"Channels (MPMC) {threads}P/{threads}C:"
-    let metrics = benchmarkThroughput(
-      proc(): ChannelsAdapter[int] =
-        initChannelsAdapter[int](1024),
-      numProducers = threads,
-      numConsumers = threads,
+  if "sipsic" in runGroups:
+    echo "Sipsic (bounded SPSC) 1P/1C:"
+    let sipsicMetrics = benchmarkThroughput(
+      proc(): SipsicAdapter[1024, int] =
+        initSipsicAdapter[1024, int](),
+      numProducers = 1,
+      numConsumers = 1,
       runs = 10,
     )
-    echo fmt"  mean: {metrics.mean:.0f} ops/ms"
-    echo fmt"  stddev: {metrics.stddev:.0f}"
+    echo fmt"  mean: {sipsicMetrics.mean:.0f} ops/ms"
+    echo fmt"  stddev: {sipsicMetrics.stddev:.0f}"
     echo ""
+
+  # Mupmuc (bounded MPMC)
+  if "mupmuc" in runGroups:
+    for threads in [1, 2, 4]:
+      echo fmt"Mupmuc (bounded MPMC) {threads}P/{threads}C:"
+      let metrics =
+        case threads
+        of 1:
+          benchmarkMupmuc1P1C(runs = 10)
+        of 2:
+          benchmarkMupmuc2P2C(runs = 10)
+        of 4:
+          benchmarkMupmuc4P4C(runs = 10)
+        else:
+          ThroughputMetrics()
+      echo fmt"  mean: {metrics.mean:.0f} ops/ms"
+      echo fmt"  stddev: {metrics.stddev:.0f}"
+      echo ""
+
+  # UnboundedMupsic (unbounded MPSC) — new harness, 33 runs.
+  if "unbounded_mupsic" in runGroups:
+    echo "==================================================="
+    echo "UnboundedMupsic (unbounded MPSC) — runs = ", UnboundedMupsicRuns
+    echo "==================================================="
+    for producers in [1, 2, 4]:
+      echo fmt"UnboundedMupsic (unbounded MPSC) {producers}P/1C:"
+      let metrics =
+        case producers
+        of 1:
+          benchmarkUnboundedMupsic1P1C()
+        of 2:
+          benchmarkUnboundedMupsic2P1C()
+        of 4:
+          benchmarkUnboundedMupsic4P1C()
+        else:
+          ThroughputMetrics()
+      echo fmt"  mean: {metrics.mean:.0f} ops/ms"
+      echo fmt"  min: {metrics.min:.0f}  max: {metrics.max:.0f}"
+      echo fmt"  stddev: {metrics.stddev:.0f}"
+      echo ""
+    echo "==================================================="
+    echo ""
+
+  # Channels (MPMC)
+  if "channels" in runGroups:
+    for threads in [1, 2, 4]:
+      echo fmt"Channels (MPMC) {threads}P/{threads}C:"
+      let metrics = benchmarkThroughput(
+        proc(): ChannelsAdapter[int] =
+          initChannelsAdapter[int](1024),
+        numProducers = threads,
+        numConsumers = threads,
+        runs = 10,
+      )
+      echo fmt"  mean: {metrics.mean:.0f} ops/ms"
+      echo fmt"  stddev: {metrics.stddev:.0f}"
+      echo ""
