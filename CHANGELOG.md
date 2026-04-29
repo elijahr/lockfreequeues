@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Throughput bench harness for `UnboundedMupsic` (1P/1C, 2P/1C, 4P/1C) at `benchmarks/nim/bench_throughput.nim` plus a thin adapter at `benchmarks/nim/adapters/lockfreequeues_unbounded_mupsic.nim` that owns the queue and `DebraManager`. Producer threads register their own `ThreadHandle` in-thread (handles are per-thread by construction). The new variants run for 33 timed iterations + 3 warmup; existing Sipsic/Mupmuc/Channels run counts are unchanged.
 - `bench_throughput` accepts variant-group args (`sipsic`, `mupmuc`, `unbounded_mupsic`, `channels`) to limit which benchmarks run. With no args, all variants run (backward compatible). Multiple args take the union of groups. Unknown args print the supported list and exit non-zero. Lets gate runs target a single queue family without paying for the slow bounded MPMC variants.
+- Compile-time overrides for `bench_throughput` run shape via `{.intdefine.}` constants: `-d:MessageCount=N`, `-d:DefaultRuns=N`, `-d:WarmupRuns=N`, `-d:UnboundedMupsicRuns=N`, `-d:UnboundedMupsicSegmentSize=N`, `-d:UnboundedMupsicMaxThreads=N`. Defaults are unchanged (1M messages, 33 runs, 3 warmup). Lets gate runs trade statistical confidence for wall-clock budget without source edits. `bench_throughput` also unbuffers stdout in `isMainModule` so progress is visible under file redirect.
 
 ## [3.2.0] - 2026-04-27
 

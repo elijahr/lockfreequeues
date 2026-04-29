@@ -1,7 +1,7 @@
 ## Throughput benchmark: N producers, N consumers, shared queue.
 ## Measures ops/ms as thread count scales.
 
-import std/[atomics, times, monotimes, strformat, options, os, sets]
+import std/[atomics, times, monotimes, strformat, options, os, sets, syncio]
 import ./stats
 import ./results
 import ./adapter
@@ -11,10 +11,15 @@ import lockfreequeues/mupmuc
 import lockfreequeues/unbounded_mupsic
 import debra
 
+# All run-shape constants below are `{.intdefine.}` so they can be overridden
+# at compile time without touching the source. Default behavior (no `-d:` flags)
+# is unchanged: 1M messages, 33 timed runs, 3 warmup runs for the unbounded
+# Mupsic harness. For tighter wall-clock budgets in CI gate runs, override via
+# e.g. `nim c -d:MessageCount=100000 -d:UnboundedMupsicRuns=11 ...`.
 const
-  MessageCount = 1_000_000
-  DefaultRuns = 33
-  WarmupRuns = 3
+  MessageCount {.intdefine.} = 1_000_000
+  DefaultRuns {.intdefine.} = 33
+  WarmupRuns {.intdefine.} = 3
 
 type
   ProducerContext[Q] = object
@@ -262,9 +267,9 @@ proc benchmarkMupmuc4P4C*(
 # keep their previous run counts.
 
 const
-  UnboundedMupsicRuns = 33
-  UnboundedMupsicSegmentSize = 64
-  UnboundedMupsicMaxThreads = 8
+  UnboundedMupsicRuns {.intdefine.} = 33
+  UnboundedMupsicSegmentSize {.intdefine.} = 64
+  UnboundedMupsicMaxThreads {.intdefine.} = 8
     ## Headroom for the consumer + up to 4 producers + DEBRA bookkeeping.
 
 type
@@ -394,6 +399,13 @@ proc benchmarkUnboundedMupsic4P1C*(
   benchmarkUnboundedMupsicNP1C(4, runs, warmup)
 
 when isMainModule:
+  # Unbuffer stdout so progress is visible when the bench is run under
+  # a file redirect (e.g. `bench_throughput unbounded_mupsic > out.txt`).
+  # Without this, block-buffering on a redirected pipe can hide all
+  # output from a >20-minute variant until the process exits, which
+  # makes external poll loops indistinguishable from a hang.
+  setStdIoUnbuffered()
+
   # CLI: optional variant-group filter. With no args, run everything
   # (backward compatible). With one or more args from the supported
   # set, run only those groups. Unknown args produce an error and
