@@ -274,6 +274,14 @@ proc pop*[S: static int, T; MaxThreads: static int](
       if nextSeg == nil:
         break
 
+      # Tail re-check: a producer may have committed a slot between our
+      # original `tail` read above and now. Don't advance past data we
+      # could still pop. Loop back to re-evaluate `seg.head < tail` with
+      # the fresher tail value before retiring this segment.
+      let tailRecheck = seg.tail.load(moAcquire)
+      if seg.head < tailRecheck:
+        continue
+
       # Single consumer, so no race on headSegment. Advance with release
       # semantics and retire under the active pin so a follow-up reclaim
       # cannot free this segment until every pinned thread observes the
