@@ -1,0 +1,192 @@
+# yamllint disable rule:line-length
+
+name: bench
+
+# yamllint disable rule:truthy
+on:
+  pull_request:
+    branches:
+      - main
+      - devel
+      - 'feat/**'
+      - 'perf/**'
+      - 'fix/**'
+    paths-ignore:
+      - '*.md'
+      - '.github/workflows/docs.yml'
+  push:
+    branches: [main, devel]
+    paths-ignore:
+      - '*.md'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+# yamllint enable rule:truthy
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # Exposed at job env so step-level `if:` expressions can gate on
+  # presence via `env.BENCHER_API_TOKEN`. GitHub Actions does not allow
+  # `secrets.*` directly in `if:`, so the env-var indirection is required.
+  BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
+
+jobs:
+  benchmark:
+    name: Throughput bench (ubuntu-latest)
+    runs-on: ubuntu-latest
+    # PRs from forks cannot read BENCHER_API_TOKEN. Skip rather than fail
+    # noisily; maintainer pushes / merges still record the baseline.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      pull-requests: write
+      checks: write
+    timeout-minutes: 30
+
+    steps:
+      - name: Restore cache
+        uses: actions/cache@v4
+        with:
+          path: ${HOME}/.cache
+          key: cache-bench-${{ runner.os }}
+
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Setup Nim
+        uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: 'stable'
+
+      - name: Install build deps (Linux)
+        run: |
+          sudo apt-get update -q -y
+          sudo apt-get -qq install -y clang
+
+      - name: Clone and install sibling Nim deps (nim-debra, nim-typestates)
+        # Mirrors build.yml: nim.cfg uses --path:"../nim-debra/src" and
+        # --path:"../nim-typestates/src", and nimble's resolver runs before
+        # the compiler so we must install matching branches locally.
+        run: |
+          set -e
+          cd ..
+          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
+          git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
+          (cd nim-typestates && nimble install -y)
+          (cd nim-debra && nimble install -y)
+
+      - name: Vendor unittest2
+        run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
+
+      - name: Run adapter unit tests
+        # Cheap pre-flight: fail fast if the parser itself is broken before
+        # spending minutes compiling and running the bench binary.
+        run: python3 benchmarks/test_bmf_adapter.py -v
+
+      - name: Compile bench_throughput (CI-tuned run shape)
+        # Cloud runs use a tighter wall-clock budget than the local default
+        # (1M messages × 33 runs). Bounded variants (sipsic, channels) use
+        # 1M × 5 runs and finish in single-digit seconds. unbounded_mupsic
+        # is super-linear in message count and is gated separately via
+        # UnboundedMupsicMessageCount=500000 + UnboundedMupsicRuns=3 to keep
+        # the variant tractable inside the 30-min job budget. Warmup stays
+        # at 2 to absorb JIT/cache effects.
+        #
+        # Counts are 10x the previous values (100k / 50k → 1M / 500k) and
+        # the bench timer is microsecond/nanosecond-precision (computed in
+        # ns, printed as `mean: <N>.1f ops/ms`). Together this gives non-zero
+        # stddev and >1-decimal resolution between runs on the fast CI
+        # runner; previously a 50k unbounded_mupsic run completed in ~3 ms,
+        # so multiple samples bucketed into the same integer ms and stddev
+        # was reported as 0. The new shape costs roughly 30-60s on CI: well
+        # inside the 30-min job budget while giving the timer enough
+        # wall-clock spread to produce a stable, comparable signal.
+        run: |
+          nim c -d:release -d:danger --threads:on \
+            -d:MessageCount=1000000 \
+            -d:DefaultRuns=5 \
+            -d:WarmupRuns=2 \
+            -d:UnboundedMupsicRuns=3 \
+            -d:UnboundedMupsicMessageCount=500000 \
+            benchmarks/nim/bench_throughput.nim
+
+      - name: Run bench_throughput
+        # Mupmuc 4P/4C is skipped on shared CI runners: 8 threads on a
+        # 4-vCPU runner with a small-capacity bounded MPMC livelocks under
+        # scheduler pressure and hangs the job to the 30-min timeout.
+        # Tracked in https://github.com/elijahr/lockfreequeues/issues/15.
+        # Other variants (sipsic, unbounded_mupsic, channels) complete in
+        # single-digit minutes and exercise the harness end-to-end.
+        # Step-level timeout: if any single variant hangs, fail fast inside
+        # the 30-min job budget so Bencher upload steps still run (or are
+        # visibly skipped) instead of burning the entire budget on one variant.
+        timeout-minutes: 20
+        run: ./.tmp/bench_throughput sipsic unbounded_mupsic channels | tee bench_output.txt
+
+      - name: Convert to BMF JSON
+        run: python3 benchmarks/bmf_adapter.py bench_output.txt bench_results.json
+
+      - name: Show BMF JSON (debug)
+        run: cat bench_results.json
+
+      - name: Install Bencher CLI
+        uses: bencherdev/bencher@main
+
+      - name: Bencher token preflight
+        # Always runs. Surfaces a yellow PR-check warning when the upload
+        # secret is unset so it is obvious from the check summary why the
+        # downstream Bencher steps were skipped, rather than the bench
+        # silently appearing to "do nothing" with the data.
+        run: |
+          if [ -z "$BENCHER_API_TOKEN" ]; then
+            echo "::warning title=Bencher upload skipped::BENCHER_API_TOKEN secret is not set on this repo. The bench ran successfully and produced bench_results.json (visible in the 'Show BMF JSON (debug)' step), but no data is being uploaded to Bencher.dev. Set up the project at bencher.dev with slug 'lockfreequeues' and add BENCHER_API_TOKEN as a repo secret to enable upload."
+          else
+            echo "Bencher token present; proceeding with upload."
+          fi
+
+      # PR runs: compare against base branch and post a comment.
+      - name: Track PR benchmarks with Bencher
+        if: github.event_name == 'pull_request' && env.BENCHER_API_TOKEN != ''
+        run: |
+          bencher run \
+            --project lockfreequeues \
+            --token '${{ secrets.BENCHER_API_TOKEN }}' \
+            --branch "$GITHUB_HEAD_REF" \
+            --start-point "$GITHUB_BASE_REF" \
+            --start-point-hash '${{ github.event.pull_request.base.sha }}' \
+            --start-point-clone-thresholds \
+            --start-point-reset \
+            --testbed ubuntu-latest \
+            --adapter json \
+            --file bench_results.json \
+            --github-actions '${{ secrets.GITHUB_TOKEN }}' \
+            --err
+
+      # Push to main/devel: record the baseline for that branch.
+      - name: Track base branch benchmarks with Bencher
+        if: github.event_name == 'push' && env.BENCHER_API_TOKEN != ''
+        run: |
+          bencher run \
+            --project lockfreequeues \
+            --token '${{ secrets.BENCHER_API_TOKEN }}' \
+            --branch "${GITHUB_REF##*/}" \
+            --testbed ubuntu-latest \
+            --threshold-measure throughput \
+            --threshold-test t_test \
+            --threshold-max-sample-size 64 \
+            --threshold-lower-boundary 0.99 \
+            --thresholds-reset \
+            --adapter json \
+            --file bench_results.json \
+            --github-actions '${{ secrets.GITHUB_TOKEN }}' \
+            --err
+
+      # workflow_dispatch: just upload, no comparison.
+      - name: Track manual benchmarks with Bencher
+        if: github.event_name == 'workflow_dispatch' && env.BENCHER_API_TOKEN != ''
+        run: |
+          bencher run \
+            --project lockfreequeues \
+            --token '${{ secrets.BENCHER_API_TOKEN }}' \
+            --branch "${GITHUB_REF##*/}" \
+            --testbed ubuntu-latest \
+            --adapter json \
+            --file bench_results.json
