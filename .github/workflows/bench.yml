@@ -5,7 +5,12 @@ name: bench
 # yamllint disable rule:truthy
 on:
   pull_request:
-    branches: [main, devel]
+    branches:
+      - main
+      - devel
+      - 'feat/**'
+      - 'perf/**'
+      - 'fix/**'
     paths-ignore:
       - '*.md'
       - '.github/workflows/docs.yml'
