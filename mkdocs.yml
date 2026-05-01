@@ -83,6 +83,7 @@ nav:
       - UnboundedMupmuc: api/unbounded_mupmuc.md
     - Support:
       - Operations: api/ops.md
+  - Benchmarks: benchmarks.md
   - Examples: examples.md
 
 watch:
@@ -101,3 +102,4 @@ extra:
 
 extra_css:
   - css/custom.css
+  - assets/bench-charts.css
