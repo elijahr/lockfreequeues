@@ -8,6 +8,13 @@ on:
       - devel
     tags:
       - 'v*'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - 'docs-requirements.txt'
+      - '.github/workflows/docs.yml'
+      - 'src/**'
   workflow_dispatch:
 
 permissions:
@@ -62,12 +69,23 @@ jobs:
         run: |
           pip install -r docs-requirements.txt
 
+      - name: Build docs (PR verification, no deploy)
+        # On pull_request runs we only build to verify the docs compile;
+        # we deliberately skip mike + git push so PR branches never touch
+        # gh-pages. This catches mkdocstrings-nim regressions, broken
+        # internal links, and missing nav entries before merge.
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdocs build --strict --clean
+
       - name: Configure git
+        if: github.event_name != 'pull_request'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Fetch gh-pages
+        if: github.event_name != 'pull_request'
         run: |
           git fetch origin gh-pages --depth=1 || true
 
