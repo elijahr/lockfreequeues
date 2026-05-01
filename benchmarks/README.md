@@ -24,6 +24,14 @@ regression gate via [Bencher.dev](https://bencher.dev).
   -> PushResult` / `pop() -> PopResult[T]` shape consumed by the
   shared harness; multi-thread topologies bypass the generic adapter
   and call queue.getProducer(idx) / queue.getConsumer(idx) directly.
+- `nim/smoke/` - Compile-and-run sanity binaries for FFI adapters
+  (`smoke_boost.nim`, `smoke_crossbeam.nim`). Each is a 32-item push/pop
+  round-trip used by CI to fail fast when a system library or cdylib
+  is unavailable, before paying the cost of a full bench compile.
+- `rust/bench-ffi-crossbeam/` - C-ABI cdylib wrapping
+  `crossbeam_queue::ArrayQueue<u64>` and `crossbeam_queue::SegQueue<u64>`.
+  Built with `cargo build --release`; consumed by the Nim Crossbeam
+  adapters via `importc`.
 - `merge_bmf.py` - Stateless union of per-binary BMF JSON fragments
   into a single `merged.json` for `bencher run`. Exits 1 on
   `(slug, measure)` collisions naming the colliding inputs.
@@ -146,6 +154,68 @@ Current slug set emitted across the five binaries:
   `lockfreequeues_unbounded_mupmuc/mpmc_unbounded/{1,2,4}p{1,2,4}c`.
 - `bench_latency`:
   `lockfreequeues_{sipsic,sipmuc,mupsic,mupmuc}/{spsc,mpmc,mpsc,mpmc}/1p1c`.
+
+## Comparison MVP — third-party adapters
+
+PR 3 (Track 3) adds five external-library adapters so each topology has
+≥ 3 distinct libraries plotted on the same Bencher dashboard. All
+adapters are gated behind `-d:adapter_<library_slug>_available`; absent
+gates produce no symbol references and the production builds are
+unchanged.
+
+| Library | Variant | Topology | Compile gate | Install (Linux CI) |
+|---------|---------|----------|--------------|--------------------|
+| Loony | `LoonyQueue` | `mpmc_unbounded` | `-d:adapter_loony_available` | `nimble install loony` |
+| Boost.LockFree | `boost::lockfree::queue` | `mpmc` (bounded) | `-d:adapter_boost_lockfree_queue_available` | `apt install libboost-dev` (requires `nim cpp`) |
+| Boost.LockFree | `boost::lockfree::spsc_queue` | `spsc` (bounded) | `-d:adapter_boost_lockfree_spsc_available` | same as above |
+| Crossbeam | `crossbeam_queue::ArrayQueue` | `mpmc` (bounded) | `-d:adapter_crossbeam_array_queue_available` | `cargo build --release --manifest-path benchmarks/rust/bench-ffi-crossbeam/Cargo.toml` |
+| Crossbeam | `crossbeam_queue::SegQueue` | `mpmc_unbounded` | `-d:adapter_crossbeam_seg_queue_available` | same as above |
+
+Library upstreams: [Loony](https://github.com/shayanhabibi/loony) (MIT),
+[Boost.LockFree](https://www.boost.org/libs/lockfree/) (BSL-1.0),
+[Crossbeam](https://github.com/crossbeam-rs/crossbeam) (Apache-2.0 OR MIT).
+Per-library obligations are tracked in
+[`THIRD_PARTY_LICENSES.md`](../THIRD_PARTY_LICENSES.md).
+
+### CI integration
+
+- **`bench.yml`** runs Loony + Boost.LockFree on every PR using the
+  soft-skip pattern (design 2.6): each library has install -> smoke ->
+  set-flag stages with `continue-on-error: true`; if install or smoke
+  fails the binary compiles without that adapter and the workflow emits
+  a `::warning title=Adapter skipped::...` annotation. The
+  `workflow_dispatch` event also accepts `force_skip_boost` /
+  `force_skip_loony` boolean inputs to exercise the skip path manually.
+- **`bench-comparison.yml`** runs Crossbeam (the only adapter with a
+  Rust toolchain dependency) on a nightly cron + `workflow_dispatch` +
+  targeted path pushes to `devel`. It produces a separate Bencher
+  Report dedicated to crossbeam slugs.
+
+### Running comparison adapters locally
+
+```bash
+# Loony (Nim only):
+nimble install loony
+nim c -r -d:release -d:danger --threads:on \
+  -d:adapter_loony_available \
+  -d:UnboundedMupmucMessageCount=100000 -d:UnboundedMupmucRuns=3 \
+  benchmarks/nim/bench_unbounded.nim loony
+
+# Boost (C++ headers; macOS: brew install boost; Ubuntu: apt install libboost-dev):
+nim cpp -r -d:release -d:danger --threads:on \
+  -d:adapter_boost_lockfree_queue_available \
+  -d:BenchMpmcMessageCount=100000 -d:BenchMpmcRuns=3 \
+  benchmarks/nim/bench_mpmc.nim boost_lockfree_queue
+
+# Crossbeam (Rust cdylib):
+cargo build --release \
+  --manifest-path benchmarks/rust/bench-ffi-crossbeam/Cargo.toml
+nim c -r -d:release -d:danger --threads:on \
+  -d:adapter_crossbeam_array_queue_available \
+  --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
+  -d:BenchMpmcMessageCount=100000 -d:BenchMpmcRuns=3 \
+  benchmarks/nim/bench_mpmc.nim crossbeam_array_queue
+```
 
 ## Running merge_bmf and superset_check tests
 
