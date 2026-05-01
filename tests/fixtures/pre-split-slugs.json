@@ -1,0 +1,79 @@
+{
+  "lockfreequeues_mupmuc/mpmc/1p1c": {
+    "throughput_ops_ms": {
+      "value": 19504.396482813747,
+      "lower_value": 19493.36754157748,
+      "upper_value": 19515.425424050012
+    }
+  },
+  "lockfreequeues_mupmuc/mpmc/2p2c": {
+    "throughput_ops_ms": {
+      "value": 14885.897861969646,
+      "lower_value": 14631.317487664088,
+      "upper_value": 15140.478236275205
+    }
+  },
+  "lockfreequeues_mupmuc/mpmc/4p4c": {
+    "throughput_ops_ms": {
+      "value": 10095.92880447807,
+      "lower_value": 8882.45788519962,
+      "upper_value": 11309.39972375652
+    }
+  },
+  "lockfreequeues_mupmuc/mpmc/8p8c": {
+    "throughput_ops_ms": {
+      "value": 5251.162209555323,
+      "lower_value": 5219.47811287181,
+      "upper_value": 5282.846306238836
+    }
+  },
+  "lockfreequeues_sipsic/spsc/1p1c": {
+    "throughput_ops_ms": {
+      "value": 12253.2290574398,
+      "lower_value": 9837.219803030268,
+      "upper_value": 14669.23831184933
+    }
+  },
+  "lockfreequeues_unbounded_mupsic/mpsc_unbounded/1p1c": {
+    "throughput_ops_ms": {
+      "value": 10894.752895523907,
+      "lower_value": 9466.384456540516,
+      "upper_value": 12323.121334507297
+    }
+  },
+  "lockfreequeues_unbounded_mupsic/mpsc_unbounded/2p1c": {
+    "throughput_ops_ms": {
+      "value": 9728.381928620092,
+      "lower_value": 9291.02333733393,
+      "upper_value": 10165.740519906254
+    }
+  },
+  "lockfreequeues_unbounded_mupsic/mpsc_unbounded/4p1c": {
+    "throughput_ops_ms": {
+      "value": 10044.267734713983,
+      "lower_value": 9969.935465775887,
+      "upper_value": 10118.60000365208
+    }
+  },
+  "nim_channels/mpmc/1p1c": {
+    "throughput_ops_ms": {
+      "value": 8592.459855772106,
+      "lower_value": 7521.893938337938,
+      "upper_value": 9663.025773206273
+    }
+  },
+  "nim_channels/mpmc/2p2c": {
+    "throughput_ops_ms": {
+      "value": 4231.466333633576,
+      "lower_value": 3154.904307809079,
+      "upper_value": 5308.028359458073
+    }
+  },
+  "nim_channels/mpmc/4p4c": {
+    "throughput_ops_ms": {
+      "value": 3438.3306751727805,
+      "lower_value": 361.41998723450706,
+      "upper_value": 6515.241363111054
+    }
+  }
+}
