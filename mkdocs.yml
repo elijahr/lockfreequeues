@@ -82,7 +82,6 @@ nav:
       - UnboundedMupsic: api/unbounded_mupsic.md
       - UnboundedMupmuc: api/unbounded_mupmuc.md
     - Support:
-      - EpochManager: api/epoch.md
       - Operations: api/ops.md
   - Examples: examples.md
 

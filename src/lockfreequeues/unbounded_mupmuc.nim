@@ -9,14 +9,23 @@
 ## Both push and pop are lock-free (CAS coordination).
 ##
 ## ```nim
+## # Auto-create: queue owns a private DebraManager, threads auto-register.
+## var queue = newUnboundedMupmuc[64, int, 4]()
+## var producer = queue.getProducer()
+## var consumer = queue.getConsumer()
+## producer.push(42)
+## let item = consumer.pop()  # some(42)
+## ```
+##
+## For multi-queue setups that share a manager, pass it explicitly:
+##
+## ```nim
 ## var manager = initDebraManager[4]()
 ## var queue = newUnboundedMupmuc[64, int, 4](addr manager)
 ## let producerHandle = registerThread(manager)
 ## let consumerHandle = registerThread(manager)
 ## var producer = queue.getProducer(producerHandle)
 ## var consumer = queue.getConsumer(consumerHandle)
-## producer.push(42)
-## let item = consumer.pop()  # some(42)
 ## ```
 ##
 ## See `unbounded_sipmuc` for documentation of the
@@ -74,6 +83,10 @@ type
     segments: Atomic[int] # Number of segments
     producerCount: Atomic[int]
     consumerCount: Atomic[int]
+    ownsManager: bool
+      ## True only when the queue allocated its own private manager via
+      ## the no-manager-arg constructor; the manager is destroyed and
+      ## freed inside `=destroy` after segment cleanup.
 
   Producer*[S: static int, T; MaxThreads: static int] = object
     ## Handle for a registered producer.
@@ -119,13 +132,18 @@ proc newUnboundedMupmuc*[S: static int, T; MaxThreads: static int](
         {.
           error:
             "Queue item type '" & $T & "' is a ref type. " &
-            "On arc/orc, ref types use spinlock-based atomic operations for reference counting. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks mutate the refcount on the same object multiple threads can read or write, which is a race regardless of whether the refcount itself is atomic. " &
             "Use a lock-free type (int, pointer, ptr T, etc.) or compile with " &
-            "-d:allowNonLockFreeQueueItems to explicitly allow spinlock fallback."
+            "-d:allowNonLockFreeQueueItems to explicitly allow it."
         .}
 
   result.manager = manager
   result.strategy = strategy
+  result.ownsManager = false
+
+  # Refcount this queue against the manager so the manager's `=destroy`
+  # asserts cleanly if a shared manager is torn down before its queues.
+  bindClient(manager[])
 
   # Start with one segment
   let seg = newSegment[S, T]()
@@ -135,6 +153,24 @@ proc newUnboundedMupmuc*[S: static int, T; MaxThreads: static int](
   result.segments.store(1, moRelaxed)
   result.producerCount.store(0, moRelaxed)
   result.consumerCount.store(0, moRelaxed)
+
+proc newUnboundedMupmuc*[S: static int, T; MaxThreads: static int](
+    strategy: DeallocationStrategy = DefaultDeallocationStrategy
+): UnboundedMupmuc[S, T, MaxThreads] =
+  ## Auto-create overload: heap-allocates a private `DebraManager`
+  ## owned by this queue. Manager teardown happens inside this queue's
+  ## `=destroy` after segment cleanup. For multi-queue setups that
+  ## share a manager, use the `(manager, strategy)` overload instead.
+  let mgr = cast[ptr DebraManager[MaxThreads]](
+    c_calloc(1.csize_t, sizeof(DebraManager[MaxThreads]).csize_t)
+  )
+  if mgr == nil:
+    raise newException(
+      OutOfMemDefect, "newUnboundedMupmuc: c_calloc returned nil"
+    )
+  mgr[] = initDebraManager[MaxThreads]()
+  result = newUnboundedMupmuc[S, T, MaxThreads](mgr, strategy)
+  result.ownsManager = true
 
 proc segmentCount*[S: static int, T; MaxThreads: static int](
     self: var UnboundedMupmuc[S, T, MaxThreads]
@@ -159,6 +195,17 @@ proc getProducer*[S: static int, T; MaxThreads: static int](
   result.idx = idx
   result.handle = handle
 
+proc getProducer*[S: static int, T; MaxThreads: static int](
+    self: var UnboundedMupmuc[S, T, MaxThreads]
+): Producer[S, T, MaxThreads] =
+  ## Auto-register overload: calls `registerThread(self.manager[])`
+  ## internally and returns a Producer. Each call consumes one thread
+  ## slot in the manager. If a thread will use multiple queues sharing
+  ## a manager, prefer the explicit-handle overload to avoid burning
+  ## one slot per queue.
+  let handle = registerThread(self.manager[])
+  self.getProducer(handle)
+
 proc getConsumer*[S: static int, T; MaxThreads: static int](
     self: var UnboundedMupmuc[S, T, MaxThreads], handle: ThreadHandle[MaxThreads]
 ): Consumer[S, T, MaxThreads] =
@@ -169,6 +216,17 @@ proc getConsumer*[S: static int, T; MaxThreads: static int](
   result.queue = addr self
   result.idx = idx
   result.handle = handle
+
+proc getConsumer*[S: static int, T; MaxThreads: static int](
+    self: var UnboundedMupmuc[S, T, MaxThreads]
+): Consumer[S, T, MaxThreads] =
+  ## Auto-register overload: calls `registerThread(self.manager[])`
+  ## internally and returns a Consumer. Each call consumes one thread
+  ## slot in the manager. If a thread will use multiple queues sharing
+  ## a manager, prefer the explicit-handle overload to avoid burning
+  ## one slot per queue.
+  let handle = registerThread(self.manager[])
+  self.getConsumer(handle)
 
 proc push*[S: static int, T; MaxThreads: static int](
     self: var Producer[S, T, MaxThreads], item: T
@@ -182,6 +240,7 @@ proc push*[S: static int, T; MaxThreads: static int](
         {.
           error:
             "Queue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks mutate the refcount on the same object multiple threads can read or write, which is a race regardless of whether the refcount itself is atomic. " &
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
@@ -264,6 +323,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
         {.
           error:
             "Queue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks mutate the refcount on the same object multiple threads can read or write, which is a race regardless of whether the refcount itself is atomic. " &
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
@@ -358,7 +418,9 @@ proc pop*[S: static int, T; MaxThreads: static int](
 proc `=destroy`*[S: static int, T; MaxThreads: static int](
     self: var UnboundedMupmuc[S, T, MaxThreads]
 ) =
-  ## Clean up all segments.
+  ## Clean up all segments. Releases this queue's client refcount on
+  ## the manager; if the queue owns a private manager (auto-create
+  ## overload), tears that manager down and frees it.
   var seg = self.headSegment.load(moRelaxed)
   while seg != nil:
     let next = seg.next.load(moRelaxed)
@@ -370,3 +432,16 @@ proc `=destroy`*[S: static int, T; MaxThreads: static int](
         reset(seg.data[i])
     c_free(seg)
     seg = next
+
+  # Release our refcount on the manager. Conceptually pairs with the
+  # `bindClient` call in the constructor. Done after segment cleanup so
+  # we are demonstrably finished using the manager before unbinding.
+  if self.manager != nil:
+    unbindClient(self.manager[])
+    if self.ownsManager:
+      # Run the manager's destructor (drains limbo bags, asserts
+      # clientCount == 0). `reset` invokes the type's `=destroy` hook
+      # without the parsing surprise of the backtick form, which trips
+      # `expr(nkIdent); unknown node kind` inside a generic destructor.
+      reset(self.manager[])
+      c_free(self.manager)

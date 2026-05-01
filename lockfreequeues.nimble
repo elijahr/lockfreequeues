@@ -1,7 +1,7 @@
 import os
 
 # Package
-version        = "4.0.0"
+version        = "4.1.0"
 author         = "Elijah Shaw-Rutschman"
 description    = "Lock-free queue implementations for Nim."
 license        = "MIT"
@@ -11,8 +11,8 @@ entryPoints    = @["tests/test.nim"]
 # Dependencies
 requires "nim >= 2.2.0"
 requires "unittest2"
-requires "typestates >= 0.3.1"
-requires "debra >= 0.4.0"
+requires "typestates >= 0.6.0"
+requires "debra >= 0.5.0"
 
 # Tasks
 task test, "Runs the test suite":

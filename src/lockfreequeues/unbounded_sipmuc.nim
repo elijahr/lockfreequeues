@@ -10,13 +10,21 @@
 ## Pop is lock-free for multiple consumers (CAS coordination).
 ##
 ## ```nim
+## # Auto-create: queue owns a private DebraManager, consumers auto-register.
+## var queue = newUnboundedSipmuc[64, int, 4]()
+## var consumer = queue.getConsumer()
+##
+## queue.push(42)
+## let item = consumer.pop()  # some(42)
+## ```
+##
+## For multi-queue setups that share a manager, pass it explicitly:
+##
+## ```nim
 ## var manager = initDebraManager[4]()
 ## var queue = newUnboundedSipmuc[64, int, 4](addr manager)
 ## let handle = registerThread(manager)
 ## var consumer = queue.getConsumer(handle)
-##
-## queue.push(42)
-## let item = consumer.pop()  # some(42)
 ## ```
 ##
 ## **Compile-time knobs**
@@ -79,6 +87,10 @@ type
     # Consumer tracking
     consumerCount: Atomic[int]
     consumerHeads: array[MaxThreads, Atomic[int]] # Per-consumer read position
+    ownsManager: bool
+      ## True only when the queue allocated its own private manager via
+      ## the no-manager-arg constructor; the manager is destroyed and
+      ## freed inside `=destroy` after segment cleanup.
 
   Consumer*[S: static int, T; MaxThreads: static int] = object
     ## Handle for a registered consumer.
@@ -116,13 +128,18 @@ proc newUnboundedSipmuc*[S: static int, T; MaxThreads: static int](
         {.
           error:
             "Queue item type '" & $T & "' is a ref type. " &
-            "On arc/orc, ref types use spinlock-based atomic operations for reference counting. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks mutate the refcount on the same object multiple threads can read or write, which is a race regardless of whether the refcount itself is atomic. " &
             "Use a lock-free type (int, pointer, ptr T, etc.) or compile with " &
-            "-d:allowNonLockFreeQueueItems to explicitly allow spinlock fallback."
+            "-d:allowNonLockFreeQueueItems to explicitly allow it."
         .}
 
   result.manager = manager
   result.strategy = strategy
+  result.ownsManager = false
+
+  # Refcount this queue against the manager so the manager's `=destroy`
+  # asserts cleanly if a shared manager is torn down before its queues.
+  bindClient(manager[])
 
   # Start with one segment
   let seg = newSegment[S, T]()
@@ -135,6 +152,24 @@ proc newUnboundedSipmuc*[S: static int, T; MaxThreads: static int](
   result.consumerCount.store(0, moRelaxed)
   for i in 0 ..< MaxThreads:
     result.consumerHeads[i].store(0, moRelaxed)
+
+proc newUnboundedSipmuc*[S: static int, T; MaxThreads: static int](
+    strategy: DeallocationStrategy = DefaultDeallocationStrategy
+): UnboundedSipmuc[S, T, MaxThreads] =
+  ## Auto-create overload: heap-allocates a private `DebraManager`
+  ## owned by this queue. Manager teardown happens inside this queue's
+  ## `=destroy` after segment cleanup. For multi-queue setups that
+  ## share a manager, use the `(manager, strategy)` overload instead.
+  let mgr = cast[ptr DebraManager[MaxThreads]](
+    c_calloc(1.csize_t, sizeof(DebraManager[MaxThreads]).csize_t)
+  )
+  if mgr == nil:
+    raise newException(
+      OutOfMemDefect, "newUnboundedSipmuc: c_calloc returned nil"
+    )
+  mgr[] = initDebraManager[MaxThreads]()
+  result = newUnboundedSipmuc[S, T, MaxThreads](mgr, strategy)
+  result.ownsManager = true
 
 proc segmentCount*[S: static int, T; MaxThreads: static int](
     self: var UnboundedSipmuc[S, T, MaxThreads]
@@ -160,6 +195,7 @@ proc push*[S: static int, T; MaxThreads: static int](
         {.
           error:
             "Queue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks mutate the refcount on the same object multiple threads can read or write, which is a race regardless of whether the refcount itself is atomic. " &
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
@@ -205,6 +241,17 @@ proc getConsumer*[S: static int, T; MaxThreads: static int](
   result.localHead = 0
   result.handle = handle
 
+proc getConsumer*[S: static int, T; MaxThreads: static int](
+    self: var UnboundedSipmuc[S, T, MaxThreads]
+): Consumer[S, T, MaxThreads] =
+  ## Auto-register overload: calls `registerThread(self.manager[])`
+  ## internally and returns a Consumer. Each call consumes one thread
+  ## slot in the manager. If a thread will use multiple queues sharing
+  ## a manager, prefer the explicit-handle overload to avoid burning
+  ## one slot per queue.
+  let handle = registerThread(self.manager[])
+  self.getConsumer(handle)
+
 # Typed destructor for retired segments. Generic over `(S, T)` so we can
 # `reset` any managed slots (`string`, `seq`, `ref`, ...) before
 # `c_free`'s away the segment block. For POD `T` (`supportsCopyMem`),
@@ -230,6 +277,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
         {.
           error:
             "Queue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks mutate the refcount on the same object multiple threads can read or write, which is a race regardless of whether the refcount itself is atomic. " &
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
@@ -315,7 +363,9 @@ proc pop*[S: static int, T; MaxThreads: static int](
 proc `=destroy`*[S: static int, T; MaxThreads: static int](
     self: var UnboundedSipmuc[S, T, MaxThreads]
 ) =
-  ## Clean up all segments.
+  ## Clean up all segments. Releases this queue's client refcount on
+  ## the manager; if the queue owns a private manager (auto-create
+  ## overload), tears that manager down and frees it.
   var seg = self.headSegment.load(moRelaxed)
   while seg != nil:
     when not supportsCopyMem(T):
@@ -327,3 +377,16 @@ proc `=destroy`*[S: static int, T; MaxThreads: static int](
     let next = seg.next.load(moRelaxed)
     c_free(seg)
     seg = next
+
+  # Release our refcount on the manager. Conceptually pairs with the
+  # `bindClient` call in the constructor. Done after segment cleanup so
+  # we are demonstrably finished using the manager before unbinding.
+  if self.manager != nil:
+    unbindClient(self.manager[])
+    if self.ownsManager:
+      # Run the manager's destructor (drains limbo bags, asserts
+      # clientCount == 0). `reset` invokes the type's `=destroy` hook
+      # without the parsing surprise of the backtick form, which trips
+      # `expr(nkIdent); unknown node kind` inside a generic destructor.
+      reset(self.manager[])
+      c_free(self.manager)

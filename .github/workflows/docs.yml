@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - master
+      - devel
     tags:
       - 'v*'
   workflow_dispatch:
@@ -54,6 +55,6 @@ jobs:
           mike set-default --push latest
 
       - name: Deploy docs (dev)
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/devel'
         run: |
           mike deploy --push dev

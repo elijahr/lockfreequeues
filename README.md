@@ -54,8 +54,26 @@ assert item == some(42)
 
 ### Unbounded MPMC
 
-The MP/MC unbounded variants need a `DebraManager` for safe segment
-reclamation and a per-thread handle for every producer and consumer.
+The simplest setup — the queue auto-creates a private `DebraManager` and
+threads auto-register on first `getProducer()` / `getConsumer()` call:
+
+```nim
+import options
+import lockfreequeues
+
+var queue = newUnboundedMupmuc[64, int, 4]()
+
+var producer = queue.getProducer()
+var consumer = queue.getConsumer()
+
+producer.push(42)
+let item = consumer.pop()  # some(42)
+assert item == some(42)
+```
+
+For multi-queue setups that share a manager, pass it explicitly. Threads
+that touch multiple queues should also share a single `ThreadHandle` to
+avoid burning a slot per queue:
 
 ```nim
 import options
@@ -63,17 +81,15 @@ import debra
 import lockfreequeues
 
 var manager = initDebraManager[4]()
-var queue = newUnboundedMupmuc[64, int, 4](addr manager)
+var queueA = newUnboundedMupmuc[64, int, 4](addr manager)
+var queueB = newUnboundedMupmuc[64, int, 4](addr manager)
 
-let producerHandle = registerThread(manager)
-let consumerHandle = registerThread(manager)
-
-var producer = queue.getProducer(producerHandle)
-var consumer = queue.getConsumer(consumerHandle)
+let handle = manager.registerThread()
+var producer = queueA.getProducer(handle)
+var consumer = queueB.getConsumer(handle)
 
 producer.push(42)
-let item = consumer.pop()  # some(42)
-assert item == some(42)
+let item = consumer.pop()
 ```
 
 See [`examples/`](examples/) for full multi-threaded examples and patterns
@@ -81,20 +97,27 @@ See [`examples/`](examples/) for full multi-threaded examples and patterns
 
 ## Choosing a queue
 
-| Queue              | P    | C    | Push      | Pop       | Bounded? | Needs `DebraManager`? | Per-thread handle? |
-|--------------------|------|------|-----------|-----------|----------|-----------------------|--------------------|
-| `Sipsic`           | 1    | 1    | wait-free | wait-free | yes      | no                    | no                 |
-| `Sipmuc`           | 1    | many | wait-free | lock-free | yes      | no                    | no                 |
-| `Mupsic`           | many | 1    | lock-free | wait-free | yes      | no                    | no                 |
-| `Mupmuc`           | many | many | lock-free | lock-free | yes      | no                    | no                 |
-| `UnboundedSipsic`  | 1    | 1    | wait-free | wait-free | no       | no                    | no                 |
-| `UnboundedSipmuc`  | 1    | many | wait-free | lock-free | no       | yes                   | consumer side      |
-| `UnboundedMupsic`  | many | 1    | lock-free | wait-free | no       | yes                   | producer side      |
-| `UnboundedMupmuc`  | many | many | lock-free | lock-free | no       | yes                   | both               |
+### Bounded queues
 
-`UnboundedSipsic` is special: with one producer and one consumer the consumer
-is the only freer, so it does not need DEBRA. Every other unbounded variant
-does, because multiple threads can race to detach a segment.
+| Queue    | Producers | Consumers | Push      | Pop       |
+|----------|-----------|-----------|-----------|-----------|
+| `Sipsic` | 1         | 1         | wait-free | wait-free |
+| `Sipmuc` | 1         | many      | wait-free | lock-free |
+| `Mupsic` | many      | 1         | lock-free | wait-free |
+| `Mupmuc` | many      | many      | lock-free | lock-free |
+
+Bounded queues are ring buffers with compile-time capacity. None require a `DebraManager` or per-thread handles.
+
+### Unbounded queues
+
+| Queue              | Producers | Consumers | Push      | Pop       | `DebraManager` | Per-thread handle |
+|--------------------|-----------|-----------|-----------|-----------|----------------|-------------------|
+| `UnboundedSipsic`  | 1         | 1         | wait-free | wait-free | not needed     | not needed        |
+| `UnboundedSipmuc`  | 1         | many      | wait-free | lock-free | required       | consumer side     |
+| `UnboundedMupsic`  | many      | 1         | lock-free | wait-free | required       | producer side     |
+| `UnboundedMupmuc`  | many      | many      | lock-free | lock-free | required       | both              |
+
+`UnboundedSipsic` is special: with one producer and one consumer the consumer is the only thread freeing segments, so it does not need DEBRA. Every other unbounded variant does, because multiple threads can race to detach a segment.
 
 ### Bounded vs unbounded
 
@@ -130,18 +153,13 @@ Unbounded queues are linked segments that grow as needed. Use them when:
 
 ## Thread safety
 
-The one rule that bites first: on `arc` / `orc`, `ref` item types fail to
-compile. Reference counting on those memory managers can fall back to
-spinlocks, which would defeat the lock-free guarantee. Use a value type, a
-`ptr T`, or compile with `-d:allowNonLockFreeQueueItems` if you accept the
-trade-off.
+By design, `lockfreequeues` rejects queues whose item type is `ref T` under arc, orc, or atomicArc. This is intentional: a queue holding `ref` items is not safe under our concurrency model.
 
-The full safety model — slot-ownership typestates, why the queue itself is
-lock-free even when items are not, and the matrix of MM x sanitiser
-combinations under CI — lives in
-[`docs/safety-model.md`](docs/safety-model.md). The typestate transitions are
-documented in
-[`docs/slot-ownership-typestates.md`](docs/slot-ownership-typestates.md).
+Slots are stored in a plain `array[S, T]` and shared across threads. When a producer writes `seg.data[i] = item` and a consumer reads `seg.data[i]`, those assignments fire Nim's `=copy`/`=sink` hooks for ref types, which mutate the refcount on the same object that other threads are reading or writing concurrently. That race exists regardless of whether the underlying refcount itself is atomic — arc's refcount is non-atomic, and even orc/atomicArc's atomic refcount can't make a torn read/write of the slot value safe.
+
+Use a value type, a `ptr T`, or, if you accept the trade-off, compile with `-d:allowNonLockFreeQueueItems` to disable the check.
+
+The full safety model — slot-ownership typestates, why the queue itself is lock-free even when items are not, and the matrix of MM x sanitiser combinations under CI — lives in [`docs/safety-model.md`](docs/safety-model.md). The typestate transitions are documented in [`docs/slot-ownership-typestates.md`](docs/slot-ownership-typestates.md).
 
 ## Benchmarks
 
