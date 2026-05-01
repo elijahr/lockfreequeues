@@ -15,11 +15,17 @@ on:
     paths-ignore:
       - '*.md'
       - '.github/workflows/docs.yml'
+      # Loop-prevention layer 2 of 3 (design §5.X): the snapshot push
+      # writes BMF JSON under docs/assets/bench-results/. paths-ignore
+      # makes the bench job skip any push consisting solely of these
+      # snapshot files, in case [skip ci] is ever stripped manually.
+      - 'docs/assets/bench-results/**'
   push:
     branches: [main, devel]
     paths-ignore:
       - '*.md'
       - '.github/workflows/docs.yml'
+      - 'docs/assets/bench-results/**'
   workflow_dispatch:
     inputs:
       force_skip_boost:
@@ -115,9 +121,19 @@ jobs:
     # design 2.5 for the override table.
     name: ${{ matrix.binary }} (ubuntu-latest)
     runs-on: ubuntu-latest
-    # PRs from forks cannot read BENCHER_API_TOKEN. Skip rather than fail
-    # noisily; maintainer pushes / merges still record the baseline.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # Two combined gates:
+    #   1. PRs from forks cannot read BENCHER_API_TOKEN. Skip rather
+    #      than fail noisily; maintainer pushes / merges still record
+    #      the baseline.
+    #   2. Loop-prevention layer 3 of 3 (design §5.X): the snapshot
+    #      push step (Task 5.5.b) commits as `github-actions[bot]`.
+    #      Even if [skip ci] is stripped AND paths-ignore is somehow
+    #      bypassed, the bot-actor guard short-circuits before the
+    #      job grows any cost.
+    if: |
+      github.actor != 'github-actions[bot]' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
     strategy:
       fail-fast: false
       matrix:
@@ -545,11 +561,22 @@ jobs:
     # single per-slug history (design 1 / Track 1 Task 1.4).
     name: Merge BMF + Bencher upload (ubuntu-latest)
     runs-on: ubuntu-latest
-    # `always()` so a single matrix-leg failure (e.g. one binary timed
-    # out) does not skip the merge+upload; the operator still gets
-    # partial Bencher coverage from the surviving binaries. The fork-PR
-    # guard remains the same.
-    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    # Three combined gates:
+    #   1. `always()` — a single matrix-leg failure (e.g. one binary
+    #      timed out) must not skip the merge+upload; the operator
+    #      still gets partial Bencher coverage from the surviving
+    #      binaries (design's partial-coverage tolerance).
+    #   2. Bot-actor guard (loop-prevention layer 3 of 3): the
+    #      snapshot push step commits as `github-actions[bot]`. Skip
+    #      the upload when the actor is the bot so a snapshot push
+    #      cannot trigger another bench run.
+    #   3. Fork-PR token guard: PRs from forks cannot read
+    #      BENCHER_API_TOKEN; skip rather than fail noisily.
+    if: |
+      always() &&
+      github.actor != 'github-actions[bot]' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
     needs: [bench]
     permissions:
       contents: read
