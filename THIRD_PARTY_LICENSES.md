@@ -68,13 +68,27 @@ vendored into this repository. The benchmark adapter code (under
   and the Nim round-trip suite (`tests/t_bench_adapters.nim` with the
   crossbeam gates).
 
-## Future entries (PR 4 / PR 5)
+## Docs site charting (PR 5)
 
-The following libraries are reserved for future PRs in the bench-rollup
-series; entries will be added when their adapters land:
+The docs site under `docs/` ships an interactive throughput chart
+(`docs/benchmarks.md`) that renders via the vendored uPlot bundle
+below. The chart wiring (`docs/assets/bench-charts.js` +
+`docs/assets/bench-charts.css`) is original `lockfreequeues` source
+and inherits the project's MIT license.
 
-- **uPlot** — bundled at `docs/assets/uplot-<version>.iife.min.js` for
-  the docs chart page, MIT. Tracked in design doc §3 (PR 5).
+### uPlot
+
+- **Source:** https://github.com/leeoniya/uPlot
+- **Version:** `1.6.27`
+- **License:** MIT
+- **Vendored at:** `docs/assets/uplot-1.6.27.iife.min.js`
+- **Upgrade procedure:** download the new IIFE bundle from
+  `https://cdn.jsdelivr.net/npm/uplot@<new-version>/dist/uPlot.iife.min.js`,
+  rename the file with the new version suffix, update the
+  `<script src=...>` reference in `docs/benchmarks.md`, update the
+  `Version:` field above, and verify SHA-256 against jsdelivr's
+  package metadata (`https://data.jsdelivr.com/v1/package/npm/uplot@<new-version>`).
+  Delete the old version's file in the same commit.
 
 ## Comparison expansion libraries (PR 4)
 

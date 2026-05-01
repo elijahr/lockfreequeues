@@ -1,3 +1,10 @@
 # Vendored third-party sources are excluded from GitHub language stats
 # and code-search noise per design doc §4.6.
-benchmarks/vendor/**           linguist-vendored=true linguist-generated=true
+benchmarks/vendor/**             linguist-vendored=true linguist-generated=true
+docs/assets/uplot-*.js           linguist-vendored=true linguist-generated=true
+# Auto-emitted BMF snapshots (Track 5 PR 5 Task 5.5.b). Marked
+# `linguist-generated=true` so they do not skew GitHub's language
+# stats or appear in code-search noise. NOT marked `linguist-vendored`
+# because they are produced by our own CI, not imported from a
+# third-party project.
+docs/assets/bench-results/*.json linguist-generated=true
