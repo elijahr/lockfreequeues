@@ -166,24 +166,134 @@ type
     seenAll*: int
     seenBody*: int
     rng*: Rand
+    debugMode*: bool       ## when true, every `record` also appends
+                           ## the value to `debugAll` and `percentile`
+                           ## reads from there for an exact answer.
     debugAll*: seq[float]
 
 proc initHistogram*(debug: bool = false): Histogram =
-  ## Construct an empty Histogram. `debug=true` populates `debugAll` so
-  ## `percentile` returns the exact sort answer (used by tests).
-  raiseAssert "not implemented"
+  ## Construct an empty Histogram. `debug=true` puts the histogram in
+  ## debug mode: every `record` call also appends to `debugAll`, and
+  ## `percentile` returns the exact sort answer over `debugAll` instead
+  ## of the heap+reservoir estimator. Used by tests / smoke checks.
+  result.topKHeap = initHeapQueue[float]()
+  result.reservoir = newSeqOfCap[float](HistogramReservoir)
+  result.seenAll = 0
+  result.seenBody = 0
+  # Deterministic seed makes the reservoir reproducible per-Histogram.
+  # Callers needing fresh randomness can re-seed via
+  # `h.rng = initRand(<seed>)` after construction.
+  result.rng = initRand(0xBA5EBA11'i64)
+  result.debugMode = debug
+  result.debugAll = @[]
+
+proc reservoirAdmit(h: var Histogram, value: float) =
+  ## Algorithm R reservoir admission. `seenBody` counts every body
+  ## sample (admitted or not) and drives the replacement probability.
+  inc h.seenBody
+  if h.reservoir.len < HistogramReservoir:
+    h.reservoir.add(value)
+  else:
+    # Replace at random index with probability HistogramReservoir/seenBody.
+    let j = h.rng.rand(h.seenBody - 1)
+    if j < HistogramReservoir:
+      h.reservoir[j] = value
 
 proc record*(h: var Histogram, value: float) =
-  ## Insert a sample. O(log K) amortized.
-  raiseAssert "not implemented"
+  ## Insert a sample.
+  ##
+  ## Top-K: maintain a min-heap of the K largest values.
+  ##   - heap.len < K            -> push.
+  ##   - else value > heap[0]    -> replace (evicts smallest of top-K
+  ##                                 into the body bucket via
+  ##                                 reservoirAdmit).
+  ##   - else                    -> reservoirAdmit(value).
+  ##
+  ## Body: Algorithm R reservoir of size R = HistogramReservoir.
+  ##
+  ## In debug mode we additionally store every value in `debugAll` so
+  ## `percentile` returns an exact answer.
+  inc h.seenAll
+  if h.debugMode:
+    h.debugAll.add(value)
+
+  if h.topKHeap.len < HistogramTopK:
+    h.topKHeap.push(value)
+  elif value > h.topKHeap[0]:
+    # `replace` returns the evicted minimum.
+    let evicted = h.topKHeap.replace(value)
+    reservoirAdmit(h, evicted)
+  else:
+    reservoirAdmit(h, value)
 
 proc topK*(h: Histogram): seq[float] =
-  ## Return the top-K samples sorted ascending.
-  raiseAssert "not implemented"
+  ## Return the top-K samples sorted ascending. Reads the heap by
+  ## copy + sort so the original heap is untouched.
+  var copy = h.topKHeap
+  result = newSeqOfCap[float](copy.len)
+  while copy.len > 0:
+    result.add(copy.pop())  # min-heap pop -> ascending order
 
 proc percentile*(h: Histogram, p: float): float =
-  ## Estimate the p-th percentile per the lookup rule in design 2.1.
-  raiseAssert "not implemented"
+  ## Estimate the p-th percentile.
+  ##
+  ## Lookup rule (design 2.1, with stratified-estimator math):
+  ##   debug mode                                  -> exact sort(debugAll)
+  ##   p == 1.0                                    -> top-K max
+  ##   target rank in top-K stratum                -> top-K rank lookup
+  ##                       (i.e. seenAll*(1-p) <= heap.len)
+  ##   else                                        -> reservoir, with the
+  ##     percentile rescaled to the body stratum: p_body = (p*seenAll - K)
+  ##     / (seenAll - K). The reservoir samples uniformly from the body,
+  ##     so the rescaled percentile is unbiased.
+  ##
+  ## Worked example (K=1000, seenAll=100_000):
+  ##   p=0.99, target rank 99_000. Top-K covers ranks 99_001..100_000
+  ##     (count K=1000), so target is in the body stratum at the very
+  ##     top edge. p_body = (99_000 - 0) / 99_000 = 1.0 -> reservoir max.
+  ##   p=0.999, target rank 99_900. Tail count = 100. <= heap.len -> top-K.
+  ##   p=1.0, max -> top-K.
+  ##   p=0.50, target rank 50_000 -> body, p_body = 50_000/99_000 ≈ 0.505.
+  if h.debugMode:
+    return percentile(h.debugAll, p)
+  if h.seenAll == 0:
+    return 0.0
+  let pc = max(0.0, min(1.0, p))
+  let topkLen = h.topKHeap.len
+
+  if pc == 1.0:
+    if topkLen == 0: return 0.0
+    let topk = h.topK()
+    return topk[^1]
+
+  # Total samples that ARE in the top-K stratum is exactly `topkLen`
+  # (heap fills up to K; before that, every sample is "in top-K" trivially).
+  # Tail count = number of samples >= target. If tail <= topkLen, the
+  # target lies in the top-K stratum.
+  let tailCount = float(h.seenAll) * (1.0 - pc)
+
+  if tailCount <= float(topkLen):
+    # Top-K rank lookup. topk sorted ascending, length topkLen.
+    # Target is the (topkLen - tailCount)-th element (0-based).
+    let topk = h.topK()
+    let pos = float(topkLen) - tailCount
+    let lo = max(0, int(floor(pos)))
+    let hi = min(lo + 1, topk.len - 1)
+    let frac = pos - float(lo)
+    return topk[lo] + frac * (topk[hi] - topk[lo])
+
+  # Body-stratum lookup with rescaling. body samples = seenAll - topkLen.
+  # Target body-rank = pc * seenAll  (since top-K is at the high end and
+  # contributes topkLen items above the body).
+  let bodySize = h.seenAll - topkLen
+  if bodySize <= 0 or h.reservoir.len == 0:
+    # All samples ended up in top-K. Fall back to top-K percentile.
+    let topk = h.topK()
+    if topk.len == 0: return 0.0
+    return percentile(topk, pc)
+  let pBody = (pc * float(h.seenAll)) / float(bodySize)
+  let pBodyClamped = max(0.0, min(1.0, pBody))
+  return percentile(h.reservoir, pBodyClamped)
 
 # ---------- Latency harness ----------
 

@@ -160,3 +160,67 @@ suite "bench_common Stats":
     for i in 0 .. 99: data.add(float(i))
     check percentile(data, 0.0) == 0.0
     check percentile(data, 1.0) == 99.0
+
+# ---------- Task 0.3: Histogram ----------
+
+import std/[math, random]
+
+proc generateLogNormal(n: int, seed: int64): seq[float] =
+  ## Deterministic log-normal-ish samples. We use exp(N(0,1)) modeled
+  ## via Box-Muller from a seeded RNG so the test is reproducible.
+  var r = initRand(seed)
+  result = newSeq[float](n)
+  var i = 0
+  while i < n:
+    # Box-Muller: two uniforms -> two standard normals.
+    let u1 = r.rand(1.0)
+    let u2 = r.rand(1.0)
+    if u1 == 0.0: continue
+    let mag = sqrt(-2.0 * ln(u1))
+    let z0 = mag * cos(2.0 * PI * u2)
+    let z1 = mag * sin(2.0 * PI * u2)
+    result[i] = exp(z0)
+    if i + 1 < n: result[i + 1] = exp(z1)
+    i += 2
+
+suite "bench_common Histogram":
+  test "percentile(1.0) equals top-K max":
+    var h = initHistogram()
+    for v in [1.0, 5.0, 3.0, 99.0, 7.0, 42.0]:
+      h.record(v)
+    check h.percentile(1.0) == 99.0
+
+  test "p99 within 1% of sort fallback on 100K log-normal samples":
+    let samples = generateLogNormal(100_000, 0xC0FFEE'i64)
+    let exact = percentile(samples, 0.99)
+    var h = initHistogram()
+    for v in samples: h.record(v)
+    let approx = h.percentile(0.99)
+    let relErr = abs(approx - exact) / exact
+    check relErr < 0.01
+
+  test "p50 reads from reservoir and is close to sort-fallback":
+    let samples = generateLogNormal(100_000, 0xBEEF'i64)
+    let exact = percentile(samples, 0.50)
+    var h = initHistogram()
+    for v in samples: h.record(v)
+    let approx = h.percentile(0.50)
+    # Reservoir is a uniform sample of 99K of 100K — within 5% on a
+    # well-behaved log-normal.
+    let relErr = abs(approx - exact) / exact
+    check relErr < 0.05
+
+  test "debug mode returns exact sort answer":
+    var h = initHistogram(debug = true)
+    for v in [1.0, 5.0, 3.0, 99.0, 7.0, 42.0]:
+      h.record(v)
+    # Sorted: [1, 3, 5, 7, 42, 99]; len 6. percentile(0.99) on [..]:
+    # linear interp index = 0.99 * 5 = 4.95
+    # data[4] + 0.95 * (data[5]-data[4]) = 42 + 0.95 * 57 = 42 + 54.15 = 96.15
+    check abs(h.percentile(0.99) - 96.15) < 1e-9
+
+  test "topK of small sample returns sorted ascending":
+    var h = initHistogram()
+    for v in [9.0, 1.0, 5.0, 3.0, 7.0]:
+      h.record(v)
+    check h.topK() == @[1.0, 3.0, 5.0, 7.0, 9.0]
