@@ -72,6 +72,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   + throughput measures on shared per-slug histories. (Multiple
   `bencher run` invocations create separate Bencher Reports and would
   NOT co-locate measures — see merge rationale in design 1.)
+- Four new topology-split throughput binaries replacing the legacy
+  `bench_throughput.nim` (PR 2):
+  `benchmarks/nim/bench_spsc.nim` (Sipsic 1p1c),
+  `benchmarks/nim/bench_mpsc.nim` (Mupsic {1,2,4}p1c),
+  `benchmarks/nim/bench_mpmc.nim` (Mupmuc {1,2,4}p{1,2,4}c plus 8p8c
+    oversubscription, Sipmuc 1p{1,2,4}c, Nim channels {1,2,4}p{1,2,4}c),
+  `benchmarks/nim/bench_unbounded.nim` (all four lockfreequeues
+    unbounded variants at their natural shapes).
+  Each emits BMF JSON via `--bmf-out=<path>` with the same per-slug
+  `throughput_ops_ms` shape as the prior binary. Each owns its own
+  per-binary intdefines (`-d:BenchSpscRuns/MessageCount/Warmup`,
+  `-d:BenchMpscRuns/...`, `-d:BenchMpmcRuns/...`, plus four pairs of
+  `-d:Unbounded<Variant>Runs/MessageCount` per design 2.5) so CI can
+  budget each topology independently.
+- New `benchmarks/scripts/superset_check.py`: slug-set deletion-safety
+  guard that exits 0 when the post-split BMF covers every slug in the
+  pre-split fixture (`tests/fixtures/pre-split-slugs.json`) and
+  exits 1 with the missing slugs alpha-listed on stderr otherwise.
+  Run by `bench-upload` immediately after `merge_bmf.py` so any
+  silent slug regression introduced by future edits to the topology
+  binaries fails the PR check. Covered by 9 unit tests in
+  `benchmarks/tests/test_superset_check.py`.
+- `benchmarks/tests/test_merge_bmf.py` gains `test_five_input_union`
+  covering the upload-job pipeline shape: 5 sibling fragments (one per
+  topology binary) merged via `merge_bmf.py` produce a single output
+  whose slug set is the disjoint union, with shared slugs carrying
+  measures from every input binary.
 
 ### Changed
 
@@ -105,6 +132,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `runThroughputHarness` without per-call-site type conversion. No
   external API change: legacy callers that imported `./adapter` for
   `PushResult` / `PopResult` continue to compile (PR 1).
+- `.github/workflows/bench.yml` now runs the five topology-split
+  binaries (`bench_spsc`, `bench_mpsc`, `bench_mpmc`, `bench_unbounded`,
+  `bench_latency`) as a GitHub Actions matrix instead of the legacy
+  pair of bench-throughput / bench-latency jobs. Each matrix entry
+  has its own `timeout-minutes: 12` budget so a hang in one binary
+  cannot burn the entire workflow's clock; the surviving binaries
+  finish, the bench-upload job merges what arrived, and the operator
+  gets partial Bencher coverage rather than no coverage. The
+  bench-upload job now also runs the `superset_check.py` deletion-
+  safety guard between `merge_bmf.py` and `bencher run` (PR 2).
+- `benchmarks/runner.py` and `lockfreequeues.nimble` `task benchmarks`
+  iterate the five topology-split binaries and merge their fragments
+  via `merge_bmf.py` (PR 2).
+- `benchmarks/README.md` rewritten to describe the 5-binary pipeline
+  (matrix CI job, per-binary intdefines, deletion-safety guard, the
+  merged BMF schema where one slug can carry both throughput and
+  latency measures) (PR 2).
 
 ### Removed
 
@@ -116,6 +160,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `benchmarks/nim/bench_main.nim` — aggregator binary that wrapped
   bench_throughput + bench_latency and produced a custom JSON shape.
   `bench_throughput` is now the canonical entry point.
+- `benchmarks/nim/bench_throughput.nim` — single multi-topology
+  throughput driver, replaced by the four topology-split binaries
+  `bench_spsc`, `bench_mpsc`, `bench_mpmc`, and `bench_unbounded`.
+  The pre-split slug fixture committed at
+  `tests/fixtures/pre-split-slugs.json` plus the `superset_check.py`
+  guard wired into bench.yml enforces that no slug from the legacy
+  binary silently disappears across the split (PR 2).
 
 ## [4.1.0] - 2026-05-01
 
