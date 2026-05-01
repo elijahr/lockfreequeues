@@ -77,3 +77,25 @@ when defined(adapter_boost_lockfree_spsc_available):
           makeBoostLockfreeSpscAdapter[uint64](capacity = 4096),
           cleanup(adapter)
         )
+
+when defined(adapter_crossbeam_array_queue_available):
+  import ../benchmarks/nim/adapters/crossbeam_array_queue_adapter
+  import ../benchmarks/nim/adapter
+
+  suite "crossbeam_array_queue_adapter":
+    test "push/pop 1000 uint64 round-trip preserves set":
+      runRoundTrip[CrossbeamArrayQueueAdapter[uint64]](
+        makeCrossbeamArrayQueueAdapter[uint64](capacity = 4096),
+        cleanup(adapter)
+      )
+
+when defined(adapter_crossbeam_seg_queue_available):
+  import ../benchmarks/nim/adapters/crossbeam_seg_queue_adapter
+  import ../benchmarks/nim/adapter
+
+  suite "crossbeam_seg_queue_adapter":
+    test "push/pop 1000 uint64 round-trip preserves set":
+      runRoundTrip[CrossbeamSegQueueAdapter[uint64]](
+        makeCrossbeamSegQueueAdapter[uint64](),
+        cleanup(adapter)
+      )
