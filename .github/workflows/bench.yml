@@ -76,11 +76,6 @@ jobs:
       - name: Vendor unittest2
         run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
 
-      - name: Run adapter unit tests
-        # Cheap pre-flight: fail fast if the parser itself is broken before
-        # spending minutes compiling and running the bench binary.
-        run: python3 benchmarks/test_bmf_adapter.py -v
-
       - name: Compile bench_throughput (CI-tuned run shape)
         # Cloud runs use a tighter wall-clock budget than the local default
         # (1M messages × 33 runs). Bounded variants (sipsic, channels) use
@@ -113,14 +108,23 @@ jobs:
         # Step-level timeout: if any single variant hangs, fail fast inside
         # the 30-min job budget so Bencher upload steps still run (or are
         # visibly skipped) instead of burning the entire budget on one variant.
+        # `--bmf-out=throughput.json` emits Bencher Metric Format JSON
+        # natively (Task 0.10); the legacy stdout->bmf_adapter.py regex
+        # parser is gone (Task 0.12).
         timeout-minutes: 20
-        run: ./.tmp/bench_throughput sipsic mupmuc unbounded_mupsic channels | tee bench_output.txt
+        run: |
+          ./.tmp/bench_throughput --bmf-out=throughput.json \
+            sipsic mupmuc unbounded_mupsic channels | tee bench_output.txt
 
-      - name: Convert to BMF JSON
-        run: python3 benchmarks/bmf_adapter.py bench_output.txt bench_results.json
+      - name: Merge BMF JSON
+        # Single-input merge today, but the bench-rollup feature splits
+        # bench_throughput into per-topology binaries in PR 2-4 each
+        # producing its own throughput.json fragment. Calling merge_bmf.py
+        # now keeps the workflow unchanged when those fragments arrive.
+        run: python3 benchmarks/merge_bmf.py merged.json throughput.json
 
       - name: Show BMF JSON (debug)
-        run: cat bench_results.json
+        run: cat merged.json
 
       - name: Install Bencher CLI
         uses: bencherdev/bencher@main
@@ -132,7 +136,7 @@ jobs:
         # silently appearing to "do nothing" with the data.
         run: |
           if [ -z "$BENCHER_API_TOKEN" ]; then
-            echo "::warning title=Bencher upload skipped::BENCHER_API_TOKEN secret is not set on this repo. The bench ran successfully and produced bench_results.json (visible in the 'Show BMF JSON (debug)' step), but no data is being uploaded to Bencher.dev. Set up the project at bencher.dev with slug 'lockfreequeues' and add BENCHER_API_TOKEN as a repo secret to enable upload."
+            echo "::warning title=Bencher upload skipped::BENCHER_API_TOKEN secret is not set on this repo. The bench ran successfully and produced merged.json (visible in the 'Show BMF JSON (debug)' step), but no data is being uploaded to Bencher.dev. Set up the project at bencher.dev with slug 'lockfreequeues' and add BENCHER_API_TOKEN as a repo secret to enable upload."
           else
             echo "Bencher token present; proceeding with upload."
           fi
@@ -151,7 +155,7 @@ jobs:
             --start-point-reset \
             --testbed ubuntu-latest \
             --adapter json \
-            --file bench_results.json \
+            --file merged.json \
             --github-actions '${{ secrets.GITHUB_TOKEN }}' \
             --err
 
@@ -170,7 +174,7 @@ jobs:
             --threshold-lower-boundary 0.99 \
             --thresholds-reset \
             --adapter json \
-            --file bench_results.json \
+            --file merged.json \
             --github-actions '${{ secrets.GITHUB_TOKEN }}' \
             --err
 
@@ -184,4 +188,4 @@ jobs:
             --branch "${GITHUB_REF##*/}" \
             --testbed ubuntu-latest \
             --adapter json \
-            --file bench_results.json
+            --file merged.json
