@@ -36,9 +36,10 @@
 
 import ./atomic_dsl
 import ./backoff
+import ./internal/aligned_alloc
 import std/options
 import std/typetraits
-from system/ansi_c import c_calloc, c_free
+from system/ansi_c import c_free
 
 import debra
 
@@ -66,10 +67,12 @@ else:
 type
   Segment[S: static int, T] = object ## A fixed-size segment in the linked list.
     data: array[S, T]
-    next: Atomic[ptr Segment[S, T]]
-    tail: Atomic[int] # CAS coordination for producers
+    next {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
+    tail {.align: CacheLineBytes.}: Atomic[int]
+      # CAS coordination for producers
     head: int # Consumer read position within segment (single consumer, no atomic)
-    committed: array[S, Atomic[bool]] # Track which slots are ready to read
+    committed {.align: CacheLineBytes.}: array[S, Atomic[bool]]
+      # Track which slots are ready to read
 
   UnboundedMupsic*[S: static int, T; MaxThreads: static int] = object
     ## Unbounded MPSC queue using linked segments.
@@ -78,8 +81,10 @@ type
     ## - T: Data type.
     ## - MaxThreads: Maximum number of threads (compile-time constant).
     manager: ptr DebraManager[MaxThreads]
-    headSegment: Atomic[ptr Segment[S, T]] # Consumer reads from here
-    tailSegment: Atomic[ptr Segment[S, T]] # Producers write here (atomic for CAS)
+    headSegment {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
+      # Consumer reads from here
+    tailSegment {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
+      # Producers write here (atomic for CAS)
     strategy: DeallocationStrategy
     handle: ThreadHandle[MaxThreads] # Consumer's handle (single consumer)
     itemCount: Atomic[int] # Total items in queue
@@ -100,10 +105,9 @@ type
     handle: ThreadHandle[MaxThreads] # Each producer has its own handle
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
-  ## Allocate a new segment via libc calloc (zero-initialized, truly shared).
-  result = cast[ptr Segment[S, T]](c_calloc(1.csize_t, sizeof(Segment[S, T]).csize_t))
-  if result == nil:
-    raise newException(OutOfMemDefect, "newSegment: c_calloc returned nil")
+  ## Allocate a new segment on a CacheLineBytes boundary so the
+  ## ``{.align.}`` pragmas above land on distinct physical cache lines.
+  result = allocAligned[Segment[S, T]]()
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
   result.head = 0

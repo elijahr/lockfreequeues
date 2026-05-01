@@ -12,12 +12,22 @@
 ## and false-shares with whatever neighbours the heap happens to place
 ## adjacent.
 ##
-## Compile probe verified at impl-plan time (Task 3.2.0): ``std/posix`` exports
-## ``posix_memalign`` on both macOS (libSystem) and Linux glibc with the same
-## C signature ``int posix_memalign(void**, size_t, size_t)``. Allocation
-## returns 64-byte aligned memory and ``rc == 0`` on success.
+## Compile probe verified at impl-plan time (Task 3.2.0): the C
+## ``posix_memalign`` from ``<stdlib.h>`` is callable from both ``nim c`` and
+## ``nim cpp`` on macOS (libSystem) and Linux glibc, returning 64-byte
+## aligned memory and ``rc == 0`` on success.
+##
+## Note: ``std/posix.posix_memalign`` was the first candidate, but on macOS
+## the Apple SDK declares the first parameter with the
+## ``__unsafe_indexable`` attribute under C++, which the Nim wrapper does
+## not match — ``nim cpp`` then fails with
+## "cannot convert argument of incomplete type 'void *' to 'void **'".
+## The local importc shim below uses the canonical C signature, which
+## clang accepts in both C and C++ modes.
 
-import std/posix
+proc posix_memalign(
+    memptr: ptr pointer, alignment: csize_t, size: csize_t
+): cint {.importc, header: "<stdlib.h>".}
 
 import ../atomic_dsl
 export CacheLineBytes

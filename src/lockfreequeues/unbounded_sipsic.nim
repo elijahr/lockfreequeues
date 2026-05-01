@@ -16,32 +16,35 @@
 ## ```
 
 import ./atomic_dsl
+import ./internal/aligned_alloc
 import std/options
 import std/typetraits
-from system/ansi_c import c_calloc, c_free
+from system/ansi_c import c_free
 
 type
   Segment*[S: static int, T] = object
     data*: array[S, T]
-    next*: Atomic[ptr Segment[S, T]]
-    head*: Atomic[int]
-    tail*: Atomic[int]
+    next* {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
+    head* {.align: CacheLineBytes.}: Atomic[int]
+    tail* {.align: CacheLineBytes.}: Atomic[int]
 
   UnboundedSipsic*[S: static int, T] = object
     ## Unbounded SPSC queue using linked segments.
     ##
     ## - S: Segment size (compile-time constant).
     ## - T: Data type.
-    headSegment: Atomic[ptr Segment[S, T]] # Consumer reads from here
-    tailSegment: Atomic[ptr Segment[S, T]] # Producer writes here
+    headSegment {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
+      # Consumer reads from here
+    tailSegment {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
+      # Producer writes here
     itemCount: Atomic[int] # Total items in queue
     segments: Atomic[int] # Number of segments
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
-  ## Allocate a new segment via libc calloc (zero-initialized, truly shared).
-  result = cast[ptr Segment[S, T]](c_calloc(1.csize_t, sizeof(Segment[S, T]).csize_t))
-  if result == nil:
-    raise newException(OutOfMemDefect, "newSegment: c_calloc returned nil")
+  ## Allocate a new segment on a CacheLineBytes boundary so the
+  ## ``{.align.}`` pragmas above land on distinct physical cache lines
+  ## rather than sharing the 16-byte-aligned base that ``c_calloc`` returns.
+  result = allocAligned[Segment[S, T]]()
   result.next.store(nil, moRelaxed)
   result.head.store(0, moRelaxed)
   result.tail.store(0, moRelaxed)
