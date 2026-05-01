@@ -261,11 +261,50 @@ nim c -r -d:release -d:danger --threads:on \
 ```bash
 python3 -m unittest benchmarks.tests.test_merge_bmf -v
 python3 -m unittest benchmarks.tests.test_superset_check -v
+python3 -m unittest benchmarks.tests.test_bench_charts_contract -v
 ```
 
 The tests use only the Python standard library (`unittest`) and run in
 under a second. They cover slug regex enforcement, measure regex
 enforcement, collision detection (with both colliding files named in
 stderr), alpha-sorted output, 5-input union (one fragment per
-topology binary), and the deletion-safety contract enforced by
-`superset_check.py`.
+topology binary), the deletion-safety contract enforced by
+`superset_check.py`, and the BMF-shape contract that
+`docs/assets/bench-charts.js` depends on (Track 5 PR 5).
+
+## Updating the README summary
+
+The four-row summary inside the `<!-- BENCHMARKS:start -->` /
+`<!-- BENCHMARKS:end -->` markers in the project root `README.md` is
+hand-curated at release prep, NOT auto-rendered. The "always fresh"
+promise lives at the chart page
+(<https://elijahr.github.io/lockfreequeues/latest/benchmarks/>); the
+README values may lag by up to one release cycle.
+
+**Procedure (run once per release PR):**
+
+1. Open the latest devel snapshot at
+   <https://elijahr.github.io/lockfreequeues/dev/benchmarks/>.
+2. Read the throughput chart for these four shapes:
+   - `lockfreequeues_sipsic/spsc/1p1c`
+   - `lockfreequeues_sipmuc/mpmc/1p2c`
+   - `lockfreequeues_mupsic/mpsc/2p1c`
+   - `lockfreequeues_mupmuc/mpmc/2p2c`
+3. Edit `README.md` between the BENCHMARKS markers, replacing the four
+   `_to be filled at next release_` cells with the rounded throughput
+   values (one decimal). Keep the table layout unchanged.
+4. Commit the edit on the release branch as part of the release prep
+   commit (CHANGELOG bump + version bump + README refresh).
+
+Why hand-curated rather than auto-published: the README is the first
+artefact most consumers see, so a regression on a noisy CI run should
+NOT silently update it. The chart page absorbs run-to-run noise; the
+README intentionally captures only the most recent release's headline
+numbers.
+
+The previous auto-render path (`benchmarks/render_readme.nim`,
+removed in PR 5 of the bench-rollup) consumed the merged BMF JSON and
+rewrote the markers in place. It was deleted because the "live"
+audience now goes to the chart page, and the four-row README summary
+is small enough that hand curation is faster than maintaining a
+renderer.
