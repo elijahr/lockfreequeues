@@ -98,7 +98,7 @@ jobs:
           - bench_mpmc
           - bench_unbounded
           - bench_latency
-    timeout-minutes: 12
+    timeout-minutes: 18
 
     steps:
       - name: Restore cache
@@ -141,11 +141,14 @@ jobs:
         # Per-binary -d: overrides mirror the design 2.5 CI override
         # column. Bounded throughput binaries: 1M messages × 5 runs ×
         # 2 warmup; cheap, single-digit seconds total. bench_unbounded
-        # uses 500K × 3 × 2 because its backing memory pool grows with
-        # messageCount and the super-linear path needs a tighter budget
-        # to fit 12 min on the 4×4 mupmuc grid. bench_latency keeps PR
-        # 1's tighter shape (50K × 11 × 2) because each ping-pong RTT
-        # records exactly one sample, so 1M messages would never fit.
+        # uses a tighter shape — sipsic 200K×3, sipmuc/mupsic 100K×2,
+        # mupmuc 50K×2 — because the 16-shape total (1+3+3+9) plus
+        # oversubscribed shapes like 1p4c on 4-vCPU runners exhausts
+        # the budget at higher N. The mupmuc 9-shape grid dominates
+        # the wall clock so it gets the deepest cut. bench_latency
+        # keeps PR 1's tighter shape (50K × 11 × 2) because each
+        # ping-pong RTT records exactly one sample, so 1M messages
+        # would never fit.
         run: |
           set -eu
           case "${{ matrix.binary }}" in
@@ -172,15 +175,15 @@ jobs:
               ;;
             bench_unbounded)
               nim c -d:release -d:danger --threads:on \
-                -d:UnboundedSipsicMessageCount=500000 \
+                -d:UnboundedSipsicMessageCount=200000 \
                 -d:UnboundedSipsicRuns=3 \
-                -d:UnboundedSipmucMessageCount=500000 \
-                -d:UnboundedSipmucRuns=3 \
-                -d:UnboundedMupsicMessageCount=500000 \
-                -d:UnboundedMupsicRuns=3 \
-                -d:UnboundedMupmucMessageCount=500000 \
-                -d:UnboundedMupmucRuns=3 \
-                -d:BenchUnboundedWarmup=2 \
+                -d:UnboundedSipmucMessageCount=100000 \
+                -d:UnboundedSipmucRuns=2 \
+                -d:UnboundedMupsicMessageCount=100000 \
+                -d:UnboundedMupsicRuns=2 \
+                -d:UnboundedMupmucMessageCount=50000 \
+                -d:UnboundedMupmucRuns=2 \
+                -d:BenchUnboundedWarmup=1 \
                 benchmarks/nim/bench_unbounded.nim
               ;;
             bench_latency)
