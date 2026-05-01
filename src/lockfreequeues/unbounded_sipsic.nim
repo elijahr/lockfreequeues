@@ -58,9 +58,9 @@ proc newUnboundedSipsic*[S: static int, T](): UnboundedSipsic[S, T] =
         {.
           error:
             "Queue item type '" & $T & "' is a ref type. " &
-            "On arc/orc, ref types use spinlock-based atomic operations for reference counting. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks mutate the refcount on the same object multiple threads can read or write, which is a race regardless of whether the refcount itself is atomic. " &
             "Use a lock-free type (int, pointer, ptr T, etc.) or compile with " &
-            "-d:allowNonLockFreeQueueItems to explicitly allow spinlock fallback."
+            "-d:allowNonLockFreeQueueItems to explicitly allow it."
         .}
 
   # Start with one segment
@@ -88,6 +88,7 @@ proc push*[S: static int, T](self: var UnboundedSipsic[S, T], item: T) =
         {.
           error:
             "Queue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks mutate the refcount on the same object multiple threads can read or write, which is a race regardless of whether the refcount itself is atomic. " &
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
@@ -128,6 +129,7 @@ proc pop*[S: static int, T](self: var UnboundedSipsic[S, T]): Option[T] =
         {.
           error:
             "Queue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks mutate the refcount on the same object multiple threads can read or write, which is a race regardless of whether the refcount itself is atomic. " &
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 

@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-05-01
+
+### Added
+
+- **Auto-create constructors for unbounded MP/SP variants.** `newUnboundedMupmuc[S, T, MaxThreads](strategy)`, `newUnboundedSipmuc[S, T, MaxThreads](strategy)`, and `newUnboundedMupsic[S, T, MaxThreads](strategy)` (the last auto-registers the caller as the consumer). Each heap-allocates a private `DebraManager` owned by the queue; teardown happens inside the queue's `=destroy` after segment cleanup. The existing explicit-manager API (`addr manager`) is preserved for multi-queue setups that share a manager.
+- **Auto-register `getProducer()` / `getConsumer()` overloads.** No-arg variants that call `registerThread` internally. Each call consumes one thread slot; threads using multiple queues with a shared manager should prefer the explicit-handle overloads.
+- **Bidirectional client refcount on `DebraManager`** (via `nim-debra >= 0.5.0`). Queue constructors call `bindClient`; `=destroy` calls `unbindClient`. The manager's destructor asserts `clientCount == 0`, catching the case where a shared manager is destroyed before its queues.
+
+### Changed
+
+- Bump minimum `debra` to 0.5.0.
+- Bump minimum `typestates` to 0.6.0.
+- `src/lockfreequeues/atomic_dsl.nim` no longer defines a local `compareExchange` shim — it's now provided by `debra/atomics`.
+
+### Documentation
+
+- `README.md` "Thread safety" section rewritten with the correct explanation of why `ref` items are rejected (`=copy`/`=sink` hooks race on slot refcounts in the shared `array[S, T]`), replacing the prior incorrect spinlock claim.
+- "Choosing a queue" table split into separate Bounded and Unbounded tables for better rendering.
+- The same `{.error.}` strings inside `unbounded_*.nim` were updated to match.
+
+### Fixed
+
+- `docs/api/epoch.md` removed (referenced a module extracted into `nim-debra`); was breaking the `mkdocs build` step in the docs deploy workflow.
+- `.github/workflows/docs.yml` triggers extended to include `devel` branch and `workflow_dispatch`.
+
 ## [4.0.0] - 2026-04-30
 
 ### BREAKING

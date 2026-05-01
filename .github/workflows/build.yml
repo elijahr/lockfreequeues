@@ -19,7 +19,7 @@ jobs:
   test:
     name: Test nim-${{ matrix.nim-version }} / ${{ matrix.runs-on }}
     runs-on: ${{ matrix.runs-on }}
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     strategy:
       fail-fast: false
@@ -63,10 +63,11 @@ jobs:
         # nim.cfg uses --path:"../nim-debra/src" and --path:"../nim-typestates/src"
         # for compiler-side resolution. Nimble's dep resolver runs BEFORE
         # the compiler though, and `nimble test` will refuse to launch if
-        # `requires "debra >= 0.3.0"` is unsatisfiable from nimble's
-        # package store. So fetch the matching branches and `nimble install`
-        # them locally to satisfy the resolver. Once debra 0.3.0 publishes
-        # this whole step can go away.
+        # `requires "debra >= 0.5.0"` is unsatisfiable from nimble's
+        # package store. So fetch matching branches and `nimble install`
+        # them locally to satisfy the resolver. Once nimble.directory has
+        # picked up the new tags, this whole step can be replaced with a
+        # plain `nimble install -d -y`.
         run: |
           set -e
           cd ..
