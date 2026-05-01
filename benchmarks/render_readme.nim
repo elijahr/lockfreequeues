@@ -8,6 +8,15 @@
 ##   nim r benchmarks/render_readme.nim
 ##
 ## Idempotent: running it twice produces the same output.
+##
+## PR 0 (bench-rollup, Task 0.13) switched the input from the legacy
+## `bench_main` aggregator JSON (`{results: [{...}], metadata: {...}}`)
+## to native Bencher Metric Format JSON
+## (`{slug: {measure: {value, lower_value?, upper_value?}}}`) emitted by
+## `bench_throughput --bmf-out` (Task 0.10) and merged via merge_bmf.py
+## (Task 0.7). The slug shape is `<library>/<topology>/<P>p<C>c`; this
+## file walks the slug to recover the (impl, thread_config) pair the
+## table renders.
 
 import std/[json, os, strformat, strutils, algorithm]
 
@@ -66,27 +75,64 @@ proc renderTable(rows: seq[Row], meta: JsonNode): string =
     "from `benchmarks/results/latest.json`._"
   result = lines.join("\n") & "\n"
 
+proc parseSlug(slug: string): tuple[impl, threads: string, ok: bool] =
+  ## Split `<library>/<topology>/<P>p<C>c` into (library, "<P>P/<C>C").
+  ## Returns ok=false if the slug shape does not match.
+  ##
+  ## Example: "lockfreequeues_sipsic/spsc/1p1c" -> ("lockfreequeues_sipsic", "1P/1C", true)
+  let parts = slug.split('/')
+  if parts.len != 3:
+    return ("", "", false)
+  let shape = parts[2]
+  let pIdx = shape.find('p')
+  let cIdx = shape.find('c')
+  if pIdx <= 0 or cIdx <= pIdx + 1 or cIdx != shape.high:
+    return ("", "", false)
+  let producers = shape[0 ..< pIdx]
+  let consumers = shape[pIdx + 1 ..< cIdx]
+  # Validate digits — keep this strict so `mpsc_unbounded`-suffixed
+  # slugs (which have a non-digit `_unbounded` segment) still slot in,
+  # because the topology lives in parts[1] and `<P>p<C>c` lives in
+  # parts[2] regardless of the topology name.
+  for ch in producers:
+    if ch notin {'0'..'9'}: return ("", "", false)
+  for ch in consumers:
+    if ch notin {'0'..'9'}: return ("", "", false)
+  result = (parts[0], producers & "P/" & consumers & "C", true)
+
 proc loadRows(path: string): tuple[rows: seq[Row], meta: JsonNode] =
+  ## Parse a BMF JSON file (`{slug: {measure: {value, ...}}}`).
+  ##
+  ## Slug walk: each top-level key is `<lib>/<topology>/<P>p<C>c`. The
+  ## library becomes `Row.impl`; (P, C) pair becomes `Row.threads`. The
+  ## `throughput_ops_ms.value` measure becomes `Row.throughput`. Latency
+  ## measures (`latency_p50_ns` etc.) populate `Row.latencyP50` /
+  ## `Row.hasLatency` when present (PR 1+ emits these; PR 0 does not).
+  ##
+  ## BMF has no `metadata` block, so the second tuple slot is always
+  ## `nil` for the new shape. Callers must accept `meta == nil`.
   let raw = readFile(path)
   let doc = parseJson(raw)
   var rows: seq[Row]
-  let results = doc{"results"}
-  if results == nil or results.kind != JArray:
-    return (rows, doc{"metadata"})
-  for r in results.items:
-    var row = Row(
-      impl: r{"implementation"}.getStr("?"), threads: r{"thread_config"}.getStr("?")
-    )
-    let throughput = r{"metrics"}{"throughput_ops_ms"}{"mean"}
+  if doc.kind != JObject:
+    return (rows, nil)
+  for slug, slugNode in doc.pairs:
+    if slugNode.kind != JObject:
+      continue
+    let parsed = parseSlug(slug)
+    if not parsed.ok:
+      continue
+    var row = Row(impl: parsed.impl, threads: parsed.threads)
+    let throughput = slugNode{"throughput_ops_ms"}{"value"}
     if throughput != nil:
       row.throughput = throughput.getFloat(0.0)
-    let p50 = r{"metrics"}{"latency_ns"}{"p50"}
+    let p50 = slugNode{"latency_p50_ns"}{"value"}
     if p50 != nil:
       row.latencyP50 = p50.getFloat(0.0)
       row.hasLatency = row.latencyP50 > 0.0
     rows.add row
-  # Stable sort: by implementation then by thread config so the table
-  # has a predictable order regardless of run interleaving.
+  # Stable sort: by impl then by thread_config so the table has a
+  # predictable order regardless of JSON hash-table iteration order.
   rows.sort(
     proc(a, b: Row): int =
       result = cmp(a.impl, b.impl)
@@ -96,7 +142,7 @@ proc loadRows(path: string): tuple[rows: seq[Row], meta: JsonNode] =
   # Cap to 8 rows to keep the README compact.
   if rows.len > 8:
     rows.setLen(8)
-  return (rows, doc{"metadata"})
+  return (rows, nil)
 
 proc renderBlock(jsonPath: string): string =
   if not fileExists(jsonPath):
@@ -128,7 +174,12 @@ proc updateReadme(readmePath, body: string) =
   writeFile(readmePath, newContent)
   echo "render_readme: updated ", readmePath, "."
 
-when isMainModule:
+# Guard the CLI entry point with `renderReadmeNoMain` so unit tests
+# (`tests/t_render_readme.nim`) can `include` this file to access the
+# private helpers (loadRows, renderTable, parseSlug, ...) without
+# triggering the README rewrite. `nim r` and CLI invocations leave the
+# define unset and so still run main as before.
+when isMainModule and not defined(renderReadmeNoMain):
   let here = currentSourcePath().parentDir()
   let projectRoot = here.parentDir()
   let jsonPath = projectRoot / "benchmarks" / "results" / "latest.json"
