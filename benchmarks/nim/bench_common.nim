@@ -19,7 +19,7 @@
 ## downstream tasks (0.2-0.6) can be written and reviewed in parallel
 ## while the implementation lands behind them.
 
-import std/[heapqueue, options, random, tables]
+import std/[algorithm, heapqueue, json, math, options, random, tables]
 
 # ---------- Topology ----------
 
@@ -56,7 +56,11 @@ type
 
 proc initBMFEmitter*(): BMFEmitter =
   ## Construct an empty BMFEmitter.
-  raiseAssert "not implemented"
+  result.data = initTable[string, Table[string, MeasureValue]]()
+
+proc toBound(v: float): Option[float] =
+  ## NaN sentinel -> none[float](); finite values -> some(v).
+  if v.classify == fcNaN: none(float) else: some(v)
 
 proc addMeasure*(
     em: var BMFEmitter,
@@ -68,12 +72,40 @@ proc addMeasure*(
 ) =
   ## Record one measure on one slug. NaN sentinels for `lower` / `upper`
   ## map to `none[float]()`; finite values map to `some(v)`.
-  raiseAssert "not implemented"
+  if slug notin em.data:
+    em.data[slug] = initTable[string, MeasureValue]()
+  em.data[slug][measure] = MeasureValue(
+    value: value,
+    lower: toBound(lower),
+    upper: toBound(upper),
+  )
 
 proc emit*(em: BMFEmitter, path: string) =
   ## Write the accumulated BMF data to `path`. Slugs alpha-sorted; within
   ## each slug, measures alpha-sorted. Optional bounds omitted when none.
-  raiseAssert "not implemented"
+  let root = newJObject()
+  var slugs: seq[string]
+  for slug in em.data.keys:
+    slugs.add(slug)
+  slugs.sort()
+  for slug in slugs:
+    let inner = em.data[slug]
+    let slugNode = newJObject()
+    var measures: seq[string]
+    for m in inner.keys:
+      measures.add(m)
+    measures.sort()
+    for measure in measures:
+      let mv = inner[measure]
+      let mNode = newJObject()
+      mNode["value"] = newJFloat(mv.value)
+      if mv.lower.isSome:
+        mNode["lower_value"] = newJFloat(mv.lower.get)
+      if mv.upper.isSome:
+        mNode["upper_value"] = newJFloat(mv.upper.get)
+      slugNode[measure] = mNode
+    root[slug] = slugNode
+  writeFile(path, pretty(root, 2) & "\n")
 
 # ---------- Stats helpers ----------
 

@@ -9,6 +9,7 @@
 ## Subsequent tasks (0.2 onward) will add behavior tests against these
 ## symbols.
 
+import std/[json, os, strutils]
 import unittest2
 import ../benchmarks/nim/bench_common
 
@@ -51,3 +52,77 @@ suite "bench_common":
       {.error: "initBMFEmitter signature missing".}
     when not compiles(initHistogram(false)):
       {.error: "initHistogram signature missing".}
+
+# ---------- Task 0.2: BMFEmitter behavior ----------
+
+proc readJsonFile(path: string): JsonNode =
+  parseJson(readFile(path))
+
+suite "bench_common BMFEmitter":
+  test "empty emitter writes {}":
+    let path = getTempDir() / "bench_common_empty.json"
+    var em = initBMFEmitter()
+    em.emit(path)
+    check readJsonFile(path) == newJObject()
+    removeFile(path)
+
+  test "two slugs are alpha-sorted":
+    let path = getTempDir() / "bench_common_two_slugs.json"
+    var em = initBMFEmitter()
+    em.addMeasure("zzz_lib/spsc/1p1c", "throughput", 100.0)
+    em.addMeasure("aaa_lib/spsc/1p1c", "throughput", 200.0)
+    em.emit(path)
+    # Read raw text to verify ordering, since JsonNode field order in Nim
+    # is preserved per insertion but pretty-printed via std/json sort_keys.
+    let raw = readFile(path)
+    let aaaIdx = raw.find("aaa_lib")
+    let zzzIdx = raw.find("zzz_lib")
+    check aaaIdx >= 0
+    check zzzIdx >= 0
+    check aaaIdx < zzzIdx
+    removeFile(path)
+
+  test "measures within a slug are alpha-sorted":
+    let path = getTempDir() / "bench_common_measures_sorted.json"
+    var em = initBMFEmitter()
+    em.addMeasure("foo/spsc/1p1c", "throughput", 100.0)
+    em.addMeasure("foo/spsc/1p1c", "latency_p50_ns", 50.0)
+    em.addMeasure("foo/spsc/1p1c", "latency_p99_ns", 90.0)
+    em.emit(path)
+    let raw = readFile(path)
+    # latency_p50_ns < latency_p99_ns < throughput in alpha order.
+    let i50 = raw.find("latency_p50_ns")
+    let i99 = raw.find("latency_p99_ns")
+    let it = raw.find("throughput")
+    check i50 >= 0
+    check i99 >= 0
+    check it >= 0
+    check i50 < i99
+    check i99 < it
+    removeFile(path)
+
+  test "NaN bounds are omitted":
+    let path = getTempDir() / "bench_common_nan_bounds.json"
+    var em = initBMFEmitter()
+    em.addMeasure("foo/spsc/1p1c", "throughput", 100.0)  # both bounds default NaN
+    em.emit(path)
+    let node = readJsonFile(path)
+    let inner = node["foo/spsc/1p1c"]["throughput"]
+    check inner.kind == JObject
+    check "value" in inner
+    check "lower_value" notin inner
+    check "upper_value" notin inner
+    check inner["value"].getFloat() == 100.0
+    removeFile(path)
+
+  test "finite bounds emit lower_value and upper_value":
+    let path = getTempDir() / "bench_common_finite_bounds.json"
+    var em = initBMFEmitter()
+    em.addMeasure("foo/spsc/1p1c", "throughput", 100.0,
+                  lower = 95.0, upper = 105.0)
+    em.emit(path)
+    let inner = readJsonFile(path)["foo/spsc/1p1c"]["throughput"]
+    check inner["value"].getFloat() == 100.0
+    check inner["lower_value"].getFloat() == 95.0
+    check inner["upper_value"].getFloat() == 105.0
+    removeFile(path)
