@@ -1,0 +1,76 @@
+name: release
+
+# Two release paths:
+#   1. push to devel: parse the version from lockfreequeues.nimble,
+#      idempotently create+push v{version} tag if it does not already
+#      exist, then create the GitHub Release.
+#   2. manual v* tag push: just create the GitHub Release.
+#
+# The two paths are merged into a single job because GITHUB_TOKEN-pushed
+# tags do not trigger downstream workflows. If we split into a separate
+# auto-tag workflow, the tag push would need a PAT (or workflow_dispatch
+# call) to fire the release step.
+#
+# Note: docs.yml independently triggers on `tags: ['v*']` to deploy the
+# versioned mkdocs/mike site. That workflow runs in parallel with this
+# one when this job pushes a tag.
+
+on:
+  push:
+    branches: [devel]
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            echo "Triggered by tag push: $TAG"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            VERSION=$(grep -E '^version[[:space:]]*=' lockfreequeues.nimble \
+              | sed -E 's/version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/' \
+              | head -n1)
+            if [ -z "$VERSION" ]; then
+              echo "::error::could not parse version from lockfreequeues.nimble"
+              exit 1
+            fi
+            TAG="v$VERSION"
+            echo "Triggered by devel push; parsed version $VERSION"
+            if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+              echo "Tag $TAG already exists on remote; skipping release."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            else
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git tag -a "$TAG" -m "Release $TAG"
+              git push origin "$TAG"
+              echo "Created and pushed tag $TAG"
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        if: steps.tag.outputs.skip != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(steps.tag.outputs.tag, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
