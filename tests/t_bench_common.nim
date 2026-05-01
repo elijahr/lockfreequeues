@@ -346,50 +346,13 @@ suite "bench_common adapters: lockfreequeues smoke (Task 0.8)":
     check r.popped == SmokeMessageCount
     check r.ok
 
-# ---------- Task 0.10: bench_throughput --bmf-out integration ----------
-
-import std/osproc
-
-const
-  RepoRoot = currentSourcePath().parentDir.parentDir
-  BenchSrc = RepoRoot / "benchmarks" / "nim" / "bench_throughput.nim"
-
-proc compileBenchThroughput(extraDefs: openArray[string]): string =
-  ## Compile bench_throughput.nim with extra -d: defines, return path to
-  ## the resulting binary. Compiles in release mode for realistic timing
-  ## but with tiny message counts so the integration test stays fast.
-  let outBin = getTempDir() / "bench_throughput_t010"
-  var cmd = "nim c --threads:on -d:release"
-  for d in extraDefs:
-    cmd.add(" -d:" & d)
-  cmd.add(" -o:" & outBin & " " & BenchSrc)
-  let (output, exitCode) = execCmdEx(cmd)
-  if exitCode != 0:
-    raise newException(IOError, "bench_throughput compile failed:\n" & output)
-  result = outBin
-
-suite "bench_common bench_throughput --bmf-out integration (Task 0.10)":
-  test "sipsic variant emits valid BMF with expected slug and measure":
-    # Override message count + runs to keep the integration run under 2s.
-    let bin = compileBenchThroughput([
-      "MessageCount=1000",
-      "BenchSipsicRuns=2",
-      "BenchSipsicWarmup=0",
-    ])
-    let bmfPath = getTempDir() / "bench_t010.json"
-    if fileExists(bmfPath): removeFile(bmfPath)
-    let cmd = bin & " --bmf-out=" & bmfPath & " sipsic"
-    let (output, exitCode) = execCmdEx(cmd)
-    check exitCode == 0
-    check fileExists(bmfPath)
-    let node = parseJson(readFile(bmfPath))
-    # Expected slug per design 2.2 / table at design line 357.
-    check node.hasKey("lockfreequeues_sipsic/spsc/1p1c")
-    let slugNode = node["lockfreequeues_sipsic/spsc/1p1c"]
-    check slugNode.hasKey("throughput_ops_ms")
-    let mv = slugNode["throughput_ops_ms"]
-    check mv.hasKey("value")
-    check mv["value"].getFloat() > 0.0
-    # Stdout text output preserved (acceptance: positional CLI behavior unchanged).
-    check output.contains("Sipsic")
-    removeFile(bmfPath)
+# ---------- Task 0.10 (legacy bench_throughput integration) ----------
+#
+# PR 0 Task 0.10 originally compiled bench_throughput.nim against
+# `--bmf-out=` and asserted the emitted BMF carried the expected
+# `lockfreequeues_sipsic/spsc/1p1c` slug. PR 2 Task 2.10 deleted
+# bench_throughput.nim in favor of five topology-split binaries, and
+# tests/t_topology_split.nim now covers the equivalent BMF-emission
+# contract for each new binary (bench_spsc covers the sipsic/spsc/1p1c
+# slug specifically). The bench_throughput-specific suite is removed
+# here intentionally; do not reintroduce.

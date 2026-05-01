@@ -21,8 +21,9 @@
 ## consumer handle and exposes them so that bench code can register
 ## producers on the worker threads themselves.
 ##
-## The bench harness in `bench_throughput.nim` consumes this adapter
-## directly via specialized benchmark procs (mirroring the Mupmuc path).
+## The bench harness in `bench_unbounded.nim` consumes this adapter
+## directly via specialized benchmark procs (was `bench_throughput.nim`
+## prior to the PR 2 topology split).
 
 import lockfreequeues/unbounded_mupsic
 import debra

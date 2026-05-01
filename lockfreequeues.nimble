@@ -52,11 +52,24 @@ task examples, "Runs the examples":
   exec "nim c --threads:on -r -f examples/job_scheduler.nim"
 
 task benchmarks, "Runs the benchmark suite":
-  # PR 0 (bench-rollup) replaced bench_main with bench_throughput. The
-  # `--bmf-out=` flag emits Bencher Metric Format JSON directly. The
-  # binary lands in `.tmp/` per the project nim.cfg (`--outdir:.tmp`).
-  exec "nim c -d:release --threads:on benchmarks/nim/bench_throughput.nim"
-  exec ".tmp/bench_throughput --bmf-out=benchmarks/results/latest.json"
+  # PR 2 (bench-rollup) replaced bench_throughput.nim with five
+  # topology-split binaries. Each emits its own Bencher Metric Format
+  # JSON fragment; merge_bmf.py unions them into one final file.
+  # Binaries land in `.tmp/` per the project nim.cfg (`--outdir:.tmp`).
+  mkDir "benchmarks/results"
+  for binName in [
+    "bench_spsc", "bench_mpsc", "bench_mpmc",
+    "bench_unbounded", "bench_latency",
+  ]:
+    exec "nim c -d:release --threads:on benchmarks/nim/" & binName & ".nim"
+    exec ".tmp/" & binName & " --bmf-out=benchmarks/results/" & binName & ".json"
+  # Union the per-binary fragments. Exits 1 on (slug, measure) collisions.
+  exec "python3 benchmarks/merge_bmf.py benchmarks/results/latest.json " &
+       "benchmarks/results/bench_spsc.json " &
+       "benchmarks/results/bench_mpsc.json " &
+       "benchmarks/results/bench_mpmc.json " &
+       "benchmarks/results/bench_unbounded.json " &
+       "benchmarks/results/bench_latency.json"
 
 
 task benchtests, "Runs the bench harness test suite":
