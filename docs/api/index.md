@@ -11,7 +11,7 @@ Fixed-capacity ring buffer implementations. Capacity and thread counts are compi
 
 ## Unbounded Queues
 
-Dynamic-capacity linked segment implementations. Grow as needed with epoch-based memory reclamation.
+Dynamic-capacity linked segment implementations. Grow as needed with DEBRA+ epoch-based memory reclamation supplied by [nim-debra](https://github.com/elijahr/nim-debra).
 
 - **[UnboundedSipsic](unbounded_sipsic.md)** - Single-producer, single-consumer (SPSC). Wait-free operations.
 - **[UnboundedSipmuc](unbounded_sipmuc.md)** - Single-producer, multiple-consumer (SPMC). Wait-free push, lock-free pop.
@@ -20,7 +20,6 @@ Dynamic-capacity linked segment implementations. Grow as needed with epoch-based
 
 ## Support Types
 
-- **[EpochManager](epoch.md)** - Memory reclamation for unbounded queues.
 - **[Ops](ops.md)** - Ring buffer index operations (internal).
 - **DeallocationStrategy** - Memory reclamation policy:
   - `Manual` - Retire segments to epoch manager. User calls `tryReclaim()` periodically. Best for `--mm:none`.
