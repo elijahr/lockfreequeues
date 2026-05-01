@@ -21,6 +21,15 @@ on:
       - '*.md'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
+    inputs:
+      force_skip_boost:
+        description: 'Force boost soft-skip (Track 3 §2.6 acceptance)'
+        type: boolean
+        default: false
+      force_skip_loony:
+        description: 'Force loony soft-skip (Track 3 §2.6 acceptance)'
+        type: boolean
+        default: false
 # yamllint enable rule:truthy
 
 env:
@@ -29,6 +38,11 @@ env:
   # presence via `env.BENCHER_API_TOKEN`. GitHub Actions does not allow
   # `secrets.*` directly in `if:`, so the env-var indirection is required.
   BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
+  # Track 3 §2.6 soft-skip overrides. Empty string when the
+  # workflow_dispatch input is unset (the default), '1' when the
+  # operator forces a skip. Step-level `if:` clauses gate on these.
+  FORCE_SKIP_BOOST: ${{ inputs.force_skip_boost && '1' || '' }}
+  FORCE_SKIP_LOONY: ${{ inputs.force_skip_loony && '1' || '' }}
 
 jobs:
   bench-tests:
@@ -137,6 +151,135 @@ jobs:
       - name: Vendor unittest2
         run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
 
+      # ---------- Track 3 MVP adapter installs (soft-skip) ----------
+      #
+      # Each adapter has three stages: install -> smoke -> set-env-on-success.
+      # Failure at any stage flips the binary's compile flags so the slugs
+      # are simply omitted from the BMF instead of failing the workflow.
+      # Annotate-skipped steps surface a yellow PR-check warning.
+
+      - name: Install boost (libboost-dev for Boost.LockFree)
+        # Boost.LockFree is C++ header-only; libboost-dev pulls the
+        # entire boost include tree on the runner. Skip on bench_mpsc /
+        # bench_unbounded / bench_latency (no boost adapter wired into
+        # those binaries; install would just slow them down).
+        id: install-boost
+        if: |
+          env.FORCE_SKIP_BOOST != '1' &&
+          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc')
+        continue-on-error: true
+        run: |
+          sudo apt-get install -qq -y libboost-dev
+
+      - name: Smoke boost adapters
+        id: smoke-boost
+        if: |
+          env.FORCE_SKIP_BOOST != '1' &&
+          steps.install-boost.outcome == 'success' &&
+          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc')
+        continue-on-error: true
+        run: |
+          set -eu
+          # Compile and run the smoke binary with both gates so a single
+          # invocation covers queue + spsc_queue. nim cpp because boost
+          # headers are C++.
+          nim cpp -d:release -d:danger --threads:on \
+            -d:adapter_boost_lockfree_queue_available \
+            -d:adapter_boost_lockfree_spsc_available \
+            -o:.tmp/smoke_boost \
+            benchmarks/nim/smoke/smoke_boost.nim
+          ./.tmp/smoke_boost
+
+      - name: Set boost adapter defines (success only)
+        if: |
+          env.FORCE_SKIP_BOOST != '1' &&
+          steps.install-boost.outcome == 'success' &&
+          steps.smoke-boost.outcome == 'success'
+        run: |
+          {
+            echo "ADAPTER_BOOST_QUEUE=1"
+            echo "ADAPTER_BOOST_SPSC=1"
+          } >> "$GITHUB_ENV"
+
+      - name: Annotate boost skipped
+        if: |
+          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc') &&
+          (env.FORCE_SKIP_BOOST == '1' ||
+           steps.install-boost.outcome != 'success' ||
+           steps.smoke-boost.outcome != 'success')
+        run: |
+          echo "::warning title=Adapter skipped::boost.lockfree install or smoke failed for ${{ matrix.binary }}; bench will omit boost slugs."
+
+      - name: Install loony (nimble)
+        # Loony is a Nim-only unbounded MPMC queue; nimble pulls it from
+        # the registry. Only bench_unbounded uses it.
+        id: install-loony
+        if: |
+          env.FORCE_SKIP_LOONY != '1' &&
+          matrix.binary == 'bench_unbounded'
+        continue-on-error: true
+        run: |
+          nimble install -y loony
+
+      - name: Smoke loony adapter
+        id: smoke-loony
+        if: |
+          env.FORCE_SKIP_LOONY != '1' &&
+          steps.install-loony.outcome == 'success' &&
+          matrix.binary == 'bench_unbounded'
+        continue-on-error: true
+        run: |
+          # The smoke is the round-trip test in tests/t_bench_adapters.nim.
+          # Compile-only; runs in <1s.
+          set -eu
+          nim c -d:release -d:danger --threads:on \
+            -d:adapter_loony_available \
+            -o:.tmp/smoke_loony \
+            -r tests/t_bench_adapters.nim
+
+      - name: Set loony adapter define (success only)
+        if: |
+          env.FORCE_SKIP_LOONY != '1' &&
+          steps.install-loony.outcome == 'success' &&
+          steps.smoke-loony.outcome == 'success'
+        run: echo "ADAPTER_LOONY=1" >> "$GITHUB_ENV"
+
+      - name: Annotate loony skipped
+        if: |
+          matrix.binary == 'bench_unbounded' &&
+          (env.FORCE_SKIP_LOONY == '1' ||
+           steps.install-loony.outcome != 'success' ||
+           steps.smoke-loony.outcome != 'success')
+        run: |
+          echo "::warning title=Adapter skipped::loony install or smoke failed; bench will omit loony slugs."
+
+      - name: Build adapter define flags
+        # Aggregates the per-adapter env flags into a single shell
+        # variable consumed by the compile step. Empty when no adapter
+        # is enabled; properly space-separated otherwise.
+        id: adapter-flags
+        run: |
+          set -eu
+          flags=""
+          mode="c"
+          if [ "${ADAPTER_BOOST_QUEUE:-}" = "1" ]; then
+            flags="$flags -d:adapter_boost_lockfree_queue_available"
+            mode="cpp"
+          fi
+          if [ "${ADAPTER_BOOST_SPSC:-}" = "1" ]; then
+            flags="$flags -d:adapter_boost_lockfree_spsc_available"
+            mode="cpp"
+          fi
+          if [ "${ADAPTER_LOONY:-}" = "1" ]; then
+            flags="$flags -d:adapter_loony_available"
+          fi
+          {
+            echo "flags=$flags"
+            echo "mode=$mode"
+          } >> "$GITHUB_OUTPUT"
+          echo "Adapter flags: $flags"
+          echo "Compile mode:  $mode"
+
       - name: Compile ${{ matrix.binary }} (CI-tuned run shape)
         # Per-binary -d: overrides mirror the design 2.5 CI override
         # column. Bounded throughput binaries: 1M messages × 5 runs ×
@@ -149,17 +292,29 @@ jobs:
         # keeps PR 1's tighter shape (50K × 11 × 2) because each
         # ping-pong RTT records exactly one sample, so 1M messages
         # would never fit.
+        #
+        # ${{ steps.adapter-flags.outputs.flags }} is the space-separated
+        # set of -d:adapter_*_available defines that survived install +
+        # smoke. ${{ steps.adapter-flags.outputs.mode }} is 'cpp' iff at
+        # least one C++-only adapter (boost) is enabled, else 'c'.
+        env:
+          NIM_MODE: ${{ steps.adapter-flags.outputs.mode }}
+          ADAPTER_FLAGS: ${{ steps.adapter-flags.outputs.flags }}
         run: |
           set -eu
+          # shellcheck disable=SC2086  # ADAPTER_FLAGS is intentionally word-split.
           case "${{ matrix.binary }}" in
             bench_spsc)
-              nim c -d:release -d:danger --threads:on \
+              nim "$NIM_MODE" -d:release -d:danger --threads:on \
                 -d:BenchSpscMessageCount=1000000 \
                 -d:BenchSpscRuns=5 \
                 -d:BenchSpscWarmup=2 \
+                $ADAPTER_FLAGS \
                 benchmarks/nim/bench_spsc.nim
               ;;
             bench_mpsc)
+              # bench_mpsc has no MVP adapter wiring; ignore ADAPTER_FLAGS
+              # / NIM_MODE and stay on `nim c`.
               nim c -d:release -d:danger --threads:on \
                 -d:BenchMpscMessageCount=1000000 \
                 -d:BenchMpscRuns=5 \
@@ -167,13 +322,16 @@ jobs:
                 benchmarks/nim/bench_mpsc.nim
               ;;
             bench_mpmc)
-              nim c -d:release -d:danger --threads:on \
+              nim "$NIM_MODE" -d:release -d:danger --threads:on \
                 -d:BenchMpmcMessageCount=1000000 \
                 -d:BenchMpmcRuns=5 \
                 -d:BenchMpmcWarmup=2 \
+                $ADAPTER_FLAGS \
                 benchmarks/nim/bench_mpmc.nim
               ;;
             bench_unbounded)
+              # bench_unbounded supports loony (Nim, plain `nim c`) but
+              # no boost. Stay on c regardless of NIM_MODE.
               nim c -d:release -d:danger --threads:on \
                 -d:UnboundedSipsicMessageCount=200000 \
                 -d:UnboundedSipsicRuns=3 \
@@ -185,6 +343,7 @@ jobs:
                 -d:UnboundedMupmucRuns=2 \
                 -d:BenchUnboundedWarmup=1 \
                 -d:BenchSkipOversubscribed \
+                $ADAPTER_FLAGS \
                 benchmarks/nim/bench_unbounded.nim
               ;;
             bench_latency)
