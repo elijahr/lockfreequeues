@@ -48,6 +48,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `-d:BenchMupmucRuns=N`, `-d:BenchMupmucWarmup=N`,
   `-d:BenchChannelsRuns=N`, `-d:BenchChannelsWarmup=N`. Defaults match
   the prior hard-coded `runs = 10`, so production runs are unchanged.
+- `bench_latency` now emits Bencher Metric Format JSON natively via
+  `--bmf-out=<path>`, mirroring `bench_throughput`'s CLI surface (PR 1).
+  Positional args filter the variants run (`sipsic`, `mupmuc`, `sipmuc`,
+  `mupsic`); without any positional arg, all four bounded lockfreequeues
+  variants run at the 1p1c smoke shape. Emitted slugs:
+  `lockfreequeues_sipsic/spsc/1p1c`,
+  `lockfreequeues_sipmuc/mpmc/1p1c`,
+  `lockfreequeues_mupsic/mpsc/1p1c`,
+  `lockfreequeues_mupmuc/mpmc/1p1c`. Each carries
+  `latency_p50_ns` / `latency_p95_ns` / `latency_p99_ns` measures
+  (`latency_p999_ns` / `latency_max_ns` deferred to PR 6's threshold-
+  gating work). The binary is built on top of
+  `bench_common.runLatencyHarness` and uses per-binary intdefines:
+  `-d:BenchLatencyRuns=N` (default 33), `-d:BenchLatencyMessageCount=N`
+  (default 100_000), `-d:BenchLatencyWarmupRuns=N` (default 3).
+- New `bench-latency` job in `.github/workflows/bench.yml` sibling to
+  `bench-throughput`. Both jobs upload per-binary BMF artifacts
+  (`bench-throughput-bmf` / `bench-latency-bmf`) consumed by a new
+  `bench-upload` job that downloads via `actions/download-artifact@v4`
+  pattern `bench-*-bmf`, runs `merge_bmf.py` to union the fragments,
+  and performs the single `bencher run` upload that co-locates latency
+  + throughput measures on shared per-slug histories. (Multiple
+  `bencher run` invocations create separate Bencher Reports and would
+  NOT co-locate measures — see merge rationale in design 1.)
 
 ### Changed
 
@@ -72,6 +96,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `benchmarks/README.md` rewritten to document the new flow
   (bench_common module, adapter convention, `--bmf-out` flag,
   merge_bmf.py, expected slug set).
+- `benchmarks/nim/adapter.nim` now re-exports `PushResult` / `PopResult`
+  from `bench_common` instead of defining its own copies, unifying the
+  two parallel type definitions introduced by PR 0 Task 0.1. Both
+  adapter packs (legacy `lockfreequeues_sipsic` / `lockfreequeues_mupmuc`
+  / `channels` and the newer `lockfreequeues_sipmuc` / `mupsic` /
+  `unbounded_*`) now flow through the same `runLatencyHarness` and
+  `runThroughputHarness` without per-call-site type conversion. No
+  external API change: legacy callers that imported `./adapter` for
+  `PushResult` / `PopResult` continue to compile (PR 1).
 
 ### Removed
 
