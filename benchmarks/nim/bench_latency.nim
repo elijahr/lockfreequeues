@@ -1,18 +1,54 @@
-
-
 ## Latency benchmark: Ping-pong between 2 threads.
 ## Measures RTT in nanoseconds with percentile distribution.
+##
+## Task 1.1 (PR 1) — exposes per-binary `{.intdefine.}` overrides for
+## wall-time control: `BenchLatencyRuns` (default 33) and
+## `BenchLatencyMessageCount` (default 100_000). These mirror the
+## `BenchSipsicRuns` / `MessageCount` pattern in bench_throughput.nim.
+## They are referenced by Task 1.2 once the binary is rewritten on top
+## of `bench_common.runLatencyHarness`; until then they are public-API
+## stable so downstream test/CI tasks can pin them.
 
 import std/[atomics, times, monotimes]
 import ./stats
 import ./results
 import ./adapter
-import ./adapters/lockfreequeues_sipsic
+import ./adapters/lockfreequeues_sipsic_adapter
 
 const
+  ## Per-binary intdefines for latency wall-time control. Task 1.2 wires
+  ## these into the rewritten `runLatencyHarness` call site; Task 1.1
+  ## only ships the symbols + defaults so the test surface lands first.
+  ## NOTE: kept as `*` (exported) so external consumers (tests, CI) can
+  ## reference them; legacy `DefaultIterations` / `DefaultRuns` /
+  ## `WarmupRuns` remain so the existing `runLatencyBenchmark` path
+  ## continues to compile until Task 1.2 deletes it.
+  BenchLatencyRuns* {.intdefine.} = 33
+  BenchLatencyMessageCount* {.intdefine.} = 100_000
+
   DefaultIterations = 100_000
   DefaultRuns = 33
   WarmupRuns = 3
+
+# Task 1.1 compile-time test gates. These flags are set ONLY by
+# `tests/t_bench_latency.nim` to assert the intdefine defaults / overrides
+# at compile time; production builds never set them, so the `static`
+# blocks evaluate trivially in normal use.
+when defined(BenchLatencyTestCompileTime):
+  static:
+    doAssert BenchLatencyRuns == 33,
+      "BenchLatencyRuns default must be 33 (got " & $BenchLatencyRuns & ")"
+    doAssert BenchLatencyMessageCount == 100_000,
+      "BenchLatencyMessageCount default must be 100_000 (got " &
+      $BenchLatencyMessageCount & ")"
+
+when defined(BenchLatencyTestCompileTimeOverrides):
+  static:
+    doAssert BenchLatencyRuns == 2,
+      "BenchLatencyRuns override must be 2 (got " & $BenchLatencyRuns & ")"
+    doAssert BenchLatencyMessageCount == 1000,
+      "BenchLatencyMessageCount override must be 1000 (got " &
+      $BenchLatencyMessageCount & ")"
 
 type
   PingPongContext[Q] = object
