@@ -99,3 +99,41 @@ when defined(adapter_crossbeam_seg_queue_available):
         makeCrossbeamSegQueueAdapter[uint64](),
         cleanup(adapter)
       )
+
+when defined(adapter_moodycamel_available):
+  # MoodyCamel ``concurrentqueue`` is a C++ template + extern "C"
+  # wrapper; load only when both the gate AND the cpp build mode are
+  # set so ``nim c -r`` of this file stays compilable when the suite
+  # runs under the default backend.
+  when defined(cpp):
+    import ../benchmarks/nim/adapters/moodycamel_adapter
+    import ../benchmarks/nim/adapter
+
+    suite "moodycamel_adapter":
+      test "push/pop 1000 uint64 round-trip preserves set":
+        runRoundTrip[MoodycamelAdapter[uint64]](
+          makeMoodycamelAdapter[uint64](capacity = 4096),
+          cleanup(adapter)
+        )
+
+when defined(adapter_threading_channels_available):
+  import ../benchmarks/nim/adapters/threading_channels_adapter
+  import ../benchmarks/nim/adapter
+
+  suite "threading_channels_adapter":
+    test "push/pop 1000 uint64 round-trip preserves set":
+      runRoundTrip[ThreadingChannelsAdapter[uint64]](
+        initThreadingChannelsAdapter[uint64](capacity = 4096),
+        deinitThreadingChannelsAdapter(adapter)
+      )
+
+when defined(adapter_nim_channel_available):
+  import ../benchmarks/nim/adapters/nim_channel_adapter
+  import ../benchmarks/nim/adapter
+
+  suite "nim_channel_adapter":
+    test "push/pop 1000 uint64 round-trip preserves set":
+      runRoundTrip[NimChannelAdapter[uint64]](
+        initNimChannelAdapter[uint64](capacity = 4096),
+        deinitNimChannelAdapter(adapter)
+      )
