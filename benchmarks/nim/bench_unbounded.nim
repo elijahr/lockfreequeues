@@ -615,7 +615,7 @@ proc runVariant(variant: string, em: var BMFEmitter) =
         for p in [1, 2, 4]:
           for c in [1, 2, 4]:
             runMvpUnboundedShape[MoodycamelAdapter[uint64]](
-              em, "moodycamel/ConcurrentQueue", initMoodycamelQ,
+              em, "moodycamel", initMoodycamelQ,
               p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
               UnboundedMupmucMessageCount)
         return
