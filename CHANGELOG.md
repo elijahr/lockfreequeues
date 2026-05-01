@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- New `benchmarks/nim/bench_common.nim` shared harness module exporting:
+  `Topology` enum, `BMFEmitter` (alpha-sorted Bencher Metric Format JSON
+  emission), `Histogram` (min-heap top-K + Algorithm R reservoir for
+  stratified-percentile estimation, p99 within 1% of sort fallback on
+  100k log-normal samples), generic `runThroughputHarness` and
+  `runLatencyHarness` (1P/1C ping-pong RTT with monotonic-ns timing and
+  per-run percentile aggregation), and Stats helpers (mean / stddev /
+  minVal / maxVal / linear-interpolation percentile).
+- Five new lockfreequeues adapters in `benchmarks/nim/adapters/`:
+  `lockfreequeues_sipmuc_adapter.nim`, `lockfreequeues_mupsic_adapter.nim`,
+  `lockfreequeues_unbounded_sipsic_adapter.nim`,
+  `lockfreequeues_unbounded_sipmuc_adapter.nim`,
+  `lockfreequeues_unbounded_mupmuc_adapter.nim`. Each exposes
+  `topologiesSupported: set[Topology]` and the standard `push`/`pop`
+  shape consumed by the shared harness. The unbounded adapters store
+  the queue inline (not via `ptr`) to dodge a Nim 2.2.6 codegen bug
+  triggered by generic-pointer destructor calls when bench_common is
+  imported.
+- New `benchmarks/merge_bmf.py` CLI: stateless union of per-binary BMF
+  JSON fragments into a single output file. Exits 1 on `(slug, measure)`
+  collisions naming both colliding inputs in stderr. Output slugs and
+  measures alpha-sorted. Pure-stdlib (no third-party deps); covered by
+  `benchmarks/tests/test_merge_bmf.py` (10 tests).
+- `bench_throughput` `--bmf-out=<path>` flag emits Bencher Metric Format
+  JSON natively. The flag is purely additive: with the flag absent, the
+  binary is bit-for-bit unchanged from the prior release (same stdout
+  text, same positional CLI: `bench_throughput sipsic mupmuc
+  unbounded_mupsic channels`). Emitted slugs:
+  `lockfreequeues_sipsic/spsc/1p1c`,
+  `lockfreequeues_mupmuc/mpmc/{1,2,4,8}p{1,2,4,8}c`,
+  `lockfreequeues_unbounded_mupsic/mpsc_unbounded/{1,2,4}p1c`,
+  `nim_channels/mpmc/{1,2,4}p{1,2,4}c`. Each carries a
+  `throughput_ops_ms` measure with `value=mean`, `lower_value=mean-stddev`,
+  `upper_value=mean+stddev`.
+- Per-variant compile-time run-count overrides:
+  `-d:BenchSipsicRuns=N`, `-d:BenchSipsicWarmup=N`,
+  `-d:BenchMupmucRuns=N`, `-d:BenchMupmucWarmup=N`,
+  `-d:BenchChannelsRuns=N`, `-d:BenchChannelsWarmup=N`. Defaults match
+  the prior hard-coded `runs = 10`, so production runs are unchanged.
+
+### Changed
+
+- `bench_throughput.nim` now natively emits Bencher Metric Format JSON
+  via `--bmf-out=<path>`. The CI workflow (`.github/workflows/bench.yml`)
+  was rewired to consume the native output and feed it through
+  `merge_bmf.py` before uploading to Bencher.dev — the previous Python
+  regex parser (`bmf_adapter.py`) is gone.
+- The four existing lockfreequeues adapter files renamed to the
+  canonical `<library_slug>_adapter.nim` convention with `git mv`
+  (history preserved): `lockfreequeues_sipsic.nim`,
+  `lockfreequeues_mupmuc.nim`, `lockfreequeues_unbounded_mupsic.nim`.
+  Each gained a `topologiesSupported: set[Topology]` constant for the
+  upcoming PR 3 binary-split.
+- `benchmarks/render_readme.nim` rewritten to consume the new BMF JSON
+  shape directly (`{slug: {measure: MeasureValue}}`) instead of the
+  legacy `bench_main` aggregator output. The slug walk decomposes
+  `<lib>/<topology>/<P>p<C>c` back into the (impl, thread_config) pair
+  the table renders.
+- `benchmarks/runner.py` and `lockfreequeues.nimble` `task benchmarks`
+  redirected from `bench_main` to `bench_throughput --bmf-out=<path>`.
+- `benchmarks/README.md` rewritten to document the new flow
+  (bench_common module, adapter convention, `--bmf-out` flag,
+  merge_bmf.py, expected slug set).
+
+### Removed
+
+- `benchmarks/bmf_adapter.py` — Python regex parser that converted
+  `bench_throughput` stdout text into BMF JSON. Replaced by native BMF
+  emission via `--bmf-out=`.
+- `benchmarks/test_bmf_adapter.py` — unit tests for the parser.
+  Replaced by `benchmarks/tests/test_merge_bmf.py`.
+- `benchmarks/nim/bench_main.nim` — aggregator binary that wrapped
+  bench_throughput + bench_latency and produced a custom JSON shape.
+  `bench_throughput` is now the canonical entry point.
+
 ## [4.1.0] - 2026-05-01
 
 ### Added
