@@ -63,14 +63,18 @@ jobs:
         # nim.cfg uses --path:"../nim-debra/src" and --path:"../nim-typestates/src"
         # for compiler-side resolution. Nimble's dep resolver runs BEFORE
         # the compiler though, and `nimble test` will refuse to launch if
-        # `requires "debra >= 0.3.0"` is unsatisfiable from nimble's
+        # `requires "debra >= 0.5.0"` is unsatisfiable from nimble's
         # package store. So fetch the matching branches and `nimble install`
-        # them locally to satisfy the resolver. Once debra 0.3.0 publishes
-        # this whole step can go away.
+        # them locally to satisfy the resolver. After both companion PRs
+        # land and tags publish, the whole step can go away.
+        #
+        # nim-debra: pinned to feat/ergonomics until the companion PR
+        # (elijahr/nim-debra#7) merges and v0.5.0 publishes — switch back
+        # to `main` then.
         run: |
           set -e
           cd ..
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
+          git clone --depth 1 --branch feat/ergonomics https://github.com/elijahr/nim-debra.git
           git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
           (cd nim-typestates && nimble install -y)
           (cd nim-debra && nimble install -y)
