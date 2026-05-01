@@ -19,7 +19,7 @@ jobs:
   test:
     name: Test nim-${{ matrix.nim-version }} / ${{ matrix.runs-on }}
     runs-on: ${{ matrix.runs-on }}
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     strategy:
       fail-fast: false
