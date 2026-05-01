@@ -75,20 +75,37 @@ jobs:
       - name: Run bench harness tests
         run: nimble benchtests
 
-  bench-throughput:
-    name: Throughput bench (ubuntu-latest)
+  bench:
+    # Track 2 PR 2: matrix over the 5 topology-split binaries. Each
+    # matrix entry is its own GitHub Actions job with an independent
+    # `timeout-minutes: 12` budget so a hang in one binary cannot burn
+    # the entire workflow's clock — the surviving binaries finish, the
+    # bench-upload job merges what arrived, and the operator gets
+    # partial Bencher coverage rather than no coverage. Per-binary
+    # `-d:` overrides are tuned to fit each variant's CI budget; see
+    # design 2.5 for the override table.
+    name: ${{ matrix.binary }} (ubuntu-latest)
     runs-on: ubuntu-latest
     # PRs from forks cannot read BENCHER_API_TOKEN. Skip rather than fail
     # noisily; maintainer pushes / merges still record the baseline.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        binary:
+          - bench_spsc
+          - bench_mpsc
+          - bench_mpmc
+          - bench_unbounded
+          - bench_latency
+    timeout-minutes: 12
 
     steps:
       - name: Restore cache
         uses: actions/cache@v4
         with:
           path: ${HOME}/.cache
-          key: cache-bench-throughput-${{ runner.os }}
+          key: cache-${{ matrix.binary }}-${{ runner.os }}
 
       - name: Checkout project
         uses: actions/checkout@v4
@@ -120,114 +137,80 @@ jobs:
       - name: Vendor unittest2
         run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
 
-      - name: Compile bench_throughput (CI-tuned run shape)
-        # Cloud runs use a tighter wall-clock budget than the local default
-        # (1M messages × 33 runs). Bounded variants (sipsic, channels) use
-        # 1M × 5 runs and finish in single-digit seconds. unbounded_mupsic
-        # is super-linear in message count and is gated separately via
-        # UnboundedMupsicMessageCount=500000 + UnboundedMupsicRuns=3 to keep
-        # the variant tractable inside the 30-min job budget. Warmup stays
-        # at 2 to absorb JIT/cache effects.
+      - name: Compile ${{ matrix.binary }} (CI-tuned run shape)
+        # Per-binary -d: overrides mirror the design 2.5 CI override
+        # column. Bounded throughput binaries: 1M messages × 5 runs ×
+        # 2 warmup; cheap, single-digit seconds total. bench_unbounded
+        # uses 500K × 3 × 2 because its backing memory pool grows with
+        # messageCount and the super-linear path needs a tighter budget
+        # to fit 12 min on the 4×4 mupmuc grid. bench_latency keeps PR
+        # 1's tighter shape (50K × 11 × 2) because each ping-pong RTT
+        # records exactly one sample, so 1M messages would never fit.
         run: |
-          nim c -d:release -d:danger --threads:on \
-            -d:MessageCount=1000000 \
-            -d:DefaultRuns=5 \
-            -d:WarmupRuns=2 \
-            -d:UnboundedMupsicRuns=3 \
-            -d:UnboundedMupsicMessageCount=500000 \
-            benchmarks/nim/bench_throughput.nim
+          set -eu
+          case "${{ matrix.binary }}" in
+            bench_spsc)
+              nim c -d:release -d:danger --threads:on \
+                -d:BenchSpscMessageCount=1000000 \
+                -d:BenchSpscRuns=5 \
+                -d:BenchSpscWarmup=2 \
+                benchmarks/nim/bench_spsc.nim
+              ;;
+            bench_mpsc)
+              nim c -d:release -d:danger --threads:on \
+                -d:BenchMpscMessageCount=1000000 \
+                -d:BenchMpscRuns=5 \
+                -d:BenchMpscWarmup=2 \
+                benchmarks/nim/bench_mpsc.nim
+              ;;
+            bench_mpmc)
+              nim c -d:release -d:danger --threads:on \
+                -d:BenchMpmcMessageCount=1000000 \
+                -d:BenchMpmcRuns=5 \
+                -d:BenchMpmcWarmup=2 \
+                benchmarks/nim/bench_mpmc.nim
+              ;;
+            bench_unbounded)
+              nim c -d:release -d:danger --threads:on \
+                -d:UnboundedSipsicMessageCount=500000 \
+                -d:UnboundedSipsicRuns=3 \
+                -d:UnboundedSipmucMessageCount=500000 \
+                -d:UnboundedSipmucRuns=3 \
+                -d:UnboundedMupsicMessageCount=500000 \
+                -d:UnboundedMupsicRuns=3 \
+                -d:UnboundedMupmucMessageCount=500000 \
+                -d:UnboundedMupmucRuns=3 \
+                -d:BenchUnboundedWarmup=2 \
+                benchmarks/nim/bench_unbounded.nim
+              ;;
+            bench_latency)
+              nim c -d:release -d:danger --threads:on \
+                -d:BenchLatencyMessageCount=50000 \
+                -d:BenchLatencyRuns=11 \
+                -d:BenchLatencyWarmupRuns=2 \
+                benchmarks/nim/bench_latency.nim
+              ;;
+            *)
+              echo "::error::unknown binary: ${{ matrix.binary }}"
+              exit 1
+              ;;
+          esac
 
-      - name: Run bench_throughput
-        # mupmuc 4P/4C livelock fixed via CAS-retry backoff; see backoff
-        # changelog. Step-level timeout: if any single variant hangs, fail
-        # fast inside the 30-min job budget so the upload step still
-        # records the partial result rather than burning the entire
-        # budget on one variant.
-        timeout-minutes: 20
-        run: |
-          ./.tmp/bench_throughput --bmf-out=throughput.json \
-            sipsic mupmuc unbounded_mupsic channels | tee bench_output.txt
-
-      - name: Upload throughput BMF artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: bench-throughput-bmf
-          path: throughput.json
-
-  bench-latency:
-    # Sibling job to bench-throughput. Builds bench_latency.nim and emits a
-    # latency.json BMF fragment that the bench-upload job merges with the
-    # throughput fragment before a single `bencher run` upload — multiple
-    # `bencher run` invocations create separate Bencher Reports and would
-    # NOT co-locate latency + throughput measures on the shared per-slug
-    # history (design 1 / impl plan Track 1).
-    name: Latency bench (ubuntu-latest)
-    runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    timeout-minutes: 12
-
-    steps:
-      - name: Restore cache
-        uses: actions/cache@v4
-        with:
-          path: ${HOME}/.cache
-          key: cache-bench-latency-${{ runner.os }}
-
-      - name: Checkout project
-        uses: actions/checkout@v4
-
-      - name: Setup Nim
-        uses: jiro4989/setup-nim-action@v2
-        with:
-          nim-version: 'stable'
-
-      - name: Install build deps (Linux)
-        run: |
-          sudo apt-get update -q -y
-          sudo apt-get -qq install -y clang
-
-      - name: Clone and install sibling Nim deps (nim-debra, nim-typestates)
-        # Mirrors the bench-throughput job: pin to release tags (not
-        # `main`) for deterministic CI; bump in lockstep with build.yml
-        # and lockfreequeues.nimble's `requires`.
-        run: |
-          set -e
-          cd ..
-          git clone --depth 1 --branch v0.6.0 https://github.com/elijahr/nim-debra.git
-          git clone --depth 1 --branch v0.7.0 https://github.com/elijahr/nim-typestates.git
-          (cd nim-typestates && nimble install -y)
-          (cd nim-debra && nimble install -y)
-
-      - name: Vendor unittest2
-        run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
-
-      - name: Compile bench_latency (CI-tuned run shape)
-        # 100K-message default × 33 runs would bust the 12-min budget on a
-        # CI runner with one ping-pong RTT pair per run. Cloud uses a
-        # tighter shape: 50K × 11 runs × 2 warmup ≈ 1.5M total RTTs across
-        # 4 variants. Each RTT is sub-microsecond on Linux x86_64; that
-        # gives ~3-4s per variant, well inside the budget.
-        run: |
-          nim c -d:release -d:danger --threads:on \
-            -d:BenchLatencyMessageCount=50000 \
-            -d:BenchLatencyRuns=11 \
-            -d:BenchLatencyWarmupRuns=2 \
-            benchmarks/nim/bench_latency.nim
-
-      - name: Run bench_latency
-        # Step-level timeout: latency runs are bounded but a runtime
-        # failure (lost message, missed wakeup) would spin a ponger
-        # thread forever. Fail fast inside the 12-min budget.
+      - name: Run ${{ matrix.binary }}
+        # Step-level timeout: a runtime hang in one variant (lost
+        # message, missed wakeup, livelock regression) would otherwise
+        # spin until the job-level 12-min budget expired. Fail fast at
+        # 10 min so the upload step still records the partial result.
         timeout-minutes: 10
         run: |
-          ./.tmp/bench_latency --bmf-out=latency.json \
-            sipsic mupmuc sipmuc mupsic | tee latency_output.txt
+          ./.tmp/${{ matrix.binary }} --bmf-out=${{ matrix.binary }}.json \
+            | tee ${{ matrix.binary }}_output.txt
 
-      - name: Upload latency BMF artifact
+      - name: Upload ${{ matrix.binary }} BMF artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bench-latency-bmf
-          path: latency.json
+          name: bench-${{ matrix.binary }}-bmf
+          path: ${{ matrix.binary }}.json
 
   bench-upload:
     # Merges per-binary BMF artifacts into a single JSON before a single
@@ -237,10 +220,8 @@ jobs:
     name: Merge BMF + Bencher upload (ubuntu-latest)
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    needs: [bench-throughput, bench-latency]
+    needs: [bench]
     permissions:
-      contents: read
-      actions: read
       pull-requests: write
       checks: write
     timeout-minutes: 10
@@ -250,33 +231,47 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download BMF artifacts
-        # Pattern matches both bench-throughput-bmf and bench-latency-bmf
-        # (and any future per-binary artifact uploaded by PR 2's topology
-        # split, which uses the same `bench-*-bmf` naming convention).
-        # Each artifact downloads into its own subdirectory under
-        # `bmf-inputs/<artifact-name>/` (no `merge-multiple`) so two
-        # artifacts that happen to contain a same-named file (e.g. both
-        # write `throughput.json`) cannot overwrite each other.
+        # Pattern matches every per-binary artifact uploaded by the
+        # bench matrix (`bench-bench_spsc-bmf`, `bench-bench_mpsc-bmf`,
+        # `bench-bench_mpmc-bmf`, `bench-bench_unbounded-bmf`,
+        # `bench-bench_latency-bmf`).
         uses: actions/download-artifact@v4
         with:
           pattern: bench-*-bmf
           path: ./bmf-inputs/
+          merge-multiple: true
 
       - name: List BMF inputs (debug)
-        run: find bmf-inputs/ -type f -name '*.json' -print
+        run: ls -la bmf-inputs/
 
       - name: Merge BMF JSON
-        # `merge_bmf.py` unions per-slug measure dicts across N inputs and
-        # exits 1 on (slug, measure) collisions. Pure stdlib (no third-
-        # party deps), so no Python install step is needed beyond the
-        # ubuntu-latest default.
+        # `merge_bmf.py` unions per-slug measure dicts across N inputs
+        # and exits 1 on (slug, measure) collisions. Pure stdlib (no
+        # third-party deps), so no Python install step is needed beyond
+        # the ubuntu-latest default.
         #
-        # Inputs live one subdir deep (no `merge-multiple`); enumerate
-        # all `*.json` recursively. `xargs` arranges argv splitting; we
-        # NUL-delimit to be robust against any future filename quirks.
+        # `$(ls ...)` is intentionally unquoted: each path must arrive
+        # as a separate positional argv to merge_bmf.py. shellcheck
+        # SC2046 flags this as a word-splitting risk; the risk is real
+        # ONLY if an artifact filename contains whitespace or glob
+        # characters. Artifacts are produced by upload-artifact@v4
+        # with names we control (`bench_*.json`); none contain
+        # whitespace, so the warning does not apply here.
         run: |
-          find bmf-inputs/ -type f -name '*.json' -print0 | \
-            xargs -0 python3 benchmarks/merge_bmf.py merged.json
+          # shellcheck disable=SC2046
+          python3 benchmarks/merge_bmf.py merged.json $(ls bmf-inputs/*.json)
+
+      - name: Verify deletion-safety against pre-split fixture
+        # Track 2 PR 2 Task 2.7 deletion-safety guard. Asserts the
+        # union of the topology-split BMFs is a strict superset of the
+        # pre-split slug fixture captured from the legacy
+        # bench_throughput before the split. Exit 1 with missing slugs
+        # listed on stderr fails this step (and the workflow), making
+        # any silent slug regression visible in the PR check summary.
+        run: |
+          python3 benchmarks/scripts/superset_check.py \
+            tests/fixtures/pre-split-slugs.json \
+            merged.json
 
       - name: Show BMF JSON (debug)
         run: cat merged.json
