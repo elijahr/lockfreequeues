@@ -6,7 +6,10 @@ import ./stats
 import ./results
 import ./adapter
 import
-  ./adapters/[lockfreequeues_sipsic, channels_adapter, lockfreequeues_unbounded_mupsic]
+  ./adapters/[
+    lockfreequeues_sipsic_adapter, channels_adapter,
+    lockfreequeues_unbounded_mupsic_adapter,
+  ]
 import lockfreequeues/mupmuc
 import lockfreequeues/unbounded_mupsic
 import lockfreequeues/backoff

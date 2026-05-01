@@ -1,4 +1,8 @@
-## Adapter for lockfreequeues Mupmuc (bounded MPMC)
+## Adapter for lockfreequeues Mupmuc (bounded MPMC).
+##
+## Renamed from `lockfreequeues_mupmuc.nim` in PR 0 Task 0.9 per design
+## section 2.2. `topologiesSupported` is exported here for PR 3
+## Task 3.11.
 ##
 ## Note: Mupmuc requires using Producer/Consumer objects for push/pop.
 ## This adapter manages those internally for single-threaded testing.
@@ -7,6 +11,9 @@
 import options
 import lockfreequeues/mupmuc
 import ../adapter
+from ../bench_common import Topology, tMpmc
+
+const topologiesSupported*: set[Topology] = {tMpmc}
 
 type
   MupmucAdapter*[N: static int, T] = object

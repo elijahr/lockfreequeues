@@ -1,8 +1,15 @@
-## Adapter for lockfreequeues Sipsic (bounded SPSC)
+## Adapter for lockfreequeues Sipsic (bounded SPSC).
+##
+## Renamed from `lockfreequeues_sipsic.nim` in PR 0 Task 0.9 per design
+## section 2.2 (`<library_slug>_adapter.nim`). `topologiesSupported` is
+## exported here for PR 3 Task 3.11 consumption.
 
 import options
 import lockfreequeues
 import ../adapter
+from ../bench_common import Topology, tSpsc
+
+const topologiesSupported*: set[Topology] = {tSpsc}
 
 type
   SipsicAdapter*[N: static int, T] = object
