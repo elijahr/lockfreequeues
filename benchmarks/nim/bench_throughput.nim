@@ -1,7 +1,15 @@
 ## Throughput benchmark: N producers, N consumers, shared queue.
 ## Measures ops/ms as thread count scales.
+##
+## Task 0.10 (PR 0) — this binary now natively emits Bencher Metric Format
+## (BMF) JSON when invoked with `--bmf-out=<path>`. Stdout text output is
+## preserved verbatim for backward compatibility with the existing
+## positional CLI (`bench_throughput sipsic mupmuc unbounded_mupsic
+## channels`). The BMF output replaces the legacy `bmf_adapter.py` regex
+## parser that consumed the stdout text.
 
-import std/[atomics, times, monotimes, strformat, options, os, sets, syncio]
+import std/[atomics, times, monotimes, parseopt, strformat, options, os, sets,
+            syncio]
 import ./stats
 import ./results
 import ./adapter
@@ -14,6 +22,16 @@ import lockfreequeues/mupmuc
 import lockfreequeues/unbounded_mupsic
 import lockfreequeues/backoff
 import debra
+# Selective import of the bench_common BMF surface. PR 0 keeps the
+# bespoke topology-aware harness procs below (legacy `runThroughputBenchmark`,
+# `runMupmucBenchmark`, `runUnboundedMupsicBenchmark`) since they handle
+# per-thread Producer/Consumer registration and DEBRA epoch boundaries
+# that the generic `runThroughputHarness` does not yet support. The
+# `runThroughputHarness` consolidation across all topologies is scoped
+# for PR 1+ once each adapter exposes the registration surface uniformly.
+# Avoid importing `ThroughputMetrics` from bench_common — it would shadow
+# the legacy `results.ThroughputMetrics` already used here.
+from ./bench_common import BMFEmitter, initBMFEmitter, addMeasure, emit
 
 # All run-shape constants below are `{.intdefine.}` so they can be overridden
 # at compile time without touching the source. Default behavior (no `-d:` flags)
@@ -479,26 +497,72 @@ when isMainModule:
   # makes external poll loops indistinguishable from a hang.
   setStdIoUnbuffered()
 
-  # CLI: optional variant-group filter. With no args, run everything
-  # (backward compatible). With one or more args from the supported
-  # set, run only those groups. Unknown args produce an error and
-  # exit non-zero.
+  # Per-variant run/warmup count overrides. These are `{.intdefine.}` so
+  # that the `tests/t_bench_common.nim` integration test (Task 0.10) can
+  # build the binary with `-d:BenchSipsicRuns=2 -d:BenchSipsicWarmup=0`
+  # and finish in under 2 seconds. Production runs leave them at default.
+  const
+    BenchSipsicRuns {.intdefine.} = 10
+    BenchSipsicWarmup {.intdefine.} = 0
+    BenchMupmucRuns {.intdefine.} = 10
+    BenchMupmucWarmup {.intdefine.} = 0
+    BenchChannelsRuns {.intdefine.} = 10
+    BenchChannelsWarmup {.intdefine.} = 0
+
+  # CLI parsing: positional args = variant filter (legacy, preserved);
+  # `--bmf-out=<path>` = native BMF emission (PR 0 Task 0.10). Unknown
+  # flags or unknown positional args exit 1. Backward compatible: with
+  # no args, runs everything and emits no BMF.
   const SupportedGroups = ["sipsic", "mupmuc", "unbounded_mupsic", "channels"]
 
-  let cliArgs = commandLineParams()
+  var bmfOutPath = ""
+  var positional: seq[string] = @[]
+  block parseCli:
+    var p = initOptParser(commandLineParams())
+    while true:
+      p.next()
+      case p.kind
+      of cmdEnd: break
+      of cmdLongOption, cmdShortOption:
+        case p.key
+        of "bmf-out":
+          if p.val.len == 0:
+            echo "Missing value for --bmf-out"
+            quit 1
+          bmfOutPath = p.val
+        else:
+          echo "Unknown flag: --", p.key
+          quit 1
+      of cmdArgument:
+        positional.add(p.key)
+
   let supported = SupportedGroups.toHashSet
   let runGroups =
-    if cliArgs.len == 0:
+    if positional.len == 0:
       supported
     else:
       var groups = initHashSet[string]()
-      for arg in cliArgs:
+      for arg in positional:
         if arg notin supported:
           echo "Unknown variant group: ", arg
           echo "Supported: ", SupportedGroups
           quit 1
         groups.incl arg
       groups
+
+  # BMF accumulator. Always allocate (cheap) so the per-variant
+  # `addMeasure` calls do not need to be guarded; emit only at end if
+  # `--bmf-out` was given.
+  var emitter = initBMFEmitter()
+
+  proc emitThroughputSlug(
+      em: var BMFEmitter, slug: string, mean, stddev: float
+  ) =
+    ## Map legacy `results.ThroughputMetrics{mean, stddev}` onto the BMF
+    ## triple `{value, lower_value, upper_value}` per design 2.3:
+    ## value=mean, bounds = mean +/- 1*stddev (1-sigma band; matches the
+    ## convention used by `bmf_adapter.py` which this code replaces).
+    em.addMeasure(slug, "throughput_ops_ms", mean, mean - stddev, mean + stddev)
 
   echo "Throughput Benchmark"
   echo "===================="
@@ -512,11 +576,16 @@ when isMainModule:
         initSipsicAdapter[1024, int](),
       numProducers = 1,
       numConsumers = 1,
-      runs = 10,
+      runs = BenchSipsicRuns,
+      warmup = BenchSipsicWarmup,
     )
     echo fmt"  mean: {sipsicMetrics.mean:.1f} ops/ms"
     echo fmt"  stddev: {sipsicMetrics.stddev:.1f}"
     echo ""
+    emitter.emitThroughputSlug(
+      "lockfreequeues_sipsic/spsc/1p1c",
+      sipsicMetrics.mean, sipsicMetrics.stddev,
+    )
 
   # Mupmuc (bounded MPMC). 8P/8C is the oversubscription case that
   # exercised the CAS-retry livelock (issue #15); keep it in the standard
@@ -528,18 +597,22 @@ when isMainModule:
       let metrics =
         case threads
         of 1:
-          benchmarkMupmuc1P1C(runs = 10)
+          benchmarkMupmuc1P1C(runs = BenchMupmucRuns, warmup = BenchMupmucWarmup)
         of 2:
-          benchmarkMupmuc2P2C(runs = 10)
+          benchmarkMupmuc2P2C(runs = BenchMupmucRuns, warmup = BenchMupmucWarmup)
         of 4:
-          benchmarkMupmuc4P4C(runs = 10)
+          benchmarkMupmuc4P4C(runs = BenchMupmucRuns, warmup = BenchMupmucWarmup)
         of 8:
-          benchmarkMupmuc8P8C(runs = 10)
+          benchmarkMupmuc8P8C(runs = BenchMupmucRuns, warmup = BenchMupmucWarmup)
         else:
           ThroughputMetrics()
       echo fmt"  mean: {metrics.mean:.1f} ops/ms"
       echo fmt"  stddev: {metrics.stddev:.1f}"
       echo ""
+      emitter.emitThroughputSlug(
+        fmt"lockfreequeues_mupmuc/mpmc/{threads}p{threads}c",
+        metrics.mean, metrics.stddev,
+      )
 
   # UnboundedMupsic (unbounded MPSC) — new harness, 33 runs.
   if "unbounded_mupsic" in runGroups:
@@ -562,10 +635,17 @@ when isMainModule:
       echo fmt"  min: {metrics.min:.1f}  max: {metrics.max:.1f}"
       echo fmt"  stddev: {metrics.stddev:.1f}"
       echo ""
+      emitter.emitThroughputSlug(
+        fmt"lockfreequeues_unbounded_mupsic/mpsc_unbounded/{producers}p1c",
+        metrics.mean, metrics.stddev,
+      )
     echo "==================================================="
     echo ""
 
-  # Channels (MPMC)
+  # Channels (MPMC). Slug uses underscore form `nim_channels` so the
+  # merge_bmf.py SLUG_RE (^[a-z][a-z0-9_]*/[a-z][a-z0-9_]*/\d+p\d+c$)
+  # accepts it. The human-readable adapter `name()` ("nim/channels")
+  # is only used for stdout; the slug is independent.
   if "channels" in runGroups:
     for threads in [1, 2, 4]:
       echo fmt"Channels (MPMC) {threads}P/{threads}C:"
@@ -574,8 +654,18 @@ when isMainModule:
           initChannelsAdapter[int](1024),
         numProducers = threads,
         numConsumers = threads,
-        runs = 10,
+        runs = BenchChannelsRuns,
+        warmup = BenchChannelsWarmup,
       )
       echo fmt"  mean: {metrics.mean:.1f} ops/ms"
       echo fmt"  stddev: {metrics.stddev:.1f}"
       echo ""
+      emitter.emitThroughputSlug(
+        fmt"nim_channels/mpmc/{threads}p{threads}c",
+        metrics.mean, metrics.stddev,
+      )
+
+  # Emit BMF JSON last so a partial run (e.g. `sipsic` only) still
+  # produces a valid file with just the variants that ran.
+  if bmfOutPath.len > 0:
+    emitter.emit(bmfOutPath)
