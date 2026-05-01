@@ -75,15 +75,12 @@ jobs:
       - name: Run bench harness tests
         run: nimble benchtests
 
-  benchmark:
+  bench-throughput:
     name: Throughput bench (ubuntu-latest)
     runs-on: ubuntu-latest
     # PRs from forks cannot read BENCHER_API_TOKEN. Skip rather than fail
     # noisily; maintainer pushes / merges still record the baseline.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    permissions:
-      pull-requests: write
-      checks: write
     timeout-minutes: 30
 
     steps:
@@ -91,7 +88,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${HOME}/.cache
-          key: cache-bench-${{ runner.os }}
+          key: cache-bench-throughput-${{ runner.os }}
 
       - name: Checkout project
         uses: actions/checkout@v4
@@ -131,16 +128,6 @@ jobs:
         # UnboundedMupsicMessageCount=500000 + UnboundedMupsicRuns=3 to keep
         # the variant tractable inside the 30-min job budget. Warmup stays
         # at 2 to absorb JIT/cache effects.
-        #
-        # Counts are 10x the previous values (100k / 50k → 1M / 500k) and
-        # the bench timer is microsecond/nanosecond-precision (computed in
-        # ns, printed as `mean: <N>.1f ops/ms`). Together this gives non-zero
-        # stddev and >1-decimal resolution between runs on the fast CI
-        # runner; previously a 50k unbounded_mupsic run completed in ~3 ms,
-        # so multiple samples bucketed into the same integer ms and stddev
-        # was reported as 0. The new shape costs roughly 30-60s on CI: well
-        # inside the 30-min job budget while giving the timer enough
-        # wall-clock spread to produce a stable, comparable signal.
         run: |
           nim c -d:release -d:danger --threads:on \
             -d:MessageCount=1000000 \
@@ -151,24 +138,141 @@ jobs:
             benchmarks/nim/bench_throughput.nim
 
       - name: Run bench_throughput
-        # mupmuc 4P/4C livelock fixed via CAS-retry backoff; ref issue #15.
-        # Step-level timeout: if any single variant hangs, fail fast inside
-        # the 30-min job budget so Bencher upload steps still run (or are
-        # visibly skipped) instead of burning the entire budget on one variant.
-        # `--bmf-out=throughput.json` emits Bencher Metric Format JSON
-        # natively (Task 0.10); the legacy stdout->bmf_adapter.py regex
-        # parser is gone (Task 0.12).
+        # mupmuc 4P/4C livelock fixed via CAS-retry backoff; see backoff
+        # changelog. Step-level timeout: if any single variant hangs, fail
+        # fast inside the 30-min job budget so the upload step still
+        # records the partial result rather than burning the entire
+        # budget on one variant.
         timeout-minutes: 20
         run: |
           ./.tmp/bench_throughput --bmf-out=throughput.json \
             sipsic mupmuc unbounded_mupsic channels | tee bench_output.txt
 
+      - name: Upload throughput BMF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-throughput-bmf
+          path: throughput.json
+
+  bench-latency:
+    # Sibling job to bench-throughput. Builds bench_latency.nim and emits a
+    # latency.json BMF fragment that the bench-upload job merges with the
+    # throughput fragment before a single `bencher run` upload — multiple
+    # `bencher run` invocations create separate Bencher Reports and would
+    # NOT co-locate latency + throughput measures on the shared per-slug
+    # history (design 1 / impl plan Track 1).
+    name: Latency bench (ubuntu-latest)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    timeout-minutes: 12
+
+    steps:
+      - name: Restore cache
+        uses: actions/cache@v4
+        with:
+          path: ${HOME}/.cache
+          key: cache-bench-latency-${{ runner.os }}
+
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Setup Nim
+        uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: 'stable'
+
+      - name: Install build deps (Linux)
+        run: |
+          sudo apt-get update -q -y
+          sudo apt-get -qq install -y clang
+
+      - name: Clone and install sibling Nim deps (nim-debra, nim-typestates)
+        run: |
+          set -e
+          cd ..
+          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
+          git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
+          (cd nim-typestates && nimble install -y)
+          (cd nim-debra && nimble install -y)
+
+      - name: Vendor unittest2
+        run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
+
+      - name: Compile bench_latency (CI-tuned run shape)
+        # 100K-message default × 33 runs would bust the 12-min budget on a
+        # CI runner with one ping-pong RTT pair per run. Cloud uses a
+        # tighter shape: 50K × 11 runs × 2 warmup ≈ 1.5M total RTTs across
+        # 4 variants. Each RTT is sub-microsecond on Linux x86_64; that
+        # gives ~3-4s per variant, well inside the budget.
+        run: |
+          nim c -d:release -d:danger --threads:on \
+            -d:BenchLatencyMessageCount=50000 \
+            -d:BenchLatencyRuns=11 \
+            -d:BenchLatencyWarmupRuns=2 \
+            benchmarks/nim/bench_latency.nim
+
+      - name: Run bench_latency
+        # Step-level timeout: latency runs are bounded but a runtime
+        # failure (lost message, missed wakeup) would spin a ponger
+        # thread forever. Fail fast inside the 12-min budget.
+        timeout-minutes: 10
+        run: |
+          ./.tmp/bench_latency --bmf-out=latency.json \
+            sipsic mupmuc sipmuc mupsic | tee latency_output.txt
+
+      - name: Upload latency BMF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-latency-bmf
+          path: latency.json
+
+  bench-upload:
+    # Merges per-binary BMF artifacts into a single JSON before a single
+    # `bencher run` invocation. Bencher creates a separate Report per
+    # invocation; multiple uploads would NOT co-locate measures on a
+    # single per-slug history (design 1 / Track 1 Task 1.4).
+    name: Merge BMF + Bencher upload (ubuntu-latest)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: [bench-throughput, bench-latency]
+    permissions:
+      pull-requests: write
+      checks: write
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Download BMF artifacts
+        # Pattern matches both bench-throughput-bmf and bench-latency-bmf
+        # (and any future per-binary artifact uploaded by PR 2's topology
+        # split, which uses the same `bench-*-bmf` naming convention).
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bench-*-bmf
+          path: ./bmf-inputs/
+          merge-multiple: true
+
+      - name: List BMF inputs (debug)
+        run: ls -la bmf-inputs/
+
       - name: Merge BMF JSON
-        # Single-input merge today, but the bench-rollup feature splits
-        # bench_throughput into per-topology binaries in PR 2-4 each
-        # producing its own throughput.json fragment. Calling merge_bmf.py
-        # now keeps the workflow unchanged when those fragments arrive.
-        run: python3 benchmarks/merge_bmf.py merged.json throughput.json
+        # `merge_bmf.py` unions per-slug measure dicts across N inputs and
+        # exits 1 on (slug, measure) collisions. Pure stdlib (no third-
+        # party deps), so no Python install step is needed beyond the
+        # ubuntu-latest default.
+        #
+        # `$(ls ...)` is intentionally unquoted: each path must arrive as
+        # a separate positional argv to merge_bmf.py. shellcheck SC2046
+        # flags this as a word-splitting risk; the risk is real ONLY if
+        # an artifact filename contains whitespace or glob characters.
+        # Artifacts are produced by upload-artifact@v4 with names we
+        # control (`throughput.json`, `latency.json`); none contain
+        # whitespace, so the warning does not apply here.
+        run: |
+          # shellcheck disable=SC2046
+          python3 benchmarks/merge_bmf.py merged.json $(ls bmf-inputs/*.json)
 
       - name: Show BMF JSON (debug)
         run: cat merged.json
