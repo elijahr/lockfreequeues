@@ -1,139 +1,104 @@
-## MPMC Push operation lifecycle typestate.
+## MPMC Push operation lifecycle typestate (Vyukov per-slot sequence protocol).
 ##
-## Enforces correct sequencing for multi-producer push:
-## Start -> LoadPointers -> CheckFull -> TryClaim -> WriteData -> Complete
+## State machine:
+##   Start -> SlotClaimed | Full | Start  (3-arm: claim succeeded / generation
+##                                         full / retry)
+##   SlotClaimed -> bool                  (terminal: write data + publish seq)
 ##
-## Key invariant: Once a slot is claimed via CAS, data MUST be written and committed.
+## Key invariant: Once a slot is claimed via CAS on `tail`, data MUST be
+## written and the per-slot `seq` MUST be advanced to `pos + 1` (release).
+## That release is the producer->consumer happens-before edge.
 ##
-## Key difference from MPSC: Uses reservedHead (not head) for fullness check,
-## because consumers can lag behind in MPMC.
+## Memory ordering follows Vyukov canonical: `moRelaxed` on the global `tail`
+## CAS (the per-slot `seq` does the data-ordering work), `moAcquire` on the
+## `seq` load (pairs with consumer's release at `pos + N`), and `moRelease`
+## on the `seq` store at `pos + 1` (gates the matching consumer).
 ##
-## Uses N-slot arithmetic with committed flags. CAS on reservedTail.
+## Backoff: this verb returns the `Start` arm to signal "retry". The facade
+## holds `var spins = InitialSpin` and calls `backoffOnRetry(spins)` between
+## iterations on the Start arm. See design doc §6.
+##
+## See design doc §2 (algorithm), §3 (bug walkthrough), §10.4 (recipe).
 
 import ../atomic_dsl
 import typestates
 
 import ./virtual_values_n
-import ./storage_n
-import ./committed_flags_n
-import ./atomic_loaders
-import ./fullness_checks
+import ./mpmc_cell
 
 type
   MPMCPushStart*[N: static int] = object ## Entry point. No data yet.
 
-  MPMCPushPointersLoaded*[N: static int] = object
-    ## Loaded reservedTail and reservedHead.
-    reservedTail*: WrappedValueN[N]
-    reservedHead*: WrappedValueN[N]
-
-  MPMCPushNotFull*[N: static int] = object
-    ## Confirmed queue has space. Ready to try CAS.
-    reservedTail*: WrappedValueN[N]
-    newReservedTail*: WrappedValueN[N]
-
   MPMCPushSlotClaimed*[N: static int] = object
-    ## CAS succeeded - we own this slot. MUST write and commit.
-    reservedTail*: WrappedValueN[N]
+    ## CAS on `tail` succeeded - we own the slot at `pos mod N`.
+    ## MUST write data and publish the seq advance.
+    pos*: uint64
     slot*: PhysicalSlotN[N]
 
-  MPMCPushDataWritten*[N: static int] = object
-    ## Data written to slot. MUST mark committed.
-    slot*: PhysicalSlotN[N]
-
-  MPMCPushFull*[N: static int] = object ## Terminal: queue was full.
+  MPMCPushFull*[N: static int] = object ## Terminal: generation full.
 
 typestate MPMCPushOp[N: static int]:
   inheritsFromRootObj = true
   consumeOnTransition = false # Allow values to be passed across case branches
-  states MPMCPushStart[N],
-    MPMCPushPointersLoaded[N],
-    MPMCPushNotFull[N],
-    MPMCPushSlotClaimed[N],
-    MPMCPushDataWritten[N],
-    MPMCPushFull[N]
+  states MPMCPushStart[N], MPMCPushSlotClaimed[N], MPMCPushFull[N]
   transitions:
-    MPMCPushStart[N] -> MPMCPushPointersLoaded[N]
-    MPMCPushPointersLoaded[N] ->
-      MPMCPushNotFull[N] | MPMCPushFull[N] as MPMCPushFullCheck[N]
-    MPMCPushNotFull[N] ->
-      MPMCPushSlotClaimed[N] | MPMCPushStart[N] as MPMCPushClaimResult[N]
-    MPMCPushSlotClaimed[N] -> MPMCPushDataWritten[N]
+    MPMCPushStart[N] ->
+      MPMCPushSlotClaimed[N] | MPMCPushFull[N] | MPMCPushStart[N] as
+      MPMCPushClaimResult[N]
 
-# Forward declaration for Mupmuc (avoid circular import)
+# Forward declaration for Mupmuc (avoid circular import).
+# Note: even though push only writes `tail`, the shared base type carries
+# `head` too so the facade can cast a single Mupmuc[N,P,C,T] to either
+# MupmucPushBase or MupmucBase (pop-side). Field order MUST stay in lockstep
+# with MupmucBase in mpmc_pop.nim — see design doc §10.10 for the offsetof
+# asserts the facade emits.
 type MupmucPushBase*[N, P, C: static int, T] = object
-  head* {.align: 64.}: Atomic[int]
-  reservedHead* {.align: 64.}: Atomic[int]
-  reservedTail* {.align: 64.}: Atomic[int]
-  storage*: StorageN[N, T]
-  committed*: CommittedFlagsN[N]
+  head* {.align: CacheLineBytes.}: Atomic[uint64]
+  tail* {.align: CacheLineBytes.}: Atomic[uint64]
+  cells*: MPMCCellArrayN[N, T]
 
 proc start*[N: static int](): MPMCPushStart[N] {.inline.} =
   ## Begin a push operation.
   MPMCPushStart[N]()
 
-proc loadPointers*[N, P, C: static int, T](
-    op: MPMCPushStart[N], queue: var MupmucPushBase[N, P, C, T]
-): MPMCPushPointersLoaded[N] {.inline, transition.} =
-  ## Load reservedTail and reservedHead atomically.
-  ## MPMC KEY: Uses reservedHead (not head) because consumers can lag.
-  let reservedTail = loadAcquireN[N](queue.reservedTail).validate()
-  let reservedHead = loadAcquireN[N](queue.reservedHead).validate()
-  MPMCPushPointersLoaded[N](reservedTail: reservedTail, reservedHead: reservedHead)
-
-proc checkFull*[N: static int](
-    op: MPMCPushPointersLoaded[N]
-): MPMCPushFullCheck[N] {.inline, transition.} =
-  ## Check if queue is full. Returns branch type.
-  ## MPMC uses reservedHead (not head) vs reservedTail for fullness check.
-  if fullN(op.reservedHead, op.reservedTail):
-    MPMCPushFullCheck[N] -> MPMCPushFull[N]()
-  else:
-    let newReservedTail = op.reservedTail.incOrResetN(1)
-    MPMCPushFullCheck[N] ->
-      MPMCPushNotFull[N](
-        reservedTail: op.reservedTail, newReservedTail: newReservedTail
-      )
-
 proc tryClaim*[N, P, C: static int, T](
-    op: MPMCPushNotFull[N], queue: var MupmucPushBase[N, P, C, T]
+    op: MPMCPushStart[N], queue: var MupmucPushBase[N, P, C, T]
 ): MPMCPushClaimResult[N] {.inline, transition.} =
-  ## CAS to claim the slot. Failure = retry from start.
-  var expected = op.reservedTail.value
-  if queue.reservedTail.compareExchangeWeak(
-    expected, op.newReservedTail.value, moRelease, moAcquire
-  ):
-    let slot = op.reservedTail.index()
-    MPMCPushClaimResult[N] ->
-      MPMCPushSlotClaimed[N](reservedTail: op.reservedTail, slot: slot)
+  ## Vyukov producer claim. Returns one of:
+  ## - SlotClaimed: tail CAS won; caller must call `complete`.
+  ## - Full: per-slot seq says the previous-generation consumer hasn't
+  ##         re-armed this slot yet. Caller returns false to user.
+  ## - Start: CAS race or producer raced ahead; caller backs off and retries.
+  let pos = queue.tail.load(moRelaxed) # P1
+  # PhysicalSlotN[N] is constructed via the validated index() path. The
+  # double-mod (here, then again inside index()) is intentional: validate()
+  # checks val < 2*N and index() does the final mod. The cost is one extra
+  # mod on the hot path - negligible vs the CAS that follows. See Phase A
+  # open issue #1 in the impl plan.
+  let slot = initRawN[N](int(pos mod uint64(N))).validate().index()
+  let s = queue.cells.seqLoad(slot, moAcquire) # P2
+  let diff = cast[int64](s) - cast[int64](pos)
+  if diff == 0:
+    var expected = pos
+    if queue.tail.compareExchangeWeak(expected, pos + 1, moRelaxed, moRelaxed):
+      # P3
+      MPMCPushClaimResult[N] -> MPMCPushSlotClaimed[N](pos: pos, slot: slot)
+    else:
+      MPMCPushClaimResult[N] -> MPMCPushStart[N]() # CAS race: caller retries
+  elif diff < 0:
+    MPMCPushClaimResult[N] -> MPMCPushFull[N]() # generation full
   else:
-    MPMCPushClaimResult[N] -> MPMCPushStart[N]()
-
-proc writeData*[N, P, C: static int, T](
-    op: MPMCPushSlotClaimed[N], queue: var MupmucPushBase[N, P, C, T], item: T
-): MPMCPushDataWritten[N] {.inline, transition.} =
-  ## Write item to the claimed slot.
-  ##
-  ## Wait for `committed[slot]` to be `false` before writing. The fullness
-  ## check via `head` already establishes the cross-cycle happens-before
-  ## chain, so this load is functionally redundant. It exists to give TSAN
-  ## a direct release/acquire pair on the slot's `committed` flag between
-  ## a consumer's `committed.store(false, release)` and this write. TSAN
-  ## on weakly-ordered arm64 was flakily failing to track the transitive
-  ## chain through `head` alone. See `mpsc_push.writeData` for the same
-  ## pattern.
-  while queue.committed.load(op.slot):
-    discard
-  queue.storage[op.slot] = item
-  MPMCPushDataWritten[N](slot: op.slot)
+    MPMCPushClaimResult[N] -> MPMCPushStart[N]() # producer raced ahead: retry
 
 proc complete*[N, P, C: static int, T](
-    op: MPMCPushDataWritten[N], queue: var MupmucPushBase[N, P, C, T]
+    op: MPMCPushSlotClaimed[N], queue: var MupmucPushBase[N, P, C, T], item: T
 ): bool {.inline.} =
-  ## Mark slot as committed. Returns success.
-  queue.committed.store(op.slot, true)
+  ## Write item to the claimed slot, then publish the seq advance.
+  ## The `seq.store(pos+1, moRelease)` is the producer->consumer edge.
+  queue.cells.dataPtr(op.slot)[] = item # P4 plain store; ordered by P5
+  queue.cells.seqStore(op.slot, op.pos + 1, moRelease) # P5 publish
   true
 
 proc extractFalse*[N: static int](op: MPMCPushFull[N]): bool {.inline.} =
-  ## Terminal: extract false result (queue was full).
+  ## Terminal: extract false result (queue was full this generation).
   false

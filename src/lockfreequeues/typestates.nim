@@ -3,7 +3,8 @@
 # N-slot types (MPSC/SPMC/MPMC)
 import ./typestates/virtual_values_n
 import ./typestates/storage_n
-import ./typestates/committed_flags_n
+import ./typestates/slot_seq_n
+import ./typestates/mpmc_cell
 
 # N+1-slot types (SPSC)
 import ./typestates/virtual_values_n1
@@ -26,7 +27,8 @@ import ./typestates/mpmc_pop
 
 export virtual_values_n
 export storage_n
-export committed_flags_n
+export slot_seq_n
+export mpmc_cell
 export virtual_values_n1
 export storage_n1
 export cas
