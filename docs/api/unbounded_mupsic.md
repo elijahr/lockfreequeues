@@ -4,7 +4,15 @@ Unbounded multiple-producer, single-consumer (MPSC) queue using linked segments.
 
 ## Overview
 
-`UnboundedMupsic` provides an unbounded MPSC queue where multiple producers feed a single consumer. Uses epoch-based memory reclamation and a committed flag for safe concurrent writes.
+`UnboundedMupsic` provides an unbounded MPSC queue where multiple producers feed a single consumer. Uses epoch-based memory reclamation (DEBRA) and a per-slot committed flag inside each segment for safe concurrent writes.
+
+> **Note:** This per-slot committed flag is the *segment-local* publication
+> mechanism for the unbounded queues. It is distinct from the per-slot
+> sequence-counter protocol used by the bounded variants (`Mupmuc`, `Mupsic`,
+> `Sipmuc`). Unbounded segments are single-use linked nodes (no generation
+> rollover), so the simpler one-shot committed flag is sufficient. See
+> [slot-ownership-typestates.md](../slot-ownership-typestates.md) for the
+> full distinction.
 
 **Performance characteristics:**
 

@@ -16,7 +16,7 @@ suite "Mupsic[N, P, T]":
     check(queue.producerCount == 4)
 
   test "initial state":
-    queue.checkState(head = 0, reservedTail = 0)
+    queue.checkState(head = 0'u64, tail = 0'u64)
 
 suite "getProducer(Mupsic[N, P, T])":
   setup:

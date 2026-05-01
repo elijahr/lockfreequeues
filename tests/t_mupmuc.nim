@@ -18,7 +18,7 @@ suite "Mupmuc[N, P, C, T]":
     check(queue.producerCount == 4)
 
   test "initial state":
-    queue.checkState(head = 0, tail = 0, storage = repeat(0, 8))
+    queue.checkState(head = 0'u64, tail = 0'u64, data = repeat(0, 8))
 
 suite "getProducer(Mupmuc[N, P, C, T])":
   setup:
@@ -135,16 +135,16 @@ suite "Mupmuc integration":
 
     check(pushRes.isNone)
 
-    queue.checkState(head = 4, tail = 12, storage = (@[9, 10, 11, 12, 5, 6, 7, 8]))
+    queue.checkState(head = 4'u64, tail = 12'u64, data = (@[9, 10, 11, 12, 5, 6, 7, 8]))
 
     popRes = queue.getConsumer(0).pop(4)
     check(popRes.isSome)
     check(popRes.get == @[5, 6, 7, 8])
 
-    queue.checkState(head = 8, tail = 12, storage = (@[9, 10, 11, 12, 5, 6, 7, 8]))
+    queue.checkState(head = 8'u64, tail = 12'u64, data = (@[9, 10, 11, 12, 5, 6, 7, 8]))
 
     popRes = queue.getConsumer(1).pop(4)
     check(popRes.isSome)
     check(popRes.get == @[9, 10, 11, 12])
 
-    queue.checkState(head = 12, tail = 12, storage = (@[9, 10, 11, 12, 5, 6, 7, 8]))
+    queue.checkState(head = 12'u64, tail = 12'u64, data = (@[9, 10, 11, 12, 5, 6, 7, 8]))

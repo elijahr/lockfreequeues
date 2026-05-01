@@ -1,7 +1,6 @@
 import options
 import unittest2
 
-import lockfreequeues/epoch
 import lockfreequeues/unbounded_sipmuc
 
 

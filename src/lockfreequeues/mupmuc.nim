@@ -1,16 +1,23 @@
 ## A multi-producer, multi-consumer (MPMC) bounded queue.
 ##
-## Both push and pop are lock-free (producers coordinate via CAS, consumers
-## coordinate via CAS, with committed flags for synchronization).
+## Both push and pop are lock-free, using the Vyukov per-slot sequence
+## protocol (see `typestates/mpmc_cell` and the `mpmc_push` / `mpmc_pop`
+## verb modules). Producers coordinate via CAS on `tail`; consumers
+## coordinate via CAS on `head`; the per-slot `seq` counter on each cell
+## carries the producer->consumer and consumer->next-producer happens-before
+## edges, eliminating the separate `committed` flag array used by the old
+## protocol.
 
 when not compileOption("threads"):
   {.error: "lockfreequeues/mupmuc requires --threads:on option.".}
 
 import ./atomic_dsl
+import ./backoff
 import options
 
 import ./exceptions
 import ./typestates
+import ./typestates/mpmc_cell
 import ./typestates/mpmc_push
 import ./typestates/mpmc_pop
 
@@ -21,17 +28,21 @@ const NoSlice* = none(HSlice[int, int])
 type
   Mupmuc*[N, P, C: static int, T] = object
     ## A multi-producer, multi-consumer bounded queue.
-    ## Uses N slots + committed flags. Both push and pop are lock-free.
+    ## Uses Vyukov per-slot sequence counters (see `MPMCCellArrayN`).
+    ## Both push and pop are lock-free.
     ##
     ## * `N` is the capacity of the queue.
     ## * `P` is the number of producer threads.
     ## * `C` is the number of consumer threads.
     ## * `T` is the type of data the queue will hold.
-    head* {.align: CacheLineBytes.}: Atomic[int]
-    reservedHead* {.align: CacheLineBytes.}: Atomic[int]
-    reservedTail* {.align: CacheLineBytes.}: Atomic[int]
-    storage*: StorageN[N, T]
-    committed*: CommittedFlagsN[N]
+    ##
+    ## Field order constraint: `head`, `tail`, `cells` MUST be the first
+    ## three fields (in that order) so the unsafe casts in `push`/`pop`
+    ## to `MupmucPushBase` / `MupmucBase` are sound. The `static` block
+    ## below pins these offsets via `offsetof`.
+    head* {.align: CacheLineBytes.}: Atomic[uint64]
+    tail* {.align: CacheLineBytes.}: Atomic[uint64]
+    cells*: MPMCCellArrayN[N, T]
     producerThreadIds*: array[P, Atomic[int]]
     consumerThreadIds*: array[C, Atomic[int]]
 
@@ -45,12 +56,32 @@ type
     idx*: int
     queue*: ptr Mupmuc[N, P, C, T]
 
+# I1 (design doc §10.10): the facade casts `ptr Mupmuc` to
+# `ptr MupmucPushBase` / `ptr MupmucBase` in push/pop. That cast is sound
+# only if the shared field PREFIX (head, tail, cells) has identical offsets.
+# Sizeof equality would be wrong because Mupmuc carries the
+# producerThreadIds/consumerThreadIds arrays not present in the bases.
+# Picking [8, 4, 4, int] as the canonical generic instantiation is
+# arbitrary but sufficient: object-field offsets are computed structurally,
+# so a match for one instantiation implies a match for all.
+static:
+  doAssert offsetOf(Mupmuc[8, 4, 4, int], head) ==
+    offsetOf(MupmucPushBase[8, 4, 4, int], head)
+  doAssert offsetOf(Mupmuc[8, 4, 4, int], tail) ==
+    offsetOf(MupmucPushBase[8, 4, 4, int], tail)
+  doAssert offsetOf(Mupmuc[8, 4, 4, int], cells) ==
+    offsetOf(MupmucPushBase[8, 4, 4, int], cells)
+  doAssert offsetOf(Mupmuc[8, 4, 4, int], head) ==
+    offsetOf(MupmucBase[8, 4, 4, int], head)
+  doAssert offsetOf(Mupmuc[8, 4, 4, int], tail) ==
+    offsetOf(MupmucBase[8, 4, 4, int], tail)
+  doAssert offsetOf(Mupmuc[8, 4, 4, int], cells) ==
+    offsetOf(MupmucBase[8, 4, 4, int], cells)
+
 proc clear[N, P, C: static int, T](self: var Mupmuc[N, P, C, T]) =
-  self.head.store(0, moRelaxed)
-  self.reservedHead.store(0, moRelaxed)
-  self.reservedTail.store(0, moRelaxed)
-  self.storage.init()
-  self.committed.init()
+  self.head.store(0'u64, moRelaxed)
+  self.tail.store(0'u64, moRelaxed)
+  self.cells.init()
   for p in 0 ..< P:
     self.producerThreadIds[p].store(0, moRelaxed)
   for c in 0 ..< C:
@@ -136,191 +167,102 @@ proc push*[N, P, C: static int, T](self: MupmucProducer[N, P, C, T], item: T): b
   ## If `item` is appended, `true` is returned.
   ##
   ## This operation is lock-free: producers never block on each other.
-  ## Uses typestate to ensure correct operation sequencing.
+  ## Uses the Vyukov per-slot `seq` protocol via the `mpmc_push` typestate.
 
-  # Cast queue to MupmucPushBase for typestate compatibility
+  # Cast queue to MupmucPushBase for typestate compatibility (sound per the
+  # static offsetof asserts at the top of this module).
   var queueBase = cast[ptr MupmucPushBase[N, P, C, T]](self.queue)
 
   var op = mpmc_push.start[N]()
-
+  var spins = InitialSpin
   while true:
-    let loaded = op.loadPointers(queueBase[])
-    let fullCheck = loaded.checkFull()
-
-    case fullCheck.kind
+    let claim = op.tryClaim(queueBase[])
+    case claim.kind
     of mMPMCPushFull:
-      return fullCheck.mpmcpushfull.extractFalse()
-    of mMPMCPushNotFull:
-      let claimResult = fullCheck.mpmcpushnotfull.tryClaim(queueBase[])
-      case claimResult.kind
-      of mMPMCPushStart:
-        op = claimResult.mpmcpushstart # CAS failed, retry
-        continue
-      of mMPMCPushSlotClaimed:
-        let written = claimResult.mpmcpushslotclaimed.writeData(queueBase[], item)
-        return written.complete(queueBase[])
+      return claim.mpmcpushfull.extractFalse()
+    of mMPMCPushSlotClaimed:
+      return claim.mpmcpushslotclaimed.complete(queueBase[], item)
+    of mMPMCPushStart:
+      op = claim.mpmcpushstart # CAS race or producer raced ahead: retry
+      backoffOnRetry(spins)
+      continue
 
 proc push*[N, P, C: static int, T](
     self: MupmucProducer[N, P, C, T], items: openArray[T]
 ): Option[HSlice[int, int]] =
-  ## Append multiple items to the queue.
-  ## If the queue is already full or is filled by this call, `some(unpushed)`
+  ## Append multiple items to the queue (best-effort).
+  ## If the queue is already full or fills during this call, `some(unpushed)`
   ## is returned, where `unpushed` is an `HSlice` corresponding to the
   ## chunk of items which could not be pushed.
-  ## If all items are appended, `none(HSlice[int, int])` is returned.
+  ## If all items are appended, `NoSlice` is returned.
+  ##
+  ## SEMANTIC CHANGE FROM 3.x: The old API atomically reserved a contiguous
+  ## block via `fetchAdd` on a `reservedTail` cursor; this API does not.
+  ## Bulk push is now a loop of single-item pushes — concurrent producers
+  ## may interleave items in the queue. Consumers still see each item
+  ## exactly once, in the order it was individually committed.
   ##
   ## This operation is lock-free: producers never block on each other.
   if unlikely(items.len == 0):
     return NoSlice
-
-  var actualCount: int
-  var reservedTail: WrappedValueN[N]
-  var newReservedTail: WrappedValueN[N]
-
-  # Claim slots using CAS on reservedTail
-  while true:
-    reservedTail = loadAcquireN[N](self.queue.reservedTail).validate()
-    # MPMC KEY: Use reservedHead (not head)
-    let reservedHead = loadAcquireN[N](self.queue.reservedHead).validate()
-
-    # MPMC: uses reservedHead vs reservedTail
-    if unlikely(fullN(reservedHead, reservedTail)):
-      return some(0 .. items.len - 1)
-
-    let avail = availableN(reservedHead, reservedTail)
-
-    if likely(avail >= items.len):
-      actualCount = items.len
-    else:
-      actualCount = min(avail, N)
-
-    newReservedTail = reservedTail.incOrResetN(actualCount)
-
-    let cas = prepareCAS(
-        addr self.queue.reservedTail, reservedTail.value, newReservedTail.value
-      )
-      .executeCAS()
-
-    if cas.succeeded:
-      break
-
-  if actualCount < items.len:
-    result = some(actualCount .. items.len - 1)
-  else:
-    result = NoSlice
-
-  # Write each item
-  for i in 0 ..< actualCount:
-    let currentTail = reservedTail.incOrResetN(i)
-    self.queue.storage[currentTail.index()] = items[i]
-
-  # Mark all claimed slots as committed
-  for i in 0 ..< actualCount:
-    let slot = reservedTail.incOrResetN(i).index()
-    self.queue.committed.store(slot, true)
+  for i in 0 ..< items.len:
+    if not self.push(items[i]):
+      return some(i .. items.len - 1)
+  NoSlice
 
 proc pop*[N, P, C: static int, T](self: Consumer[N, P, C, T]): Option[T] =
   ## Pop a single item from the queue.
   ## If the queue is empty, `none(T)` is returned.
-  ## Otherwise an item is popped, `some(T)` is returned.
+  ## Otherwise an item is popped and `some(T)` is returned.
   ##
   ## This operation is lock-free: consumers never block on each other.
-  ## Uses typestate to ensure correct operation sequencing.
+  ## Uses the Vyukov per-slot `seq` protocol via the `mpmc_pop` typestate.
 
-  # Cast queue to MupmucBase for typestate compatibility
+  # Cast queue to MupmucBase for typestate compatibility (sound per the
+  # static offsetof asserts at the top of this module).
   var queueBase = cast[ptr MupmucBase[N, P, C, T]](self.queue)
 
   var op = mpmc_pop.start[N]()
-
+  var spins = InitialSpin
   while true:
-    let loaded = op.loadPointers(queueBase[])
-
-    let emptyCheck = loaded.checkEmpty()
-    case emptyCheck.kind
+    let claim = op.tryClaim(queueBase[])
+    case claim.kind
     of mMPMCPopEmpty:
       return none(T)
-    of mMPMCPopNotEmpty:
-      let notEmpty = emptyCheck.mpmcpopnotempty
-      let committedCheck = notEmpty.checkCommitted(queueBase[])
-      case committedCheck.kind
-      of mMPMCPopStart:
-        op = committedCheck.mpmcpopstart # Retry - producer still writing
-        continue
-      of mMPMCPopSlotReady:
-        let ready = committedCheck.mpmcpopslotready
-        let claimResult = ready.tryClaim(queueBase[])
-        case claimResult.kind
-        of mMPMCPopStart:
-          op = claimResult.mpmcpopstart # Retry - CAS contention
-          continue
-        of mMPMCPopSlotClaimed:
-          let claimed = claimResult.mpmcpopslotclaimed
-          return some(claimed.complete(queueBase[]))
+    of mMPMCPopSlotClaimed:
+      return some(claim.mpmcpopslotclaimed.complete(queueBase[]))
+    of mMPMCPopStart:
+      op = claim.mpmcpopstart # CAS race or consumer raced ahead: retry
+      backoffOnRetry(spins)
+      continue
 
 proc pop*[N, P, C: static int, T](
     self: Consumer[N, P, C, T], count: int
 ): Option[seq[T]] =
-  ## Pop up to `count` items from the queue.
+  ## Pop up to `count` items from the queue (best-effort drain).
   ## If the queue is empty, `none(seq[T])` is returned.
-  ## Otherwise `some(seq[T])` is returned containing at least one item.
+  ## Otherwise `some(seq[T])` is returned containing at least one and at
+  ## most `count` items.
+  ##
+  ## SEMANTIC CHANGE FROM 3.x: The old API atomically reserved a contiguous
+  ## block via `fetchAdd` on a `reservedHead` cursor; this API does not.
+  ## Bulk pop is now a loop of single-item pops — the returned sequence may
+  ## be shorter than `count` even when the queue still contains items
+  ## visible to other consumers.
   ##
   ## This operation is lock-free: consumers never block on each other.
-
   if unlikely(count <= 0):
     return none(seq[T])
-
-  var actualCount: int
-  var reservedHead: WrappedValueN[N]
-  var newReservedHead: WrappedValueN[N]
-
-  # Claim slots using CAS on reservedHead
-  while true:
-    reservedHead = loadAcquireN[N](self.queue.reservedHead).validate()
-    let reservedTail = loadAcquireN[N](self.queue.reservedTail).validate()
-
-    if unlikely(emptyN(reservedHead, reservedTail)):
-      return none(seq[T])
-
-    # Count available committed slots
-    var avail = 0
-    for i in 0 ..< min(count, N):
-      let idx = reservedHead.incOrResetN(i).index()
-      if not self.queue.committed.load(idx):
-        break # Hit an uncommitted slot, stop
-      inc avail
-
-    if avail <= 0:
-      return none(seq[T]) # No committed items available
-
-    actualCount = min(avail, count)
-    newReservedHead = reservedHead.incOrResetN(actualCount)
-
-    let cas = prepareCAS(
-        addr self.queue.reservedHead, reservedHead.value, newReservedHead.value
-      )
-      .executeCAS()
-
-    if cas.succeeded:
+  var items = newSeqOfCap[T](count)
+  for _ in 0 ..< count:
+    let v = self.pop()
+    if v.isNone:
       break
-
-  # Read each slot
-  var items = newSeq[T](actualCount)
-  for i in 0 ..< actualCount:
-    let currentHead = reservedHead.incOrResetN(i)
-    items[i] = self.queue.storage[currentHead.index()]
-
-  result = some(items)
-
-  # Clear committed flags for all claimed slots
-  for i in 0 ..< actualCount:
-    let idx = reservedHead.incOrResetN(i).index()
-    self.queue.committed.store(idx, false)
-
-  # Try to advance head (lock-free, may fail if other consumers are ahead)
-  var expectedHead = reservedHead.value
-  discard self.queue.head.compareExchangeWeak(
-    expectedHead, newReservedHead.value, moRelease, moAcquire
-  )
+    items.add(v.get)
+  if items.len == 0:
+    none(seq[T])
+  else:
+    some(items)
 
 proc push*[N, P, C: static int, T](self: var Mupmuc[N, P, C, T], item: T): bool =
   ## Raises `InvalidCallDefect`. Use `MupmucProducer.push()` instead.
@@ -367,25 +309,18 @@ when defined(testing):
     self.clear()
 
   proc checkState*[N, P, C: static int, T](
-      self: var Mupmuc[N, P, C, T], head: int, reservedHead: int, tail: int
+      self: var Mupmuc[N, P, C, T], head: uint64, tail: uint64
+  ) =
+    ## Check internal queue state for testing (head + tail only).
+    check(self.head.load(moRelaxed) == head)
+    check(self.tail.load(moRelaxed) == tail)
+
+  proc checkState*[N, P, C: static int, T](
+      self: var Mupmuc[N, P, C, T], head: uint64, tail: uint64, data: seq[T]
   ) =
     ## Check internal queue state for testing.
+    ## Verifies head, tail, and each cell's payload data against `data`.
     check(self.head.load(moRelaxed) == head)
-    check(self.reservedHead.load(moRelaxed) == reservedHead)
-    check(self.reservedTail.load(moRelaxed) == tail)
-
-  proc checkState*[N, P, C: static int, T](
-      self: var Mupmuc[N, P, C, T], head: int, reservedTail: int
-  ) =
-    ## Check internal queue state for testing (simplified, just head and reservedTail).
-    check(self.head.load(moRelaxed) == head)
-    check(self.reservedTail.load(moRelaxed) == reservedTail)
-
-  proc checkState*[N, P, C: static int, T](
-      self: var Mupmuc[N, P, C, T], head: int, tail: int, storage: seq[T]
-  ) =
-    ## Check internal queue state for testing (simplified, without reservedHead).
-    check(self.head.load(moRelaxed) == head)
-    check(self.reservedTail.load(moRelaxed) == tail)
+    check(self.tail.load(moRelaxed) == tail)
     for i in 0 ..< N:
-      check(self.storage.data[i] == storage[i])
+      check(self.cells.cells[i].payload.data == data[i])

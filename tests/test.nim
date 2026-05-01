@@ -1,5 +1,7 @@
 import ./t_atomic_dsl
+import ./t_backoff
 import ./t_mupmuc
+import ./t_slot_seq_generation_rollover
 # import ./t_mupmuc_threaded  # DISABLED: pre-existing deadlock unrelated to typestate migration
 import ./t_mupsic
 import ./t_mupsic_threaded
@@ -20,7 +22,9 @@ import ./t_wraparound
 
 export
   t_atomic_dsl,
+  t_backoff,
   t_mupmuc,
+  t_slot_seq_generation_rollover,
   # t_mupmuc_threaded,
   t_mupsic,
   t_mupsic_threaded,

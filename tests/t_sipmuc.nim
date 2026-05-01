@@ -20,8 +20,8 @@ suite "Sipmuc[N, C, T]":
     check(queue.consumerCount == 4)
 
   test "initial state":
-    queue.checkState(head = 0, tail = 0, storage = repeat(0, 8))
-    queue.checkState(head = 0, reservedHead = 0, tail = 0)
+    queue.checkState(head = 0'u64, tail = 0'u64, data = repeat(0, 8))
+    queue.checkState(head = 0'u64, tail = 0'u64)
 
 suite "getConsumer(Sipmuc[N, C, T])":
   setup:
@@ -101,7 +101,10 @@ suite "push(Sipmuc[N, C, T], T)":
   test "basic":
     # Sipmuc uses Sipsic's push directly (single producer)
     check(queue.push(1) == true)
-    queue.checkState(head = 0, tail = 1, storage = (@[1, 0, 0, 0, 0, 0, 0, 0]))
+    # Only slot 0 is published (tail advanced to 1). Cell data outside the
+    # published region is undefined per Vyukov canonical protocol — reset()
+    # does not zero payload.data, so we cannot assert on un-pushed slots.
+    queue.checkState(head = 0'u64, tail = 1'u64)
 
   test "overflow":
     for i in 1 .. 8:
@@ -115,7 +118,7 @@ suite "push(Sipmuc[N, C, T], T)":
       discard queue.getConsumer(0).pop()
     for i in 9 .. 12:
       check(queue.push(i) == true)
-    queue.checkState(head = 4, tail = 12, storage = (@[9, 10, 11, 12, 5, 6, 7, 8]))
+    queue.checkState(head = 4'u64, tail = 12'u64, data = (@[9, 10, 11, 12, 5, 6, 7, 8]))
 
 suite "push(Sipmuc[N, C, T], seq[T])":
   setup:
@@ -123,7 +126,10 @@ suite "push(Sipmuc[N, C, T], seq[T])":
 
   test "basic":
     check(queue.push(@[1, 2, 3, 4]).isNone)
-    queue.checkState(head = 0, tail = 4, storage = (@[1, 2, 3, 4, 0, 0, 0, 0]))
+    # Slots 0-3 are published (tail advanced to 4). Cell data outside the
+    # published region is undefined per Vyukov canonical protocol — reset()
+    # does not zero payload.data, so we cannot assert on un-pushed slots.
+    queue.checkState(head = 0'u64, tail = 4'u64)
 
   test "overflow":
     let unpushed = queue.push(@[1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
@@ -135,7 +141,7 @@ suite "push(Sipmuc[N, C, T], seq[T])":
     for i in 1 .. 4:
       discard queue.getConsumer(0).pop()
     check(queue.push(@[9, 10, 11, 12]).isNone)
-    queue.checkState(head = 4, tail = 12, storage = (@[9, 10, 11, 12, 5, 6, 7, 8]))
+    queue.checkState(head = 4'u64, tail = 12'u64, data = (@[9, 10, 11, 12, 5, 6, 7, 8]))
 
 suite "capacity(Sipmuc[N, C, T])":
   test "basic":
