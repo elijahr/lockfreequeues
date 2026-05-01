@@ -583,11 +583,24 @@ jobs:
       actions: read
       pull-requests: write
       checks: write
+      # Required by the snapshot-push step (Task 5.5.b). The push only
+      # fires on `push` to `refs/heads/devel`; PR runs and other
+      # branches keep contents:write unused.
+      contents: write
     timeout-minutes: 10
 
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
+        with:
+          # Snapshot-push needs a writable working tree on `devel` so
+          # `git commit` + `git push origin devel` succeeds. Detached
+          # HEAD (the default for push events) cannot push back.
+          ref: ${{ github.event_name == 'push' && github.ref_name || '' }}
+          # Default GITHUB_TOKEN identity (`github-actions[bot]`) is the
+          # token the actor-guard short-circuits on (Task 5.5.a), so
+          # the push closes the loop-prevention contract.
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download BMF artifacts
         # Pattern matches every per-binary artifact uploaded by the
@@ -742,3 +755,38 @@ jobs:
             --testbed ubuntu-latest \
             --adapter json \
             --file merged.json
+
+      # Track 5 PR 5 Task 5.5.b: snapshot the merged BMF into the docs
+      # assets tree so the chart on `docs/benchmarks.md` always points
+      # at the most recent devel run. Loop-prevention is layered (see
+      # design §5.X / Task 5.5.a):
+      #   1. `[skip ci]` in the commit message — GitHub natively skips
+      #      workflow runs on commits containing this marker.
+      #   2. `paths-ignore: docs/assets/bench-results/**` (Task 5.5.a)
+      #      — bench job skipped at workflow-evaluation time.
+      #   3. `if: github.actor != 'github-actions[bot]'` on the parent
+      #      bench / bench-upload jobs (Task 5.5.a) — a bot-authored
+      #      commit short-circuits before any work happens.
+      # Only fires on `push` to `refs/heads/devel`; tag pushes,
+      # workflow_dispatch, PR runs, and main pushes do nothing here.
+      - name: Snapshot to docs assets (devel push only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/devel'
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          mkdir -p docs/assets/bench-results
+          SHA=$(git rev-parse --short HEAD)
+          cp merged.json "docs/assets/bench-results/${SHA}.json"
+          cp merged.json docs/assets/bench-results/latest.json
+          git add docs/assets/bench-results/
+          # Nothing to commit if merged.json is byte-identical to the
+          # currently-checked-in latest.json (rare but possible on a
+          # docs-only retrigger). `git diff --cached --quiet` exits 0
+          # when there is no staged diff; in that case skip cleanly.
+          if git diff --cached --quiet; then
+            echo "::notice::Snapshot identical to current checked-in latest.json; skipping commit."
+            exit 0
+          fi
+          git commit -m "chore(bench): refresh snapshot [skip ci]"
+          git push origin devel
