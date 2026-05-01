@@ -383,7 +383,7 @@ proc runVariant(variant: string, em: var BMFEmitter) =
         for p in [1, 2, 4]:
           for c in [1, 2, 4]:
             runMvpMpmcShape[CrossbeamArrayQueueAdapter[uint64]](
-              em, "crossbeam_queue", initCrossbeamArrayQ,
+              em, "crossbeam_array_queue", initCrossbeamArrayQ,
               p, c, BenchMpmcRuns, BenchMpmcWarmup,
               BenchMpmcMessageCount, MpmcCapacity)
         return

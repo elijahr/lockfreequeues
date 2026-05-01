@@ -582,7 +582,7 @@ proc runVariant(variant: string, em: var BMFEmitter) =
         for p in [1, 2, 4]:
           for c in [1, 2, 4]:
             runMvpUnboundedShape[LoonyAdapter[uint64]](
-              em, "loony/LoonyQueue", initLoonyQ,
+              em, "loony", initLoonyQ,
               p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
               UnboundedMupmucMessageCount)
         return
@@ -591,7 +591,7 @@ proc runVariant(variant: string, em: var BMFEmitter) =
         for p in [1, 2, 4]:
           for c in [1, 2, 4]:
             runMvpUnboundedShape[CrossbeamSegQueueAdapter[uint64]](
-              em, "crossbeam_queue/SegQueue", initCrossbeamSegQ,
+              em, "crossbeam_seg_queue", initCrossbeamSegQ,
               p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
               UnboundedMupmucMessageCount)
         return
