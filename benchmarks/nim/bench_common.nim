@@ -307,6 +307,94 @@ type
     max_ns*: float
     samples*: int
 
+type
+  PingerCtx[Q] = object
+    fwd: ptr Q
+    rev: ptr Q
+    count: int
+    histogram: ptr Histogram
+
+  PongerCtx[Q] = object
+    fwd: ptr Q
+    rev: ptr Q
+    count: int
+
+proc pingerThreadBody[Q](ctx: ptr PingerCtx[Q]) {.thread.} =
+  ## Send a monotonic-ns timestamp via the forward queue, spin on the
+  ## reverse queue until the ponger echoes it back, record RTT.
+  ## `mixin push / pop` defers symbol resolution to the call site.
+  mixin push, pop
+  for _ in 0 ..< ctx.count:
+    let t0 = getMonoTime()
+    let payload = uint64(inNanoseconds(t0 - MonoTime()))
+    while push(ctx.fwd[], payload) == prFull:
+      discard
+    while true:
+      let r = pop(ctx.rev[])
+      if r.success:
+        let t1 = getMonoTime()
+        let rtt = float(inNanoseconds(t1 - t0))
+        if rtt > 0.0:
+          ctx.histogram[].record(rtt)
+        break
+
+proc pongerThreadBody[Q](ctx: ptr PongerCtx[Q]) {.thread.} =
+  mixin push, pop
+  for _ in 0 ..< ctx.count:
+    var v: uint64
+    while true:
+      let r = pop(ctx.fwd[])
+      if r.success:
+        v = r.value
+        break
+    while push(ctx.rev[], v) == prFull:
+      discard
+
+proc runOneLatencyRun[Q](
+    queueInit: proc(): Q,
+    messageCount: int,
+): LatencyMetrics =
+  ## One ping-pong RTT run. Allocates fwd + rev queues of type Q,
+  ## spawns 1 pinger and 1 ponger, records RTT samples, returns
+  ## LatencyMetrics{p50, p95, p99, p999, max, samples}.
+  ##
+  ## NOTE: This task ships the 1P/1C smoke topology only. PR 1 (Task 1.x)
+  ## extends to multi-pinger / multi-ponger by sharding `messageCount`
+  ## across additional threads with the remainder-spread rule from
+  ## runThroughputHarness. The 1P/1C path keeps RTT semantics clean
+  ## (no scheduler interleave between ping and pong) which is what the
+  ## p50 / p99 measurements in PR 1 hinge on.
+  var fwd = queueInit()
+  var rev = queueInit()
+  var hist = initHistogram()
+
+  var pingerCtx = PingerCtx[Q](
+    fwd: addr fwd, rev: addr rev,
+    count: messageCount,
+    histogram: addr hist,
+  )
+  var pongerCtx = PongerCtx[Q](
+    fwd: addr fwd, rev: addr rev,
+    count: messageCount,
+  )
+
+  var pingerThread: Thread[ptr PingerCtx[Q]]
+  var pongerThread: Thread[ptr PongerCtx[Q]]
+
+  createThread(pingerThread, pingerThreadBody[Q], addr pingerCtx)
+  createThread(pongerThread, pongerThreadBody[Q], addr pongerCtx)
+  joinThread(pingerThread)
+  joinThread(pongerThread)
+
+  result = LatencyMetrics(
+    p50_ns: hist.percentile(0.50),
+    p95_ns: hist.percentile(0.95),
+    p99_ns: hist.percentile(0.99),
+    p999_ns: hist.percentile(0.999),
+    max_ns: hist.percentile(1.0),
+    samples: hist.seenAll,
+  )
+
 proc runLatencyHarness*[Q](
     queueInit: proc(): Q,
     messageCount: int,
@@ -315,8 +403,34 @@ proc runLatencyHarness*[Q](
 ): LatencyMetrics =
   ## Ping-pong RTT runner. Allocates two queues of type Q (forward +
   ## reverse). Records per-run RTT into a Histogram; reported metrics
-  ## are the mean across runs of each percentile.
-  raiseAssert "not implemented"
+  ## are the **mean across runs of each percentile** (NOT a percentile
+  ## of all unioned samples), per design 2.5 "Run aggregation for latency".
+  ##
+  ## Per-run histograms isolate slow GC pauses or thread-warmup
+  ## artifacts to the run that contains them, instead of bleeding into
+  ## the next run's tail.
+  for _ in 0 ..< warmupCount:
+    discard runOneLatencyRun[Q](queueInit, messageCount)
+  if runCount <= 0:
+    return LatencyMetrics()
+  var p50s, p95s, p99s, p999s, maxs: seq[float]
+  var totalSamples = 0
+  for _ in 0 ..< runCount:
+    let m = runOneLatencyRun[Q](queueInit, messageCount)
+    p50s.add(m.p50_ns)
+    p95s.add(m.p95_ns)
+    p99s.add(m.p99_ns)
+    p999s.add(m.p999_ns)
+    maxs.add(m.max_ns)
+    totalSamples += m.samples
+  result = LatencyMetrics(
+    p50_ns: mean(p50s),
+    p95_ns: mean(p95s),
+    p99_ns: mean(p99s),
+    p999_ns: mean(p999s),
+    max_ns: mean(maxs),
+    samples: totalSamples,
+  )
 
 # ---------- Throughput harness ----------
 

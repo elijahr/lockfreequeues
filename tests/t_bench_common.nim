@@ -263,3 +263,18 @@ suite "bench_common runThroughputHarness":
     )
     check metrics.runs == 1
     check metrics.ops_ms_mean > 0.0
+
+# ---------- Task 0.6: runLatencyHarness smoke ----------
+
+suite "bench_common runLatencyHarness":
+  test "smoke: 1P/1C, 1000 messages, 1 run, 0 warmup; p50<p99<max":
+    let metrics = runLatencyHarness[SmokeAdapter](
+      queueInit = proc(): SmokeAdapter = initSmokeAdapter(1024),
+      messageCount = 1000,
+      runCount = 1,
+      warmupCount = 0,
+    )
+    check metrics.samples >= 1000
+    check metrics.p50_ns > 0.0
+    check metrics.p99_ns >= metrics.p50_ns
+    check metrics.max_ns >= metrics.p99_ns
