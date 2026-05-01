@@ -155,13 +155,15 @@ Current slug set emitted across the five binaries:
 - `bench_latency`:
   `lockfreequeues_{sipsic,sipmuc,mupsic,mupmuc}/{spsc,mpmc,mpsc,mpmc}/1p1c`.
 
-## Comparison MVP — third-party adapters
+## Comparison libraries — third-party adapters
 
-PR 3 (Track 3) adds five external-library adapters so each topology has
-≥ 3 distinct libraries plotted on the same Bencher dashboard. All
-adapters are gated behind `-d:adapter_<library_slug>_available`; absent
-gates produce no symbol references and the production builds are
-unchanged.
+PR 3 (Track 3) introduced the comparison MVP with five
+external-library adapters; PR 4 (Track 4) extends the set to seven
+upstream libraries / nine adapter variants so each topology has ≥ 3
+distinct libraries plotted on the same Bencher dashboard. All
+adapters are gated behind `-d:adapter_<library_slug>_available`;
+absent gates produce no symbol references and the production builds
+are unchanged.
 
 | Library | Variant | Topology | Compile gate | Install (Linux CI) |
 |---------|---------|----------|--------------|--------------------|
@@ -170,25 +172,43 @@ unchanged.
 | Boost.LockFree | `boost::lockfree::spsc_queue` | `spsc` (bounded) | `-d:adapter_boost_lockfree_spsc_available` | same as above |
 | Crossbeam | `crossbeam_queue::ArrayQueue` | `mpmc` (bounded) | `-d:adapter_crossbeam_array_queue_available` | `cargo build --release --manifest-path benchmarks/rust/bench-ffi-crossbeam/Cargo.toml` |
 | Crossbeam | `crossbeam_queue::SegQueue` | `mpmc_unbounded` | `-d:adapter_crossbeam_seg_queue_available` | same as above |
+| MoodyCamel | `concurrentqueue::ConcurrentQueue` | `mpmc_unbounded` | `-d:adapter_moodycamel_available` | vendored at `benchmarks/vendor/concurrentqueue/` (requires `nim cpp`) |
+| nimble `threading` | `threading.Chan` | `mpmc` (bounded) | `-d:adapter_threading_channels_available` | `nimble install threading` |
+| Nim `system.Channel` | `system/channels.Channel` | `mpsc` (bounded, blocking-on-full producer\*) | `-d:adapter_nim_channel_available` | none (Nim stdlib) |
 
-Library upstreams: [Loony](https://github.com/shayanhabibi/loony) (MIT),
-[Boost.LockFree](https://www.boost.org/libs/lockfree/) (BSL-1.0),
-[Crossbeam](https://github.com/crossbeam-rs/crossbeam) (Apache-2.0 OR MIT).
-Per-library obligations are tracked in
+\* The `system.Channel` adapter blocks the producer when the channel
+is full instead of returning back-pressure to the harness loop, so its
+recorded throughput captures kernel wakeup latency. This makes the
+`nim_channel/*` slugs only loosely comparable to the lock-free
+adapters; the chart legend marks the slug accordingly.
+
+Library upstreams: [Loony](https://github.com/shayanhabibi/loony)
+(MIT),
+[Boost.LockFree](https://www.boost.org/libs/lockfree/)
+(BSL-1.0),
+[Crossbeam](https://github.com/crossbeam-rs/crossbeam)
+(Apache-2.0 OR MIT),
+[MoodyCamel concurrentqueue](https://github.com/cameron314/concurrentqueue)
+(BSD-2-Clause / Boost dual),
+[nimble threading](https://github.com/nim-lang/threading) (MIT),
+[Nim `system.Channel`](https://nim-lang.org) (MIT, ships with the
+compiler). Per-library obligations are tracked in
 [`THIRD_PARTY_LICENSES.md`](../THIRD_PARTY_LICENSES.md).
 
 ### CI integration
 
-- **`bench.yml`** runs Loony + Boost.LockFree on every PR using the
-  soft-skip pattern (design 2.6): each library has install -> smoke ->
-  set-flag stages with `continue-on-error: true`; if install or smoke
-  fails the binary compiles without that adapter and the workflow emits
-  a `::warning title=Adapter skipped::...` annotation. The
-  `workflow_dispatch` event also accepts `force_skip_boost` /
-  `force_skip_loony` boolean inputs to exercise the skip path manually.
+- **`bench.yml`** runs every adapter on every PR using the soft-skip
+  pattern (design §2.6): each library has install → smoke → set-flag
+  stages with `continue-on-error: true`; if install or smoke fails
+  the binary compiles without that adapter and the workflow emits a
+  `::warning title=Adapter skipped::...` annotation. The
+  `workflow_dispatch` event accepts `force_skip_boost` /
+  `force_skip_loony` / `force_skip_moodycamel` /
+  `force_skip_threading_channels` / `force_skip_nim_channel`
+  boolean inputs to exercise the skip path manually.
 - **`bench-comparison.yml`** runs Crossbeam (the only adapter with a
-  Rust toolchain dependency) on a nightly cron + `workflow_dispatch` +
-  targeted path pushes to `devel`. It produces a separate Bencher
+  Rust toolchain dependency) on a nightly cron + `workflow_dispatch`
+  + targeted path pushes to `devel`. It produces a separate Bencher
   Report dedicated to crossbeam slugs.
 
 ### Running comparison adapters locally
@@ -215,6 +235,25 @@ nim c -r -d:release -d:danger --threads:on \
   --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
   -d:BenchMpmcMessageCount=100000 -d:BenchMpmcRuns=3 \
   benchmarks/nim/bench_mpmc.nim crossbeam_array_queue
+
+# MoodyCamel (vendored single-header; nim cpp):
+nim cpp -r -d:release -d:danger --threads:on \
+  -d:adapter_moodycamel_available \
+  -d:UnboundedMupmucMessageCount=100000 -d:UnboundedMupmucRuns=3 \
+  benchmarks/nim/bench_unbounded.nim moodycamel
+
+# nimble threading.Chan:
+nimble install threading
+nim c -r -d:release -d:danger --threads:on \
+  -d:adapter_threading_channels_available \
+  -d:BenchMpmcMessageCount=100000 -d:BenchMpmcRuns=3 \
+  benchmarks/nim/bench_mpmc.nim threading_channels
+
+# Nim system.Channel (no install):
+nim c -r -d:release -d:danger --threads:on \
+  -d:adapter_nim_channel_available \
+  -d:BenchMpscMessageCount=100000 -d:BenchMpscRuns=3 \
+  benchmarks/nim/bench_mpsc.nim nim_channel
 ```
 
 ## Running merge_bmf and superset_check tests

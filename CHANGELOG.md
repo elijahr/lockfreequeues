@@ -9,6 +9,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Comparison expansion (PR 4, Track 4): four new third-party adapters
+  reach the comparison set. `moodycamel_adapter.nim` wraps
+  `moodycamel::ConcurrentQueue` (BSD-2-Clause / Boost dual,
+  `mpmc_unbounded`) via a thin `extern "C"` shim isolating Nim from
+  upstream's template machinery. `threading_channels_adapter.nim`
+  wraps the nimble `threading` package's `Chan[T]` (MIT, `mpmc`
+  bounded) using non-blocking `trySend` / `tryRecv`.
+  `nim_channel_adapter.nim` wraps Nim's stdlib `system.Channel[T]`
+  (MIT, `mpsc` bounded) with blocking-on-full producer semantics
+  (apples-to-oranges fairness caveat documented inline + asterisked
+  in the bench README). All three are gated behind
+  `-d:adapter_<library_slug>_available` defines; absent gates produce
+  no symbol references and the production builds are unchanged.
+- Vendored MoodyCamel `concurrentqueue` at upstream commit
+  `d655418bb644b7f85159d94c591d7d983949fb81` under
+  `benchmarks/vendor/concurrentqueue/`: `concurrentqueue.h` + upstream
+  `LICENSE.md` + a project-authored `README.md` documenting the
+  pinned SHA and upgrade procedure. The
+  `moodycamel_wrapper.cpp` shim exposes `mc_init` / `mc_push` /
+  `mc_pop` / `mc_destroy` for `uint64_t`. New
+  `benchmarks/nim/smoke/smoke_moodycamel.nim` and
+  `benchmarks/nim/smoke/smoke_threading_channels.nim` run a 32-item
+  push/pop round-trip as fast pre-flight checks in CI.
+- `bench.yml` gains the `force_skip_moodycamel` /
+  `force_skip_threading_channels` / `force_skip_nim_channel`
+  `workflow_dispatch` boolean inputs and per-library install → smoke →
+  set-flag pipelines (design §2.6 soft-skip pattern). MoodyCamel's
+  install step is a `test -f` against the vendored header so the
+  bench is reproducible without network egress; threading uses
+  `nimble install threading`; system.Channel needs no install.
+  Failure at install or smoke flips the binary's compile flags so the
+  slugs are omitted from the BMF instead of failing the workflow; the
+  `Annotate skipped` step emits a `::warning title=Adapter
+  skipped::...` annotation visible on the PR check summary. The
+  `bench_mpsc` compile step now consumes `ADAPTER_FLAGS` so the new
+  `nim_channel` adapter wires in; the `bench_unbounded` compile step
+  honours `NIM_MODE=cpp` when MoodyCamel is enabled.
+- `tests/t_bench_adapters.nim` extends with three new
+  `when defined(adapter_<lib>_available):` blocks covering 1000-item
+  push/pop round-trip set equality for the new adapters (gated under
+  `nim cpp` for MoodyCamel).
+- `THIRD_PARTY_LICENSES.md` lands its first vendored entry
+  (`concurrentqueue (MoodyCamel)`, BSD-2-Clause / Boost dual, pinned
+  to commit `d655418bb644b7f85159d94c591d7d983949fb81`) plus
+  unvendored entries for the nimble `threading` package (MIT) and
+  Nim `system.Channel` stdlib (MIT). Placeholder PR-4 reservation
+  removed.
+- New `.gitattributes` rule
+  `benchmarks/vendor/** linguist-vendored=true linguist-generated=true`
+  excludes the vendored MoodyCamel header from GitHub language stats
+  and code-search noise.
+- `benchmarks/README.md` comparison table extends to seven upstream
+  libraries / nine adapter variants with install commands for each.
+- Bench-binary slug coverage extends per design §2.4: `bench_mpmc`
+  emits `threading_channels/mpmc/{1,2,4}p{1,2,4}c` (9 shapes);
+  `bench_mpsc` emits `nim_channel/mpsc/{1,2,4}p1c` (3 shapes);
+  `bench_unbounded` emits
+  `moodycamel/ConcurrentQueue/mpmc_unbounded/{1,2,4}p{1,2,4}c` (9
+  shapes). Each carries a `throughput_ops_ms` measure with
+  `value=mean`, `lower_value=mean-stddev`, `upper_value=mean+stddev`.
 - New `benchmarks/nim/bench_common.nim` shared harness module exporting:
   `Topology` enum, `BMFEmitter` (alpha-sorted Bencher Metric Format JSON
   emission), `Histogram` (min-heap top-K + Algorithm R reservoir for

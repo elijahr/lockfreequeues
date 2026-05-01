@@ -1,0 +1,3 @@
+# Vendored third-party sources are excluded from GitHub language stats
+# and code-search noise per design doc §4.6.
+benchmarks/vendor/**           linguist-vendored=true linguist-generated=true

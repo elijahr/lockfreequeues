@@ -73,8 +73,45 @@ vendored into this repository. The benchmark adapter code (under
 The following libraries are reserved for future PRs in the bench-rollup
 series; entries will be added when their adapters land:
 
-- **concurrentqueue (MoodyCamel)** — vendored under
-  `benchmarks/vendor/concurrentqueue/`, BSD-2-Clause / Boost dual.
-  Tracked in design doc §3 (PR 4).
 - **uPlot** — bundled at `docs/assets/uplot-<version>.iife.min.js` for
   the docs chart page, MIT. Tracked in design doc §3 (PR 5).
+
+## Comparison expansion libraries (PR 4)
+
+PR 4 adds three more comparison adapters; one is vendored
+(`concurrentqueue`), the other two are linked at compile time without
+vendoring (Nim's stdlib `system.Channel` is built into the compiler;
+the nimble `threading` package is resolved at build time).
+
+### concurrentqueue (MoodyCamel)
+
+- **Source:** https://github.com/cameron314/concurrentqueue
+- **Version:** commit
+  `d655418bb644b7f85159d94c591d7d983949fb81` (vendored at PR 4
+  implementation time; see
+  `benchmarks/vendor/concurrentqueue/README.md` for the upgrade
+  procedure and rationale).
+- **License:** BSD-2-Clause / Boost Software License 1.0 (dual)
+- **Vendored at:** `benchmarks/vendor/concurrentqueue/`
+- **Upgrade procedure:** see
+  `benchmarks/vendor/concurrentqueue/README.md`
+
+### threading (nimble package)
+
+- **Source:** https://github.com/nim-lang/threading
+- **Version:** `0.2.x` (resolved by `nimble install threading`; the
+  bench CI step records the resolved SHA in the workflow log).
+- **License:** MIT
+- **Vendored at:** _(not vendored — resolved at build time via
+  Nimble)_
+- **Upgrade procedure:** _(not applicable; nimble-managed)_
+
+### Nim system.Channel (stdlib)
+
+- **Source:** https://nim-lang.org (built into the `system/channels`
+  module of the Nim compiler distribution).
+- **Version:** _(matches the Nim compiler version — currently the
+  `jiro4989/setup-nim-action` `stable` channel)._
+- **License:** MIT (Nim compiler license)
+- **Vendored at:** _(not vendored — built into the Nim compiler)_
+- **Upgrade procedure:** _(not applicable; tracks Nim compiler)_
