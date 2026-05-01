@@ -110,19 +110,48 @@ proc emit*(em: BMFEmitter, path: string) =
 # ---------- Stats helpers ----------
 
 proc mean*(data: openArray[float]): float =
-  raiseAssert "not implemented"
+  ## Arithmetic mean. Empty input returns 0.0 (matches the legacy
+  ## `benchmarks/nim/stats.nim` contract that this module replaces).
+  if data.len == 0: return 0.0
+  var s = 0.0
+  for x in data: s += x
+  s / float(data.len)
 
 proc stddev*(data: openArray[float]): float =
-  raiseAssert "not implemented"
+  ## Sample standard deviation (ddof = 1, matches numpy default for
+  ## `np.std(..., ddof=1)`). Singleton or empty input returns 0.0.
+  if data.len < 2: return 0.0
+  let m = mean(data)
+  var sumSq = 0.0
+  for x in data:
+    let d = x - m
+    sumSq += d * d
+  sqrt(sumSq / float(data.len - 1))
 
 proc minVal*(data: openArray[float]): float =
-  raiseAssert "not implemented"
+  if data.len == 0: return 0.0
+  result = data[0]
+  for x in data:
+    if x < result: result = x
 
 proc maxVal*(data: openArray[float]): float =
-  raiseAssert "not implemented"
+  if data.len == 0: return 0.0
+  result = data[0]
+  for x in data:
+    if x > result: result = x
 
 proc percentile*(data: openArray[float], p: float): float =
-  raiseAssert "not implemented"
+  ## Linear-interpolation percentile over a sorted copy of `data`.
+  ## `p` clamped to [0, 1]. Empty input returns 0.0.
+  if data.len == 0: return 0.0
+  let pc = max(0.0, min(1.0, p))
+  var sorted = @data
+  sorted.sort()
+  let pos = pc * float(sorted.len - 1)
+  let lo = int(pos)
+  let hi = min(lo + 1, sorted.len - 1)
+  let frac = pos - float(lo)
+  sorted[lo] + frac * (sorted[hi] - sorted[lo])
 
 # ---------- Histogram (top-K min-heap + uniform reservoir) ----------
 

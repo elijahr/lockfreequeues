@@ -126,3 +126,37 @@ suite "bench_common BMFEmitter":
     check inner["lower_value"].getFloat() == 95.0
     check inner["upper_value"].getFloat() == 105.0
     removeFile(path)
+
+# ---------- Task 0.4: Stats helpers ----------
+
+suite "bench_common Stats":
+  test "mean of integer-like floats":
+    check mean(@[1.0, 2.0, 3.0, 4.0]) == 2.5
+
+  test "mean of empty data is 0.0 (defined behavior)":
+    check mean(newSeq[float]()) == 0.0
+
+  test "stddev of [1,2,3,4] matches numpy's sample stddev":
+    # numpy default ddof=1 (sample): sqrt(sum((x-mean)^2) / (n-1)) = sqrt(5/3)
+    let s = stddev(@[1.0, 2.0, 3.0, 4.0])
+    let expected = 1.2909944487358056  # sqrt(5/3)
+    check abs(s - expected) < 1e-9
+
+  test "stddev of singleton is 0":
+    check stddev(@[42.0]) == 0.0
+
+  test "minVal and maxVal":
+    check minVal(@[3.0, 1.0, 4.0, 1.5, 5.0, 9.0]) == 1.0
+    check maxVal(@[3.0, 1.0, 4.0, 1.5, 5.0, 9.0]) == 9.0
+
+  test "percentile(0..99, 0.5) is 49.5 (linear interpolation)":
+    var data: seq[float]
+    for i in 0 .. 99: data.add(float(i))
+    # Linear interpolation: index = 0.5 * 99 = 49.5; data[49] + 0.5 * (data[50]-data[49]) = 49.5
+    check abs(percentile(data, 0.5) - 49.5) < 1e-9
+
+  test "percentile(p=0.0) is min, percentile(p=1.0) is max":
+    var data: seq[float]
+    for i in 0 .. 99: data.add(float(i))
+    check percentile(data, 0.0) == 0.0
+    check percentile(data, 1.0) == 99.0
