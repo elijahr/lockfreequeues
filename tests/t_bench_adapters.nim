@@ -49,3 +49,19 @@ when defined(adapter_loony_available):
       runRoundTrip[LoonyAdapter[uint64]](
         makeLoonyAdapter[uint64](), cleanup(adapter)
       )
+
+when defined(adapter_boost_lockfree_queue_available):
+  # Boost.LockFree is C++ -- only loadable under `nim cpp`. The adapter
+  # raises a hard {.error.} under `nim c`, so pulling it in only when both
+  # the gate AND the cpp build mode are set keeps `nim c -r` of this file
+  # compilable.
+  when defined(cpp):
+    import ../benchmarks/nim/adapters/boost_lockfree_queue_adapter
+    import ../benchmarks/nim/adapter
+
+    suite "boost_lockfree_queue_adapter":
+      test "push/pop 1000 uint64 round-trip preserves set":
+        runRoundTrip[BoostLockfreeQueueAdapter[uint64]](
+          makeBoostLockfreeQueueAdapter[uint64](capacity = 4096),
+          cleanup(adapter)
+        )
