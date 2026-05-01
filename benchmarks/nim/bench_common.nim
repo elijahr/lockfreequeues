@@ -186,7 +186,18 @@ proc percentile*(data: openArray[float], p: float): float =
 # ---------- Histogram (top-K min-heap + uniform reservoir) ----------
 
 const
-  HistogramTopK* = 1000        ## exact top-K largest samples seen
+  HistogramTopK* = 5000        ## exact top-K largest samples seen.
+                               ## Sized to cover p999 at production sample
+                               ## sizes (Track 6 Task 6.2): at
+                               ## `BenchLatencyMessageCount=100_000` and
+                               ## `BenchLatencyRuns=33`, `seenAll ≈ 3.3M`
+                               ## per aggregated histogram, so the p999
+                               ## tail count is ~3300. K=5000 keeps the
+                               ## p999 lookup inside the exact top-K
+                               ## stratum with headroom for stochastic
+                               ## variation around the boundary. Memory
+                               ## cost is 5000 × 8B = 40KB per histogram,
+                               ## negligible vs the 99K reservoir.
   HistogramReservoir* = 99_000 ## uniform sample of the body distribution
 
 type

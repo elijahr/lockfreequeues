@@ -9,6 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Latency p99 + throughput regression gating in Bencher (PR 6, Track 6).
+  `bench.yml`'s base-branch tracking step now configures per-measure
+  thresholds in a single `bencher run` invocation: `latency_p99_ns`
+  with `--threshold-upper-boundary 0.99` (regression = latency
+  increase) and `throughput_ops_ms` with `--threshold-lower-boundary
+  0.99` (regression = throughput drop). Both use `--threshold-test
+  t_test --threshold-max-sample-size 64`, terminated by
+  `--thresholds-reset` so only the explicitly-listed thresholds
+  remain active. Threshold activation requires ≥ 10 prior runs
+  accumulated in Bencher to calibrate the t-test baseline (Task 6.4
+  stability soak gate). Also corrects a prior measure-name mismatch:
+  the earlier `--threshold-measure throughput` never matched any
+  emitted measure (the actual key is `throughput_ops_ms`), so the
+  previous throughput threshold was a no-op.
+- `latency_p999_ns` and `latency_max_ns` measures emitted by
+  `bench_latency.nim` (PR 6, Track 6). Each bounded variant slug
+  (`lockfreequeues_{sipsic,sipmuc,mupsic,mupmuc}/<topology>/1p1c`)
+  now carries the full p50 / p95 / p99 / p999 / max latency tuple in
+  the merged BMF, available for the Bencher dashboard and downstream
+  comparison charts. `t_bench_latency.nim` extended to assert all
+  four extra measures appear on every bounded variant in the smoke
+  shape.
+- `HistogramTopK` raised from 1000 to 5000 (PR 6, Task 6.2). At
+  production sample counts (`BenchLatencyMessageCount=100_000` ×
+  `BenchLatencyRuns=33` ≈ 3.3M samples per aggregated histogram), the
+  p999 tail rank is ~3300; K=1000 forced the p999 lookup into the
+  rescaled-reservoir stratum, while K=5000 keeps it in the exact
+  top-K stratum with headroom. Memory cost: 5000 × 8B = 40KB
+  additional per histogram, negligible vs the 99K-sample reservoir.
+  New `t_bench_common.nim` test asserts p999 within 5% of sort
+  fallback on a 3.3M log-normal stream.
 - Interactive uPlot throughput chart on the docs site (PR 5, Track 5).
   `docs/benchmarks.md` embeds a `<div id="bench-chart">` container plus
   a vendored `uPlot 1.6.27` IIFE bundle and a vanilla-JS wiring module

@@ -225,6 +225,32 @@ suite "bench_common Histogram":
       h.record(v)
     check h.topK() == @[1.0, 3.0, 5.0, 7.0, 9.0]
 
+  # ---------- Task 6.2: HistogramTopK sized for production p999 ----------
+  #
+  # At BenchLatencyMessageCount=100_000 and BenchLatencyRuns=33,
+  # `seenAll` per-aggregate ≈ 3.3M. The p999 tail count is
+  # 3.3M * 0.001 = 3300; if K < 3300, the p999 lookup falls into the
+  # rescaled reservoir stratum (less accurate). K=5000 keeps p999 in the
+  # exact top-K stratum with headroom for stochastic variation around
+  # the boundary.
+  test "HistogramTopK is at least 5000 (covers p999 at 3.3M samples)":
+    check HistogramTopK >= 5000
+
+  test "p999 within 5% of sort fallback on 3.3M log-normal samples":
+    # Direct verification of the K=5000 design choice from Task 6.2:
+    # at seenAll=3.3M the p999 tail count (3300) lies inside the top-K
+    # stratum, so percentile(0.999) is read from the exact top-K heap.
+    # Tolerance is 5% per impl plan acceptance criterion. Test is heavier
+    # than the 100K p99 case (~3.3M record() calls) but still tractable
+    # under release-mode `nimble test`.
+    let samples = generateLogNormal(3_300_000, 0xDEADBEEF'i64)
+    let exact = percentile(samples, 0.999)
+    var h = initHistogram()
+    for v in samples: h.record(v)
+    let approx = h.percentile(0.999)
+    let relErr = abs(approx - exact) / exact
+    check relErr < 0.05
+
 # ---------- Task 0.5: runThroughputHarness smoke ----------
 
 # Tiny inline adapter that satisfies bench_common's BenchAdapter shape

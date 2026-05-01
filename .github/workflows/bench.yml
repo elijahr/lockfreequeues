@@ -729,6 +729,28 @@ jobs:
             --err
 
       # Push to main/devel: record the baseline for that branch.
+      #
+      # Track 6 Task 6.3: per-measure thresholds. We gate on BOTH
+      #   - latency_p99_ns (upper boundary: regression = latency increase)
+      #   - throughput_ops_ms (lower boundary: regression = throughput drop)
+      # in a single `bencher run` invocation by repeating the
+      # `--threshold-measure / --threshold-test / --threshold-max-sample-size
+      # / --threshold-{upper,lower}-boundary` block per measure (Bencher CLI
+      # convention; design §3 PR 6). End with `--thresholds-reset` so only
+      # the explicitly-listed thresholds remain active going forward.
+      #
+      # NOTE on activation: per Track 6 Task 6.4, the latency threshold
+      # requires ≥ 10 prior runs accumulated in Bencher to calibrate the
+      # t-test baseline. Until that soak completes (post-merge), the
+      # threshold is effectively dormant — Bencher will not emit alerts on
+      # measures that have insufficient sample history. The configuration
+      # is in place so activation is purely a function of run count, not
+      # workflow edits.
+      #
+      # NOTE on previous measure name: the prior config used
+      # `--threshold-measure throughput`; the actual measure key emitted by
+      # bench_{spsc,mpsc,mpmc,unbounded}.nim is `throughput_ops_ms`, so the
+      # earlier threshold never matched any measure. Track 6 corrects this.
       - name: Track base branch benchmarks with Bencher
         if: github.event_name == 'push' && env.BENCHER_API_TOKEN != ''
         run: |
@@ -737,7 +759,11 @@ jobs:
             --token '${{ secrets.BENCHER_API_TOKEN }}' \
             --branch "${GITHUB_REF##*/}" \
             --testbed ubuntu-latest \
-            --threshold-measure throughput \
+            --threshold-measure latency_p99_ns \
+            --threshold-test t_test \
+            --threshold-max-sample-size 64 \
+            --threshold-upper-boundary 0.99 \
+            --threshold-measure throughput_ops_ms \
             --threshold-test t_test \
             --threshold-max-sample-size 64 \
             --threshold-lower-boundary 0.99 \

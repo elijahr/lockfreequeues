@@ -16,8 +16,9 @@
 ##   -d:BenchLatencyWarmupRuns=<N>      (default 3)
 ##
 ## Emitted measures per slug:
-##   latency_p50_ns, latency_p95_ns, latency_p99_ns
-##   (latency_p999_ns / latency_max_ns are deferred to PR 6.)
+##   latency_p50_ns, latency_p95_ns, latency_p99_ns,
+##   latency_p999_ns, latency_max_ns
+##   (Track 6 Task 6.1: full p50/p95/p99/p999/max set.)
 ##
 ## Slug shape: `<library_slug>/<topology>/1p1c` per design 2.2 / table at
 ## design line 357.
@@ -146,6 +147,12 @@ proc runVariant(
   em.addMeasure(slug, "latency_p50_ns", metrics.p50_ns)
   em.addMeasure(slug, "latency_p95_ns", metrics.p95_ns)
   em.addMeasure(slug, "latency_p99_ns", metrics.p99_ns)
+  # Track 6 Task 6.1: emit p999 + max alongside the p50/p95/p99 trio.
+  # Histogram K=5000 (Task 6.2) covers p999 in the exact top-K stratum at
+  # production sample counts (3.3M samples); max is `percentile(1.0)`,
+  # always the top-K head.
+  em.addMeasure(slug, "latency_p999_ns", metrics.p999_ns)
+  em.addMeasure(slug, "latency_max_ns", metrics.max_ns)
 
 when isMainModule:
   # Unbuffer stdout so progress is visible when the bench is run under

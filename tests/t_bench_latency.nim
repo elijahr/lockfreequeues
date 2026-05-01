@@ -101,12 +101,17 @@ suite "bench_latency --bmf-out integration (Task 1.2)":
     check s.hasKey("latency_p50_ns")
     check s.hasKey("latency_p95_ns")
     check s.hasKey("latency_p99_ns")
+    # Track 6 Task 6.1: p999 and max measures emitted alongside p50/p95/p99.
+    check s.hasKey("latency_p999_ns")
+    check s.hasKey("latency_max_ns")
     check s["latency_p50_ns"]["value"].getFloat() > 0.0
     check s["latency_p99_ns"]["value"].getFloat() >= s["latency_p50_ns"]["value"].getFloat()
+    check s["latency_p999_ns"]["value"].getFloat() >= s["latency_p99_ns"]["value"].getFloat()
+    check s["latency_max_ns"]["value"].getFloat() >= s["latency_p999_ns"]["value"].getFloat()
     # Stdout text output preserved (acceptance: positional CLI behavior).
     check output.contains("Sipsic") or output.contains("sipsic")
 
-  test "all four bounded variants emit latency_p50_ns / latency_p99_ns":
+  test "all four bounded variants emit latency_p50_ns / latency_p99_ns / latency_p999_ns / latency_max_ns":
     # Per impl plan Track 1 Acceptance Criteria: BMF JSON contains
     # latency_p50_ns and latency_p99_ns for sipsic / sipmuc / mupsic /
     # mupmuc on the 1p1c smoke shape.
@@ -132,6 +137,9 @@ suite "bench_latency --bmf-out integration (Task 1.2)":
       check node.hasKey(slug)
       check node[slug].hasKey("latency_p50_ns")
       check node[slug].hasKey("latency_p99_ns")
+      # Track 6 Task 6.1: p999 + max alongside p50/p99 on every bounded variant.
+      check node[slug].hasKey("latency_p999_ns")
+      check node[slug].hasKey("latency_max_ns")
 
   test "unknown variant exits 1":
     let dir = newTestWorkspace("t12_unknown")
