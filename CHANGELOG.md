@@ -99,6 +99,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   topology binary) merged via `merge_bmf.py` produce a single output
   whose slug set is the disjoint union, with shared slugs carrying
   measures from every input binary.
+- Five third-party comparison adapters land in `benchmarks/nim/adapters/`
+  for the comparison MVP (PR 3, Track 3): `loony_adapter.nim`
+  (LoonyQueue, MIT, mpmc_unbounded), `boost_lockfree_queue_adapter.nim`
+  (`boost::lockfree::queue`, BSL-1.0, mpmc bounded),
+  `boost_lockfree_spsc_adapter.nim`
+  (`boost::lockfree::spsc_queue`, BSL-1.0, spsc bounded),
+  `crossbeam_array_queue_adapter.nim` (`crossbeam_queue::ArrayQueue`,
+  Apache-2.0 OR MIT, mpmc bounded), `crossbeam_seg_queue_adapter.nim`
+  (`crossbeam_queue::SegQueue`, Apache-2.0 OR MIT, mpmc_unbounded).
+  Each is gated behind a `-d:adapter_<library_slug>_available` define;
+  absent gates produce no symbol references and the production builds
+  are unchanged. Tests in `tests/t_bench_adapters.nim` cover a
+  1000-item push/pop round-trip per adapter.
+- New Rust crate `benchmarks/rust/bench-ffi-crossbeam/`: a `cdylib`
+  exposing 8 `extern "C"` fns (`cb_array_init/push/pop/destroy`,
+  `cb_seg_init/push/pop/destroy`) consumed by the Crossbeam Nim
+  adapters. Pinned via `rust-toolchain.toml` to `stable`. Six
+  integration tests cover round-trip set equality for both queue
+  types, capacity edges, empty-pop, and null-pointer tolerance.
+- New `benchmarks/nim/smoke/` directory with `smoke_boost.nim` and
+  `smoke_crossbeam.nim`: 32-item push/pop round-trip binaries used as
+  fast pre-flight checks in CI before the full bench compile.
+- New workflow `.github/workflows/bench-comparison.yml`: dedicated
+  Crossbeam comparison job triggered by nightly cron (`0 4 * * *`),
+  `workflow_dispatch`, and targeted path pushes to `devel` (anything
+  under `benchmarks/rust/**` or `benchmarks/nim/adapters/crossbeam_*`).
+  Builds the cdylib via `dtolnay/rust-toolchain@stable` +
+  `Swatinem/rust-cache@v2`, runs the cdylib integration tests,
+  compiles `bench_mpmc` + `bench_unbounded` with the crossbeam gates,
+  merges via `merge_bmf.py`, and uploads to a separate Bencher Report.
+  Crossbeam is intentionally NOT in `bench.yml` so PR critical-path
+  time stays unchanged.
+- `bench.yml` gains the `force_skip_boost` / `force_skip_loony`
+  `workflow_dispatch` boolean inputs and a per-library install ->
+  smoke -> set-flag pipeline (design §2.6 soft-skip). Failure at
+  install or smoke flips the binary's compile flags so the slugs are
+  omitted from the BMF instead of failing the workflow; the
+  `Annotate skipped` step emits a `::warning title=Adapter
+  skipped::...` annotation visible on the PR check summary.
+- New `THIRD_PARTY_LICENSES.md` records license obligations for the
+  comparison MVP libraries (Loony MIT, Boost BSL-1.0, Crossbeam
+  Apache-2.0 OR MIT) and reserves placeholder entries for
+  concurrentqueue (PR 4) and uPlot (PR 5).
+- New `src/lockfreequeues/internal/aligned_alloc.nim` exporting
+  `allocAligned[T]: ptr T` via a local `posix_memalign` shim. Used by
+  the four unbounded queue variants to allocate cache-line-aligned
+  segments (64-byte alignment instead of `c_calloc`'s 16-byte ABI
+  guarantee), eliminating the false-sharing asymmetry vs other
+  libraries flagged in design §4.2.
+
+### Fixed
+
+- Cache-line padding for unbounded queue segments. Each `Segment` field
+  participating in producer/consumer coordination now carries
+  `{.align: CacheLineBytes.}`, and the four unbounded variants
+  (`unbounded_sipsic`, `unbounded_sipmuc`, `unbounded_mupsic`,
+  `unbounded_mupmuc`) allocate via `allocAligned[Segment[S, T]]()`
+  instead of `c_calloc`. Verified by `tests/t_unbounded_padding.nim`
+  (8 assertions across 4 variants, green under c/cpp/arc/refc).
 
 ### Changed
 
