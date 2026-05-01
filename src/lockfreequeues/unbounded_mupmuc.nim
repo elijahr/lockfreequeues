@@ -173,6 +173,12 @@ proc newUnboundedMupmuc*[S: static int, T; MaxThreads: static int](
     result = newUnboundedMupmuc[S, T, MaxThreads](mgr, strategy)
     result.ownsManager = true
   except:
+    # Run the manager's =destroy (drains any limbo bags + asserts the
+    # client refcount is zero) before freeing the heap slot. Safe for
+    # both partially- and fully-initialized state because c_calloc
+    # zeroed it: nil limboBagTail pointers walk no list, boundClients
+    # is 0 so the destructor's invariant assertion passes.
+    reset(mgr[])
     c_free(mgr)
     raise
 

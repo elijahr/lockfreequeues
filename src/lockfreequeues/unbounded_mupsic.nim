@@ -179,6 +179,11 @@ proc newUnboundedMupsic*[S: static int, T; MaxThreads: static int](
     result = newUnboundedMupsic[S, T, MaxThreads](mgr, consumerHandle, strategy)
     result.ownsManager = true
   except:
+    # Run the manager's =destroy (drains any limbo bags + asserts the
+    # client refcount is zero) before freeing the heap slot. Safe for
+    # both partially- and fully-initialized state because c_calloc
+    # zeroed it.
+    reset(mgr[])
     c_free(mgr)
     raise
 
