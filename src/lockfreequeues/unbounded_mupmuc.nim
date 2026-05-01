@@ -168,9 +168,13 @@ proc newUnboundedMupmuc*[S: static int, T; MaxThreads: static int](
     raise newException(
       OutOfMemDefect, "newUnboundedMupmuc: c_calloc returned nil"
     )
-  mgr[] = initDebraManager[MaxThreads]()
-  result = newUnboundedMupmuc[S, T, MaxThreads](mgr, strategy)
-  result.ownsManager = true
+  try:
+    mgr[] = initDebraManager[MaxThreads]()
+    result = newUnboundedMupmuc[S, T, MaxThreads](mgr, strategy)
+    result.ownsManager = true
+  except:
+    c_free(mgr)
+    raise
 
 proc segmentCount*[S: static int, T; MaxThreads: static int](
     self: var UnboundedMupmuc[S, T, MaxThreads]

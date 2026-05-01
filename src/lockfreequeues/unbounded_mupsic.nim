@@ -173,10 +173,14 @@ proc newUnboundedMupsic*[S: static int, T; MaxThreads: static int](
     raise newException(
       OutOfMemDefect, "newUnboundedMupsic: c_calloc returned nil"
     )
-  mgr[] = initDebraManager[MaxThreads]()
-  let consumerHandle = registerThread(mgr[])
-  result = newUnboundedMupsic[S, T, MaxThreads](mgr, consumerHandle, strategy)
-  result.ownsManager = true
+  try:
+    mgr[] = initDebraManager[MaxThreads]()
+    let consumerHandle = registerThread(mgr[])
+    result = newUnboundedMupsic[S, T, MaxThreads](mgr, consumerHandle, strategy)
+    result.ownsManager = true
+  except:
+    c_free(mgr)
+    raise
 
 proc segmentCount*[S: static int, T; MaxThreads: static int](
     self: var UnboundedMupsic[S, T, MaxThreads]
