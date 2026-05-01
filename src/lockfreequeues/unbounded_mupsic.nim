@@ -25,6 +25,7 @@
 ## this queue's Eager reclamation cadence.
 
 import ./atomic_dsl
+import ./backoff
 import std/options
 import std/typetraits
 from system/ansi_c import c_calloc, c_free
@@ -172,6 +173,7 @@ proc push*[S: static int, T; MaxThreads: static int](
         .}
 
   self.handle.withPin:
+    var spins = InitialSpin
     while true:
       var seg = self.queue.tailSegment.load(moAcquire)
       var tail = seg.tail.load(moAcquire)
@@ -191,13 +193,17 @@ proc push*[S: static int, T; MaxThreads: static int](
               expectedSeg, newSeg, moRelease, moRelaxed
             )
             discard self.queue.segments.fetchAdd(1, moRelaxed)
+            # Allocation succeeded; loop to retry slot claim on the new segment.
+            # No backoff: this is a success edge, not a CAS-retry failure.
             continue
           else:
-            # Lost race, free our segment
+            # Lost the segment-alloc race, free our orphan and back off.
             c_free(newSeg)
+            backoffOnRetry(spins)
             continue
         else:
-          # Someone else allocated, advance tail segment
+          # Someone else allocated; advance tailSegment (best effort) and
+          # retry slot claim. No backoff: success edge.
           var expectedSeg = seg
           discard self.queue.tailSegment.compareExchange(
             expectedSeg, nextSeg, moRelease, moRelaxed

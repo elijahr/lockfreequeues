@@ -24,6 +24,7 @@
 ## this queue's Eager reclamation cadence.
 
 import ./atomic_dsl
+import ./backoff
 import std/options
 import std/typetraits
 from system/ansi_c import c_calloc, c_free
@@ -185,6 +186,7 @@ proc push*[S: static int, T; MaxThreads: static int](
         .}
 
   self.handle.withPin:
+    var spins = InitialSpin
     while true:
       var seg = self.queue.tailSegment.load(moAcquire)
       var tail = seg.tail.load(moAcquire)
@@ -202,11 +204,19 @@ proc push*[S: static int, T; MaxThreads: static int](
               expectedSeg, newSeg, moRelease, moRelaxed
             )
             discard self.queue.segments.fetchAdd(1, moRelaxed)
+            # Allocation succeeded; loop to retry slot claim on the new segment.
+            # No backoff: this is a success edge, not a CAS-retry failure.
             continue
           else:
+            # Lost the segment-alloc race: another producer linked first.
+            # Free our orphan segment and back off before retrying.
             c_free(newSeg)
+            backoffOnRetry(spins)
             continue
         else:
+          # Another producer already linked next; just advance tailSegment
+          # (best effort, may CAS-fail because someone else advanced) and
+          # retry slot claim on the new segment. No backoff: success edge.
           var expectedSeg = seg
           discard self.queue.tailSegment.compareExchange(
             expectedSeg, nextSeg, moRelease, moRelaxed
@@ -263,6 +273,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
     # from under us before we read it.
     var seg = self.queue.headSegment.load(moAcquire)
 
+    var spins = InitialSpin
     while true:
       let tail = seg.tail.load(moAcquire)
       var prevIdx = seg.prevConsumerIdx.load(moAcquire)
@@ -276,6 +287,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
           if not seg.committed[mySlot].load(moAcquire):
             break
           # Try again
+          backoffOnRetry(spins)
           continue
 
         # Segment exhausted, try to advance to the next one. CAS
@@ -305,6 +317,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
         else:
           # Another consumer already advanced. Pick up its observation.
           seg = expected
+        backoffOnRetry(spins)
         continue
 
       # Check if this slot is committed

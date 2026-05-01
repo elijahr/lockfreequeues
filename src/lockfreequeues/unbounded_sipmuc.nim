@@ -29,6 +29,7 @@
 ##   integer.
 
 import ./atomic_dsl
+import ./backoff
 import std/options
 import std/typetraits
 from system/ansi_c import c_calloc, c_free
@@ -237,6 +238,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
     # cannot pull the segment out from under us before we read it.
     var seg = self.queue.headSegment.load(moAcquire)
 
+    var spins = InitialSpin
     while true:
       let tail = seg.tail.load(moAcquire)
       var prevIdx = seg.prevConsumerIdx.load(moAcquire)
@@ -273,6 +275,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
           # Another consumer already advanced. expected now points at the
           # current head segment as observed by the CAS failure load.
           seg = expected
+        backoffOnRetry(spins)
         continue
 
       # CAS to claim slot

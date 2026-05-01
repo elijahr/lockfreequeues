@@ -9,6 +9,7 @@ import
   ./adapters/[lockfreequeues_sipsic, channels_adapter, lockfreequeues_unbounded_mupsic]
 import lockfreequeues/mupmuc
 import lockfreequeues/unbounded_mupsic
+import lockfreequeues/backoff
 import debra
 
 # All run-shape constants below are `{.intdefine.}` so they can be overridden
@@ -51,8 +52,20 @@ proc runThroughputBenchmark*[Q](
     queue: var Q, numProducers: int, numConsumers: int, messageCount: int = MessageCount
 ): float =
   ## Returns throughput in ops/ms
-  let messagesPerProducer = messageCount div numProducers
-  let messagesPerConsumer = messageCount div numConsumers
+  ##
+  ## Message distribution must satisfy two invariants for the run to terminate:
+  ##   1. sum(producer.count for producer) == messageCount
+  ##   2. sum(consumer.count for consumer) == messageCount
+  ## A naive `messageCount div N` truncates and breaks both when `messageCount`
+  ## is not divisible by `numProducers` or `numConsumers`, which deadlocks the
+  ## consumers (they wait for items the producers never enqueue) or leaves
+  ## items stranded in the queue (consumers stop early). Spread the
+  ## remainder over the first `messageCount mod N` workers so totals match
+  ## exactly for any (P, C, messageCount) triple — including P != C.
+  let baseP = messageCount div numProducers
+  let remP = messageCount mod numProducers
+  let baseC = messageCount div numConsumers
+  let remC = messageCount mod numConsumers
 
   var done: Atomic[int]
   var consumed: Atomic[int]
@@ -64,18 +77,23 @@ proc runThroughputBenchmark*[Q](
   var producerCtxs = newSeq[ProducerContext[Q]](numProducers)
   var consumerCtxs = newSeq[ConsumerContext[Q]](numConsumers)
 
-  # Setup contexts
+  # Setup contexts. `startIdx` walks through the global id space so producer
+  # ranges remain disjoint even when the per-producer count is not uniform.
+  var nextStart = 0
   for i in 0 ..< numProducers:
+    let count = baseP + (if i < remP: 1 else: 0)
     producerCtxs[i] = ProducerContext[Q](
       queue: addr queue,
-      startIdx: i * messagesPerProducer,
-      count: messagesPerProducer,
+      startIdx: nextStart,
+      count: count,
       done: addr done,
     )
+    nextStart += count
 
   for i in 0 ..< numConsumers:
+    let count = baseC + (if i < remC: 1 else: 0)
     consumerCtxs[i] = ConsumerContext[Q](
-      queue: addr queue, count: messagesPerConsumer, consumed: addr consumed
+      queue: addr queue, count: count, consumed: addr consumed
     )
 
   # Start timing. Monotonic clock — `epochTime` (wall clock) can step
@@ -148,7 +166,7 @@ proc mupmucProducer[N, P, C: static int, T](
   let producer = ctx.queue[].getProducer(idx = ctx.producerIdx)
   for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
     while not producer.push(i):
-      discard
+      backoffOnPeerWait()
 
 proc mupmucConsumer[N, P, C: static int, T](
     ctx: ptr MupmucConsumerCtx[N, P, C, T]
@@ -163,27 +181,41 @@ proc mupmucConsumer[N, P, C: static int, T](
 proc runMupmucBenchmark[N, P, C: static int, T](
     queue: var Mupmuc[N, P, C, T], messageCount: int = MessageCount
 ): float =
-  ## Run Mupmuc throughput benchmark with P producers and C consumers
-  let messagesPerProducer = messageCount div P
-  let messagesPerConsumer = messageCount div C
+  ## Run Mupmuc throughput benchmark with P producers and C consumers.
+  ##
+  ## Distribution invariants are the same as runThroughputBenchmark: the
+  ## per-producer and per-consumer counts must sum to messageCount or the
+  ## consumers wait forever / producers leak items. Spread `messageCount
+  ## mod P` and `messageCount mod C` over the first workers to keep the
+  ## totals exact for any (P, C, messageCount) — including P != C and
+  ## non-power-of-two messageCount values.
+  let baseP = messageCount div P
+  let remP = messageCount mod P
+  let baseC = messageCount div C
+  let remC = messageCount mod C
 
   var producerThreads: array[P, Thread[ptr MupmucProducerCtx[N, P, C, T]]]
   var consumerThreads: array[C, Thread[ptr MupmucConsumerCtx[N, P, C, T]]]
   var producerCtxs: array[P, MupmucProducerCtx[N, P, C, T]]
   var consumerCtxs: array[C, MupmucConsumerCtx[N, P, C, T]]
 
-  # Setup contexts
+  # Setup contexts. `startIdx` walks through the global id space so producer
+  # ranges stay disjoint when the per-producer count is not uniform.
+  var nextStart = 0
   for i in 0 ..< P:
+    let count = baseP + (if i < remP: 1 else: 0)
     producerCtxs[i] = MupmucProducerCtx[N, P, C, T](
       queue: addr queue,
       producerIdx: i,
-      startIdx: i * messagesPerProducer,
-      count: messagesPerProducer,
+      startIdx: nextStart,
+      count: count,
     )
+    nextStart += count
 
   for i in 0 ..< C:
+    let count = baseC + (if i < remC: 1 else: 0)
     consumerCtxs[i] = MupmucConsumerCtx[N, P, C, T](
-      queue: addr queue, consumerIdx: i, count: messagesPerConsumer
+      queue: addr queue, consumerIdx: i, count: count
     )
 
   # Start timing. Monotonic clock — `epochTime` (wall clock) can step
@@ -258,6 +290,27 @@ proc benchmarkMupmuc4P4C*(
     stddev: stddev(samples),
   )
 
+proc benchmarkMupmuc8P8C*(
+    runs: int = DefaultRuns, warmup: int = WarmupRuns
+): ThroughputMetrics =
+  ## 8P/8C is the explicit oversubscription case the CAS-retry backoff
+  ## livelock fix targeted (issue #15). Kept as a fixed-static-int wrapper
+  ## like 1/2/4 so the topology iteration in `isMainModule` stays
+  ## table-driven without runtime generic instantiation.
+  var samples: seq[float] = @[]
+  for _ in 0 ..< warmup:
+    var q = initMupmuc[1024, 8, 8, int]()
+    discard runMupmucBenchmark(q)
+  for _ in 0 ..< runs:
+    var q = initMupmuc[1024, 8, 8, int]()
+    samples.add(runMupmucBenchmark(q))
+  ThroughputMetrics(
+    mean: mean(samples),
+    min: minVal(samples),
+    max: maxVal(samples),
+    stddev: stddev(samples),
+  )
+
 # UnboundedMupsic-specific benchmark types and procs.
 #
 # UnboundedMupsic is multi-producer, single-consumer with linked-segment
@@ -318,11 +371,16 @@ proc runUnboundedMupsicBenchmark[S: static int, T; MaxThreads: static int](
     messageCount: int = MessageCount,
 ): float =
   ## Spawn `numProducers` producers and one consumer. Each producer
-  ## pushes a disjoint range of `messagesPerProducer` items; the consumer
-  ## pops until it has seen `messagesPerProducer * numProducers` items.
-  ## Returns throughput in ops/ms.
-  let messagesPerProducer = messageCount div numProducers
-  let totalMessages = messagesPerProducer * numProducers
+  ## pushes a disjoint range; the consumer pops until it has seen exactly
+  ## `messageCount` items. Returns throughput in ops/ms.
+  ##
+  ## Spread `messageCount mod numProducers` over the first producers so the
+  ## sum of per-producer counts equals `messageCount` exactly — without
+  ## this, the harness silently degrades to fewer ops than it reports
+  ## (and the ops/ms denominator becomes inconsistent across NP values
+  ## when messageCount is not divisible by numProducers).
+  let basePerProducer = messageCount div numProducers
+  let remProducers = messageCount mod numProducers
 
   var done: Atomic[int]
   var consumed: Atomic[int]
@@ -334,17 +392,20 @@ proc runUnboundedMupsicBenchmark[S: static int, T; MaxThreads: static int](
   var producerCtxs = newSeq[UMupsicProducerCtx[S, T, MaxThreads]](numProducers)
   var consumerThread: Thread[ptr UMupsicConsumerCtx[S, T, MaxThreads]]
   var consumerCtx = UMupsicConsumerCtx[S, T, MaxThreads](
-    queue: adapter.queue, count: totalMessages, consumed: addr consumed
+    queue: adapter.queue, count: messageCount, consumed: addr consumed
   )
 
+  var nextStart = 0
   for i in 0 ..< numProducers:
+    let count = basePerProducer + (if i < remProducers: 1 else: 0)
     producerCtxs[i] = UMupsicProducerCtx[S, T, MaxThreads](
       queue: adapter.queue,
       manager: adapter.manager,
-      startIdx: i * messagesPerProducer,
-      count: messagesPerProducer,
+      startIdx: nextStart,
+      count: count,
       done: addr done,
     )
+    nextStart += count
 
   # Start timing. Monotonic clock; see runMupmucBenchmark for rationale.
   let startTime = getMonoTime()
@@ -360,7 +421,7 @@ proc runUnboundedMupsicBenchmark[S: static int, T; MaxThreads: static int](
   joinThread(consumerThread)
 
   let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
-  result = float(totalMessages) * 1_000_000.0 / elapsedNs
+  result = float(messageCount) * 1_000_000.0 / elapsedNs
 
 proc benchmarkUnboundedMupsicNP1C(
     numProducers: int,
@@ -454,9 +515,12 @@ when isMainModule:
     echo fmt"  stddev: {sipsicMetrics.stddev:.1f}"
     echo ""
 
-  # Mupmuc (bounded MPMC)
+  # Mupmuc (bounded MPMC). 8P/8C is the oversubscription case that
+  # exercised the CAS-retry livelock (issue #15); keep it in the standard
+  # iteration so any regression of the backoff fix is visible in the
+  # bench output and tracked by Bencher alongside 1/2/4.
   if "mupmuc" in runGroups:
-    for threads in [1, 2, 4]:
+    for threads in [1, 2, 4, 8]:
       echo fmt"Mupmuc (bounded MPMC) {threads}P/{threads}C:"
       let metrics =
         case threads
@@ -466,6 +530,8 @@ when isMainModule:
           benchmarkMupmuc2P2C(runs = 10)
         of 4:
           benchmarkMupmuc4P4C(runs = 10)
+        of 8:
+          benchmarkMupmuc8P8C(runs = 10)
         else:
           ThroughputMetrics()
       echo fmt"  mean: {metrics.mean:.1f} ops/ms"
