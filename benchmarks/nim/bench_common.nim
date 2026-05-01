@@ -19,7 +19,8 @@
 ## downstream tasks (0.2-0.6) can be written and reviewed in parallel
 ## while the implementation lands behind them.
 
-import std/[algorithm, heapqueue, json, math, options, random, tables]
+import std/[algorithm, atomics, heapqueue, json, math, monotimes, options,
+            random, tables, times]
 
 # ---------- Topology ----------
 
@@ -325,6 +326,104 @@ type
     ops_ms_stddev*: float
     runs*: int
 
+type
+  ProducerCtx[Q] = object
+    queue: ptr Q
+    startIdx: int
+    count: int
+
+  ConsumerCtx[Q] = object
+    queue: ptr Q
+    count: int
+
+proc producerThreadBody[Q](ctx: ptr ProducerCtx[Q]) {.thread.} =
+  ## Tight push loop. Spins on `prFull` to keep the harness simple.
+  ## `mixin push` defers symbol resolution to instantiation site so the
+  ## user's adapter-specific `push` is found.
+  mixin push
+  for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
+    while push(ctx.queue[], uint64(i)) == prFull:
+      discard
+
+proc consumerThreadBody[Q](ctx: ptr ConsumerCtx[Q]) {.thread.} =
+  mixin pop
+  var local = 0
+  while local < ctx.count:
+    let item = pop(ctx.queue[])
+    if item.success:
+      inc local
+
+proc runOneThroughputRun[Q](
+    queueInit: proc(capacity: int): Q,
+    capacity: int,
+    numProducers: int,
+    numConsumers: int,
+    messageCount: int,
+): float =
+  ## One run of the throughput harness; returns ops/ms.
+  ##
+  ## Distribution invariants (mirrors legacy bench_throughput
+  ## `runThroughputBenchmark`):
+  ##   1. sum(producer.count) == messageCount
+  ##   2. sum(consumer.count) == messageCount
+  ## A naive `messageCount div N` truncates and breaks both when
+  ## `messageCount` is not divisible by `numProducers` or `numConsumers`,
+  ## which deadlocks the consumers (waiting for items the producers never
+  ## enqueue) or strands items in the queue (consumers stop early).
+  ## Spread the remainder over the first `messageCount mod N` workers so
+  ## totals match exactly for any (P, C, messageCount) triple.
+  var queue = queueInit(capacity)
+  let baseP = messageCount div numProducers
+  let remP = messageCount mod numProducers
+  let baseC = messageCount div numConsumers
+  let remC = messageCount mod numConsumers
+
+  var producerThreads = newSeq[Thread[ptr ProducerCtx[Q]]](numProducers)
+  var consumerThreads = newSeq[Thread[ptr ConsumerCtx[Q]]](numConsumers)
+  var producerCtxs = newSeq[ProducerCtx[Q]](numProducers)
+  var consumerCtxs = newSeq[ConsumerCtx[Q]](numConsumers)
+
+  var nextStart = 0
+  for i in 0 ..< numProducers:
+    let count = baseP + (if i < remP: 1 else: 0)
+    producerCtxs[i] = ProducerCtx[Q](
+      queue: addr queue,
+      startIdx: nextStart,
+      count: count,
+    )
+    nextStart += count
+
+  for i in 0 ..< numConsumers:
+    let count = baseC + (if i < remC: 1 else: 0)
+    consumerCtxs[i] = ConsumerCtx[Q](
+      queue: addr queue,
+      count: count,
+    )
+
+  # Monotonic clock — `epochTime` (wall clock) can step backward across
+  # NTP adjustments and skew throughput numbers. Nanosecond precision:
+  # ms-precision buckets multiple short runs into the same integer ms,
+  # producing identical samples and stddev=0 on a fast CI runner. ops/ms
+  # is reconstructed as a float at print time.
+  let startTime = getMonoTime()
+
+  for i in 0 ..< numProducers:
+    createThread(producerThreads[i], producerThreadBody[Q],
+                 addr producerCtxs[i])
+  for i in 0 ..< numConsumers:
+    createThread(consumerThreads[i], consumerThreadBody[Q],
+                 addr consumerCtxs[i])
+
+  for i in 0 ..< numProducers:
+    joinThread(producerThreads[i])
+  for i in 0 ..< numConsumers:
+    joinThread(consumerThreads[i])
+
+  let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
+  if elapsedNs <= 0.0:
+    return 0.0
+  result = float(messageCount) * 1_000_000.0 / elapsedNs
+
 proc runThroughputHarness*[Q](
     queueInit: proc(capacity: int): Q,
     capacity: int,
@@ -338,4 +437,20 @@ proc runThroughputHarness*[Q](
   ## counters; spreads `messageCount mod {P,C}` over the first workers
   ## to avoid the deadlock that a naive `messageCount div N` would
   ## introduce when the count is not divisible.
-  raiseAssert "not implemented"
+  ##
+  ## Verbatim factor-out of legacy `runThroughputBenchmark` (see
+  ## `benchmarks/nim/bench_throughput.nim`) parameterized over the queue
+  ## init proc. The producer's payload is `uint64(i)` per BenchAdapter
+  ## convention.
+  for _ in 0 ..< warmupCount:
+    discard runOneThroughputRun[Q](
+      queueInit, capacity, numProducers, numConsumers, messageCount)
+  var samples: seq[float] = @[]
+  for _ in 0 ..< runCount:
+    samples.add(runOneThroughputRun[Q](
+      queueInit, capacity, numProducers, numConsumers, messageCount))
+  result = ThroughputMetrics(
+    ops_ms_mean: mean(samples),
+    ops_ms_stddev: stddev(samples),
+    runs: runCount,
+  )

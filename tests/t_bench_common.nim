@@ -224,3 +224,42 @@ suite "bench_common Histogram":
     for v in [9.0, 1.0, 5.0, 3.0, 7.0]:
       h.record(v)
     check h.topK() == @[1.0, 3.0, 5.0, 7.0, 9.0]
+
+# ---------- Task 0.5: runThroughputHarness smoke ----------
+
+# Tiny inline adapter that satisfies bench_common's BenchAdapter shape
+# (push -> PushResult, pop -> PopResult[uint64]) wrapping a Nim
+# system Channel. Lives in this test file because Task 0.9 has not
+# yet reconciled benchmarks/nim/adapter.nim (legacy) with bench_common
+# (new); once that lands, this shim moves to a real adapter file.
+
+type SmokeAdapter = object
+  chan: ptr Channel[uint64]
+
+proc initSmokeAdapter(capacity: int): SmokeAdapter =
+  result.chan = create(Channel[uint64])
+  result.chan[].open(capacity)
+
+proc push(a: var SmokeAdapter, v: uint64): PushResult =
+  if a.chan[].trySend(v): prSuccess else: prFull
+
+proc pop(a: var SmokeAdapter): PopResult[uint64] =
+  let r = a.chan[].tryRecv()
+  if r.dataAvailable:
+    PopResult[uint64](success: true, value: r.msg)
+  else:
+    PopResult[uint64](success: false, value: 0'u64)
+
+suite "bench_common runThroughputHarness":
+  test "smoke: 1P/1C, 1000 messages, 1 run, 0 warmup completes":
+    let metrics = runThroughputHarness[SmokeAdapter](
+      queueInit = proc(cap: int): SmokeAdapter = initSmokeAdapter(cap),
+      capacity = 1024,
+      numProducers = 1,
+      numConsumers = 1,
+      messageCount = 1000,
+      runCount = 1,
+      warmupCount = 0,
+    )
+    check metrics.runs == 1
+    check metrics.ops_ms_mean > 0.0
