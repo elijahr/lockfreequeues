@@ -64,17 +64,14 @@ jobs:
         # for compiler-side resolution. Nimble's dep resolver runs BEFORE
         # the compiler though, and `nimble test` will refuse to launch if
         # `requires "debra >= 0.5.0"` is unsatisfiable from nimble's
-        # package store. So fetch the matching branches and `nimble install`
-        # them locally to satisfy the resolver. After both companion PRs
-        # land and tags publish, the whole step can go away.
-        #
-        # nim-debra: pinned to feat/ergonomics until the companion PR
-        # (elijahr/nim-debra#7) merges and v0.5.0 publishes — switch back
-        # to `main` then.
+        # package store. So fetch matching branches and `nimble install`
+        # them locally to satisfy the resolver. Once nimble.directory has
+        # picked up the new tags, this whole step can be replaced with a
+        # plain `nimble install -d -y`.
         run: |
           set -e
           cd ..
-          git clone --depth 1 --branch feat/ergonomics https://github.com/elijahr/nim-debra.git
+          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
           git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
           (cd nim-typestates && nimble install -y)
           (cd nim-debra && nimble install -y)
