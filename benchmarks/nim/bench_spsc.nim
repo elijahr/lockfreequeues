@@ -18,6 +18,13 @@ import std/[options, os, parseopt, sets, strformat, syncio]
 import ./bench_common
 import ./adapters/lockfreequeues_sipsic_adapter
 
+# MVP comparison adapters (Track 3). Each is included only when its
+# `-d:adapter_<lib>_available` gate is set; absent gate yields no
+# symbol references and the variant is dropped from `SupportedVariants`
+# below via `when declared(...)`.
+when defined(adapter_boost_lockfree_spsc_available):
+  import ./adapters/boost_lockfree_spsc_adapter
+
 const
   ## Per-binary intdefines for SPSC wall-time control. Override at compile
   ## time with `-d:BenchSpscRuns=N` etc. Defaults match design §2.5.
@@ -46,18 +53,32 @@ proc initSipsicQ(capacity: int): SipsicAdapter[SpscCapacity, uint64] =
   doAssert capacity == SpscCapacity, "capacity must equal SpscCapacity"
   initSipsicAdapter[SpscCapacity, uint64]()
 
-const SupportedVariants = ["sipsic"]
+when defined(adapter_boost_lockfree_spsc_available):
+  proc initBoostSpscQ(capacity: int): BoostLockfreeSpscAdapter[uint64] =
+    makeBoostLockfreeSpscAdapter[uint64](capacity)
 
-proc runVariant(variant: string, em: var BMFEmitter) =
-  let slug =
-    case variant
-    of "sipsic": "lockfreequeues_sipsic/spsc/1p1c"
-    else:
-      raise newException(ValueError, "unknown variant: " & variant)
-  echo fmt"{variant} ({slug}):"
-  let metrics = runThroughputHarness[SipsicAdapter[SpscCapacity, uint64]](
-    queueInit = initSipsicQ,
-    capacity = SpscCapacity,
+# MVP variants are added to SupportedVariants only when the matching
+# adapter symbol is in scope (i.e. its compile-time gate is set).
+proc supportedVariantsList(): seq[string] {.compileTime.} =
+  result = @["sipsic"]
+  when declared(initBoostSpscQ):
+    result.add("boost_lockfree_spsc")
+
+const SupportedVariants = supportedVariantsList()
+
+proc runMvpVariant[A](
+    em: var BMFEmitter,
+    slug: string,
+    queueInit: proc(capacity: int): A,
+    capacity: int,
+) =
+  ## Generic emitter for MVP comparison adapters: 1p1c throughput at
+  ## the same shape as the in-tree sipsic baseline so Bencher can compare
+  ## across libraries on identical work.
+  echo fmt"{slug}:"
+  let metrics = runThroughputHarness[A](
+    queueInit = queueInit,
+    capacity = capacity,
     numProducers = 1,
     numConsumers = 1,
     messageCount = BenchSpscMessageCount,
@@ -74,6 +95,42 @@ proc runVariant(variant: string, em: var BMFEmitter) =
     metrics.ops_ms_mean - metrics.ops_ms_stddev,
     metrics.ops_ms_mean + metrics.ops_ms_stddev,
   )
+
+proc runVariant(variant: string, em: var BMFEmitter) =
+  case variant
+  of "sipsic":
+    let slug = "lockfreequeues_sipsic/spsc/1p1c"
+    echo fmt"{variant} ({slug}):"
+    let metrics = runThroughputHarness[SipsicAdapter[SpscCapacity, uint64]](
+      queueInit = initSipsicQ,
+      capacity = SpscCapacity,
+      numProducers = 1,
+      numConsumers = 1,
+      messageCount = BenchSpscMessageCount,
+      runCount = BenchSpscRuns,
+      warmupCount = BenchSpscWarmup,
+    )
+    echo fmt"  mean: {metrics.ops_ms_mean:.1f} ops/ms"
+    echo fmt"  stddev: {metrics.ops_ms_stddev:.1f}"
+    echo fmt"  runs: {metrics.runs}"
+    echo ""
+    em.addMeasure(
+      slug, "throughput_ops_ms",
+      metrics.ops_ms_mean,
+      metrics.ops_ms_mean - metrics.ops_ms_stddev,
+      metrics.ops_ms_mean + metrics.ops_ms_stddev,
+    )
+  else:
+    when declared(initBoostSpscQ):
+      if variant == "boost_lockfree_spsc":
+        runMvpVariant[BoostLockfreeSpscAdapter[uint64]](
+          em,
+          slug = "boost_lockfree_queue/spsc/1p1c",
+          queueInit = initBoostSpscQ,
+          capacity = SpscCapacity,
+        )
+        return
+    raise newException(ValueError, "unknown variant: " & variant)
 
 when isMainModule:
   # Unbuffer stdout so progress is visible under file redirects (mirrors

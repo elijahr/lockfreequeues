@@ -44,6 +44,14 @@ import lockfreequeues/unbounded_mupmuc
 import lockfreequeues/unbounded_mupsic
 import debra
 
+# MVP comparison adapters (Track 3). Loony is unbounded MPMC; Crossbeam
+# SegQueue is unbounded MPMC. Both go through runThroughputHarness.
+when defined(adapter_loony_available):
+  import ./adapters/loony_adapter
+
+when defined(adapter_crossbeam_seg_queue_available):
+  import ./adapters/crossbeam_seg_queue_adapter
+
 const
   UnboundedSipsicRuns* {.intdefine.} = 3
   UnboundedSipsicMessageCount* {.intdefine.} = 500_000
@@ -458,11 +466,62 @@ proc runUMupmucShape[P: static int; C: static int](
   echo ""
   em.addMeasure(slug, "throughput_ops_ms", m, m - s, m + s)
 
+# ---------- MVP unbounded MPMC adapter dispatch (loony + crossbeam SegQueue) ----------
+#
+# Both adapters expose plain push/pop and are unbounded, so they fit the
+# stock runThroughputHarness over the {1,2,4} P x {1,2,4} C grid for
+# parity with the lockfreequeues mupmuc unbounded baseline.
+
+when defined(adapter_loony_available):
+  proc initLoonyQ(capacity: int): LoonyAdapter[uint64] =
+    discard capacity
+    makeLoonyAdapter[uint64]()
+
+when defined(adapter_crossbeam_seg_queue_available):
+  proc initCrossbeamSegQ(capacity: int): CrossbeamSegQueueAdapter[uint64] =
+    discard capacity
+    makeCrossbeamSegQueueAdapter[uint64]()
+
+proc runMvpUnboundedShape[A](
+    em: var BMFEmitter,
+    slugPrefix: string,
+    queueInit: proc(capacity: int): A,
+    p, c: int,
+    runs, warmup, messageCount: int,
+) =
+  let slug = slugPrefix & "/mpmc_unbounded/" & $p & "p" & $c & "c"
+  echo fmt"{slug}:"
+  let metrics = runThroughputHarness[A](
+    queueInit = queueInit,
+    capacity = 0,
+    numProducers = p,
+    numConsumers = c,
+    messageCount = messageCount,
+    runCount = runs,
+    warmupCount = warmup,
+  )
+  echo fmt"  mean: {metrics.ops_ms_mean:.1f} ops/ms"
+  echo fmt"  stddev: {metrics.ops_ms_stddev:.1f}"
+  echo fmt"  runs: {metrics.runs}"
+  echo ""
+  em.addMeasure(
+    slug, "throughput_ops_ms",
+    metrics.ops_ms_mean,
+    metrics.ops_ms_mean - metrics.ops_ms_stddev,
+    metrics.ops_ms_mean + metrics.ops_ms_stddev,
+  )
+
 # ---------- Variant dispatch ----------
 
-const SupportedVariants =
-  ["unbounded_sipsic", "unbounded_sipmuc",
-   "unbounded_mupsic", "unbounded_mupmuc"]
+proc supportedVariantsList(): seq[string] {.compileTime.} =
+  result = @["unbounded_sipsic", "unbounded_sipmuc",
+             "unbounded_mupsic", "unbounded_mupmuc"]
+  when declared(initLoonyQ):
+    result.add("loony")
+  when declared(initCrossbeamSegQ):
+    result.add("crossbeam_seg_queue")
+
+const SupportedVariants = supportedVariantsList()
 
 proc runVariant(variant: string, em: var BMFEmitter) =
   case variant
@@ -518,6 +577,24 @@ proc runVariant(variant: string, em: var BMFEmitter) =
       runUMupmucShape[4, 4](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
         UnboundedMupmucMessageCount)
   else:
+    when declared(initLoonyQ):
+      if variant == "loony":
+        for p in [1, 2, 4]:
+          for c in [1, 2, 4]:
+            runMvpUnboundedShape[LoonyAdapter[uint64]](
+              em, "loony/LoonyQueue", initLoonyQ,
+              p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
+              UnboundedMupmucMessageCount)
+        return
+    when declared(initCrossbeamSegQ):
+      if variant == "crossbeam_seg_queue":
+        for p in [1, 2, 4]:
+          for c in [1, 2, 4]:
+            runMvpUnboundedShape[CrossbeamSegQueueAdapter[uint64]](
+              em, "crossbeam_queue/SegQueue", initCrossbeamSegQ,
+              p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
+              UnboundedMupmucMessageCount)
+        return
     raise newException(ValueError, "unknown variant: " & variant)
 
 when isMainModule:

@@ -31,6 +31,13 @@ import lockfreequeues/mupmuc
 import lockfreequeues/sipmuc
 import lockfreequeues/backoff
 
+# MVP comparison adapters (Track 3). Gated by per-library defines.
+when defined(adapter_boost_lockfree_queue_available):
+  import ./adapters/boost_lockfree_queue_adapter
+
+when defined(adapter_crossbeam_array_queue_available):
+  import ./adapters/crossbeam_array_queue_adapter
+
 const
   BenchMpmcRuns* {.intdefine.} = 33
   BenchMpmcMessageCount* {.intdefine.} = 1_000_000
@@ -268,9 +275,59 @@ proc runChannelsShape(
     metrics.ops_ms_mean + metrics.ops_ms_stddev,
   )
 
+# ---------- MVP adapter dispatch (boost MPMC + crossbeam ArrayQueue) ----------
+#
+# Both MVP adapters expose push/pop directly so they go through
+# runThroughputHarness; the {1,2,4} P x {1,2,4} C grid keeps shape parity
+# with the lockfreequeues mupmuc baseline (≥ 9 shapes per design 2.4).
+
+when defined(adapter_boost_lockfree_queue_available):
+  proc initBoostMpmcQ(capacity: int): BoostLockfreeQueueAdapter[uint64] =
+    makeBoostLockfreeQueueAdapter[uint64](capacity)
+
+when defined(adapter_crossbeam_array_queue_available):
+  proc initCrossbeamArrayQ(capacity: int): CrossbeamArrayQueueAdapter[uint64] =
+    makeCrossbeamArrayQueueAdapter[uint64](capacity)
+
+proc runMvpMpmcShape[A](
+    em: var BMFEmitter,
+    slugPrefix: string,
+    queueInit: proc(capacity: int): A,
+    p, c: int,
+    runs, warmup, messageCount, capacity: int,
+) =
+  let slug = slugPrefix & "/mpmc/" & $p & "p" & $c & "c"
+  echo fmt"{slug}:"
+  let metrics = runThroughputHarness[A](
+    queueInit = queueInit,
+    capacity = capacity,
+    numProducers = p,
+    numConsumers = c,
+    messageCount = messageCount,
+    runCount = runs,
+    warmupCount = warmup,
+  )
+  echo fmt"  mean: {metrics.ops_ms_mean:.1f} ops/ms"
+  echo fmt"  stddev: {metrics.ops_ms_stddev:.1f}"
+  echo fmt"  runs: {metrics.runs}"
+  echo ""
+  em.addMeasure(
+    slug, "throughput_ops_ms",
+    metrics.ops_ms_mean,
+    metrics.ops_ms_mean - metrics.ops_ms_stddev,
+    metrics.ops_ms_mean + metrics.ops_ms_stddev,
+  )
+
 # ---------- Variant dispatch ----------
 
-const SupportedVariants = ["mupmuc", "sipmuc", "channels"]
+proc supportedVariantsList(): seq[string] {.compileTime.} =
+  result = @["mupmuc", "sipmuc", "channels"]
+  when declared(initBoostMpmcQ):
+    result.add("boost_lockfree_queue")
+  when declared(initCrossbeamArrayQ):
+    result.add("crossbeam_array_queue")
+
+const SupportedVariants = supportedVariantsList()
 
 proc runVariant(variant: string, em: var BMFEmitter) =
   case variant
@@ -312,6 +369,24 @@ proc runVariant(variant: string, em: var BMFEmitter) =
         runChannelsShape(em, p, c, BenchMpmcRuns, BenchMpmcWarmup,
                          BenchMpmcMessageCount)
   else:
+    when declared(initBoostMpmcQ):
+      if variant == "boost_lockfree_queue":
+        for p in [1, 2, 4]:
+          for c in [1, 2, 4]:
+            runMvpMpmcShape[BoostLockfreeQueueAdapter[uint64]](
+              em, "boost_lockfree_queue", initBoostMpmcQ,
+              p, c, BenchMpmcRuns, BenchMpmcWarmup,
+              BenchMpmcMessageCount, MpmcCapacity)
+        return
+    when declared(initCrossbeamArrayQ):
+      if variant == "crossbeam_array_queue":
+        for p in [1, 2, 4]:
+          for c in [1, 2, 4]:
+            runMvpMpmcShape[CrossbeamArrayQueueAdapter[uint64]](
+              em, "crossbeam_queue", initCrossbeamArrayQ,
+              p, c, BenchMpmcRuns, BenchMpmcWarmup,
+              BenchMpmcMessageCount, MpmcCapacity)
+        return
     raise newException(ValueError, "unknown variant: " & variant)
 
 when isMainModule:
