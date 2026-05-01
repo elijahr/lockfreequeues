@@ -216,9 +216,13 @@ proc getProducer*[S: static int, T; MaxThreads: static int](
 ): Producer[S, T, MaxThreads] =
   ## Auto-register overload: calls `registerThread(self.manager[])`
   ## internally and returns a Producer. Each call consumes one thread
-  ## slot in the manager. If a thread will use multiple queues sharing
-  ## a manager, prefer the explicit-handle overload to avoid burning
-  ## one slot per queue.
+  ## slot in the manager, and **the slot is not reclaimed when the
+  ## Producer is destroyed** — it lives until the manager itself is
+  ## destroyed. Calling this in a loop or for short-lived producers
+  ## will exhaust `MaxThreads`. Reuse the same Producer per thread,
+  ## or use the explicit-handle overload, for long-running managers.
+  ## If a thread will use multiple queues sharing a manager, prefer
+  ## the explicit-handle overload to avoid burning one slot per queue.
   let handle = registerThread(self.manager[])
   self.getProducer(handle)
 

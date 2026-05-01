@@ -255,9 +255,13 @@ proc getConsumer*[S: static int, T; MaxThreads: static int](
 ): Consumer[S, T, MaxThreads] =
   ## Auto-register overload: calls `registerThread(self.manager[])`
   ## internally and returns a Consumer. Each call consumes one thread
-  ## slot in the manager. If a thread will use multiple queues sharing
-  ## a manager, prefer the explicit-handle overload to avoid burning
-  ## one slot per queue.
+  ## slot in the manager, and **the slot is not reclaimed when the
+  ## Consumer is destroyed** — it lives until the manager itself is
+  ## destroyed. Calling this in a loop or for short-lived consumers
+  ## will exhaust `MaxThreads`. Reuse the same Consumer per thread,
+  ## or use the explicit-handle overload, for long-running managers.
+  ## If a thread will use multiple queues sharing a manager, prefer
+  ## the explicit-handle overload to avoid burning one slot per queue.
   let handle = registerThread(self.manager[])
   self.getConsumer(handle)
 
