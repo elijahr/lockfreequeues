@@ -8,7 +8,10 @@ suite "Typestates module exports":
     var wrappedN: WrappedValueN[8]
     var slotN: PhysicalSlotN[8]
     var storageN: StorageN[8, int]
-    var flagsN: CommittedFlagsN[8]
+    var seqN: SlotSeqN[8]
+    var cellArray: MPMCCellArrayN[8, int]
+    var cellSingle: MPMCCell[int]
+    var cellPayload: MPMCCellPayload[int]
 
     # N+1-slot
     var rawN1: RawLoadedN1[8]

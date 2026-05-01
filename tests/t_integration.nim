@@ -37,9 +37,7 @@ template testHeadAndTailReset*(queue: untyped) =
     check(res.get == @[1])
     # After pop, head becomes 18 which wraps to 0
     queue.checkState(
-      head = 0,
-      tail = 0,
-      storage = (@[0, 0, 0, 0, 0, 0, 0, 0, 1]), # slot 8 still has old value
+      head = 0, tail = 0, storage = (@[0, 0, 0, 0, 0, 0, 0, 0, 1]), # slot 8 still has old value
     )
 
 template testWraps*(queue: untyped) =
@@ -67,7 +65,14 @@ template testWraps*(queue: untyped) =
 
   # With mod (N+1) indexing: items 9,10,11,12 go to slots 8,0,1,2
   when ((queue is Mupsic) or (queue is Mupmuc)):
-    queue.checkState(head = 4, reservedTail = 12)
+    queue.checkState(head = 4'u64, tail = 12'u64)
+  elif queue is Sipmuc:
+    queue.checkState(
+      head = 4'u64,
+      tail = 12'u64,
+      # slot 0: 10 (index 9 mod 9), slot 1: 11, slot 2: 12, slot 8: 9
+      data = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]),
+    )
   else:
     queue.checkState(
       head = 4,
@@ -85,7 +90,9 @@ template testWraps*(queue: untyped) =
   check(popRes.get == @[5, 6, 7, 8])
 
   when ((queue is Mupsic) or (queue is Mupmuc)):
-    queue.checkState(head = 8, reservedTail = 12)
+    queue.checkState(head = 8'u64, tail = 12'u64)
+  elif queue is Sipmuc:
+    queue.checkState(head = 8'u64, tail = 12'u64, data = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]))
   else:
     queue.checkState(head = 8, tail = 12, storage = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]))
 
@@ -98,6 +105,8 @@ template testWraps*(queue: untyped) =
   check(popRes.get == @[9, 10, 11, 12])
 
   when ((queue is Mupsic) or (queue is Mupmuc)):
-    queue.checkState(head = 12, reservedTail = 12)
+    queue.checkState(head = 12'u64, tail = 12'u64)
+  elif queue is Sipmuc:
+    queue.checkState(head = 12'u64, tail = 12'u64, data = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]))
   else:
     queue.checkState(head = 12, tail = 12, storage = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]))
