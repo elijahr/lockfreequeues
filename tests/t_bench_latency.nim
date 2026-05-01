@@ -123,3 +123,92 @@ suite "bench_latency --bmf-out integration (Task 1.2)":
     let cmd = bin & " bogus_variant"
     let (_, exitCode) = execCmdEx(cmd)
     check exitCode == 1
+
+# ---------- Task 1.5: multi-measure-per-slug merge ----------
+#
+# Validates the end-to-end shape that Track 1 ships: a single slug
+# carries BOTH `throughput_ops_ms` (from bench_throughput's BMF
+# fragment) and `latency_p50_ns` / `latency_p99_ns` (from bench_latency)
+# AFTER `merge_bmf.py` unions the two fragments. Production CI does this
+# with real bench output; the test uses two synthetic fragments so it
+# stays fast and deterministic.
+
+const MergeBmfPath = RepoRoot / "benchmarks" / "merge_bmf.py"
+
+suite "bench_latency multi-measure-per-slug merge (Task 1.5)":
+  test "merge_bmf.py unions throughput + latency on shared slug":
+    let dir = createTempDir("bench_latency_t15_", "")
+    defer: removeDir(dir)
+    let throughputPath = dir / "throughput.json"
+    let latencyPath = dir / "latency.json"
+    let mergedPath = dir / "merged.json"
+    let slug = "lockfreequeues_sipsic/spsc/1p1c"
+
+    # Synthetic throughput fragment.
+    writeFile(throughputPath,
+      """{
+  "lockfreequeues_sipsic/spsc/1p1c": {
+    "throughput_ops_ms": {
+      "value": 1234.5,
+      "lower_value": 1200.0,
+      "upper_value": 1270.0
+    }
+  }
+}""")
+    # Synthetic latency fragment on the SAME slug, distinct measures.
+    writeFile(latencyPath,
+      """{
+  "lockfreequeues_sipsic/spsc/1p1c": {
+    "latency_p50_ns": { "value": 250.0 },
+    "latency_p99_ns": { "value": 875.0 }
+  }
+}""")
+
+    let cmd = "python3 " & MergeBmfPath & " " & mergedPath &
+              " " & throughputPath & " " & latencyPath
+    let (output, exitCode) = execCmdEx(cmd)
+    check exitCode == 0
+    if exitCode != 0:
+      echo "merge stdout/stderr:\n", output
+    check fileExists(mergedPath)
+
+    let node = parseJson(readFile(mergedPath))
+    check node.hasKey(slug)
+    let s = node[slug]
+    # All three measures from BOTH fragments must coexist on the shared slug.
+    check s.hasKey("throughput_ops_ms")
+    check s.hasKey("latency_p50_ns")
+    check s.hasKey("latency_p99_ns")
+    check s["throughput_ops_ms"]["value"].getFloat() == 1234.5
+    check s["latency_p50_ns"]["value"].getFloat() == 250.0
+    check s["latency_p99_ns"]["value"].getFloat() == 875.0
+
+  test "merge_bmf.py exits 1 on collision when same measure key in both inputs":
+    # Sanity: the per-slug union union semantics are NOT a free-for-all;
+    # ensure the collision guard from PR 0 Task 0.7 still fires when the
+    # latency fragment accidentally re-declares throughput_ops_ms on the
+    # same slug. This guards against silent overwrites that would erase
+    # one of the measures.
+    let dir = createTempDir("bench_latency_t15_collide_", "")
+    defer: removeDir(dir)
+    let aPath = dir / "a.json"
+    let bPath = dir / "b.json"
+    let mergedPath = dir / "merged.json"
+
+    writeFile(aPath,
+      """{
+  "lockfreequeues_sipsic/spsc/1p1c": {
+    "throughput_ops_ms": { "value": 100.0 }
+  }
+}""")
+    writeFile(bPath,
+      """{
+  "lockfreequeues_sipsic/spsc/1p1c": {
+    "throughput_ops_ms": { "value": 200.0 }
+  }
+}""")
+    let cmd = "python3 " & MergeBmfPath & " " & mergedPath &
+              " " & aPath & " " & bPath
+    let (output, exitCode) = execCmdEx(cmd)
+    check exitCode == 1
+    check output.contains("collision")
