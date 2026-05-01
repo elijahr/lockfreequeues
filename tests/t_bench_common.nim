@@ -278,3 +278,70 @@ suite "bench_common runLatencyHarness":
     check metrics.p50_ns > 0.0
     check metrics.p99_ns >= metrics.p50_ns
     check metrics.max_ns >= metrics.p99_ns
+
+# ---------- Task 0.8: lockfreequeues adapter smoke tests ----------
+
+import std/sets
+import ../benchmarks/nim/adapters/lockfreequeues_sipmuc_adapter
+import ../benchmarks/nim/adapters/lockfreequeues_mupsic_adapter
+import ../benchmarks/nim/adapters/lockfreequeues_unbounded_sipsic_adapter
+import ../benchmarks/nim/adapters/lockfreequeues_unbounded_sipmuc_adapter
+import ../benchmarks/nim/adapters/lockfreequeues_unbounded_mupmuc_adapter
+
+const SmokeMessageCount = 100
+
+proc roundTripUint64Set[A](
+    adapter: var A, count: int
+): tuple[popped: int, ok: bool] =
+  ## Push `count` sequential uint64s, then pop them all back. Returns
+  ## (popped_count, set_equality_ok).
+  for i in 0 ..< count:
+    let r = adapter.push(uint64(i))
+    if r != prSuccess:
+      return (i, false)
+  var seen = initHashSet[uint64]()
+  for _ in 0 ..< count:
+    let r = adapter.pop()
+    if not r.success:
+      return (seen.len, false)
+    seen.incl(r.value)
+  var expected = initHashSet[uint64]()
+  for i in 0 ..< count:
+    expected.incl(uint64(i))
+  result = (seen.len, seen == expected)
+
+suite "bench_common adapters: lockfreequeues smoke (Task 0.8)":
+  test "Sipmuc 1024-cap, 1p1c, 100 sequential round-trip":
+    var a = makeLockfreequeuesSipmucAdapter[1024, 1, uint64](1024)
+    let r = roundTripUint64Set(a, SmokeMessageCount)
+    a.cleanup()
+    check r.popped == SmokeMessageCount
+    check r.ok
+
+  test "Mupsic 1024-cap, 1p1c, 100 sequential round-trip":
+    var a = makeLockfreequeuesMupsicAdapter[1024, 1, uint64](1024)
+    let r = roundTripUint64Set(a, SmokeMessageCount)
+    a.cleanup()
+    check r.popped == SmokeMessageCount
+    check r.ok
+
+  test "UnboundedSipsic seg=64, 100 sequential round-trip":
+    var a = makeLockfreequeuesUnboundedSipsicAdapter[64, uint64](0)
+    let r = roundTripUint64Set(a, SmokeMessageCount)
+    a.cleanup()
+    check r.popped == SmokeMessageCount
+    check r.ok
+
+  test "UnboundedSipmuc seg=64, MaxThreads=4, 100 sequential round-trip":
+    var a = makeLockfreequeuesUnboundedSipmucAdapter[64, uint64, 4](0)
+    let r = roundTripUint64Set(a, SmokeMessageCount)
+    a.cleanup()
+    check r.popped == SmokeMessageCount
+    check r.ok
+
+  test "UnboundedMupmuc seg=64, MaxThreads=4, 100 sequential round-trip":
+    var a = makeLockfreequeuesUnboundedMupmucAdapter[64, uint64, 4](0)
+    let r = roundTripUint64Set(a, SmokeMessageCount)
+    a.cleanup()
+    check r.popped == SmokeMessageCount
+    check r.ok
