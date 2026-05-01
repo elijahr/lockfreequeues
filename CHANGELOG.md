@@ -9,6 +9,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Interactive uPlot throughput chart on the docs site (PR 5, Track 5).
+  `docs/benchmarks.md` embeds a `<div id="bench-chart">` container plus
+  a vendored `uPlot 1.6.27` IIFE bundle and a vanilla-JS wiring module
+  (`docs/assets/bench-charts.js` + `docs/assets/bench-charts.css`).
+  The chart fetches the merged BMF snapshot from the relative URL
+  `./assets/bench-results/latest.json` so the same page works under
+  the `/dev/`, `/latest/`, and `/v*/` mike aliases without rewrite.
+  Library-toggle legend hides/shows series; log-scale Y axis toggle
+  switches between linear and log; hover tooltips show mean ± stddev
+  when `lower_value` / `upper_value` are present in the underlying
+  measure (throughput). Soft-skipped (library, shape) cells render as
+  gaps, not zeros. Graceful fallbacks render an inline message on
+  fetch errors, missing uPlot global, or empty BMF.
+- BMF snapshot publishing pipeline (PR 5, Track 5). New step in
+  `bench.yml`'s `bench-upload` job runs only on `push` to
+  `refs/heads/devel`, copies `merged.json` to
+  `docs/assets/bench-results/<sha>.json` AND
+  `docs/assets/bench-results/latest.json`, and pushes the snapshot
+  back to `devel` as `github-actions[bot]` with a `[skip ci]` commit
+  message. Three-layer loop-prevention per design §5.X:
+  (1) `[skip ci]` marker (primary), (2) `paths-ignore` extension to
+  `docs/assets/bench-results/**` on both `pull_request` and `push`
+  triggers (secondary), and (3) bot-actor guard on the `bench` and
+  `bench-upload` jobs (tertiary).
+- Devel-triggered docs deploy (PR 5, Track 5). `docs.yml` now triggers
+  on push to `devel` in addition to `main` / `master`, and the
+  "Deploy docs (dev)" step's `if:` clause includes `devel`. A new
+  post-deploy "Verify mike asset path" step (design §5.Y) curls
+  the published BMF snapshot URL, asserts HTTP 200, and asserts the
+  body parses as JSON; the chart's silent-on-404 behaviour would
+  otherwise hide a broken asset path.
+- `THIRD_PARTY_LICENSES.md` records the uPlot vendoring (1.6.27, MIT,
+  vendored at `docs/assets/uplot-1.6.27.iife.min.js`) with a precise
+  upgrade procedure including the jsdelivr URL and SHA-256
+  verification path. `.gitattributes` gains
+  `docs/assets/uplot-*.js linguist-vendored=true linguist-generated=true`
+  and `docs/assets/bench-results/*.json linguist-generated=true`.
+- New `benchmarks/tests/test_bench_charts_contract.py` (9 tests)
+  guards the BMF -> chart contract: slug grammar
+  `<library>/<topology>/<P>p<C>c`, measure regex
+  `^[a-z][a-z0-9_]*$`, finite numeric values, throughput-measure
+  presence, and the existence of the three checked-in chart assets.
+  Mirrors the JS `parseSlug` logic in Python so drift is caught at
+  CI time rather than in production.
+- `docs/benchmarks.md` registered in `mkdocs.yml`'s nav (previously
+  unreachable from the docs landing page) and the four-row §4.1
+  fairness caveats embedded verbatim immediately below the chart so
+  readers see the methodology footnotes within one viewport
+  regardless of which library combination they toggle.
+- `benchmarks/README.md` "Updating the README summary" subsection
+  codifies the new hand-curation procedure for the README BENCHMARKS
+  markers (which shapes to read, where to read them, when to commit).
+
+### Changed
+
+- `README.md` BENCHMARKS markers now hold a hand-curated four-row
+  summary table (Sipsic / Sipmuc / Mupsic / Mupmuc bounded at one
+  representative shape each) plus a link line to the live chart page
+  at `https://elijahr.github.io/lockfreequeues/latest/benchmarks/`,
+  per design §4.4. Initial cells contain placeholders; the release PR
+  fills them in. The chart page absorbs run-to-run noise; the README
+  intentionally captures only the most recent release's headline
+  numbers.
+
+### Removed
+
+- `benchmarks/render_readme.nim` and its test
+  `tests/t_render_readme.nim`. The auto-rendered README path is
+  replaced by hand curation (above). Pre-deletion release-tag check
+  (per impl plan 5.8): `v3.2.0` and `v4.0.0` each ship the renderer
+  in their tagged tree; deleting on devel does not mutate those
+  tags. No CI workflow, nimble task, or test runner referenced the
+  renderer.
+
 - Comparison expansion (PR 4, Track 4): four new third-party adapters
   reach the comparison set. `moodycamel_adapter.nim` wraps
   `moodycamel::ConcurrentQueue` (BSD-2-Clause / Boost dual,
