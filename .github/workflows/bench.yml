@@ -30,6 +30,18 @@ on:
         description: 'Force loony soft-skip (Track 3 §2.6 acceptance)'
         type: boolean
         default: false
+      force_skip_moodycamel:
+        description: 'Force MoodyCamel soft-skip (Track 4 §4.7 acceptance)'
+        type: boolean
+        default: false
+      force_skip_threading_channels:
+        description: 'Force threading.Chan soft-skip (Track 4 §4.7 acceptance)'
+        type: boolean
+        default: false
+      force_skip_nim_channel:
+        description: 'Force system.Channel soft-skip (Track 4 §4.7 acceptance)'
+        type: boolean
+        default: false
 # yamllint enable rule:truthy
 
 env:
@@ -38,11 +50,14 @@ env:
   # presence via `env.BENCHER_API_TOKEN`. GitHub Actions does not allow
   # `secrets.*` directly in `if:`, so the env-var indirection is required.
   BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
-  # Track 3 §2.6 soft-skip overrides. Empty string when the
-  # workflow_dispatch input is unset (the default), '1' when the
+  # Track 3 §2.6 + Track 4 §4.7 soft-skip overrides. Empty string when
+  # the workflow_dispatch input is unset (the default), '1' when the
   # operator forces a skip. Step-level `if:` clauses gate on these.
   FORCE_SKIP_BOOST: ${{ inputs.force_skip_boost && '1' || '' }}
   FORCE_SKIP_LOONY: ${{ inputs.force_skip_loony && '1' || '' }}
+  FORCE_SKIP_MOODYCAMEL: ${{ inputs.force_skip_moodycamel && '1' || '' }}
+  FORCE_SKIP_THREADING_CHANNELS: ${{ inputs.force_skip_threading_channels && '1' || '' }}
+  FORCE_SKIP_NIM_CHANNEL: ${{ inputs.force_skip_nim_channel && '1' || '' }}
 
 jobs:
   bench-tests:
@@ -253,6 +268,131 @@ jobs:
         run: |
           echo "::warning title=Adapter skipped::loony install or smoke failed; bench will omit loony slugs."
 
+      # ---------- Track 4 PR-4 adapter installs (soft-skip) ----------
+      #
+      # MoodyCamel: vendored single-header at
+      # benchmarks/vendor/concurrentqueue/concurrentqueue.h. The
+      # "install" step is therefore a `test -f` rather than a fetch, so
+      # the bench is reproducible without network egress. Only
+      # bench_unbounded wires the moodycamel adapter (mpmc_unbounded).
+      - name: Install MoodyCamel (vendored header presence check)
+        id: install-moodycamel
+        if: |
+          env.FORCE_SKIP_MOODYCAMEL != '1' &&
+          matrix.binary == 'bench_unbounded'
+        continue-on-error: true
+        run: |
+          test -f benchmarks/vendor/concurrentqueue/concurrentqueue.h
+          test -f benchmarks/vendor/concurrentqueue/moodycamel_wrapper.cpp
+
+      - name: Smoke MoodyCamel adapter
+        id: smoke-moodycamel
+        if: |
+          env.FORCE_SKIP_MOODYCAMEL != '1' &&
+          steps.install-moodycamel.outcome == 'success' &&
+          matrix.binary == 'bench_unbounded'
+        continue-on-error: true
+        run: |
+          set -eu
+          # nim cpp because concurrentqueue.h is C++ and the wrapper
+          # is C++ source compiled in via `{.compile: ...}`.
+          nim cpp -d:release -d:danger --threads:on \
+            -d:adapter_moodycamel_available \
+            -o:.tmp/smoke_moodycamel \
+            benchmarks/nim/smoke/smoke_moodycamel.nim
+          ./.tmp/smoke_moodycamel
+
+      - name: Set MoodyCamel adapter define (success only)
+        if: |
+          env.FORCE_SKIP_MOODYCAMEL != '1' &&
+          steps.install-moodycamel.outcome == 'success' &&
+          steps.smoke-moodycamel.outcome == 'success'
+        run: echo "ADAPTER_MOODYCAMEL=1" >> "$GITHUB_ENV"
+
+      - name: Annotate MoodyCamel skipped
+        if: |
+          matrix.binary == 'bench_unbounded' &&
+          (env.FORCE_SKIP_MOODYCAMEL == '1' ||
+           steps.install-moodycamel.outcome != 'success' ||
+           steps.smoke-moodycamel.outcome != 'success')
+        run: |
+          echo "::warning title=Adapter skipped::moodycamel install or smoke failed; bench will omit moodycamel slugs."
+
+      # threading.Chan (nimble package): only used by bench_mpmc.
+      - name: Install threading (nimble)
+        id: install-threading-channels
+        if: |
+          env.FORCE_SKIP_THREADING_CHANNELS != '1' &&
+          matrix.binary == 'bench_mpmc'
+        continue-on-error: true
+        run: |
+          nimble install -y threading
+
+      - name: Smoke threading.Chan adapter
+        id: smoke-threading-channels
+        if: |
+          env.FORCE_SKIP_THREADING_CHANNELS != '1' &&
+          steps.install-threading-channels.outcome == 'success' &&
+          matrix.binary == 'bench_mpmc'
+        continue-on-error: true
+        run: |
+          set -eu
+          nim c -d:release -d:danger --threads:on \
+            -d:adapter_threading_channels_available \
+            -o:.tmp/smoke_threading_channels \
+            benchmarks/nim/smoke/smoke_threading_channels.nim
+          ./.tmp/smoke_threading_channels
+
+      - name: Set threading.Chan adapter define (success only)
+        if: |
+          env.FORCE_SKIP_THREADING_CHANNELS != '1' &&
+          steps.install-threading-channels.outcome == 'success' &&
+          steps.smoke-threading-channels.outcome == 'success'
+        run: echo "ADAPTER_THREADING_CHANNELS=1" >> "$GITHUB_ENV"
+
+      - name: Annotate threading.Chan skipped
+        if: |
+          matrix.binary == 'bench_mpmc' &&
+          (env.FORCE_SKIP_THREADING_CHANNELS == '1' ||
+           steps.install-threading-channels.outcome != 'success' ||
+           steps.smoke-threading-channels.outcome != 'success')
+        run: |
+          echo "::warning title=Adapter skipped::threading.Chan install or smoke failed; bench will omit threading_channels slugs."
+
+      # system.Channel (Nim stdlib, no install): only used by bench_mpsc.
+      # The "install" step is a no-op success placeholder so the
+      # FORCE_SKIP_NIM_CHANNEL flag has the same shape as the other
+      # adapters; the real check happens in the smoke step.
+      - name: Smoke system.Channel adapter
+        id: smoke-nim-channel
+        if: |
+          env.FORCE_SKIP_NIM_CHANNEL != '1' &&
+          matrix.binary == 'bench_mpsc'
+        continue-on-error: true
+        run: |
+          set -eu
+          # The smoke is the round-trip test in tests/t_bench_adapters.nim
+          # under the nim_channel gate; the default Nim install ships
+          # system.Channel so no install step is required.
+          nim c -d:release -d:danger --threads:on \
+            -d:adapter_nim_channel_available \
+            -o:.tmp/smoke_nim_channel \
+            -r tests/t_bench_adapters.nim
+
+      - name: Set system.Channel adapter define (success only)
+        if: |
+          env.FORCE_SKIP_NIM_CHANNEL != '1' &&
+          steps.smoke-nim-channel.outcome == 'success'
+        run: echo "ADAPTER_NIM_CHANNEL=1" >> "$GITHUB_ENV"
+
+      - name: Annotate system.Channel skipped
+        if: |
+          matrix.binary == 'bench_mpsc' &&
+          (env.FORCE_SKIP_NIM_CHANNEL == '1' ||
+           steps.smoke-nim-channel.outcome != 'success')
+        run: |
+          echo "::warning title=Adapter skipped::system.Channel smoke failed; bench will omit nim_channel slugs."
+
       - name: Build adapter define flags
         # Aggregates the per-adapter env flags into a single shell
         # variable consumed by the compile step. Empty when no adapter
@@ -272,6 +412,16 @@ jobs:
           fi
           if [ "${ADAPTER_LOONY:-}" = "1" ]; then
             flags="$flags -d:adapter_loony_available"
+          fi
+          if [ "${ADAPTER_MOODYCAMEL:-}" = "1" ]; then
+            flags="$flags -d:adapter_moodycamel_available"
+            mode="cpp"
+          fi
+          if [ "${ADAPTER_THREADING_CHANNELS:-}" = "1" ]; then
+            flags="$flags -d:adapter_threading_channels_available"
+          fi
+          if [ "${ADAPTER_NIM_CHANNEL:-}" = "1" ]; then
+            flags="$flags -d:adapter_nim_channel_available"
           fi
           {
             echo "flags=$flags"
@@ -313,12 +463,15 @@ jobs:
                 benchmarks/nim/bench_spsc.nim
               ;;
             bench_mpsc)
-              # bench_mpsc has no MVP adapter wiring; ignore ADAPTER_FLAGS
-              # / NIM_MODE and stay on `nim c`.
+              # PR 4 wires nim_channel (Nim stdlib, plain `nim c`) into
+              # bench_mpsc. No C++-only adapters live here, so ignore
+              # NIM_MODE and stay on `nim c`; ADAPTER_FLAGS may carry
+              # -d:adapter_nim_channel_available.
               nim c -d:release -d:danger --threads:on \
                 -d:BenchMpscMessageCount=1000000 \
                 -d:BenchMpscRuns=5 \
                 -d:BenchMpscWarmup=2 \
+                $ADAPTER_FLAGS \
                 benchmarks/nim/bench_mpsc.nim
               ;;
             bench_mpmc)
@@ -330,9 +483,11 @@ jobs:
                 benchmarks/nim/bench_mpmc.nim
               ;;
             bench_unbounded)
-              # bench_unbounded supports loony (Nim, plain `nim c`) but
-              # no boost. Stay on c regardless of NIM_MODE.
-              nim c -d:release -d:danger --threads:on \
+              # bench_unbounded supports loony (Nim, plain `nim c`) and
+              # PR 4's MoodyCamel (C++ vendored header, requires `nim
+              # cpp`). NIM_MODE is "cpp" iff ADAPTER_MOODYCAMEL was
+              # set; otherwise it stays "c". loony is mode-neutral.
+              nim "$NIM_MODE" -d:release -d:danger --threads:on \
                 -d:UnboundedSipsicMessageCount=200000 \
                 -d:UnboundedSipsicRuns=3 \
                 -d:UnboundedSipmucMessageCount=100000 \
