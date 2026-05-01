@@ -1,3 +1,4 @@
+import ./t_aligned_alloc
 import ./t_atomic_dsl
 import ./t_backoff
 import ./t_mupmuc
@@ -23,6 +24,7 @@ import ./t_unbounded_auto_create
 import ./t_wraparound
 
 export
+  t_aligned_alloc,
   t_atomic_dsl,
   t_backoff,
   t_mupmuc,
