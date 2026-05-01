@@ -184,6 +184,21 @@ proc pop*[S: static int, T](
     return none(seq[T])
   return some(items)
 
+when defined(testing):
+  proc headSegmentForTest*[S: static int, T](
+      self: var UnboundedSipsic[S, T]
+  ): pointer =
+    ## Test-only accessor: returns the queue's current head segment pointer
+    ## so the cache-line padding audit can verify base alignment.
+    result = cast[pointer](self.headSegment.load(moRelaxed))
+
+  proc segmentHeadOffsetForTest*[S: static int, T](
+      _: typedesc[UnboundedSipsic[S, T]]
+  ): tuple[head: int, tail: int] =
+    ## Test-only accessor: returns offsets of cache-line-padded fields within
+    ## the unbounded sipsic Segment for the cache-line padding audit.
+    result = (offsetOf(Segment[S, T], head), offsetOf(Segment[S, T], tail))
+
 proc `=destroy`*[S: static int, T](self: var UnboundedSipsic[S, T]) =
   ## Clean up all segments.
   var seg = self.headSegment.load(moRelaxed)

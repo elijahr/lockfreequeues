@@ -433,6 +433,25 @@ proc pop*[S: static int, T; MaxThreads: static int](
     return none(seq[T])
   return some(items)
 
+when defined(testing):
+  proc headSegmentForTest*[S: static int, T; MaxThreads: static int](
+      self: var UnboundedMupmuc[S, T, MaxThreads]
+  ): pointer =
+    ## Test-only accessor: returns the queue's current head segment pointer
+    ## so the cache-line padding audit can verify base alignment.
+    result = cast[pointer](self.headSegment.load(moRelaxed))
+
+  proc segmentHeadOffsetForTest*[S: static int, T; MaxThreads: static int](
+      _: typedesc[UnboundedMupmuc[S, T, MaxThreads]]
+  ): tuple[tail: int, prevConsumerIdx: int, committed: int] =
+    ## Test-only accessor: returns offsets of cache-line-padded fields within
+    ## the unbounded mupmuc Segment for the cache-line padding audit.
+    result = (
+      offsetOf(Segment[S, T], tail),
+      offsetOf(Segment[S, T], prevConsumerIdx),
+      offsetOf(Segment[S, T], committed),
+    )
+
 proc `=destroy`*[S: static int, T; MaxThreads: static int](
     self: var UnboundedMupmuc[S, T, MaxThreads]
 ) =
