@@ -52,6 +52,12 @@ when defined(adapter_loony_available):
 when defined(adapter_crossbeam_seg_queue_available):
   import ./adapters/crossbeam_seg_queue_adapter
 
+# PR 4 comparison adapter (Track 4 §4.6). MoodyCamel ConcurrentQueue
+# wired here under mpmc_unbounded. Vendored single-header + extern "C"
+# wrapper; nim cpp only.
+when defined(adapter_moodycamel_available):
+  import ./adapters/moodycamel_adapter
+
 const
   UnboundedSipsicRuns* {.intdefine.} = 3
   UnboundedSipsicMessageCount* {.intdefine.} = 500_000
@@ -482,6 +488,13 @@ when defined(adapter_crossbeam_seg_queue_available):
     discard capacity
     makeCrossbeamSegQueueAdapter[uint64]()
 
+when defined(adapter_moodycamel_available):
+  proc initMoodycamelQ(capacity: int): MoodycamelAdapter[uint64] =
+    # MoodyCamel grows beyond the initial-block-size hint, so we pass
+    # the harness capacity through verbatim (matches design 2.4
+    # convention for unbounded adapters that accept a hint).
+    makeMoodycamelAdapter[uint64](capacity)
+
 proc runMvpUnboundedShape[A](
     em: var BMFEmitter,
     slugPrefix: string,
@@ -520,6 +533,8 @@ proc supportedVariantsList(): seq[string] {.compileTime.} =
     result.add("loony")
   when declared(initCrossbeamSegQ):
     result.add("crossbeam_seg_queue")
+  when declared(initMoodycamelQ):
+    result.add("moodycamel")
 
 const SupportedVariants = supportedVariantsList()
 
@@ -592,6 +607,15 @@ proc runVariant(variant: string, em: var BMFEmitter) =
           for c in [1, 2, 4]:
             runMvpUnboundedShape[CrossbeamSegQueueAdapter[uint64]](
               em, "crossbeam_seg_queue", initCrossbeamSegQ,
+              p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
+              UnboundedMupmucMessageCount)
+        return
+    when declared(initMoodycamelQ):
+      if variant == "moodycamel":
+        for p in [1, 2, 4]:
+          for c in [1, 2, 4]:
+            runMvpUnboundedShape[MoodycamelAdapter[uint64]](
+              em, "moodycamel/ConcurrentQueue", initMoodycamelQ,
               p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
               UnboundedMupmucMessageCount)
         return

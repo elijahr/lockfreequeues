@@ -20,6 +20,12 @@ import ./bench_common
 import lockfreequeues/backoff
 import lockfreequeues/mupsic
 
+# PR 4 comparison adapter (Track 4 §4.6). Nim's stdlib system.Channel
+# wired here under the MPSC slot. Blocking-on-full producer; see the
+# adapter file for the apples-to-oranges fairness caveat.
+when defined(adapter_nim_channel_available):
+  import ./adapters/nim_channel_adapter
+
 const
   BenchMpscRuns* {.intdefine.} = 33
   BenchMpscMessageCount* {.intdefine.} = 1_000_000
@@ -35,7 +41,9 @@ when defined(BenchMpscTestCompileTime):
     doAssert BenchMpscWarmup == 3,
       "BenchMpscWarmup default must be 3 (got " & $BenchMpscWarmup & ")"
 
-const MupsicCapacity = 1024
+const
+  MupsicCapacity = 1024
+  NimChannelCapacity = 1024
 
 # ---------- Per-shape harness ----------
 #
@@ -139,9 +147,51 @@ proc runMupsicShape[N, P: static int; T](
   echo ""
   em.addMeasure(slug, "throughput_ops_ms", m, m - s, m + s)
 
+# ---------- PR 4 nim_channel dispatch (uses runThroughputHarness) ----------
+#
+# system.Channel exposes uniform push/pop through the adapter, so it
+# fits the stock runThroughputHarness on the MPSC {1,2,4}p1c matrix
+# in parity with the lockfreequeues mupsic baseline.
+
+when defined(adapter_nim_channel_available):
+  proc initNimChannelQ(capacity: int): NimChannelAdapter[uint64] =
+    initNimChannelAdapter[uint64](capacity)
+
+  proc runNimChannelShape(
+      em: var BMFEmitter,
+      p: int,
+      runs, warmup, messageCount: int,
+  ) =
+    let slug = "nim_channel/mpsc/" & $p & "p1c"
+    echo fmt"NimChannel {p}p1c ({slug}):"
+    let metrics = runThroughputHarness[NimChannelAdapter[uint64]](
+      queueInit = initNimChannelQ,
+      capacity = NimChannelCapacity,
+      numProducers = p,
+      numConsumers = 1,
+      messageCount = messageCount,
+      runCount = runs,
+      warmupCount = warmup,
+    )
+    echo fmt"  mean: {metrics.ops_ms_mean:.1f} ops/ms"
+    echo fmt"  stddev: {metrics.ops_ms_stddev:.1f}"
+    echo fmt"  runs: {metrics.runs}"
+    echo ""
+    em.addMeasure(
+      slug, "throughput_ops_ms",
+      metrics.ops_ms_mean,
+      metrics.ops_ms_mean - metrics.ops_ms_stddev,
+      metrics.ops_ms_mean + metrics.ops_ms_stddev,
+    )
+
 # ---------- Variant dispatch ----------
 
-const SupportedVariants = ["mupsic"]
+proc supportedVariantsList(): seq[string] {.compileTime.} =
+  result = @["mupsic"]
+  when declared(initNimChannelQ):
+    result.add("nim_channel")
+
+const SupportedVariants = supportedVariantsList()
 
 proc runVariant(variant: string, em: var BMFEmitter) =
   case variant
@@ -153,6 +203,12 @@ proc runVariant(variant: string, em: var BMFEmitter) =
     runMupsicShape[MupsicCapacity, 4, uint64](
       em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount)
   else:
+    when declared(initNimChannelQ):
+      if variant == "nim_channel":
+        for p in [1, 2, 4]:
+          runNimChannelShape(em, p, BenchMpscRuns, BenchMpscWarmup,
+                             BenchMpscMessageCount)
+        return
     raise newException(ValueError, "unknown variant: " & variant)
 
 when isMainModule:

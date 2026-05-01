@@ -38,6 +38,11 @@ when defined(adapter_boost_lockfree_queue_available):
 when defined(adapter_crossbeam_array_queue_available):
   import ./adapters/crossbeam_array_queue_adapter
 
+# PR 4 comparison adapter (Track 4 §4.6). Nimble threading.Chan
+# wired here under the MPMC slot. Non-blocking trySend/tryRecv.
+when defined(adapter_threading_channels_available):
+  import ./adapters/threading_channels_adapter
+
 const
   BenchMpmcRuns* {.intdefine.} = 33
   BenchMpmcMessageCount* {.intdefine.} = 1_000_000
@@ -289,6 +294,10 @@ when defined(adapter_crossbeam_array_queue_available):
   proc initCrossbeamArrayQ(capacity: int): CrossbeamArrayQueueAdapter[uint64] =
     makeCrossbeamArrayQueueAdapter[uint64](capacity)
 
+when defined(adapter_threading_channels_available):
+  proc initThreadingChannelsQ(capacity: int): ThreadingChannelsAdapter[uint64] =
+    initThreadingChannelsAdapter[uint64](capacity)
+
 proc runMvpMpmcShape[A](
     em: var BMFEmitter,
     slugPrefix: string,
@@ -326,6 +335,8 @@ proc supportedVariantsList(): seq[string] {.compileTime.} =
     result.add("boost_lockfree_queue")
   when declared(initCrossbeamArrayQ):
     result.add("crossbeam_array_queue")
+  when declared(initThreadingChannelsQ):
+    result.add("threading_channels")
 
 const SupportedVariants = supportedVariantsList()
 
@@ -384,6 +395,15 @@ proc runVariant(variant: string, em: var BMFEmitter) =
           for c in [1, 2, 4]:
             runMvpMpmcShape[CrossbeamArrayQueueAdapter[uint64]](
               em, "crossbeam_array_queue", initCrossbeamArrayQ,
+              p, c, BenchMpmcRuns, BenchMpmcWarmup,
+              BenchMpmcMessageCount, MpmcCapacity)
+        return
+    when declared(initThreadingChannelsQ):
+      if variant == "threading_channels":
+        for p in [1, 2, 4]:
+          for c in [1, 2, 4]:
+            runMvpMpmcShape[ThreadingChannelsAdapter[uint64]](
+              em, "threading_channels", initThreadingChannelsQ,
               p, c, BenchMpmcRuns, BenchMpmcWarmup,
               BenchMpmcMessageCount, MpmcCapacity)
         return
