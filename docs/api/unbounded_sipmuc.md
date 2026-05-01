@@ -4,7 +4,15 @@ Unbounded single-producer, multiple-consumer (SPMC) queue using linked segments.
 
 ## Overview
 
-`UnboundedSipmuc` provides an unbounded SPMC queue where a single producer distributes work to multiple consumers. Uses epoch-based memory reclamation for safe segment deallocation.
+`UnboundedSipmuc` provides an unbounded SPMC queue where a single producer distributes work to multiple consumers. Uses epoch-based memory reclamation (DEBRA) for safe segment deallocation, and a per-slot committed flag inside each segment for safe publication to concurrent consumers.
+
+> **Note:** This per-slot committed flag is the *segment-local* publication
+> mechanism for the unbounded queues. It is distinct from the per-slot
+> sequence-counter protocol used by the bounded variants (`Mupmuc`, `Mupsic`,
+> `Sipmuc`). Unbounded segments are single-use linked nodes (no generation
+> rollover), so the simpler one-shot committed flag is sufficient. See
+> [slot-ownership-typestates.md](../slot-ownership-typestates.md) for the
+> full distinction.
 
 **Performance characteristics:**
 

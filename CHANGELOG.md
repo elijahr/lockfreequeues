@@ -7,11 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-04-30
+
+### BREAKING
+
+- Bounded MPMC/SPMC/MPSC slot protocol switched to per-slot sequence counters (Vyukov bounded-MPMC). Fixes a confirmed race that allowed two consumers to claim the same physical slot across generations, producing silent duplicate-item delivery and producer-vs-producer storage races. The race was TSAN-confirmed at 100% reproduction and ran at roughly a 5% release-mode duplicate rate under contention.
+- `Mupmuc`, `Mupsic`, `Sipmuc` types: the `committed*`, `reservedHead*`, `reservedTail*`, and `storage*` fields have been removed. They are replaced with `cells*: MPMCCellArrayN[N, T]`. Consumers introspecting these fields directly must migrate to the new accessors.
+- `head` and `tail` cursors on the bounded queue types are now `Atomic[uint64]` instead of `Atomic[int]`. Code reading these via `.load(...)` will need an explicit cast or a local rename.
+- Bulk `push(items)` / `pop(count)` semantics have changed. The previous implementation performed an atomic block-claim across the requested range; the new implementation performs a best-effort fill via a loop of singleton operations. Partial completion is reported through the existing `Option[Slice[int]]` / `Option[seq[T]]` return types, so the API surface is unchanged but the intra-call atomicity guarantee is gone.
+- `CommittedFlagsN` type removed. Replaced with `SlotSeqN`, `MPMCCellPayload`, and `MPMCCellArrayN`. The `tests/t_committed_flags_n.nim` file has been deleted; equivalent and stronger coverage lives in `tests/t_slot_seq_n.nim`.
+
 ### Added
 
+- New `lockfreequeues/backoff` module with `backoffOnRetry` (exponential) and `backoffOnPeerWait` (cpuPause-only) helpers. Used internally on CAS-retry paths to handle CPU oversubscription without burning unbounded CPU.
+- Bench harness now supports the `Mupmuc` 8P/8C topology. The previous topology table was implicitly capped at 4P/4C.
+- New `LFQ_STRESS_DURATION_SEC` environment variable on threaded stress tests, for sustained-load runs beyond the default iteration budget.
+- New `tests/t_slot_seq_generation_rollover.nim`: a deterministic single-threaded reproduction of the original protocol-bug scenario, asserting that the new sequence-counter protocol rejects the stale second-consumer claim.
 - Throughput bench harness for `UnboundedMupsic` (1P/1C, 2P/1C, 4P/1C) at `benchmarks/nim/bench_throughput.nim` plus a thin adapter at `benchmarks/nim/adapters/lockfreequeues_unbounded_mupsic.nim` that owns the queue and `DebraManager`. Producer threads register their own `ThreadHandle` in-thread (handles are per-thread by construction). The new variants run for 33 timed iterations + 3 warmup; existing Sipsic/Mupmuc/Channels run counts are unchanged.
 - `bench_throughput` accepts variant-group args (`sipsic`, `mupmuc`, `unbounded_mupsic`, `channels`) to limit which benchmarks run. With no args, all variants run (backward compatible). Multiple args take the union of groups. Unknown args print the supported list and exit non-zero. Lets gate runs target a single queue family without paying for the slow bounded MPMC variants.
 - Compile-time overrides for `bench_throughput` run shape via `{.intdefine.}` constants: `-d:MessageCount=N`, `-d:DefaultRuns=N`, `-d:WarmupRuns=N`, `-d:UnboundedMupsicRuns=N`, `-d:UnboundedMupsicSegmentSize=N`, `-d:UnboundedMupsicMaxThreads=N`. Defaults are unchanged (1M messages, 33 runs, 3 warmup). Lets gate runs trade statistical confidence for wall-clock budget without source edits. `bench_throughput` also unbuffers stdout in `isMainModule` so progress is visible under file redirect.
+
+### Fixed
+
+- Mupmuc 4P/4C livelock under CPU oversubscription. The combination of new backoff helpers and monotonic per-thread retry counters resolves the scheduler-pressure livelock; the bounded queue can now run 8 contending threads on 4 vCPUs without hangs.
+- Bench harness `messageCount div P` truncation bug. Consumers waited forever for items the integer-division truncation had silently discarded. Spread-the-remainder fix applied in three places.
+- Several pre-existing breakages in the unbounded threaded stress tests. The 3.2.0 DEBRA migration left them on a deleted `EpochManager` API; the tests have been updated to the current handle-based API. A small number remain disabled pending separate cleanup.
+
+### Changed
+
+- Bounded queue documentation updated to reflect the new sequence-counter publication protocol. Unbounded queue documentation now explicitly disambiguates the segment-local committed-flag protocol from the bounded sequence-counter protocol. See `docs/safety-model.md` and `docs/slot-ownership-typestates.md`.
 
 ## [3.2.0] - 2026-04-27
 

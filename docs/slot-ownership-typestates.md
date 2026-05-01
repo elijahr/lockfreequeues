@@ -107,7 +107,53 @@ of pkEmpty:
 | No double write | `sink` parameter consumes `SlotClaimed` token |
 | No commit without write | `commitSlot` requires `SlotWritten` |
 | No read without CAS | `readItem` requires `SlotAvailable`, only from successful CAS |
-| No read uncommitted data | `SlotAvailable` only when committed flag set (MPSC) |
+| No read uncommitted data | `SlotAvailable` only when slot is published — sequence-counter match for bounded variants, committed-flag set for unbounded variants |
+
+## Publication Protocol: Bounded vs Unbounded
+
+The slot-ownership typestates above describe the *shape* of producer and
+consumer ownership transitions; the underlying mechanism that decides when a
+slot is "claimable" or "available" differs between bounded and unbounded
+queues.
+
+### Bounded variants (`Sipmuc`, `Mupsic`, `Mupmuc`)
+
+Bounded queues use the **Vyukov per-slot sequence counter** protocol. Each
+slot carries an `Atomic[uint64]` whose value encodes the slot's generation
+and phase:
+
+- For slot `i` with capacity `N`, the producer-ready value is
+  `gen * N + i`; after a producer commits, the value advances to
+  `gen * N + i + 1` (consumer-ready). After a consumer reads, it advances
+  to `(gen + 1) * N + i` (producer-ready again, next generation).
+- Producers CAS the tail cursor only when the target slot's sequence equals
+  `tail` (this generation's producer-ready value); consumers CAS the head
+  cursor only when the target slot's sequence equals `head + 1` (this
+  generation's consumer-ready value).
+- Generation rollover races are structurally impossible: a stale consumer
+  from generation `g` that wakes up after the slot has been recycled into
+  generation `g + 1` will see a sequence value from generation `g + 1` and
+  refuse to claim. This eliminates the silent-duplicate-delivery race that
+  the old single-bit committed-flag protocol suffered under wraparound.
+- Implementation lives in `src/lockfreequeues/typestates/slot_seq_n.nim`
+  and is paired with `MPMCCellArrayN` for slot storage.
+
+### Unbounded variants (`UnboundedSipmuc`, `UnboundedMupsic`, `UnboundedMupmuc`)
+
+Unbounded queues use a **per-slot single-bit committed flag** inside each
+segment. The segment-local view is unchanged from the 3.x layout because
+segments are single-use linked nodes — once a segment is exhausted it is
+retired via DEBRA and never recycled, so there is no generation-rollover
+hazard for the committed flag to defend against.
+
+- A producer writes to slot `i`, then sets `committed[i] = true` with a
+  release store.
+- A consumer that observes the head/tail cursors pointing past slot `i`
+  performs an acquire load on `committed[i]` and only reads the slot once
+  the flag is set. If the flag is unset (the producer has claimed but not
+  yet published), the consumer waits or retries.
+- Cross-segment hazards (segment retirement, head pointer advance, etc.)
+  are handled by DEBRA epoch reclamation, not by the committed flag.
 
 ## Type System Enforcement
 

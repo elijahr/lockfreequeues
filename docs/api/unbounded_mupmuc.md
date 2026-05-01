@@ -4,7 +4,15 @@ Unbounded multiple-producer, multiple-consumer (MPMC) queue using linked segment
 
 ## Overview
 
-`UnboundedMupmuc` provides an unbounded MPMC queue with fully concurrent access. Uses epoch-based memory reclamation and a committed flag for safe concurrent operations.
+`UnboundedMupmuc` provides an unbounded MPMC queue with fully concurrent access. Uses epoch-based memory reclamation (DEBRA) and a per-slot committed flag inside each segment for safe concurrent operations.
+
+> **Note:** This per-slot committed flag is the *segment-local* publication
+> mechanism for the unbounded queues. It is distinct from the per-slot
+> sequence-counter protocol used by the bounded variants (`Mupmuc`, `Mupsic`,
+> `Sipmuc`). Unbounded segments are single-use linked nodes (no generation
+> rollover), so the simpler one-shot committed flag is sufficient. See
+> [slot-ownership-typestates.md](../slot-ownership-typestates.md) for the
+> full distinction.
 
 **Performance characteristics:**
 

@@ -75,9 +75,20 @@ nim c -r --mm:orc  tests/mytest.nim
   multi-thread variants use [DEBRA](https://github.com/elijahr/nim-debra) to
   reclaim retired segments safely.
 - All multi-producer / multi-consumer queues publish a slot's data with a
-  release store *before* the slot becomes visible to consumers, via the
-  `committed` flag (or analogue). Consumers always observe a fully-written
-  slot.
+  release store *before* the slot becomes visible to consumers. Consumers
+  always observe a fully-written slot.
+  - **Bounded variants** (`Sipmuc`, `Mupsic`, `Mupmuc`) use per-slot sequence
+    counters following the Vyukov bounded-MPMC protocol. Each slot carries an
+    `Atomic[uint64]` whose value encodes both the slot's generation and its
+    producer/consumer phase. Producers and consumers CAS the head/tail cursor
+    only when the target slot's sequence counter matches the expected
+    generation, which makes generation-rollover races structurally impossible
+    (a stale claimant from a previous generation cannot win the CAS against
+    a current-generation slot).
+  - **Unbounded variants** (`UnboundedSipmuc`, `UnboundedMupsic`,
+    `UnboundedMupmuc`) retain the per-slot `committed` flag inside each
+    segment. Segments are single-use linked nodes (no generation rollover),
+    so the simpler one-shot committed flag is sufficient.
 
 ## Test matrix
 
