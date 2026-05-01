@@ -21,18 +21,26 @@ def build_nim():
     print("Building Nim benchmarks...")
     subprocess.run([
         "nim", "c", "-d:release", "--threads:on",
-        str(BENCHMARK_DIR / "nim" / "bench_main.nim")
+        str(BENCHMARK_DIR / "nim" / "bench_throughput.nim")
     ], check=True)
     print("Nim benchmarks built.")
 
 
 def run_nim(runs: int, output_file: Path):
-    """Run Nim benchmarks."""
+    """Run Nim benchmarks.
+
+    PR 0 (bench-rollup) replaced the legacy `bench_main` aggregator with
+    `bench_throughput`, which natively emits Bencher Metric Format JSON
+    via `--bmf-out=<path>`. The `runs` argument is honored at compile
+    time (via `-d:DefaultRuns=<n>`) — kept here as a no-op runtime arg
+    for CLI back-compat. Use `python3 benchmarks/runner.py build
+    --language nim` ahead of `run` to set the run count.
+    """
+    bin_path = PROJECT_ROOT / ".tmp" / "bench_throughput"
     print(f"Running Nim benchmarks ({runs} runs)...")
     subprocess.run([
-        str(BENCHMARK_DIR / "nim" / "bench_main"),
-        f"--runs={runs}",
-        f"-o={output_file}"
+        str(bin_path),
+        f"--bmf-out={output_file}",
     ], check=True)
     print(f"Results written to {output_file}")
 

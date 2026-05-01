@@ -52,8 +52,11 @@ task examples, "Runs the examples":
   exec "nim c --threads:on -r -f examples/job_scheduler.nim"
 
 task benchmarks, "Runs the benchmark suite":
-  exec "nim c -d:release --threads:on benchmarks/nim/bench_main.nim"
-  exec "benchmarks/nim/bench_main --runs=10 -o=benchmarks/results/latest.json"
+  # PR 0 (bench-rollup) replaced bench_main with bench_throughput. The
+  # `--bmf-out=` flag emits Bencher Metric Format JSON directly. The
+  # binary lands in `.tmp/` per the project nim.cfg (`--outdir:.tmp`).
+  exec "nim c -d:release --threads:on benchmarks/nim/bench_throughput.nim"
+  exec ".tmp/bench_throughput --bmf-out=benchmarks/results/latest.json"
 
 
 task stresstests, "Runs the stress test suite (multi-threaded)":

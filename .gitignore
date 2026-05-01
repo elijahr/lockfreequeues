@@ -32,7 +32,6 @@ nim-unittest2/
 logs/
 test_typed_introspection*
 benchmarks/nim/bench_latency
-benchmarks/nim/bench_main
 benchmarks/nim/bench_throughput
 
 # Compiled benchmark test binaries (extensionless executables)
