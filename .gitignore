@@ -47,3 +47,7 @@ benchmarks/nim/tests/t_*
 # Compiled stress-test binaries (extensionless executables)
 stress-tests/[a-z_]*
 !stress-tests/*.nim
+
+# Rust crate build artifacts (FFI bench bridges)
+benchmarks/rust/*/target/
+benchmarks/rust/*/Cargo.lock
