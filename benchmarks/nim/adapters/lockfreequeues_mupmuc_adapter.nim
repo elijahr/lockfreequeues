@@ -10,8 +10,7 @@
 
 import options
 import lockfreequeues/mupmuc
-import ../adapter
-from ../bench_common import Topology, tMpmc
+import ../bench_common
 
 const topologiesSupported*: set[Topology] = {tMpmc}
 
@@ -24,7 +23,12 @@ type
 proc initMupmucAdapter*[N: static int, T](): MupmucAdapter[N, T] =
   result.queue = create(Mupmuc[N, 1, 1, T])
   result.queue[] = initMupmuc[N, 1, 1, T]()
-  # Use idx parameter to manually assign producer/consumer for single-threaded use
+  # Use idx parameter to manually assign producer/consumer for single-threaded
+  # use AND for multi-threaded ping-pong (bench_common.runLatencyHarness):
+  # `getProducer(idx = 0)` skips the threadId-based registration path, so the
+  # returned object is safe to call from any thread for the bench's 1P/1C
+  # smoke shape (only one producer/consumer slot exists, and the underlying
+  # Vyukov per-slot CAS protocol is fully concurrent-safe).
   result.producer = result.queue[].getProducer(idx = 0)
   result.consumer = result.queue[].getConsumer(idx = 0)
 
@@ -41,17 +45,14 @@ proc cleanup*[N: static int, T](a: var MupmucAdapter[N, T]) =
   deinitMupmucAdapter(a)
 
 proc push*[N: static int, T](a: var MupmucAdapter[N, T], item: T): PushResult =
-  if a.producer.push(item):
-    prSuccess
-  else:
-    prFull
+  if a.producer.push(item): prSuccess else: prFull
 
 proc pop*[N: static int, T](a: var MupmucAdapter[N, T]): PopResult[T] =
   let item = a.consumer.pop()
   if item.isSome:
-    newPopResult(item.get)
+    PopResult[T](success: true, value: item.get)
   else:
-    emptyPopResult[T]()
+    PopResult[T](success: false)
 
 proc name*[N: static int, T](a: MupmucAdapter[N, T]): string =
   "lockfreequeues/Mupmuc[" & $N & "]"

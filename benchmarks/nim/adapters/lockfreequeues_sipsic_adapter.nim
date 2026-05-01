@@ -19,17 +19,14 @@ proc initSipsicAdapter*[N: static int, T](): SipsicAdapter[N, T] =
   result.queue = initSipsic[N, T]()
 
 proc push*[N: static int, T](a: var SipsicAdapter[N, T], item: T): PushResult =
-  if a.queue.push(item):
-    prSuccess
-  else:
-    prFull
+  if a.queue.push(item): prSuccess else: prFull
 
 proc pop*[N: static int, T](a: var SipsicAdapter[N, T]): PopResult[T] =
   let item = a.queue.pop()
   if item.isSome:
-    newPopResult(item.get)
+    PopResult[T](success: true, value: item.get)
   else:
-    emptyPopResult[T]()
+    PopResult[T](success: false)
 
 proc name*[N: static int, T](a: SipsicAdapter[N, T]): string =
   "lockfreequeues/Sipsic[" & $N & "]"
