@@ -65,3 +65,15 @@ when defined(adapter_boost_lockfree_queue_available):
           makeBoostLockfreeQueueAdapter[uint64](capacity = 4096),
           cleanup(adapter)
         )
+
+when defined(adapter_boost_lockfree_spsc_available):
+  when defined(cpp):
+    import ../benchmarks/nim/adapters/boost_lockfree_spsc_adapter
+    import ../benchmarks/nim/adapter
+
+    suite "boost_lockfree_spsc_adapter":
+      test "push/pop 1000 uint64 round-trip preserves set":
+        runRoundTrip[BoostLockfreeSpscAdapter[uint64]](
+          makeBoostLockfreeSpscAdapter[uint64](capacity = 4096),
+          cleanup(adapter)
+        )
