@@ -31,15 +31,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   comparison charts. `t_bench_latency.nim` extended to assert all
   four extra measures appear on every bounded variant in the smoke
   shape.
-- `HistogramTopK` raised from 1000 to 5000 (PR 6, Task 6.2). At
-  production sample counts (`BenchLatencyMessageCount=100_000` ×
-  `BenchLatencyRuns=33` ≈ 3.3M samples per aggregated histogram), the
-  p999 tail rank is ~3300; K=1000 forced the p999 lookup into the
-  rescaled-reservoir stratum, while K=5000 keeps it in the exact
-  top-K stratum with headroom. Memory cost: 5000 × 8B = 40KB
-  additional per histogram, negligible vs the 99K-sample reservoir.
-  New `t_bench_common.nim` test asserts p999 within 5% of sort
-  fallback on a 3.3M log-normal stream.
+- `HistogramTopK` raised from 1000 to 5000 (PR 6, Task 6.2).
+  `runLatencyHarness` builds a fresh Histogram per run and averages
+  per-run percentiles (design 2.5) — each histogram only sees
+  `BenchLatencyMessageCount` samples, NOT `messageCount × runCount`.
+  At the default 100K samples per run, K=1000 was already adequate
+  (TopK + Reservoir already captured every sample exactly). The bump
+  to K=5000 is anticipatory: an operator who overrides
+  `BenchLatencyMessageCount` upward (e.g. ~5M for a tail-stress
+  configuration) needs ~5000 in the exact top-K stratum to keep p999
+  (tail rank = MessageCount × 0.001) outside the rescaled-reservoir
+  stratum. Memory cost: 5000 × 8B = 40KB additional per histogram,
+  negligible vs the 99K-sample reservoir. New `t_bench_common.nim`
+  test stress-checks the design choice by asserting p999 within 5%
+  of sort fallback on a single 3.3M log-normal stream.
 - Interactive uPlot throughput chart on the docs site (PR 5, Track 5).
   `docs/benchmarks.md` embeds a `<div id="bench-chart">` container plus
   a vendored `uPlot 1.6.27` IIFE bundle and a vanilla-JS wiring module

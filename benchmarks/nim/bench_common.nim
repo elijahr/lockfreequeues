@@ -187,17 +187,22 @@ proc percentile*(data: openArray[float], p: float): float =
 
 const
   HistogramTopK* = 5000        ## exact top-K largest samples seen.
-                               ## Sized to cover p999 at production sample
-                               ## sizes (Track 6 Task 6.2): at
-                               ## `BenchLatencyMessageCount=100_000` and
-                               ## `BenchLatencyRuns=33`, `seenAll ≈ 3.3M`
-                               ## per aggregated histogram, so the p999
-                               ## tail count is ~3300. K=5000 keeps the
-                               ## p999 lookup inside the exact top-K
-                               ## stratum with headroom for stochastic
-                               ## variation around the boundary. Memory
-                               ## cost is 5000 × 8B = 40KB per histogram,
-                               ## negligible vs the 99K reservoir.
+                               ## `runLatencyHarness` builds a fresh
+                               ## Histogram per run and averages
+                               ## per-run percentiles (design 2.5);
+                               ## each histogram only sees
+                               ## `BenchLatencyMessageCount` samples
+                               ## (default 100K). K=5000 sizes the
+                               ## exact-top-K stratum with headroom
+                               ## for `BenchLatencyMessageCount`
+                               ## overrides up to ~5M before p999
+                               ## starts spilling into the rescaled
+                               ## reservoir. At the default 100K, K
+                               ## was already big enough at 1K (p999
+                               ## tail = 100); the bump is anticipatory.
+                               ## Memory cost is 5000 × 8B = 40KB per
+                               ## histogram, negligible vs the 99K
+                               ## reservoir.
   HistogramReservoir* = 99_000 ## uniform sample of the body distribution
 
 type

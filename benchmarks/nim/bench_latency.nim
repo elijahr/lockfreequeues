@@ -148,9 +148,13 @@ proc runVariant(
   em.addMeasure(slug, "latency_p95_ns", metrics.p95_ns)
   em.addMeasure(slug, "latency_p99_ns", metrics.p99_ns)
   # Track 6 Task 6.1: emit p999 + max alongside the p50/p95/p99 trio.
-  # Histogram K=5000 (Task 6.2) covers p999 in the exact top-K stratum at
-  # production sample counts (3.3M samples); max is `percentile(1.0)`,
-  # always the top-K head.
+  # Each runLatencyHarness run uses its own Histogram of MessageCount
+  # samples (default 100K), and percentiles are averaged across runs;
+  # the harness does NOT union samples across runs. Histogram K=5000
+  # (Task 6.2) sits well above the 100-sample p999 tail at the default
+  # MessageCount and reserves headroom for larger MessageCount overrides
+  # before p999 spills into the rescaled-reservoir stratum. max is
+  # `percentile(1.0)`, always the top-K head.
   em.addMeasure(slug, "latency_p999_ns", metrics.p999_ns)
   em.addMeasure(slug, "latency_max_ns", metrics.max_ns)
 
