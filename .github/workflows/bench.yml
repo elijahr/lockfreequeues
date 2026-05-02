@@ -263,18 +263,35 @@ jobs:
       - name: List BMF inputs (debug)
         run: find bmf-inputs/ -type f -name '*.json' -print
 
+      - name: Validate BMF inputs (drop unparseable fragments)
+        # `bench-upload` runs with `if: always()`, so a matrix leg that
+        # crashed mid-write can leave a truncated JSON fragment in its
+        # uploaded artifact. `merge_bmf.py` exits 1 on the first malformed
+        # input, which would block uploading results from the surviving
+        # legs. Pre-validate each fragment with `json.load` and remove
+        # any that fail to parse, emitting a `::warning::` per dropped
+        # file so the operator can see which leg produced bad output.
+        run: |
+          while IFS= read -r -d '' f; do
+            if ! python3 -c 'import json,sys; json.load(open(sys.argv[1],"r",encoding="utf-8"))' "$f" 2>/dev/null; then
+              echo "::warning::Dropping unparseable BMF fragment: $f"
+              rm -f "$f"
+            fi
+          done < <(find bmf-inputs/ -type f -name '*.json' -print0)
+
       - name: Verify BMF inputs present
-        # If every matrix leg failed before producing JSON we have
-        # nothing to merge. Fail loudly here so the workflow surfaces
-        # a clear "no benchmarks ran" signal instead of crashing inside
-        # merge_bmf.py with an empty argv.
+        # If every matrix leg failed before producing JSON (or every
+        # fragment was dropped as unparseable above) we have nothing to
+        # merge. Fail loudly here so the workflow surfaces a clear "no
+        # benchmarks ran" signal instead of crashing inside merge_bmf.py
+        # with an empty argv.
         run: |
           count=$(find bmf-inputs/ -type f -name '*.json' | wc -l)
           if [ "$count" -eq 0 ]; then
-            echo "::error::No BMF JSON fragments found in bmf-inputs/. All bench matrix legs must have failed before writing output." >&2
+            echo "::error::No valid BMF JSON fragments found in bmf-inputs/. All bench matrix legs must have failed (or produced unparseable output) before writing usable JSON." >&2
             exit 1
           fi
-          echo "Found $count BMF JSON fragment(s) to merge."
+          echo "Found $count valid BMF JSON fragment(s) to merge."
 
       - name: Merge BMF JSON
         # `merge_bmf.py` unions per-slug measure dicts across N inputs
