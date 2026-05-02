@@ -29,8 +29,8 @@ import lockfreequeues
 # the queue and registers the calling thread as the (single) consumer.
 # The caller MUST be the consumer thread; if you need to construct on
 # a different thread than the one that will pop, use the explicit
-# `(addr manager, consumerHandle, strategy)` overload with a handle
-# obtained on the consumer thread.
+# `(manager, handle, strategy)` overload with a `handle` obtained
+# on the consumer thread.
 var queue = newUnboundedMupsic[64, int, 4]()
 
 # Each producer thread gets a handle (auto-registers a thread slot)

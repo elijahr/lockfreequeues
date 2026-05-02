@@ -71,9 +71,10 @@ jobs:
 
       - name: Resolve docs source ref
         # mkdocs.yml reads source_ref from $DOCS_SOURCE_REF (with default
-        # `main`). Set it explicitly per trigger so mkdocstrings-nim does
-        # not warn about a detached-HEAD branch lookup (warning becomes
-        # error under `mkdocs build --strict`):
+        # `devel` — the repo's default branch). Set it explicitly per
+        # trigger so mkdocstrings-nim does not warn about a detached-HEAD
+        # branch lookup (warning becomes error under
+        # `mkdocs build --strict`):
         #   pull_request    -> the PR head branch (so blob URLs in the
         #                      PR-verified build point at the branch
         #                      under review)
@@ -99,7 +100,7 @@ jobs:
               ref="${GITHUB_REF#refs/heads/}"
               ;;
             *)
-              ref="main"
+              ref="devel"
               ;;
           esac
           echo "DOCS_SOURCE_REF=$ref" >> "$GITHUB_ENV"

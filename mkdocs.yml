@@ -53,10 +53,12 @@ plugins:
             # source_ref drives the github blob URL stamped on each
             # source-link. Auto-detection from the working tree fails on
             # CI (actions/checkout produces a detached HEAD), so we read
-            # it from DOCS_SOURCE_REF and default to main for local
-            # `mkdocs serve`. CI exports the right value per trigger:
-            # PR -> head ref, devel push -> devel, v* tag -> tag name.
-            source_ref: !ENV [DOCS_SOURCE_REF, main]
+            # it from DOCS_SOURCE_REF and default to `devel` (this repo's
+            # default branch — verified via gh repo view) so local
+            # `mkdocs serve` produces working source links without env
+            # setup. CI exports the right value per trigger: PR -> head
+            # ref, devel push -> devel, v* tag -> tag name.
+            source_ref: !ENV [DOCS_SOURCE_REF, devel]
 
 markdown_extensions:
   - pymdownx.highlight:
