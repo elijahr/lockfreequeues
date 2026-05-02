@@ -4,7 +4,7 @@ Unbounded single-producer, multiple-consumer (SPMC) queue using linked segments.
 
 ## Overview
 
-`UnboundedSipmuc` provides an unbounded SPMC queue where a single producer distributes work to multiple consumers. Uses epoch-based memory reclamation (DEBRA) for safe segment deallocation, and a per-slot committed flag inside each segment for safe publication to concurrent consumers.
+`UnboundedSipmuc` provides an unbounded SPMC queue where a single producer distributes work to multiple consumers. Uses DEBRA+ epoch-based memory reclamation (via [nim-debra](https://github.com/elijahr/nim-debra)) for safe segment deallocation, and a per-slot committed flag inside each segment for safe publication to concurrent consumers.
 
 > **Note:** This per-slot committed flag is the *segment-local* publication
 > mechanism for the unbounded queues. It is distinct from the per-slot
@@ -23,14 +23,18 @@ Unbounded single-producer, multiple-consumer (SPMC) queue using linked segments.
 
 ```nim
 import lockfreequeues
+import debra
 
-let manager = newEpochManager()
-var queue = newUnboundedSipmuc[64, int](manager)
+# Auto-create overload: queue owns a private DebraManager (torn down
+# with the queue). For multi-queue setups sharing a manager, see the
+# explicit `(manager, strategy)` overload.
+const MaxThreads = 4
+var queue = newUnboundedSipmuc[64, int, MaxThreads]()
 
 # Producer pushes
 queue.push(42)
 
-# Each consumer gets a handle
+# Each consumer gets a handle (auto-registers a thread slot)
 var consumer1 = queue.getConsumer()
 var consumer2 = queue.getConsumer()
 

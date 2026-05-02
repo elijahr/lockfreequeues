@@ -21,7 +21,7 @@ Dynamic-capacity linked segment implementations. Grow as needed with DEBRA+ epoc
 ## Support Types
 
 - **DeallocationStrategy** - Memory reclamation policy:
-  - `Manual` - Retire segments to epoch manager. User calls `tryReclaim()` periodically. Best for `--mm:none`.
+  - `Manual` - Retire segments to the `DebraManager`. User calls `tryReclaim()` periodically. Best for `--mm:none`.
   - `Eager` - Retire segments and immediately call `tryReclaim()`. Best for GC environments.
 
 ## Performance Guarantees
