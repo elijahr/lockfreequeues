@@ -72,14 +72,21 @@ env:
 jobs:
   bench-tests:
     # Compiles and runs `tests/t_bench_*.nim` (the bench harness's own
-    # unit tests). Lives in bench.yml because the bench harness itself
-    # is what these tests exercise, but takes no secrets — fork PRs
-    # are allowed so contributors get the same harness validation as
-    # maintainer pushes. The bot-actor guard prevents loop-back from
-    # the bench-snapshot push commit (see docs.yml). Sibling Nim deps
-    # are pinned to tagged releases (not `main`) for deterministic CI;
-    # bump in lockstep with build.yml/bench.yml's `benchmark` job and
-    # lockfreequeues.nimble's `requires`.
+    # unit tests: t_bench_common, t_bench_latency, t_bench_adapters).
+    # These tests live outside `srcDir` and are intentionally NOT
+    # imported by tests/test.nim (see lockfreequeues.nimble) so the
+    # regular `nimble test` matrix (8 invocations across MM/sanitizer
+    # combos) does not pull in the bench harness's threading/atomic
+    # dependencies. Without this job the HistogramTopK / latency CLI /
+    # adapter assertions are never enforced in CI.
+    #
+    # No secret dependencies: fork PRs are allowed so contributors get
+    # the same harness validation as maintainer pushes. The bot-actor
+    # guard prevents loop-back from the bench-snapshot push commit
+    # (see docs.yml). Sibling Nim deps are pinned to release tags
+    # (not `main`) for deterministic CI; bump in lockstep with
+    # build.yml/bench.yml's `benchmark` job and lockfreequeues.nimble's
+    # `requires`.
     name: bench-tests (ubuntu-latest)
     runs-on: ubuntu-latest
     if: github.actor != 'github-actions[bot]'

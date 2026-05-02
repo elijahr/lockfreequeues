@@ -241,22 +241,26 @@ suite "bench_common Histogram":
   test "HistogramTopK is at least 5000 (anticipates MessageCount up to ~5M)":
     check HistogramTopK >= 5000
 
-  test "p999 within 5% of sort fallback at 3.3M-sample stress shape":
-    # Stress-test the K=5000 design choice at a single-histogram volume
-    # that an operator could reach by overriding BenchLatencyMessageCount
-    # upward. At seenAll=3.3M the p999 tail count is 3300 and lies
-    # inside the K=5000 exact top-K stratum, so percentile(0.999) is
-    # read from the exact top-K heap.
-    # Tolerance is 5% per impl plan acceptance criterion. Test is
-    # heavier than the 100K case (~3.3M record() calls) but still
-    # tractable under release-mode `nimble test`.
-    let samples = generateLogNormal(3_300_000, 0xDEADBEEF'i64)
-    let exact = percentile(samples, 0.999)
-    var h = initHistogram()
-    for v in samples: h.record(v)
-    let approx = h.percentile(0.999)
-    let relErr = abs(approx - exact) / exact
-    check relErr < 0.05
+  when defined(BenchCommonStress):
+    test "p999 within 5% of sort fallback at 3.3M-sample stress shape":
+      # Stress-test the K=5000 design choice at a single-histogram
+      # volume that an operator could reach by overriding
+      # BenchLatencyMessageCount upward. At seenAll=3.3M the p999 tail
+      # count is 3300 and lies inside the K=5000 exact top-K stratum,
+      # so percentile(0.999) is read from the exact top-K heap.
+      # Tolerance is 5% per impl plan acceptance criterion. The test
+      # allocates a 3.3M-sample seq and runs `record()` that many
+      # times, so it is gated behind `-d:BenchCommonStress` to keep
+      # the default `nimble benchtests` invocation under ~1 second.
+      # Run explicitly as `nimble benchtestsstress` (or
+      # `nim c -d:BenchCommonStress -r tests/t_bench_common`).
+      let samples = generateLogNormal(3_300_000, 0xDEADBEEF'i64)
+      let exact = percentile(samples, 0.999)
+      var h = initHistogram()
+      for v in samples: h.record(v)
+      let approx = h.percentile(0.999)
+      let relErr = abs(approx - exact) / exact
+      check relErr < 0.05
 
 # ---------- Task 0.5: runThroughputHarness smoke ----------
 

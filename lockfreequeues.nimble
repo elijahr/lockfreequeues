@@ -77,14 +77,21 @@ task benchtests, "Runs the bench harness test suite":
   # (`tests/t_bench_*.nim`) are NOT imported by `tests/test.nim` to
   # keep the regular `nimble test` matrix free of the bench harness's
   # threading/atomic dependencies. This task runs them explicitly so
-  # CI can validate harness invariants. Single MM (orc default) is
-  # sufficient because the bench harness itself is the system under
-  # test, not the queue MM matrix. Later PRs in the bench rollup
-  # extend this task with additional `t_bench_*.nim` files as they
-  # land.
+  # CI can validate HistogramTopK sizing, latency CLI assertions, and
+  # adapter round-trip behavior. Single MM (orc default) is sufficient
+  # because the bench harness itself is the system under test, not the
+  # queue MM matrix.
   exec "nim c --threads:on -r -f tests/t_bench_common.nim"
   exec "nim c --threads:on -r -f tests/t_bench_latency.nim"
   exec "nim c --threads:on -r -f tests/t_bench_adapters.nim"
+
+
+task benchteststress, "Runs the bench harness test suite including 3.3M-sample stress shapes":
+  # Like `benchtests` but enables the gated 3.3M-sample p999 stress
+  # shape in t_bench_common (HistogramTopK headroom validation against
+  # an operator-driven MessageCount override). Slow (~10-15s release)
+  # so it is opt-in rather than part of every CI run.
+  exec "nim c -d:release -d:BenchCommonStress --threads:on -r -f tests/t_bench_common.nim"
 
 
 task stresstests, "Runs the stress test suite (multi-threaded)":
