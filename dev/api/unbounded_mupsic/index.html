@@ -1,0 +1,2701 @@
+<!DOCTYPE html><html lang="en" class="no-js"><head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Lock-free queues for Nim, implemented as ring buffers">
+      
+      
+      
+        <link rel="canonical" href="https://elijahr.github.io/lockfreequeues/latest/api/unbounded_mupsic/">
+      
+      
+        <link rel="prev" href="../unbounded_sipmuc/">
+      
+      
+        <link rel="next" href="../unbounded_mupmuc/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>UnboundedMupsic - lockfreequeues</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../css/timeago.css">
+    
+      <link rel="stylesheet" href="../../css/custom.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  <link href="../../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
+            html.glightbox-open { overflow: initial; height: 100%; }
+            .gslide-title { margin-top: 0px; user-select: text; }
+            .gslide-desc { color: #666; user-select: text; }
+            .gslide-image img { background: white; }
+            .gscrollbar-fixer { padding-right: 15px; }
+            .gdesc-inner { font-size: 0.75rem; }
+            body[data-md-color-scheme="slate"] .gdesc-inner { background: var(--md-default-bg-color); }
+            body[data-md-color-scheme="slate"] .gslide-title { color: var(--md-default-fg-color); }
+            body[data-md-color-scheme="slate"] .gslide-desc { color: var(--md-default-fg-color); }
+        </style></head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="cyan">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#unboundedmupsic" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden="">
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="lockfreequeues" class="md-header__button md-logo" aria-label="lockfreequeues" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"></path></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            lockfreequeues
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              UnboundedMupsic
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="cyan" aria-label="Switch to light mode" type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden="">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"></path></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="cyan" aria-label="Switch to dark mode" type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden="">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"></path></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required="">
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"></path></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix="">
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/elijahr/lockfreequeues" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"></path></svg>
+  </div>
+  <div class="md-source__repository">
+    elijahr/lockfreequeues
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="lockfreequeues" class="md-nav__button md-logo" aria-label="lockfreequeues" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
+
+    </a>
+    lockfreequeues
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/elijahr/lockfreequeues" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"></path></svg>
+  </div>
+  <div class="md-source__repository">
+    elijahr/lockfreequeues
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix="">
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked="">
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_2">
+        
+          
+          <label class="md-nav__link" for="__nav_2_2" id="__nav_2_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bounded Queues
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Bounded Queues
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sipsic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sipsic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sipmuc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sipmuc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mupsic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mupsic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mupmuc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mupmuc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_3" checked="">
+        
+          
+          <label class="md-nav__link" for="__nav_2_3" id="__nav_2_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unbounded Queues
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Unbounded Queues
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unbounded_sipsic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UnboundedSipsic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unbounded_sipmuc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UnboundedSipmuc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UnboundedMupsic
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UnboundedMupsic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unbounded_mupsic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unbounded_mupsic
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="unbounded_mupsic">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#DeallocationStrategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DeallocationStrategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#DefaultDeallocationStrategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DefaultDeallocationStrategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#DefaultDeallocationStrategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DefaultDeallocationStrategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#UnboundedMupsic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UnboundedMupsic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#Producer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Producer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#newUnboundedMupsic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        newUnboundedMupsic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#newUnboundedMupsic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        newUnboundedMupsic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#segmentCount" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        segmentCount
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#len" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        len
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#getProducer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        getProducer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#getProducer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        getProducer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        push
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        push
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#=" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        =
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unbounded_mupmuc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UnboundedMupmuc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3">
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../safety-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Safety Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../slot-ownership-typestates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Slot Ownership Typestates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unbounded_mupsic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unbounded_mupsic
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="unbounded_mupsic">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#DeallocationStrategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DeallocationStrategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#DefaultDeallocationStrategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DefaultDeallocationStrategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#DefaultDeallocationStrategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DefaultDeallocationStrategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#UnboundedMupsic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UnboundedMupsic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#Producer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Producer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#newUnboundedMupsic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        newUnboundedMupsic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#newUnboundedMupsic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        newUnboundedMupsic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#segmentCount" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        segmentCount
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#len" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        len
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#getProducer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        getProducer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#getProducer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        getProducer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        push
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        push
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#=" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        =
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="unboundedmupsic">UnboundedMupsic<a class="headerlink" href="#unboundedmupsic" title="Permanent link">¶</a></h1>
+<p>Unbounded multiple-producer, single-consumer (MPSC) queue using linked segments.</p>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">¶</a></h2>
+<p><code>UnboundedMupsic</code> provides an unbounded MPSC queue where multiple producers feed a single consumer. Uses DEBRA+ epoch-based memory reclamation (via <a href="https://github.com/elijahr/nim-debra">nim-debra</a>) and a per-slot committed flag inside each segment for safe concurrent writes.</p>
+<blockquote>
+<p><strong>Note:</strong> This per-slot committed flag is the <em>segment-local</em> publication
+mechanism for the unbounded queues. It is distinct from the per-slot
+sequence-counter protocol used by the bounded variants (<code>Mupmuc</code>, <code>Mupsic</code>,
+<code>Sipmuc</code>). Unbounded segments are single-use linked nodes (no generation
+rollover), so the simpler one-shot committed flag is sufficient. See
+<a href="../../slot-ownership-typestates/">slot-ownership-typestates.md</a> for the
+full distinction.</p>
+</blockquote>
+<p><strong>Performance characteristics:</strong></p>
+<ul>
+<li><strong>Push</strong>: Lock-free (CAS coordination between producers)</li>
+<li><strong>Pop</strong>: Wait-free (bounded steps)</li>
+</ul>
+<h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">¶</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c"># Generic params are [SegmentSize, ItemType, MaxThreads]; auto-create</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c"># overload (no args) heap-allocates a private DebraManager owned by</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c"># the queue and registers the calling thread as the (single) consumer.</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c"># The caller MUST be the consumer thread; if you need to construct on</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c"># a different thread than the one that will pop, use the explicit</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c"># `(manager, handle, strategy)` overload with a `handle` obtained</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c"># on the consumer thread.</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="kd">var</span><span class="w"> </span><span class="n">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">newUnboundedMupsic</span><span class="o">[</span><span class="mi">64</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="o">]</span><span class="p">()</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="c"># Each producer thread gets a handle (auto-registers a thread slot in</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c"># the manager). Slots are not released until the manager is destroyed,</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="c"># so reuse one handle per long-running producer thread rather than</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="c"># calling `getProducer()` repeatedly.</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="kd">var</span><span class="w"> </span><span class="n">producer1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">getProducer</span><span class="p">()</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="kd">var</span><span class="w"> </span><span class="n">producer2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">getProducer</span><span class="p">()</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="c"># Producers push concurrently</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="n">producer1</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="n">producer2</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="mi">123</span><span class="p">)</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="c"># Single consumer pops directly off the queue (no Consumer handle)</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="k">let</span><span class="w"> </span><span class="n">item</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">()</span><span class="w">  </span><span class="c"># some(42) or some(123)</span>
+</code></pre></div>
+<h2 id="when-to-use">When to Use<a class="headerlink" href="#when-to-use" title="Permanent link">¶</a></h2>
+<p>Choose <code>UnboundedMupsic</code> when:</p>
+<ul>
+<li>Multiple sources feed a single processor</li>
+<li>Number of producers may change at runtime</li>
+<li>Event collection or log aggregation patterns</li>
+<li>Cannot predetermine maximum queue size</li>
+</ul>
+<p>Choose bounded <code>Mupsic</code> instead when:</p>
+<ul>
+<li>Memory must be bounded</li>
+<li>Producer count is fixed at compile time</li>
+<li>Queue size is predictable</li>
+</ul>
+<h2 id="api">API<a class="headerlink" href="#api" title="Permanent link">¶</a></h2>
+<div class="doc doc-object doc-module">
+  
+
+  <h3 id="unbounded_mupsic" class="doc doc-heading">
+    <code class="doc-symbol doc-symbol-heading doc-symbol-module"></code>
+    <span class="doc doc-object-name doc-module-name">unbounded_mupsic</span>
+  <a href="#unbounded_mupsic" class="headerlink" title="Permanent link">¶</a></h3>
+
+  <div class="doc doc-contents first">
+    
+      <div class="doc-description">
+        <p>Unbounded multiple-producer, single-consumer (MPSC) queue using linked segments.</p>
+<p>Uses DEBRA+ epoch-based reclamation for safe memory deallocation.</p>
+<ul>
+<li>S: Segment size (items per segment). Larger = less allocation, smaller = faster reclamation.</li>
+<li>T: Type of data the queue holds.</li>
+<li>MaxThreads: Maximum number of threads (compile-time constant).</li>
+</ul>
+<p>Push is lock-free for multiple producers (CAS coordination).
+Pop is wait-free for the single consumer.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c"># Auto-create: queue owns a private DebraManager, the calling thread</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c"># is registered as the (single) consumer, and producer threads</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c"># auto-register on `getProducer()`.</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kd">var</span><span class="w"> </span><span class="n">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">newUnboundedMupsic</span><span class="o">[</span><span class="mi">64</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="o">]</span><span class="p">()</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="kd">var</span><span class="w"> </span><span class="n">producer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">getProducer</span><span class="p">()</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">producer</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="k">let</span><span class="w"> </span><span class="n">item</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">()</span><span class="w">  </span><span class="c"># some(42), called from the constructing thread.</span>
+</code></pre></div>
+<p>For multi-queue setups that share a manager, pass it explicitly:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kd">var</span><span class="w"> </span><span class="n">manager</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initDebraManager</span><span class="o">[</span><span class="mi">4</span><span class="o">]</span><span class="p">()</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">let</span><span class="w"> </span><span class="n">consumerHandle</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">registerThread</span><span class="p">(</span><span class="n">manager</span><span class="p">)</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kd">var</span><span class="w"> </span><span class="n">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">newUnboundedMupsic</span><span class="o">[</span><span class="mi">64</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="o">]</span><span class="p">(</span><span class="k">addr</span><span class="w"> </span><span class="n">manager</span><span class="p">,</span><span class="w"> </span><span class="n">consumerHandle</span><span class="p">)</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">let</span><span class="w"> </span><span class="n">producerHandle</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">registerThread</span><span class="p">(</span><span class="n">manager</span><span class="p">)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="kd">var</span><span class="w"> </span><span class="n">producer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">getProducer</span><span class="p">(</span><span class="n">producerHandle</span><span class="p">)</span>
+</code></pre></div>
+<p>See <code>unbounded_sipmuc</code> for documentation of the
+<code>-d:LockFreeQueuesAdvanceEvery=N</code> compile-time knob, which also tunes
+this queue's Eager reclamation cadence.</p>
+      </div>
+    
+
+    
+      
+      
+        <div class="doc doc-object doc-type">
+  
+
+  <h4 id="DeallocationStrategy" class="doc doc-heading">
+    <code class="doc-symbol doc-symbol-heading doc-symbol-type"></code>
+    <span class="doc doc-object-name doc-type-name">DeallocationStrategy</span>
+  <a href="#DeallocationStrategy" class="headerlink" title="Permanent link">¶</a></h4>
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">type</span><span class="w"> </span><span class="n">DeallocationStrategy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">enum</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents">
+    
+      <div class="doc-description">
+        <p>Strategy for segment memory reclamation.</p>
+      </div>
+    
+
+    
+
+    
+      <div class="doc-section doc-section-values">
+        <p class="doc-section-title">Values</p>
+        <ul class="doc-value-list">
+          
+          <li class="doc-value">
+            <code class="doc-value-name">Manual</code>
+            
+            <span class="doc-value-description"> – Retire segments. User calls tryReclaim().
+Best for --mm:none (no GC assistance).</span>
+          </li>
+          
+          <li class="doc-value">
+            <code class="doc-value-name">Eager</code>
+            
+            <span class="doc-value-description"> – Retire + immediate tryReclaim() after each segment retirement.
+Best for GC environments.</span>
+          </li>
+          
+        </ul>
+      </div>
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_mupsic.nim#L52" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_mupsic.nim:52
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+      
+      
+        <div class="doc doc-object doc-const">
+  
+
+  <h4 id="DefaultDeallocationStrategy" class="doc doc-heading">
+    <code class="doc-symbol doc-symbol-heading doc-symbol-const"></code>
+    <span class="doc doc-object-name doc-const-name">DefaultDeallocationStrategy</span>
+  <a href="#DefaultDeallocationStrategy" class="headerlink" title="Permanent link">¶</a></h4>
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">const</span><span class="w"> </span><span class="n">DefaultDeallocationStrategy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Manual</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents">
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_mupsic.nim#L62" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_mupsic.nim:62
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+      
+      
+        <div class="doc doc-object doc-const">
+  
+
+  <h4 id="DefaultDeallocationStrategy" class="doc doc-heading">
+    <code class="doc-symbol doc-symbol-heading doc-symbol-const"></code>
+    <span class="doc doc-object-name doc-const-name">DefaultDeallocationStrategy</span>
+  <a href="#DefaultDeallocationStrategy" class="headerlink" title="Permanent link">¶</a></h4>
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">const</span><span class="w"> </span><span class="n">DefaultDeallocationStrategy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Eager</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents">
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_mupsic.nim#L64" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_mupsic.nim:64
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+      
+      
+        <div class="doc doc-object doc-type">
+  
+
+  <h4 id="UnboundedMupsic" class="doc doc-heading">
+    <code class="doc-symbol doc-symbol-heading doc-symbol-type"></code>
+    <span class="doc doc-object-name doc-type-name">UnboundedMupsic</span>
+  <a href="#UnboundedMupsic" class="headerlink" title="Permanent link">¶</a></h4>
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">type</span><span class="w"> </span><span class="n">UnboundedMupsic</span><span class="o">[</span><span class="n">S</span><span class="p">:</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="nb">int</span><span class="p">;</span><span class="w"> </span><span class="n">T</span><span class="p">;</span><span class="w"> </span><span class="n">MaxThreads</span><span class="p">:</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="nb">int</span><span class="o">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">object</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents">
+    
+      <div class="doc-description">
+        <p>Unbounded MPSC queue using linked segments.</p>
+<ul>
+<li>S: Segment size (compile-time constant).</li>
+<li>T: Data type.</li>
+<li>MaxThreads: Maximum number of threads (compile-time constant).</li>
+</ul>
+      </div>
+    
+
+    
+      
+      
+    
+
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_mupsic.nim#L74" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_mupsic.nim:74
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+      
+      
+        <div class="doc doc-object doc-type">
+  
+
+  <h4 id="Producer" class="doc doc-heading">
+    <code class="doc-symbol doc-symbol-heading doc-symbol-type"></code>
+    <span class="doc doc-object-name doc-type-name">Producer</span>
+  <a href="#Producer" class="headerlink" title="Permanent link">¶</a></h4>
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">type</span><span class="w"> </span><span class="n">Producer</span><span class="o">[</span><span class="n">S</span><span class="p">:</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="nb">int</span><span class="p">;</span><span class="w"> </span><span class="n">T</span><span class="p">;</span><span class="w"> </span><span class="n">MaxThreads</span><span class="p">:</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="nb">int</span><span class="o">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">object</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents">
+    
+      <div class="doc-description">
+        <p>Handle for a registered producer.</p>
+<p>Producers must call getProducer() before pushing.</p>
+      </div>
+    
+
+    
+      
+      
+      <div class="doc-section doc-section-fields">
+        <p class="doc-section-title">Fields</p>
+        <ul class="doc-field-list">
+          
+          <li class="doc-field">
+            <code class="doc-field-name">idx</code>
+            <code class="doc-field-type">int</code>
+            
+            
+            
+          </li>
+          
+        </ul>
+      </div>
+      
+    
+
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_mupsic.nim#L94" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_mupsic.nim:94
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+      
+      
+        <div class="doc doc-object doc-proc">
+  
+
+  
+    <h4 id="newUnboundedMupsic" class="doc doc-heading">
+      
+      <span class="doc doc-object-name doc-proc-name">newUnboundedMupsic</span>
+      
+    <a href="#newUnboundedMupsic" class="headerlink" title="Permanent link">¶</a></h4>
+  
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">proc</span><span class="w"> </span><span class="nf">newUnboundedMupsic</span><span class="p">(</span><span class="n">manager</span><span class="p">:</span><span class="w"> </span><span class="k">ptr</span><span class="w"> </span><span class="n">DebraManager</span><span class="o">[</span><span class="n">MaxThreads</span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="n">handle</span><span class="p">:</span><span class="w"> </span><span class="n">ThreadHandle</span><span class="o">[</span><span class="n">MaxThreads</span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="n">strategy</span><span class="p">:</span><span class="w"> </span><span class="n">DeallocationStrategy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">DefaultDeallocationStrategy</span><span class="p">):</span><span class="w"> </span><span class="n">UnboundedMupsic</span><span class="o">[</span><span class="n">S</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents first">
+    
+      <div class="doc-description">
+        <p>Create a new unbounded MPSC queue.</p>
+<p>Requires a DebraManager pointer and consumer's ThreadHandle for memory reclamation.
+Deallocation strategy defaults based on memory management mode.
+Returns a new queue instance.</p>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-parameters">
+        <h5>Parameters</h5>
+        <ul>
+          
+            <li>
+              <code>manager</code>
+              (<code>ptr DebraManager[MaxThreads]</code>)
+              
+            </li>
+          
+            <li>
+              <code>handle</code>
+              (<code>ThreadHandle[MaxThreads]</code>)
+              
+            </li>
+          
+            <li>
+              <code>strategy</code>
+              (<code>DeallocationStrategy</code>)
+              
+            </li>
+          
+        </ul>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-returns">
+        <h5>Returns</h5>
+        <p><code>UnboundedMupsic[S, T, MaxThreads]</code></p>
+      </div>
+    
+
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_mupsic.nim#L113" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_mupsic.nim:113
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+      
+      
+        <div class="doc doc-object doc-proc">
+  
+
+  
+    <h4 id="newUnboundedMupsic" class="doc doc-heading">
+      
+      <span class="doc doc-object-name doc-proc-name">newUnboundedMupsic</span>
+      
+    <a href="#newUnboundedMupsic" class="headerlink" title="Permanent link">¶</a></h4>
+  
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">proc</span><span class="w"> </span><span class="nf">newUnboundedMupsic</span><span class="p">(</span><span class="n">strategy</span><span class="p">:</span><span class="w"> </span><span class="n">DeallocationStrategy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">DefaultDeallocationStrategy</span><span class="p">):</span><span class="w"> </span><span class="n">UnboundedMupsic</span><span class="o">[</span><span class="n">S</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents first">
+    
+      <div class="doc-description">
+        <p>Auto-create overload: heap-allocates a private <code>DebraManager</code></p>
+<p>owned by this queue, registers the calling thread as the (single)
+consumer, and stores its handle. Manager teardown happens inside
+this queue's <code>=destroy</code> after segment cleanup.</p>
+<p><strong>Caller must be the consumer thread.</strong> If the queue is constructed
+on a different thread than the one that will call <code>pop</code>, use the
+<code>(manager, consumerHandle, strategy)</code> overload with an explicit
+handle obtained on the consumer thread.</p>
+<p>For multi-queue setups that share a manager, pass it explicitly.</p>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-parameters">
+        <h5>Parameters</h5>
+        <ul>
+          
+            <li>
+              <code>strategy</code>
+              (<code>DeallocationStrategy</code>)
+              
+            </li>
+          
+        </ul>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-returns">
+        <h5>Returns</h5>
+        <p><code>UnboundedMupsic[S, T, MaxThreads]</code></p>
+      </div>
+    
+
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_mupsic.nim#L155" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_mupsic.nim:155
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+      
+      
+        <div class="doc doc-object doc-proc">
+  
+
+  
+    <h4 id="segmentCount" class="doc doc-heading">
+      
+      <span class="doc doc-object-name doc-proc-name">segmentCount</span>
+      
+    <a href="#segmentCount" class="headerlink" title="Permanent link">¶</a></h4>
+  
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">proc</span><span class="w"> </span><span class="nf">segmentCount</span><span class="p">(</span><span class="n">self</span><span class="p">:</span><span class="w"> </span><span class="kd">var</span><span class="w"> </span><span class="n">UnboundedMupsic</span><span class="o">[</span><span class="n">S</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span><span class="p">):</span><span class="w"> </span><span class="nb">int</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents first">
+    
+      <div class="doc-description">
+        <p>Number of segments currently allocated.</p>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-parameters">
+        <h5>Parameters</h5>
+        <ul>
+          
+            <li>
+              <code>self</code>
+              (<code>var UnboundedMupsic[S, T, MaxThreads]</code>)
+              
+            </li>
+          
+        </ul>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-returns">
+        <h5>Returns</h5>
+        <p><code>int</code></p>
+      </div>
+    
+
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_mupsic.nim#L190" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_mupsic.nim:190
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+      
+      
+        <div class="doc doc-object doc-proc">
+  
+
+  
+    <h4 id="len" class="doc doc-heading">
+      
+      <span class="doc doc-object-name doc-proc-name">len</span>
+      
+    <a href="#len" class="headerlink" title="Permanent link">¶</a></h4>
+  
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">proc</span><span class="w"> </span><span class="nf">len</span><span class="p">(</span><span class="n">self</span><span class="p">:</span><span class="w"> </span><span class="kd">var</span><span class="w"> </span><span class="n">UnboundedMupsic</span><span class="o">[</span><span class="n">S</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span><span class="p">):</span><span class="w"> </span><span class="nb">int</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents first">
+    
+      <div class="doc-description">
+        <p>Number of items currently in the queue.</p>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-parameters">
+        <h5>Parameters</h5>
+        <ul>
+          
+            <li>
+              <code>self</code>
+              (<code>var UnboundedMupsic[S, T, MaxThreads]</code>)
+              
+            </li>
+          
+        </ul>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-returns">
+        <h5>Returns</h5>
+        <p><code>int</code></p>
+      </div>
+    
+
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_mupsic.nim#L196" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_mupsic.nim:196
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+      
+      
+        <div class="doc doc-object doc-proc">
+  
+
+  
+    <h4 id="getProducer" class="doc doc-heading">
+      
+      <span class="doc doc-object-name doc-proc-name">getProducer</span>
+      
+    <a href="#getProducer" class="headerlink" title="Permanent link">¶</a></h4>
+  
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">proc</span><span class="w"> </span><span class="nf">getProducer</span><span class="p">(</span><span class="n">self</span><span class="p">:</span><span class="w"> </span><span class="kd">var</span><span class="w"> </span><span class="n">UnboundedMupsic</span><span class="o">[</span><span class="n">S</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="n">handle</span><span class="p">:</span><span class="w"> </span><span class="n">ThreadHandle</span><span class="o">[</span><span class="n">MaxThreads</span><span class="o">]</span><span class="p">):</span><span class="w"> </span><span class="n">Producer</span><span class="o">[</span><span class="n">S</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents first">
+    
+      <div class="doc-description">
+        <p>Register a new producer and get a handle.</p>
+<p>Returns a Producer handle for pushing items.</p>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-parameters">
+        <h5>Parameters</h5>
+        <ul>
+          
+            <li>
+              <code>self</code>
+              (<code>var UnboundedMupsic[S, T, MaxThreads]</code>)
+              
+            </li>
+          
+            <li>
+              <code>handle</code>
+              (<code>ThreadHandle[MaxThreads]</code>)
+              
+            </li>
+          
+        </ul>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-returns">
+        <h5>Returns</h5>
+        <p><code>Producer[S, T, MaxThreads]</code></p>
+      </div>
+    
+
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_mupsic.nim#L202" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_mupsic.nim:202
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+      
+      
+        <div class="doc doc-object doc-proc">
+  
+
+  
+    <h4 id="getProducer" class="doc doc-heading">
+      
+      <span class="doc doc-object-name doc-proc-name">getProducer</span>
+      
+    <a href="#getProducer" class="headerlink" title="Permanent link">¶</a></h4>
+  
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">proc</span><span class="w"> </span><span class="nf">getProducer</span><span class="p">(</span><span class="n">self</span><span class="p">:</span><span class="w"> </span><span class="kd">var</span><span class="w"> </span><span class="n">UnboundedMupsic</span><span class="o">[</span><span class="n">S</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span><span class="p">):</span><span class="w"> </span><span class="n">Producer</span><span class="o">[</span><span class="n">S</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents first">
+    
+      <div class="doc-description">
+        <p>Auto-register overload: calls <code>registerThread(self.manager[])</code></p>
+<p>internally and returns a Producer. Each call consumes one thread
+slot in the manager, and <strong>the slot is not reclaimed when the
+Producer is destroyed</strong> — it lives until the manager itself is
+destroyed. Calling this in a loop or for short-lived producers
+will exhaust <code>MaxThreads</code>. Reuse the same Producer per thread,
+or use the explicit-handle overload, for long-running managers.
+If a thread will use multiple queues sharing a manager, prefer
+the explicit-handle overload to avoid burning one slot per queue.</p>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-parameters">
+        <h5>Parameters</h5>
+        <ul>
+          
+            <li>
+              <code>self</code>
+              (<code>var UnboundedMupsic[S, T, MaxThreads]</code>)
+              
+            </li>
+          
+        </ul>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-returns">
+        <h5>Returns</h5>
+        <p><code>Producer[S, T, MaxThreads]</code></p>
+      </div>
+    
+
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_mupsic.nim#L214" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_mupsic.nim:214
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+      
+      
+        <div class="doc doc-object doc-proc">
+  
+
+  
+    <h4 id="push" class="doc doc-heading">
+      
+      <span class="doc doc-object-name doc-proc-name">push</span>
+      
+    <a href="#push" class="headerlink" title="Permanent link">¶</a></h4>
+  
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">proc</span><span class="w"> </span><span class="nf">push</span><span class="p">(</span><span class="n">self</span><span class="p">:</span><span class="w"> </span><span class="kd">var</span><span class="w"> </span><span class="n">Producer</span><span class="o">[</span><span class="n">S</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="n">item</span><span class="p">:</span><span class="w"> </span><span class="n">T</span><span class="p">)</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents first">
+    
+      <div class="doc-description">
+        <p>Push a single item. Never blocks or fails (unbounded).</p>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-parameters">
+        <h5>Parameters</h5>
+        <ul>
+          
+            <li>
+              <code>self</code>
+              (<code>var Producer[S, T, MaxThreads]</code>)
+              
+            </li>
+          
+            <li>
+              <code>item</code>
+              (<code>T</code>)
+              
+            </li>
+          
+        </ul>
+      </div>
+    
+
+    
+
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_mupsic.nim#L229" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_mupsic.nim:229
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+      
+      
+        <div class="doc doc-object doc-proc">
+  
+
+  
+    <h4 id="push" class="doc doc-heading">
+      
+      <span class="doc doc-object-name doc-proc-name">push</span>
+      
+    <a href="#push" class="headerlink" title="Permanent link">¶</a></h4>
+  
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">proc</span><span class="w"> </span><span class="nf">push</span><span class="p">(</span><span class="n">self</span><span class="p">:</span><span class="w"> </span><span class="kd">var</span><span class="w"> </span><span class="n">Producer</span><span class="o">[</span><span class="n">S</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="n">items</span><span class="p">:</span><span class="w"> </span><span class="n">openArray</span><span class="o">[</span><span class="n">T</span><span class="o">]</span><span class="p">)</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents first">
+    
+      <div class="doc-description">
+        <p>Push multiple items.</p>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-parameters">
+        <h5>Parameters</h5>
+        <ul>
+          
+            <li>
+              <code>self</code>
+              (<code>var Producer[S, T, MaxThreads]</code>)
+              
+            </li>
+          
+            <li>
+              <code>items</code>
+              (<code>openArray[T]</code>)
+              
+            </li>
+          
+        </ul>
+      </div>
+    
+
+    
+
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_mupsic.nim#L294" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_mupsic.nim:294
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+      
+      
+        <div class="doc doc-object doc-proc">
+  
+
+  
+    <h4 id="pop" class="doc doc-heading">
+      
+      <span class="doc doc-object-name doc-proc-name">pop</span>
+      
+    <a href="#pop" class="headerlink" title="Permanent link">¶</a></h4>
+  
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">proc</span><span class="w"> </span><span class="nf">pop</span><span class="p">(</span><span class="n">self</span><span class="p">:</span><span class="w"> </span><span class="kd">var</span><span class="w"> </span><span class="n">UnboundedMupsic</span><span class="o">[</span><span class="n">S</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span><span class="p">):</span><span class="w"> </span><span class="n">Option</span><span class="o">[</span><span class="n">T</span><span class="o">]</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents first">
+    
+      <div class="doc-description">
+        <p>Pop a single item.</p>
+<p>Returns some(T) if available, none(T) if empty.</p>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-parameters">
+        <h5>Parameters</h5>
+        <ul>
+          
+            <li>
+              <code>self</code>
+              (<code>var UnboundedMupsic[S, T, MaxThreads]</code>)
+              
+            </li>
+          
+        </ul>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-returns">
+        <h5>Returns</h5>
+        <p><code>Option[T]</code></p>
+      </div>
+    
+
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_mupsic.nim#L312" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_mupsic.nim:312
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+      
+      
+        <div class="doc doc-object doc-proc">
+  
+
+  
+    <h4 id="pop" class="doc doc-heading">
+      
+      <span class="doc doc-object-name doc-proc-name">pop</span>
+      
+    <a href="#pop" class="headerlink" title="Permanent link">¶</a></h4>
+  
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">proc</span><span class="w"> </span><span class="nf">pop</span><span class="p">(</span><span class="n">self</span><span class="p">:</span><span class="w"> </span><span class="kd">var</span><span class="w"> </span><span class="n">UnboundedMupsic</span><span class="o">[</span><span class="n">S</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="n">count</span><span class="p">:</span><span class="w"> </span><span class="nb">int</span><span class="p">):</span><span class="w"> </span><span class="n">Option</span><span class="o">[</span><span class="nb">seq</span><span class="o">[</span><span class="n">T</span><span class="o">]]</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents first">
+    
+      <div class="doc-description">
+        <p>Pop up to count items.</p>
+<p>Returns some(seq[T]) with at least one item, none if empty.</p>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-parameters">
+        <h5>Parameters</h5>
+        <ul>
+          
+            <li>
+              <code>self</code>
+              (<code>var UnboundedMupsic[S, T, MaxThreads]</code>)
+              
+            </li>
+          
+            <li>
+              <code>count</code>
+              (<code>int</code>)
+              
+            </li>
+          
+        </ul>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-returns">
+        <h5>Returns</h5>
+        <p><code>Option[seq[T]]</code></p>
+      </div>
+    
+
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_mupsic.nim#L376" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_mupsic.nim:376
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+      
+      
+        <div class="doc doc-object doc-proc">
+  
+
+  
+    <h4 id="=" class="doc doc-heading">
+      
+      <span class="doc doc-object-name doc-proc-name">=</span>
+      
+    <a href="#=" class="headerlink" title="Permanent link">¶</a></h4>
+  
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">proc</span><span class="w"> </span><span class="err">=(</span><span class="nf">self</span><span class="p">:</span><span class="w"> </span><span class="kd">var</span><span class="w"> </span><span class="n">UnboundedMupsic</span><span class="o">[</span><span class="n">S</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span><span class="p">)</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents first">
+    
+      <div class="doc-description">
+        <p>Clean up all segments. Releases this queue's client refcount on</p>
+<p>the manager; if the queue owns a private manager (auto-create
+overload), tears that manager down and frees it.</p>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-parameters">
+        <h5>Parameters</h5>
+        <ul>
+          
+            <li>
+              <code>self</code>
+              (<code>var UnboundedMupsic[S, T, MaxThreads]</code>)
+              
+            </li>
+          
+        </ul>
+      </div>
+    
+
+    
+
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_mupsic.nim#L397" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_mupsic.nim:397
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+
+    
+    <div class="doc-attribution">
+      <small>
+        Generated with <a href="https://github.com/elijahr/mkdocstrings-nim" target="_blank" rel="noopener">mkdocstrings-nim</a>
+      </small>
+    </div>
+    
+  </div>
+</div>
+
+
+
+
+
+
+
+  
+    
+  
+  
+    
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"></path></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="May 2, 2026 05:24:48 UTC"><span class="timeago" datetime="2026-05-02T05:24:48+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="May 2, 2026 05:24:48 UTC">2026-05-02</span>
+  </span>
+
+    
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Created">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"></path></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="April 28, 2026 02:43:49 UTC"><span class="timeago" datetime="2026-04-28T02:43:49+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="April 28, 2026 02:43:49 UTC">2026-04-28</span>
+  </span>
+
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/elijahr/lockfreequeues" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"></path></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.copy", "content.code.annotate", "navigation.instant", "navigation.sections", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../js/timeago.min.js"></script>
+      
+        <script src="../../js/timeago_mkdocs_material.js"></script>
+      
+    
+  
+<script id="init-glightbox">const lightbox = GLightbox({"touchNavigation": true, "loop": false, "zoomable": true, "draggable": true, "openEffect": "zoom", "closeEffect": "zoom", "slideEffect": "slide"});
+document$.subscribe(()=>{ lightbox.reload(); });
+</script></body></html>

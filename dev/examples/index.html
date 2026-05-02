@@ -1,0 +1,2069 @@
+<!DOCTYPE html><html lang="en" class="no-js"><head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Lock-free queues for Nim, implemented as ring buffers">
+      
+      
+      
+        <link rel="canonical" href="https://elijahr.github.io/lockfreequeues/latest/examples/">
+      
+      
+        <link rel="prev" href="../benchmarks/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Examples - lockfreequeues</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../css/timeago.css">
+    
+      <link rel="stylesheet" href="../css/custom.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  <link href="../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
+            html.glightbox-open { overflow: initial; height: 100%; }
+            .gslide-title { margin-top: 0px; user-select: text; }
+            .gslide-desc { color: #666; user-select: text; }
+            .gslide-image img { background: white; }
+            .gscrollbar-fixer { padding-right: 15px; }
+            .gdesc-inner { font-size: 0.75rem; }
+            body[data-md-color-scheme="slate"] .gdesc-inner { background: var(--md-default-bg-color); }
+            body[data-md-color-scheme="slate"] .gslide-title { color: var(--md-default-fg-color); }
+            body[data-md-color-scheme="slate"] .gslide-desc { color: var(--md-default-fg-color); }
+        </style></head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="cyan">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#examples" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden="">
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="lockfreequeues" class="md-header__button md-logo" aria-label="lockfreequeues" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"></path></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            lockfreequeues
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Examples
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="cyan" aria-label="Switch to light mode" type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden="">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"></path></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="cyan" aria-label="Switch to dark mode" type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden="">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"></path></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required="">
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"></path></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix="">
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/elijahr/lockfreequeues" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"></path></svg>
+  </div>
+  <div class="md-source__repository">
+    elijahr/lockfreequeues
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="lockfreequeues" class="md-nav__button md-logo" aria-label="lockfreequeues" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
+
+    </a>
+    lockfreequeues
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/elijahr/lockfreequeues" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"></path></svg>
+  </div>
+  <div class="md-source__repository">
+    elijahr/lockfreequeues
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix="">
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2">
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_2">
+        
+          
+          <label class="md-nav__link" for="__nav_2_2" id="__nav_2_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bounded Queues
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Bounded Queues
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/sipsic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sipsic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/sipmuc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sipmuc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/mupsic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mupsic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/mupmuc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mupmuc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_3">
+        
+          
+          <label class="md-nav__link" for="__nav_2_3" id="__nav_2_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unbounded Queues
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Unbounded Queues
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/unbounded_sipsic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UnboundedSipsic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/unbounded_sipmuc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UnboundedSipmuc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/unbounded_mupsic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UnboundedMupsic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/unbounded_mupmuc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UnboundedMupmuc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3">
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../safety-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Safety Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../slot-ownership-typestates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Slot Ownership Typestates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
+      
+        <li class="md-nav__item">
+  <a href="#running-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running Examples
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audio-buffer-bounded-spsc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audio Buffer (Bounded SPSC)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-fan-out-bounded-spmc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task Fan-Out (Bounded SPMC)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#event-collector-unbounded-mpsc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event Collector (Unbounded MPSC)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#job-scheduler-unbounded-mpmc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Job Scheduler (Unbounded MPMC)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pattern-guide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Guide
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
+      
+        <li class="md-nav__item">
+  <a href="#running-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running Examples
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audio-buffer-bounded-spsc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audio Buffer (Bounded SPSC)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-fan-out-bounded-spmc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task Fan-Out (Bounded SPMC)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#event-collector-unbounded-mpsc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event Collector (Unbounded MPSC)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#job-scheduler-unbounded-mpmc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Job Scheduler (Unbounded MPMC)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pattern-guide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Guide
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">¶</a></h1>
+<p>Practical examples demonstrating lock-free queue patterns.</p>
+<h2 id="running-examples">Running Examples<a class="headerlink" href="#running-examples" title="Permanent link">¶</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>nimble<span class="w"> </span>examples
+</code></pre></div>
+<p>Or run individual examples:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>nim<span class="w"> </span>c<span class="w"> </span>--threads:on<span class="w"> </span>-r<span class="w"> </span>examples/audio_buffer.nim
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>nim<span class="w"> </span>c<span class="w"> </span>--threads:on<span class="w"> </span>-r<span class="w"> </span>examples/task_fanout.nim
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>nim<span class="w"> </span>c<span class="w"> </span>--threads:on<span class="w"> </span>-r<span class="w"> </span>examples/event_collector.nim
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>nim<span class="w"> </span>c<span class="w"> </span>--threads:on<span class="w"> </span>-r<span class="w"> </span>examples/job_scheduler.nim
+</code></pre></div>
+<hr>
+<h2 id="audio-buffer-bounded-spsc">Audio Buffer (Bounded SPSC)<a class="headerlink" href="#audio-buffer-bounded-spsc" title="Permanent link">¶</a></h2>
+<p>Real-time audio processing with fixed latency. The producer captures audio samples, the consumer plays them.</p>
+<p><strong>Key properties:</strong></p>
+<ul>
+<li>Fixed latency determined by buffer size</li>
+<li>No allocation during operation</li>
+<li>Wait-free operations for predictable timing</li>
+</ul>
+<p><strong>Use cases:</strong> Audio engines, DSP pipelines, real-time signal processing</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="sd">## Audio Buffer Example</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="sd">##</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="sd">## Demonstrates using a bounded Sipsic (SPSC) queue for real-time audio processing.</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="sd">## The producer thread captures audio samples, the consumer thread plays them.</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="sd">##</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="sd">## Key properties:</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="sd">## - Fixed latency: buffer size determines latency (64 samples @ 44.1kHz = 1.45ms)</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="sd">## - No allocation: ring buffer operations never allocate</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="sd">## - Wait-free: both push and pop complete in bounded time</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="sd">##</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="sd">## This pattern is essential for audio applications where:</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="sd">## - Latency must be predictable and minimal</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="sd">## - Glitches from GC pauses or allocation are unacceptable</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="sd">## - Sample rate is fixed and known</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span><span class="o">/</span><span class="n">atomic_dsl</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="kn">import</span><span class="w"> </span><span class="n">math</span>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="kn">import</span><span class="w"> </span><span class="n">os</span>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="kn">import</span><span class="w"> </span><span class="n">options</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="k">const</span>
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">  </span><span class="n">SampleRate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">44100</span>
+<a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="w">  </span><span class="n">BufferSize</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">64</span><span class="w">  </span><span class="c"># ~1.45ms latency at 44.1kHz</span>
+<a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="w">  </span><span class="n">DurationMs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">100</span><span class="w">  </span><span class="c"># Simulate 100ms of audio</span>
+<a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a>
+<a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="k">type</span>
+<a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="w">  </span><span class="n">AudioSample</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">object</span>
+<a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="w">    </span><span class="n">left</span><span class="p">:</span><span class="w"> </span><span class="nb">float32</span>
+<a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="w">    </span><span class="n">right</span><span class="p">:</span><span class="w"> </span><span class="nb">float32</span>
+<a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a><span class="w">    </span><span class="n">timestamp</span><span class="p">:</span><span class="w"> </span><span class="nb">int64</span>
+<a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a>
+<a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="kd">var</span>
+<a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="w">  </span><span class="n">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initSipsic</span><span class="o">[</span><span class="n">BufferSize</span><span class="p">,</span><span class="w"> </span><span class="n">AudioSample</span><span class="o">]</span><span class="p">()</span>
+<a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="w">  </span><span class="n">running</span><span class="p">:</span><span class="w"> </span><span class="n">Atomic</span><span class="o">[</span><span class="nb">bool</span><span class="o">]</span>
+<a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="w">  </span><span class="n">samplesProduced</span><span class="p">:</span><span class="w"> </span><span class="n">Atomic</span><span class="o">[</span><span class="nb">int</span><span class="o">]</span>
+<a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a><span class="w">  </span><span class="n">samplesConsumed</span><span class="p">:</span><span class="w"> </span><span class="n">Atomic</span><span class="o">[</span><span class="nb">int</span><span class="o">]</span>
+<a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a><span class="w">  </span><span class="n">underruns</span><span class="p">:</span><span class="w"> </span><span class="n">Atomic</span><span class="o">[</span><span class="nb">int</span><span class="o">]</span><span class="w">  </span><span class="c"># Consumer needed data but queue was empty</span>
+<a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a><span class="w">  </span><span class="n">overruns</span><span class="p">:</span><span class="w"> </span><span class="n">Atomic</span><span class="o">[</span><span class="nb">int</span><span class="o">]</span><span class="w">   </span><span class="c"># Producer couldn't push because queue was full</span>
+<a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a>
+<a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a>
+<a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a><span class="k">proc</span><span class="w"> </span><span class="nf">captureThread</span><span class="p">()</span><span class="w"> </span><span class="sx">{.thread.}</span><span class="w"> </span><span class="o">=</span>
+<a id="__codelineno-2-44" name="__codelineno-2-44" href="#__codelineno-2-44"></a><span class="w">  </span><span class="sd">## Simulates audio capture hardware filling the buffer.</span>
+<a id="__codelineno-2-45" name="__codelineno-2-45" href="#__codelineno-2-45"></a><span class="w">  </span><span class="sd">## In a real application, this would be driven by hardware interrupts.</span>
+<a id="__codelineno-2-46" name="__codelineno-2-46" href="#__codelineno-2-46"></a><span class="w">  </span><span class="kd">var</span><span class="w"> </span><span class="n">sampleIndex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="__codelineno-2-47" name="__codelineno-2-47" href="#__codelineno-2-47"></a><span class="w">  </span><span class="k">let</span><span class="w"> </span><span class="n">totalSamples</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">SampleRate</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">DurationMs</span><span class="p">)</span><span class="w"> </span><span class="ow">div</span><span class="w"> </span><span class="mi">1000</span>
+<a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a>
+<a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a><span class="w">  </span><span class="k">while</span><span class="w"> </span><span class="n">sampleIndex</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">totalSamples</span><span class="p">:</span>
+<a id="__codelineno-2-50" name="__codelineno-2-50" href="#__codelineno-2-50"></a><span class="w">    </span><span class="c"># Generate a simple sine wave (440Hz tone)</span>
+<a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a><span class="w">    </span><span class="k">let</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">float32</span><span class="p">(</span><span class="n">sampleIndex</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="nb">float32</span><span class="p">(</span><span class="n">SampleRate</span><span class="p">)</span>
+<a id="__codelineno-2-52" name="__codelineno-2-52" href="#__codelineno-2-52"></a><span class="w">    </span><span class="k">let</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sin</span><span class="p">(</span><span class="n">t</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">440.0</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">2.0</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">PI</span><span class="p">).</span><span class="nb">float32</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">0.5</span>
+<a id="__codelineno-2-53" name="__codelineno-2-53" href="#__codelineno-2-53"></a>
+<a id="__codelineno-2-54" name="__codelineno-2-54" href="#__codelineno-2-54"></a><span class="w">    </span><span class="k">let</span><span class="w"> </span><span class="n">sample</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">AudioSample</span><span class="p">(</span>
+<a id="__codelineno-2-55" name="__codelineno-2-55" href="#__codelineno-2-55"></a><span class="w">      </span><span class="n">left</span><span class="p">:</span><span class="w"> </span><span class="n">value</span><span class="p">,</span>
+<a id="__codelineno-2-56" name="__codelineno-2-56" href="#__codelineno-2-56"></a><span class="w">      </span><span class="n">right</span><span class="p">:</span><span class="w"> </span><span class="n">value</span><span class="p">,</span>
+<a id="__codelineno-2-57" name="__codelineno-2-57" href="#__codelineno-2-57"></a><span class="w">      </span><span class="n">timestamp</span><span class="p">:</span><span class="w"> </span><span class="n">sampleIndex</span>
+<a id="__codelineno-2-58" name="__codelineno-2-58" href="#__codelineno-2-58"></a><span class="w">    </span><span class="p">)</span>
+<a id="__codelineno-2-59" name="__codelineno-2-59" href="#__codelineno-2-59"></a>
+<a id="__codelineno-2-60" name="__codelineno-2-60" href="#__codelineno-2-60"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">sample</span><span class="p">):</span>
+<a id="__codelineno-2-61" name="__codelineno-2-61" href="#__codelineno-2-61"></a><span class="w">      </span><span class="k">discard</span><span class="w"> </span><span class="n">samplesProduced</span><span class="p">.</span><span class="n">fetchAdd</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">moRelaxed</span><span class="p">)</span>
+<a id="__codelineno-2-62" name="__codelineno-2-62" href="#__codelineno-2-62"></a><span class="w">      </span><span class="n">inc</span><span class="w"> </span><span class="n">sampleIndex</span>
+<a id="__codelineno-2-63" name="__codelineno-2-63" href="#__codelineno-2-63"></a><span class="w">    </span><span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-2-64" name="__codelineno-2-64" href="#__codelineno-2-64"></a><span class="w">      </span><span class="c"># Buffer full - would cause overrun in real audio</span>
+<a id="__codelineno-2-65" name="__codelineno-2-65" href="#__codelineno-2-65"></a><span class="w">      </span><span class="k">discard</span><span class="w"> </span><span class="n">overruns</span><span class="p">.</span><span class="n">fetchAdd</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">moRelaxed</span><span class="p">)</span>
+<a id="__codelineno-2-66" name="__codelineno-2-66" href="#__codelineno-2-66"></a><span class="w">      </span><span class="c"># In real audio, we'd drop the sample or wait for hardware timing</span>
+<a id="__codelineno-2-67" name="__codelineno-2-67" href="#__codelineno-2-67"></a><span class="w">      </span><span class="n">sleep</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w">  </span><span class="c"># Yield to let consumer catch up</span>
+<a id="__codelineno-2-68" name="__codelineno-2-68" href="#__codelineno-2-68"></a>
+<a id="__codelineno-2-69" name="__codelineno-2-69" href="#__codelineno-2-69"></a><span class="w">  </span><span class="n">running</span><span class="p">.</span><span class="n">store</span><span class="p">(</span><span class="kp">false</span><span class="p">,</span><span class="w"> </span><span class="n">moRelease</span><span class="p">)</span>
+<a id="__codelineno-2-70" name="__codelineno-2-70" href="#__codelineno-2-70"></a>
+<a id="__codelineno-2-71" name="__codelineno-2-71" href="#__codelineno-2-71"></a>
+<a id="__codelineno-2-72" name="__codelineno-2-72" href="#__codelineno-2-72"></a><span class="k">proc</span><span class="w"> </span><span class="nf">playbackThread</span><span class="p">()</span><span class="w"> </span><span class="sx">{.thread.}</span><span class="w"> </span><span class="o">=</span>
+<a id="__codelineno-2-73" name="__codelineno-2-73" href="#__codelineno-2-73"></a><span class="w">  </span><span class="sd">## Simulates audio playback hardware draining the buffer.</span>
+<a id="__codelineno-2-74" name="__codelineno-2-74" href="#__codelineno-2-74"></a><span class="w">  </span><span class="sd">## In a real application, this would be driven by hardware interrupts.</span>
+<a id="__codelineno-2-75" name="__codelineno-2-75" href="#__codelineno-2-75"></a>
+<a id="__codelineno-2-76" name="__codelineno-2-76" href="#__codelineno-2-76"></a><span class="w">  </span><span class="k">while</span><span class="w"> </span><span class="n">running</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">moAcquire</span><span class="p">)</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">().</span><span class="n">isSome</span><span class="p">:</span>
+<a id="__codelineno-2-77" name="__codelineno-2-77" href="#__codelineno-2-77"></a><span class="w">    </span><span class="k">let</span><span class="w"> </span><span class="n">sample</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">()</span>
+<a id="__codelineno-2-78" name="__codelineno-2-78" href="#__codelineno-2-78"></a>
+<a id="__codelineno-2-79" name="__codelineno-2-79" href="#__codelineno-2-79"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">sample</span><span class="p">.</span><span class="n">isSome</span><span class="p">:</span>
+<a id="__codelineno-2-80" name="__codelineno-2-80" href="#__codelineno-2-80"></a><span class="w">      </span><span class="c"># In a real application, send to DAC</span>
+<a id="__codelineno-2-81" name="__codelineno-2-81" href="#__codelineno-2-81"></a><span class="w">      </span><span class="k">discard</span><span class="w"> </span><span class="n">samplesConsumed</span><span class="p">.</span><span class="n">fetchAdd</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">moRelaxed</span><span class="p">)</span>
+<a id="__codelineno-2-82" name="__codelineno-2-82" href="#__codelineno-2-82"></a><span class="w">    </span><span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-2-83" name="__codelineno-2-83" href="#__codelineno-2-83"></a><span class="w">      </span><span class="c"># Buffer empty - would cause underrun (glitch) in real audio</span>
+<a id="__codelineno-2-84" name="__codelineno-2-84" href="#__codelineno-2-84"></a><span class="w">      </span><span class="k">discard</span><span class="w"> </span><span class="n">underruns</span><span class="p">.</span><span class="n">fetchAdd</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">moRelaxed</span><span class="p">)</span>
+<a id="__codelineno-2-85" name="__codelineno-2-85" href="#__codelineno-2-85"></a>
+<a id="__codelineno-2-86" name="__codelineno-2-86" href="#__codelineno-2-86"></a><span class="w">    </span><span class="c"># Simulate playback timing (~22.7us per sample at 44.1kHz)</span>
+<a id="__codelineno-2-87" name="__codelineno-2-87" href="#__codelineno-2-87"></a><span class="w">    </span><span class="c"># In reality, hardware timing drives this</span>
+<a id="__codelineno-2-88" name="__codelineno-2-88" href="#__codelineno-2-88"></a><span class="w">    </span><span class="n">sleep</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-2-89" name="__codelineno-2-89" href="#__codelineno-2-89"></a>
+<a id="__codelineno-2-90" name="__codelineno-2-90" href="#__codelineno-2-90"></a>
+<a id="__codelineno-2-91" name="__codelineno-2-91" href="#__codelineno-2-91"></a><span class="k">when</span><span class="w"> </span><span class="n">isMainModule</span><span class="p">:</span>
+<a id="__codelineno-2-92" name="__codelineno-2-92" href="#__codelineno-2-92"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"Audio Buffer Example"</span>
+<a id="__codelineno-2-93" name="__codelineno-2-93" href="#__codelineno-2-93"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"===================="</span>
+<a id="__codelineno-2-94" name="__codelineno-2-94" href="#__codelineno-2-94"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"Buffer size: "</span><span class="p">,</span><span class="w"> </span><span class="n">BufferSize</span><span class="p">,</span><span class="w"> </span><span class="s">" samples"</span>
+<a id="__codelineno-2-95" name="__codelineno-2-95" href="#__codelineno-2-95"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"Latency: "</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">BufferSize</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">1000</span><span class="p">)</span><span class="w"> </span><span class="ow">div</span><span class="w"> </span><span class="n">SampleRate</span><span class="p">,</span><span class="w"> </span><span class="s">"ms"</span>
+<a id="__codelineno-2-96" name="__codelineno-2-96" href="#__codelineno-2-96"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"Duration: "</span><span class="p">,</span><span class="w"> </span><span class="n">DurationMs</span><span class="p">,</span><span class="w"> </span><span class="s">"ms"</span>
+<a id="__codelineno-2-97" name="__codelineno-2-97" href="#__codelineno-2-97"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">""</span>
+<a id="__codelineno-2-98" name="__codelineno-2-98" href="#__codelineno-2-98"></a>
+<a id="__codelineno-2-99" name="__codelineno-2-99" href="#__codelineno-2-99"></a><span class="w">  </span><span class="n">running</span><span class="p">.</span><span class="n">store</span><span class="p">(</span><span class="kp">true</span><span class="p">,</span><span class="w"> </span><span class="n">moRelease</span><span class="p">)</span>
+<a id="__codelineno-2-100" name="__codelineno-2-100" href="#__codelineno-2-100"></a><span class="w">  </span><span class="n">samplesProduced</span><span class="p">.</span><span class="n">store</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">moRelaxed</span><span class="p">)</span>
+<a id="__codelineno-2-101" name="__codelineno-2-101" href="#__codelineno-2-101"></a><span class="w">  </span><span class="n">samplesConsumed</span><span class="p">.</span><span class="n">store</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">moRelaxed</span><span class="p">)</span>
+<a id="__codelineno-2-102" name="__codelineno-2-102" href="#__codelineno-2-102"></a><span class="w">  </span><span class="n">underruns</span><span class="p">.</span><span class="n">store</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">moRelaxed</span><span class="p">)</span>
+<a id="__codelineno-2-103" name="__codelineno-2-103" href="#__codelineno-2-103"></a><span class="w">  </span><span class="n">overruns</span><span class="p">.</span><span class="n">store</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">moRelaxed</span><span class="p">)</span>
+<a id="__codelineno-2-104" name="__codelineno-2-104" href="#__codelineno-2-104"></a>
+<a id="__codelineno-2-105" name="__codelineno-2-105" href="#__codelineno-2-105"></a><span class="w">  </span><span class="kd">var</span><span class="w"> </span><span class="n">threads</span><span class="p">:</span><span class="w"> </span><span class="nb">array</span><span class="o">[</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">Thread</span><span class="o">[</span><span class="n">void</span><span class="o">]]</span>
+<a id="__codelineno-2-106" name="__codelineno-2-106" href="#__codelineno-2-106"></a><span class="w">  </span><span class="n">threads</span><span class="o">[</span><span class="mi">0</span><span class="o">]</span><span class="p">.</span><span class="n">createThread</span><span class="p">(</span><span class="n">captureThread</span><span class="p">)</span>
+<a id="__codelineno-2-107" name="__codelineno-2-107" href="#__codelineno-2-107"></a><span class="w">  </span><span class="n">threads</span><span class="o">[</span><span class="mi">1</span><span class="o">]</span><span class="p">.</span><span class="n">createThread</span><span class="p">(</span><span class="n">playbackThread</span><span class="p">)</span>
+<a id="__codelineno-2-108" name="__codelineno-2-108" href="#__codelineno-2-108"></a>
+<a id="__codelineno-2-109" name="__codelineno-2-109" href="#__codelineno-2-109"></a><span class="w">  </span><span class="n">joinThreads</span><span class="p">(</span><span class="n">threads</span><span class="p">)</span>
+<a id="__codelineno-2-110" name="__codelineno-2-110" href="#__codelineno-2-110"></a>
+<a id="__codelineno-2-111" name="__codelineno-2-111" href="#__codelineno-2-111"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"Results:"</span>
+<a id="__codelineno-2-112" name="__codelineno-2-112" href="#__codelineno-2-112"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"  Samples produced: "</span><span class="p">,</span><span class="w"> </span><span class="n">samplesProduced</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">moRelaxed</span><span class="p">)</span>
+<a id="__codelineno-2-113" name="__codelineno-2-113" href="#__codelineno-2-113"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"  Samples consumed: "</span><span class="p">,</span><span class="w"> </span><span class="n">samplesConsumed</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">moRelaxed</span><span class="p">)</span>
+<a id="__codelineno-2-114" name="__codelineno-2-114" href="#__codelineno-2-114"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"  Underruns: "</span><span class="p">,</span><span class="w"> </span><span class="n">underruns</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">moRelaxed</span><span class="p">)</span>
+<a id="__codelineno-2-115" name="__codelineno-2-115" href="#__codelineno-2-115"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"  Overruns: "</span><span class="p">,</span><span class="w"> </span><span class="n">overruns</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">moRelaxed</span><span class="p">)</span>
+<a id="__codelineno-2-116" name="__codelineno-2-116" href="#__codelineno-2-116"></a>
+<a id="__codelineno-2-117" name="__codelineno-2-117" href="#__codelineno-2-117"></a><span class="w">  </span><span class="k">let</span><span class="w"> </span><span class="n">produced</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">samplesProduced</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">moRelaxed</span><span class="p">)</span>
+<a id="__codelineno-2-118" name="__codelineno-2-118" href="#__codelineno-2-118"></a><span class="w">  </span><span class="k">let</span><span class="w"> </span><span class="n">consumed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">samplesConsumed</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">moRelaxed</span><span class="p">)</span>
+<a id="__codelineno-2-119" name="__codelineno-2-119" href="#__codelineno-2-119"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="n">produced</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">consumed</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">underruns</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">moRelaxed</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-2-120" name="__codelineno-2-120" href="#__codelineno-2-120"></a><span class="w">    </span><span class="n">echo</span><span class="w"> </span><span class="s">""</span>
+<a id="__codelineno-2-121" name="__codelineno-2-121" href="#__codelineno-2-121"></a><span class="w">    </span><span class="n">echo</span><span class="w"> </span><span class="s">"Clean audio stream - no glitches!"</span>
+<a id="__codelineno-2-122" name="__codelineno-2-122" href="#__codelineno-2-122"></a><span class="w">  </span><span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-2-123" name="__codelineno-2-123" href="#__codelineno-2-123"></a><span class="w">    </span><span class="n">echo</span><span class="w"> </span><span class="s">""</span>
+<a id="__codelineno-2-124" name="__codelineno-2-124" href="#__codelineno-2-124"></a><span class="w">    </span><span class="n">echo</span><span class="w"> </span><span class="s">"Note: Some underruns/overruns expected in simulation"</span>
+<a id="__codelineno-2-125" name="__codelineno-2-125" href="#__codelineno-2-125"></a><span class="w">    </span><span class="n">echo</span><span class="w"> </span><span class="s">"(Real audio uses hardware timing, not sleep())"</span>
+</code></pre></div>
+<hr>
+<h2 id="task-fan-out-bounded-spmc">Task Fan-Out (Bounded SPMC)<a class="headerlink" href="#task-fan-out-bounded-spmc" title="Permanent link">¶</a></h2>
+<p>Work distribution from a single dispatcher to multiple workers.</p>
+<p><strong>Key properties:</strong></p>
+<ul>
+<li>Work-stealing via CAS coordination</li>
+<li>Natural load balancing (faster workers get more tasks)</li>
+<li>Bounded memory provides backpressure</li>
+</ul>
+<p><strong>Use cases:</strong> HTTP request routing, image processing, game engine jobs</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="sd">## Task Fan-Out Example</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="sd">##</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="sd">## Demonstrates using a bounded Sipmuc (SPMC) queue for distributing work</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="sd">## from a single producer to multiple consumer workers.</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="sd">##</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="sd">## Pattern: Single dispatcher → Multiple workers</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="sd">##</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="sd">## Key properties:</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="sd">## - Work-stealing: consumers compete for tasks via CAS</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="sd">## - Load balancing: faster workers naturally get more tasks</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="sd">## - Bounded memory: fixed queue size provides backpressure</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="sd">## - Wait-free push: dispatcher never blocks</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="sd">##</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="sd">## Use cases:</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="sd">## - HTTP request routing to worker pool</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="sd">## - Image processing pipeline</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="sd">## - Game engine job distribution</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span><span class="o">/</span><span class="n">atomic_dsl</span>
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="kn">import</span><span class="w"> </span><span class="n">os</span>
+<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="kn">import</span><span class="w"> </span><span class="n">options</span>
+<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="kn">import</span><span class="w"> </span><span class="n">std</span><span class="o">/</span><span class="n">monotimes</span>
+<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="kn">import</span><span class="w"> </span><span class="n">times</span>
+<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>
+<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
+<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>
+<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="k">const</span>
+<a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="w">  </span><span class="n">QueueCapacity</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">128</span>
+<a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a><span class="w">  </span><span class="n">NumWorkers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span>
+<a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a><span class="w">  </span><span class="n">NumTasks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1000</span>
+<a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>
+<a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a><span class="k">type</span>
+<a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a><span class="w">  </span><span class="n">TaskKind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">enum</span>
+<a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a><span class="w">    </span><span class="n">tkCompute</span><span class="w">    </span><span class="c"># CPU-bound work</span>
+<a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a><span class="w">    </span><span class="n">tkIO</span><span class="w">         </span><span class="c"># Simulated I/O</span>
+<a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a><span class="w">    </span><span class="n">tkFast</span><span class="w">       </span><span class="c"># Quick task</span>
+<a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a>
+<a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a><span class="w">  </span><span class="n">Task</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">object</span>
+<a id="__codelineno-3-39" name="__codelineno-3-39" href="#__codelineno-3-39"></a><span class="w">    </span><span class="n">id</span><span class="p">:</span><span class="w"> </span><span class="nb">int</span>
+<a id="__codelineno-3-40" name="__codelineno-3-40" href="#__codelineno-3-40"></a><span class="w">    </span><span class="n">kind</span><span class="p">:</span><span class="w"> </span><span class="n">TaskKind</span>
+<a id="__codelineno-3-41" name="__codelineno-3-41" href="#__codelineno-3-41"></a><span class="w">    </span><span class="n">payload</span><span class="p">:</span><span class="w"> </span><span class="nb">int</span>
+<a id="__codelineno-3-42" name="__codelineno-3-42" href="#__codelineno-3-42"></a>
+<a id="__codelineno-3-43" name="__codelineno-3-43" href="#__codelineno-3-43"></a><span class="kd">var</span>
+<a id="__codelineno-3-44" name="__codelineno-3-44" href="#__codelineno-3-44"></a><span class="w">  </span><span class="n">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initSipmuc</span><span class="o">[</span><span class="n">QueueCapacity</span><span class="p">,</span><span class="w"> </span><span class="n">NumWorkers</span><span class="p">,</span><span class="w"> </span><span class="n">Task</span><span class="o">]</span><span class="p">()</span>
+<a id="__codelineno-3-45" name="__codelineno-3-45" href="#__codelineno-3-45"></a><span class="w">  </span><span class="n">done</span><span class="p">:</span><span class="w"> </span><span class="n">Atomic</span><span class="o">[</span><span class="nb">bool</span><span class="o">]</span>
+<a id="__codelineno-3-46" name="__codelineno-3-46" href="#__codelineno-3-46"></a><span class="w">  </span><span class="n">tasksCompleted</span><span class="p">:</span><span class="w"> </span><span class="nb">array</span><span class="o">[</span><span class="n">NumWorkers</span><span class="p">,</span><span class="w"> </span><span class="n">Atomic</span><span class="o">[</span><span class="nb">int</span><span class="o">]]</span>
+<a id="__codelineno-3-47" name="__codelineno-3-47" href="#__codelineno-3-47"></a><span class="w">  </span><span class="n">totalLatency</span><span class="p">:</span><span class="w"> </span><span class="nb">array</span><span class="o">[</span><span class="n">NumWorkers</span><span class="p">,</span><span class="w"> </span><span class="n">Atomic</span><span class="o">[</span><span class="nb">int64</span><span class="o">]]</span>
+<a id="__codelineno-3-48" name="__codelineno-3-48" href="#__codelineno-3-48"></a>
+<a id="__codelineno-3-49" name="__codelineno-3-49" href="#__codelineno-3-49"></a>
+<a id="__codelineno-3-50" name="__codelineno-3-50" href="#__codelineno-3-50"></a><span class="k">proc</span><span class="w"> </span><span class="nf">simulateWork</span><span class="p">(</span><span class="n">task</span><span class="p">:</span><span class="w"> </span><span class="n">Task</span><span class="p">)</span><span class="w"> </span><span class="o">=</span>
+<a id="__codelineno-3-51" name="__codelineno-3-51" href="#__codelineno-3-51"></a><span class="w">  </span><span class="sd">## Simulate different types of work</span>
+<a id="__codelineno-3-52" name="__codelineno-3-52" href="#__codelineno-3-52"></a><span class="w">  </span><span class="k">case</span><span class="w"> </span><span class="n">task</span><span class="p">.</span><span class="n">kind</span>
+<a id="__codelineno-3-53" name="__codelineno-3-53" href="#__codelineno-3-53"></a><span class="w">  </span><span class="k">of</span><span class="w"> </span><span class="nl">tkCompute</span><span class="o">:</span>
+<a id="__codelineno-3-54" name="__codelineno-3-54" href="#__codelineno-3-54"></a><span class="w">    </span><span class="c"># Simulate CPU work with busy loop</span>
+<a id="__codelineno-3-55" name="__codelineno-3-55" href="#__codelineno-3-55"></a><span class="w">    </span><span class="kd">var</span><span class="w"> </span><span class="n">sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="__codelineno-3-56" name="__codelineno-3-56" href="#__codelineno-3-56"></a><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="mf">0</span><span class="p">..</span><span class="o">&lt;</span><span class="n">task</span><span class="p">.</span><span class="n">payload</span><span class="p">:</span>
+<a id="__codelineno-3-57" name="__codelineno-3-57" href="#__codelineno-3-57"></a><span class="w">      </span><span class="n">sum</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">i</span>
+<a id="__codelineno-3-58" name="__codelineno-3-58" href="#__codelineno-3-58"></a><span class="w">    </span><span class="k">discard</span><span class="w"> </span><span class="n">sum</span>
+<a id="__codelineno-3-59" name="__codelineno-3-59" href="#__codelineno-3-59"></a><span class="w">  </span><span class="k">of</span><span class="w"> </span><span class="nl">tkIO</span><span class="o">:</span>
+<a id="__codelineno-3-60" name="__codelineno-3-60" href="#__codelineno-3-60"></a><span class="w">    </span><span class="c"># Simulate I/O wait</span>
+<a id="__codelineno-3-61" name="__codelineno-3-61" href="#__codelineno-3-61"></a><span class="w">    </span><span class="n">sleep</span><span class="p">(</span><span class="n">task</span><span class="p">.</span><span class="n">payload</span><span class="p">)</span>
+<a id="__codelineno-3-62" name="__codelineno-3-62" href="#__codelineno-3-62"></a><span class="w">  </span><span class="k">of</span><span class="w"> </span><span class="nl">tkFast</span><span class="o">:</span>
+<a id="__codelineno-3-63" name="__codelineno-3-63" href="#__codelineno-3-63"></a><span class="w">    </span><span class="c"># Minimal work</span>
+<a id="__codelineno-3-64" name="__codelineno-3-64" href="#__codelineno-3-64"></a><span class="w">    </span><span class="k">discard</span>
+<a id="__codelineno-3-65" name="__codelineno-3-65" href="#__codelineno-3-65"></a>
+<a id="__codelineno-3-66" name="__codelineno-3-66" href="#__codelineno-3-66"></a>
+<a id="__codelineno-3-67" name="__codelineno-3-67" href="#__codelineno-3-67"></a><span class="k">proc</span><span class="w"> </span><span class="nf">workerThread</span><span class="p">(</span><span class="n">idx</span><span class="p">:</span><span class="w"> </span><span class="nb">int</span><span class="p">)</span><span class="w"> </span><span class="sx">{.thread.}</span><span class="w"> </span><span class="o">=</span>
+<a id="__codelineno-3-68" name="__codelineno-3-68" href="#__codelineno-3-68"></a><span class="w">  </span><span class="sd">## Worker consumes tasks from the queue until shutdown.</span>
+<a id="__codelineno-3-69" name="__codelineno-3-69" href="#__codelineno-3-69"></a><span class="w">  </span><span class="k">let</span><span class="w"> </span><span class="n">consumer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">getConsumer</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
+<a id="__codelineno-3-70" name="__codelineno-3-70" href="#__codelineno-3-70"></a><span class="w">  </span><span class="kd">var</span><span class="w"> </span><span class="n">completed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="__codelineno-3-71" name="__codelineno-3-71" href="#__codelineno-3-71"></a><span class="w">  </span><span class="kd">var</span><span class="w"> </span><span class="n">latencySum</span><span class="p">:</span><span class="w"> </span><span class="nb">int64</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="__codelineno-3-72" name="__codelineno-3-72" href="#__codelineno-3-72"></a>
+<a id="__codelineno-3-73" name="__codelineno-3-73" href="#__codelineno-3-73"></a><span class="w">  </span><span class="k">while</span><span class="w"> </span><span class="kp">true</span><span class="p">:</span>
+<a id="__codelineno-3-74" name="__codelineno-3-74" href="#__codelineno-3-74"></a><span class="w">    </span><span class="k">let</span><span class="w"> </span><span class="n">task</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">consumer</span><span class="p">.</span><span class="n">pop</span><span class="p">()</span>
+<a id="__codelineno-3-75" name="__codelineno-3-75" href="#__codelineno-3-75"></a>
+<a id="__codelineno-3-76" name="__codelineno-3-76" href="#__codelineno-3-76"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">task</span><span class="p">.</span><span class="n">isSome</span><span class="p">:</span>
+<a id="__codelineno-3-77" name="__codelineno-3-77" href="#__codelineno-3-77"></a><span class="w">      </span><span class="k">let</span><span class="w"> </span><span class="n">start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">getMonoTime</span><span class="p">()</span>
+<a id="__codelineno-3-78" name="__codelineno-3-78" href="#__codelineno-3-78"></a><span class="w">      </span><span class="n">simulateWork</span><span class="p">(</span><span class="n">task</span><span class="p">.</span><span class="n">get</span><span class="p">)</span>
+<a id="__codelineno-3-79" name="__codelineno-3-79" href="#__codelineno-3-79"></a><span class="w">      </span><span class="k">let</span><span class="w"> </span><span class="n">elapsed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">getMonoTime</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">start</span><span class="p">).</span><span class="n">inMicroseconds</span>
+<a id="__codelineno-3-80" name="__codelineno-3-80" href="#__codelineno-3-80"></a><span class="w">      </span><span class="n">latencySum</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">elapsed</span>
+<a id="__codelineno-3-81" name="__codelineno-3-81" href="#__codelineno-3-81"></a><span class="w">      </span><span class="n">inc</span><span class="w"> </span><span class="n">completed</span>
+<a id="__codelineno-3-82" name="__codelineno-3-82" href="#__codelineno-3-82"></a><span class="w">    </span><span class="k">elif</span><span class="w"> </span><span class="n">done</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">moAcquire</span><span class="p">):</span>
+<a id="__codelineno-3-83" name="__codelineno-3-83" href="#__codelineno-3-83"></a><span class="w">      </span><span class="k">break</span>
+<a id="__codelineno-3-84" name="__codelineno-3-84" href="#__codelineno-3-84"></a><span class="w">    </span><span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-3-85" name="__codelineno-3-85" href="#__codelineno-3-85"></a><span class="w">      </span><span class="c"># No work available, brief pause before retry</span>
+<a id="__codelineno-3-86" name="__codelineno-3-86" href="#__codelineno-3-86"></a><span class="w">      </span><span class="n">sleep</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-3-87" name="__codelineno-3-87" href="#__codelineno-3-87"></a>
+<a id="__codelineno-3-88" name="__codelineno-3-88" href="#__codelineno-3-88"></a><span class="w">  </span><span class="n">tasksCompleted</span><span class="o">[</span><span class="n">idx</span><span class="o">]</span><span class="p">.</span><span class="n">store</span><span class="p">(</span><span class="n">completed</span><span class="p">,</span><span class="w"> </span><span class="n">moRelease</span><span class="p">)</span>
+<a id="__codelineno-3-89" name="__codelineno-3-89" href="#__codelineno-3-89"></a><span class="w">  </span><span class="n">totalLatency</span><span class="o">[</span><span class="n">idx</span><span class="o">]</span><span class="p">.</span><span class="n">store</span><span class="p">(</span><span class="n">latencySum</span><span class="p">,</span><span class="w"> </span><span class="n">moRelease</span><span class="p">)</span>
+<a id="__codelineno-3-90" name="__codelineno-3-90" href="#__codelineno-3-90"></a>
+<a id="__codelineno-3-91" name="__codelineno-3-91" href="#__codelineno-3-91"></a>
+<a id="__codelineno-3-92" name="__codelineno-3-92" href="#__codelineno-3-92"></a><span class="k">proc</span><span class="w"> </span><span class="nf">dispatcherThread</span><span class="p">()</span><span class="w"> </span><span class="sx">{.thread.}</span><span class="w"> </span><span class="o">=</span>
+<a id="__codelineno-3-93" name="__codelineno-3-93" href="#__codelineno-3-93"></a><span class="w">  </span><span class="sd">## Dispatcher generates and distributes tasks.</span>
+<a id="__codelineno-3-94" name="__codelineno-3-94" href="#__codelineno-3-94"></a><span class="w">  </span><span class="kd">var</span><span class="w"> </span><span class="n">taskId</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="__codelineno-3-95" name="__codelineno-3-95" href="#__codelineno-3-95"></a>
+<a id="__codelineno-3-96" name="__codelineno-3-96" href="#__codelineno-3-96"></a><span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="mf">0</span><span class="p">..</span><span class="o">&lt;</span><span class="n">NumTasks</span><span class="p">:</span>
+<a id="__codelineno-3-97" name="__codelineno-3-97" href="#__codelineno-3-97"></a><span class="w">    </span><span class="c"># Create varied task mix</span>
+<a id="__codelineno-3-98" name="__codelineno-3-98" href="#__codelineno-3-98"></a><span class="w">    </span><span class="k">let</span><span class="w"> </span><span class="n">kind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">case</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="ow">mod</span><span class="w"> </span><span class="mi">10</span>
+<a id="__codelineno-3-99" name="__codelineno-3-99" href="#__codelineno-3-99"></a><span class="w">      </span><span class="k">of</span><span class="w"> </span><span class="nl">0..2</span><span class="o">:</span><span class="w"> </span><span class="n">tkFast</span>
+<a id="__codelineno-3-100" name="__codelineno-3-100" href="#__codelineno-3-100"></a><span class="w">      </span><span class="k">of</span><span class="w"> </span><span class="nl">3..6</span><span class="o">:</span><span class="w"> </span><span class="n">tkCompute</span>
+<a id="__codelineno-3-101" name="__codelineno-3-101" href="#__codelineno-3-101"></a><span class="w">      </span><span class="k">else</span><span class="p">:</span><span class="w"> </span><span class="n">tkIO</span>
+<a id="__codelineno-3-102" name="__codelineno-3-102" href="#__codelineno-3-102"></a>
+<a id="__codelineno-3-103" name="__codelineno-3-103" href="#__codelineno-3-103"></a><span class="w">    </span><span class="k">let</span><span class="w"> </span><span class="n">payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">case</span><span class="w"> </span><span class="n">kind</span>
+<a id="__codelineno-3-104" name="__codelineno-3-104" href="#__codelineno-3-104"></a><span class="w">      </span><span class="k">of</span><span class="w"> </span><span class="nl">tkFast</span><span class="o">:</span><span class="w"> </span><span class="mi">0</span>
+<a id="__codelineno-3-105" name="__codelineno-3-105" href="#__codelineno-3-105"></a><span class="w">      </span><span class="k">of</span><span class="w"> </span><span class="nl">tkCompute</span><span class="o">:</span><span class="w"> </span><span class="mi">1000</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="ow">mod</span><span class="w"> </span><span class="mi">500</span><span class="p">)</span>
+<a id="__codelineno-3-106" name="__codelineno-3-106" href="#__codelineno-3-106"></a><span class="w">      </span><span class="k">of</span><span class="w"> </span><span class="nl">tkIO</span><span class="o">:</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="ow">mod</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span>
+<a id="__codelineno-3-107" name="__codelineno-3-107" href="#__codelineno-3-107"></a>
+<a id="__codelineno-3-108" name="__codelineno-3-108" href="#__codelineno-3-108"></a><span class="w">    </span><span class="k">let</span><span class="w"> </span><span class="n">task</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Task</span><span class="p">(</span><span class="n">id</span><span class="p">:</span><span class="w"> </span><span class="n">taskId</span><span class="p">,</span><span class="w"> </span><span class="n">kind</span><span class="p">:</span><span class="w"> </span><span class="n">kind</span><span class="p">,</span><span class="w"> </span><span class="n">payload</span><span class="p">:</span><span class="w"> </span><span class="n">payload</span><span class="p">)</span>
+<a id="__codelineno-3-109" name="__codelineno-3-109" href="#__codelineno-3-109"></a><span class="w">    </span><span class="n">inc</span><span class="w"> </span><span class="n">taskId</span>
+<a id="__codelineno-3-110" name="__codelineno-3-110" href="#__codelineno-3-110"></a>
+<a id="__codelineno-3-111" name="__codelineno-3-111" href="#__codelineno-3-111"></a><span class="w">    </span><span class="c"># Push with backpressure - wait if queue is full</span>
+<a id="__codelineno-3-112" name="__codelineno-3-112" href="#__codelineno-3-112"></a><span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">task</span><span class="p">):</span>
+<a id="__codelineno-3-113" name="__codelineno-3-113" href="#__codelineno-3-113"></a><span class="w">      </span><span class="n">sleep</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-3-114" name="__codelineno-3-114" href="#__codelineno-3-114"></a>
+<a id="__codelineno-3-115" name="__codelineno-3-115" href="#__codelineno-3-115"></a><span class="w">  </span><span class="n">done</span><span class="p">.</span><span class="n">store</span><span class="p">(</span><span class="kp">true</span><span class="p">,</span><span class="w"> </span><span class="n">moRelease</span><span class="p">)</span>
+<a id="__codelineno-3-116" name="__codelineno-3-116" href="#__codelineno-3-116"></a>
+<a id="__codelineno-3-117" name="__codelineno-3-117" href="#__codelineno-3-117"></a>
+<a id="__codelineno-3-118" name="__codelineno-3-118" href="#__codelineno-3-118"></a><span class="k">when</span><span class="w"> </span><span class="n">isMainModule</span><span class="p">:</span>
+<a id="__codelineno-3-119" name="__codelineno-3-119" href="#__codelineno-3-119"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"Task Fan-Out Example"</span>
+<a id="__codelineno-3-120" name="__codelineno-3-120" href="#__codelineno-3-120"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"===================="</span>
+<a id="__codelineno-3-121" name="__codelineno-3-121" href="#__codelineno-3-121"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"Queue capacity: "</span><span class="p">,</span><span class="w"> </span><span class="n">QueueCapacity</span>
+<a id="__codelineno-3-122" name="__codelineno-3-122" href="#__codelineno-3-122"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"Workers: "</span><span class="p">,</span><span class="w"> </span><span class="n">NumWorkers</span>
+<a id="__codelineno-3-123" name="__codelineno-3-123" href="#__codelineno-3-123"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"Tasks: "</span><span class="p">,</span><span class="w"> </span><span class="n">NumTasks</span>
+<a id="__codelineno-3-124" name="__codelineno-3-124" href="#__codelineno-3-124"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">""</span>
+<a id="__codelineno-3-125" name="__codelineno-3-125" href="#__codelineno-3-125"></a>
+<a id="__codelineno-3-126" name="__codelineno-3-126" href="#__codelineno-3-126"></a><span class="w">  </span><span class="n">done</span><span class="p">.</span><span class="n">store</span><span class="p">(</span><span class="kp">false</span><span class="p">,</span><span class="w"> </span><span class="n">moRelaxed</span><span class="p">)</span>
+<a id="__codelineno-3-127" name="__codelineno-3-127" href="#__codelineno-3-127"></a><span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="mf">0</span><span class="p">..</span><span class="o">&lt;</span><span class="n">NumWorkers</span><span class="p">:</span>
+<a id="__codelineno-3-128" name="__codelineno-3-128" href="#__codelineno-3-128"></a><span class="w">    </span><span class="n">tasksCompleted</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="p">.</span><span class="n">store</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">moRelaxed</span><span class="p">)</span>
+<a id="__codelineno-3-129" name="__codelineno-3-129" href="#__codelineno-3-129"></a><span class="w">    </span><span class="n">totalLatency</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="p">.</span><span class="n">store</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">moRelaxed</span><span class="p">)</span>
+<a id="__codelineno-3-130" name="__codelineno-3-130" href="#__codelineno-3-130"></a>
+<a id="__codelineno-3-131" name="__codelineno-3-131" href="#__codelineno-3-131"></a><span class="w">  </span><span class="k">let</span><span class="w"> </span><span class="n">startTime</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">getMonoTime</span><span class="p">()</span>
+<a id="__codelineno-3-132" name="__codelineno-3-132" href="#__codelineno-3-132"></a>
+<a id="__codelineno-3-133" name="__codelineno-3-133" href="#__codelineno-3-133"></a><span class="w">  </span><span class="c"># Start workers</span>
+<a id="__codelineno-3-134" name="__codelineno-3-134" href="#__codelineno-3-134"></a><span class="w">  </span><span class="kd">var</span><span class="w"> </span><span class="n">workers</span><span class="p">:</span><span class="w"> </span><span class="nb">array</span><span class="o">[</span><span class="n">NumWorkers</span><span class="p">,</span><span class="w"> </span><span class="n">Thread</span><span class="o">[</span><span class="nb">int</span><span class="o">]]</span>
+<a id="__codelineno-3-135" name="__codelineno-3-135" href="#__codelineno-3-135"></a><span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="mf">0</span><span class="p">..</span><span class="o">&lt;</span><span class="n">NumWorkers</span><span class="p">:</span>
+<a id="__codelineno-3-136" name="__codelineno-3-136" href="#__codelineno-3-136"></a><span class="w">    </span><span class="n">createThread</span><span class="p">(</span><span class="n">workers</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="n">workerThread</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">)</span>
+<a id="__codelineno-3-137" name="__codelineno-3-137" href="#__codelineno-3-137"></a>
+<a id="__codelineno-3-138" name="__codelineno-3-138" href="#__codelineno-3-138"></a><span class="w">  </span><span class="c"># Start dispatcher</span>
+<a id="__codelineno-3-139" name="__codelineno-3-139" href="#__codelineno-3-139"></a><span class="w">  </span><span class="kd">var</span><span class="w"> </span><span class="n">dispatcher</span><span class="p">:</span><span class="w"> </span><span class="n">Thread</span><span class="o">[</span><span class="n">void</span><span class="o">]</span>
+<a id="__codelineno-3-140" name="__codelineno-3-140" href="#__codelineno-3-140"></a><span class="w">  </span><span class="n">createThread</span><span class="p">(</span><span class="n">dispatcher</span><span class="p">,</span><span class="w"> </span><span class="n">dispatcherThread</span><span class="p">)</span>
+<a id="__codelineno-3-141" name="__codelineno-3-141" href="#__codelineno-3-141"></a>
+<a id="__codelineno-3-142" name="__codelineno-3-142" href="#__codelineno-3-142"></a><span class="w">  </span><span class="c"># Wait for completion</span>
+<a id="__codelineno-3-143" name="__codelineno-3-143" href="#__codelineno-3-143"></a><span class="w">  </span><span class="n">joinThread</span><span class="p">(</span><span class="n">dispatcher</span><span class="p">)</span>
+<a id="__codelineno-3-144" name="__codelineno-3-144" href="#__codelineno-3-144"></a><span class="w">  </span><span class="n">sleep</span><span class="p">(</span><span class="mi">50</span><span class="p">)</span><span class="w">  </span><span class="c"># Let workers drain queue</span>
+<a id="__codelineno-3-145" name="__codelineno-3-145" href="#__codelineno-3-145"></a><span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="mf">0</span><span class="p">..</span><span class="o">&lt;</span><span class="n">NumWorkers</span><span class="p">:</span>
+<a id="__codelineno-3-146" name="__codelineno-3-146" href="#__codelineno-3-146"></a><span class="w">    </span><span class="n">joinThread</span><span class="p">(</span><span class="n">workers</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="p">)</span>
+<a id="__codelineno-3-147" name="__codelineno-3-147" href="#__codelineno-3-147"></a>
+<a id="__codelineno-3-148" name="__codelineno-3-148" href="#__codelineno-3-148"></a><span class="w">  </span><span class="k">let</span><span class="w"> </span><span class="n">totalTime</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">getMonoTime</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">startTime</span><span class="p">).</span><span class="n">inMilliseconds</span>
+<a id="__codelineno-3-149" name="__codelineno-3-149" href="#__codelineno-3-149"></a>
+<a id="__codelineno-3-150" name="__codelineno-3-150" href="#__codelineno-3-150"></a><span class="w">  </span><span class="c"># Report results</span>
+<a id="__codelineno-3-151" name="__codelineno-3-151" href="#__codelineno-3-151"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"Results:"</span>
+<a id="__codelineno-3-152" name="__codelineno-3-152" href="#__codelineno-3-152"></a><span class="w">  </span><span class="kd">var</span><span class="w"> </span><span class="n">totalCompleted</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="__codelineno-3-153" name="__codelineno-3-153" href="#__codelineno-3-153"></a><span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="mf">0</span><span class="p">..</span><span class="o">&lt;</span><span class="n">NumWorkers</span><span class="p">:</span>
+<a id="__codelineno-3-154" name="__codelineno-3-154" href="#__codelineno-3-154"></a><span class="w">    </span><span class="k">let</span><span class="w"> </span><span class="n">completed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tasksCompleted</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">moAcquire</span><span class="p">)</span>
+<a id="__codelineno-3-155" name="__codelineno-3-155" href="#__codelineno-3-155"></a><span class="w">    </span><span class="k">let</span><span class="w"> </span><span class="n">latency</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">totalLatency</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">moAcquire</span><span class="p">)</span>
+<a id="__codelineno-3-156" name="__codelineno-3-156" href="#__codelineno-3-156"></a><span class="w">    </span><span class="k">let</span><span class="w"> </span><span class="n">avgLatency</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">completed</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">:</span><span class="w"> </span><span class="n">latency</span><span class="w"> </span><span class="ow">div</span><span class="w"> </span><span class="n">completed</span><span class="w"> </span><span class="k">else</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span>
+<a id="__codelineno-3-157" name="__codelineno-3-157" href="#__codelineno-3-157"></a><span class="w">    </span><span class="n">echo</span><span class="w"> </span><span class="s">"  Worker "</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="s">": "</span><span class="p">,</span><span class="w"> </span><span class="n">completed</span><span class="p">,</span><span class="w"> </span><span class="s">" tasks, avg "</span><span class="p">,</span><span class="w"> </span><span class="n">avgLatency</span><span class="p">,</span><span class="w"> </span><span class="s">"us/task"</span>
+<a id="__codelineno-3-158" name="__codelineno-3-158" href="#__codelineno-3-158"></a><span class="w">    </span><span class="n">totalCompleted</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">completed</span>
+<a id="__codelineno-3-159" name="__codelineno-3-159" href="#__codelineno-3-159"></a>
+<a id="__codelineno-3-160" name="__codelineno-3-160" href="#__codelineno-3-160"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">""</span>
+<a id="__codelineno-3-161" name="__codelineno-3-161" href="#__codelineno-3-161"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"Total completed: "</span><span class="p">,</span><span class="w"> </span><span class="n">totalCompleted</span><span class="p">,</span><span class="w"> </span><span class="s">"/"</span><span class="p">,</span><span class="w"> </span><span class="n">NumTasks</span>
+<a id="__codelineno-3-162" name="__codelineno-3-162" href="#__codelineno-3-162"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"Total time: "</span><span class="p">,</span><span class="w"> </span><span class="n">totalTime</span><span class="p">,</span><span class="w"> </span><span class="s">"ms"</span>
+<a id="__codelineno-3-163" name="__codelineno-3-163" href="#__codelineno-3-163"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"Throughput: "</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">NumTasks</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">1000</span><span class="p">)</span><span class="w"> </span><span class="ow">div</span><span class="w"> </span><span class="n">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">totalTime</span><span class="p">.</span><span class="nb">int</span><span class="p">),</span><span class="w"> </span><span class="s">" tasks/sec"</span>
+<a id="__codelineno-3-164" name="__codelineno-3-164" href="#__codelineno-3-164"></a>
+<a id="__codelineno-3-165" name="__codelineno-3-165" href="#__codelineno-3-165"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="n">totalCompleted</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">NumTasks</span><span class="p">:</span>
+<a id="__codelineno-3-166" name="__codelineno-3-166" href="#__codelineno-3-166"></a><span class="w">    </span><span class="n">echo</span><span class="w"> </span><span class="s">""</span>
+<a id="__codelineno-3-167" name="__codelineno-3-167" href="#__codelineno-3-167"></a><span class="w">    </span><span class="n">echo</span><span class="w"> </span><span class="s">"All tasks processed successfully!"</span>
+</code></pre></div>
+<hr>
+<h2 id="event-collector-unbounded-mpsc">Event Collector (Unbounded MPSC)<a class="headerlink" href="#event-collector-unbounded-mpsc" title="Permanent link">¶</a></h2>
+<p>Collecting events from multiple sources into a single processing pipeline.</p>
+<p><strong>Key properties:</strong></p>
+<ul>
+<li>Handles traffic bursts (queue grows during spikes)</li>
+<li>Never drops events</li>
+<li>Lock-free producers don't block each other</li>
+</ul>
+<p><strong>Use cases:</strong> Log aggregation, metrics collection, network packet capture</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="sd">## Event Collector Example</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="sd">##</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="sd">## Demonstrates using an unbounded Mupsic (MPSC) queue for collecting events</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="sd">## from multiple sources into a single processing pipeline.</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="sd">##</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="sd">## Pattern: Multiple event sources → Single processor</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="sd">##</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="sd">## Key properties:</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="sd">## - Handles bursts: queue grows during traffic spikes</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="sd">## - Never drops: events are queued even during overload</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="sd">## - Memory reclamation: epoch-based cleanup when safe</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="sd">## - Lock-free producers: sources don't block each other</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="sd">##</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="sd">## Use cases:</span>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="sd">## - Log aggregation from multiple services</span>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="sd">## - Metrics collection from distributed sensors</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="sd">## - Network packet capture from multiple interfaces</span>
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="sd">## - User activity tracking across browser tabs</span>
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>
+<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span><span class="o">/</span><span class="n">atomic_dsl</span>
+<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="kn">import</span><span class="w"> </span><span class="n">os</span>
+<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="kn">import</span><span class="w"> </span><span class="n">options</span>
+<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="kn">import</span><span class="w"> </span><span class="n">random</span>
+<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="kn">import</span><span class="w"> </span><span class="n">std</span><span class="o">/</span><span class="n">monotimes</span>
+<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="kn">import</span><span class="w"> </span><span class="n">times</span>
+<a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>
+<a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="kn">import</span><span class="w"> </span><span class="n">debra</span>
+<a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
+<a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a>
+<a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a><span class="k">const</span>
+<a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a><span class="w">  </span><span class="n">SegmentSize</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">64</span>
+<a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a><span class="w">  </span><span class="n">NumSources</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span>
+<a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a><span class="w">  </span><span class="n">DurationMs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">200</span>
+<a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a><span class="w">  </span><span class="n">MaxThreads</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">NumSources</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">4</span><span class="w">  </span><span class="c"># sources + main/consumer + slack</span>
+<a id="__codelineno-4-35" name="__codelineno-4-35" href="#__codelineno-4-35"></a>
+<a id="__codelineno-4-36" name="__codelineno-4-36" href="#__codelineno-4-36"></a><span class="k">type</span>
+<a id="__codelineno-4-37" name="__codelineno-4-37" href="#__codelineno-4-37"></a><span class="w">  </span><span class="n">EventKind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">enum</span>
+<a id="__codelineno-4-38" name="__codelineno-4-38" href="#__codelineno-4-38"></a><span class="w">    </span><span class="n">ekClick</span>
+<a id="__codelineno-4-39" name="__codelineno-4-39" href="#__codelineno-4-39"></a><span class="w">    </span><span class="n">ekPageView</span>
+<a id="__codelineno-4-40" name="__codelineno-4-40" href="#__codelineno-4-40"></a><span class="w">    </span><span class="n">ekError</span>
+<a id="__codelineno-4-41" name="__codelineno-4-41" href="#__codelineno-4-41"></a><span class="w">    </span><span class="n">ekMetric</span>
+<a id="__codelineno-4-42" name="__codelineno-4-42" href="#__codelineno-4-42"></a>
+<a id="__codelineno-4-43" name="__codelineno-4-43" href="#__codelineno-4-43"></a><span class="w">  </span><span class="n">Event</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">object</span>
+<a id="__codelineno-4-44" name="__codelineno-4-44" href="#__codelineno-4-44"></a><span class="w">    </span><span class="n">sourceId</span><span class="p">:</span><span class="w"> </span><span class="nb">int</span>
+<a id="__codelineno-4-45" name="__codelineno-4-45" href="#__codelineno-4-45"></a><span class="w">    </span><span class="n">kind</span><span class="p">:</span><span class="w"> </span><span class="n">EventKind</span>
+<a id="__codelineno-4-46" name="__codelineno-4-46" href="#__codelineno-4-46"></a><span class="w">    </span><span class="n">timestamp</span><span class="p">:</span><span class="w"> </span><span class="nb">int64</span>
+<a id="__codelineno-4-47" name="__codelineno-4-47" href="#__codelineno-4-47"></a><span class="w">    </span><span class="n">value</span><span class="p">:</span><span class="w"> </span><span class="nb">int</span>
+<a id="__codelineno-4-48" name="__codelineno-4-48" href="#__codelineno-4-48"></a>
+<a id="__codelineno-4-49" name="__codelineno-4-49" href="#__codelineno-4-49"></a><span class="w">  </span><span class="n">SourceContext</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">object</span>
+<a id="__codelineno-4-50" name="__codelineno-4-50" href="#__codelineno-4-50"></a><span class="w">    </span><span class="n">queue</span><span class="p">:</span><span class="w"> </span><span class="k">ptr</span><span class="w"> </span><span class="n">UnboundedMupsic</span><span class="o">[</span><span class="n">SegmentSize</span><span class="p">,</span><span class="w"> </span><span class="n">Event</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span>
+<a id="__codelineno-4-51" name="__codelineno-4-51" href="#__codelineno-4-51"></a><span class="w">    </span><span class="n">manager</span><span class="p">:</span><span class="w"> </span><span class="k">ptr</span><span class="w"> </span><span class="n">DebraManager</span><span class="o">[</span><span class="n">MaxThreads</span><span class="o">]</span>
+<a id="__codelineno-4-52" name="__codelineno-4-52" href="#__codelineno-4-52"></a><span class="w">    </span><span class="n">sourceId</span><span class="p">:</span><span class="w"> </span><span class="nb">int</span>
+<a id="__codelineno-4-53" name="__codelineno-4-53" href="#__codelineno-4-53"></a><span class="w">    </span><span class="n">startTime</span><span class="p">:</span><span class="w"> </span><span class="n">MonoTime</span>
+<a id="__codelineno-4-54" name="__codelineno-4-54" href="#__codelineno-4-54"></a>
+<a id="__codelineno-4-55" name="__codelineno-4-55" href="#__codelineno-4-55"></a><span class="w">  </span><span class="n">ProcessorContext</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">object</span>
+<a id="__codelineno-4-56" name="__codelineno-4-56" href="#__codelineno-4-56"></a><span class="w">    </span><span class="n">queue</span><span class="p">:</span><span class="w"> </span><span class="k">ptr</span><span class="w"> </span><span class="n">UnboundedMupsic</span><span class="o">[</span><span class="n">SegmentSize</span><span class="p">,</span><span class="w"> </span><span class="n">Event</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span>
+<a id="__codelineno-4-57" name="__codelineno-4-57" href="#__codelineno-4-57"></a><span class="w">    </span><span class="n">manager</span><span class="p">:</span><span class="w"> </span><span class="k">ptr</span><span class="w"> </span><span class="n">DebraManager</span><span class="o">[</span><span class="n">MaxThreads</span><span class="o">]</span>
+<a id="__codelineno-4-58" name="__codelineno-4-58" href="#__codelineno-4-58"></a><span class="w">    </span><span class="n">consumerHandle</span><span class="p">:</span><span class="w"> </span><span class="n">ThreadHandle</span><span class="o">[</span><span class="n">MaxThreads</span><span class="o">]</span>
+<a id="__codelineno-4-59" name="__codelineno-4-59" href="#__codelineno-4-59"></a>
+<a id="__codelineno-4-60" name="__codelineno-4-60" href="#__codelineno-4-60"></a><span class="kd">var</span>
+<a id="__codelineno-4-61" name="__codelineno-4-61" href="#__codelineno-4-61"></a><span class="w">  </span><span class="n">manager</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initDebraManager</span><span class="o">[</span><span class="n">MaxThreads</span><span class="o">]</span><span class="p">()</span>
+<a id="__codelineno-4-62" name="__codelineno-4-62" href="#__codelineno-4-62"></a><span class="w">  </span><span class="n">consumerHandle</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">registerThread</span><span class="p">(</span><span class="n">manager</span><span class="p">)</span>
+<a id="__codelineno-4-63" name="__codelineno-4-63" href="#__codelineno-4-63"></a><span class="w">  </span><span class="n">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">newUnboundedMupsic</span><span class="o">[</span><span class="n">SegmentSize</span><span class="p">,</span><span class="w"> </span><span class="n">Event</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span><span class="p">(</span><span class="k">addr</span><span class="w"> </span><span class="n">manager</span><span class="p">,</span><span class="w"> </span><span class="n">consumerHandle</span><span class="p">)</span>
+<a id="__codelineno-4-64" name="__codelineno-4-64" href="#__codelineno-4-64"></a><span class="w">  </span><span class="n">running</span><span class="p">:</span><span class="w"> </span><span class="n">Atomic</span><span class="o">[</span><span class="nb">bool</span><span class="o">]</span>
+<a id="__codelineno-4-65" name="__codelineno-4-65" href="#__codelineno-4-65"></a><span class="w">  </span><span class="n">eventsProduced</span><span class="p">:</span><span class="w"> </span><span class="nb">array</span><span class="o">[</span><span class="n">NumSources</span><span class="p">,</span><span class="w"> </span><span class="n">Atomic</span><span class="o">[</span><span class="nb">int</span><span class="o">]]</span>
+<a id="__codelineno-4-66" name="__codelineno-4-66" href="#__codelineno-4-66"></a><span class="w">  </span><span class="n">eventsConsumed</span><span class="p">:</span><span class="w"> </span><span class="n">Atomic</span><span class="o">[</span><span class="nb">int</span><span class="o">]</span>
+<a id="__codelineno-4-67" name="__codelineno-4-67" href="#__codelineno-4-67"></a><span class="w">  </span><span class="n">maxQueueDepth</span><span class="p">:</span><span class="w"> </span><span class="n">Atomic</span><span class="o">[</span><span class="nb">int</span><span class="o">]</span>
+<a id="__codelineno-4-68" name="__codelineno-4-68" href="#__codelineno-4-68"></a>
+<a id="__codelineno-4-69" name="__codelineno-4-69" href="#__codelineno-4-69"></a>
+<a id="__codelineno-4-70" name="__codelineno-4-70" href="#__codelineno-4-70"></a><span class="k">proc</span><span class="w"> </span><span class="nf">eventSourceThread</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span><span class="w"> </span><span class="k">ptr</span><span class="w"> </span><span class="n">SourceContext</span><span class="p">)</span><span class="w"> </span><span class="sx">{.thread.}</span><span class="w"> </span><span class="o">=</span>
+<a id="__codelineno-4-71" name="__codelineno-4-71" href="#__codelineno-4-71"></a><span class="w">  </span><span class="sd">## Simulates an event source generating events at variable rates.</span>
+<a id="__codelineno-4-72" name="__codelineno-4-72" href="#__codelineno-4-72"></a><span class="w">  </span><span class="sd">## Sources occasionally burst to simulate real traffic patterns.</span>
+<a id="__codelineno-4-73" name="__codelineno-4-73" href="#__codelineno-4-73"></a><span class="w">  </span><span class="sx">{.cast(gcsafe).}:</span>
+<a id="__codelineno-4-74" name="__codelineno-4-74" href="#__codelineno-4-74"></a><span class="sx">    let</span><span class="w"> </span><span class="sx">handle</span><span class="w"> </span><span class="sx">= registerThread(ctx.manager[])</span>
+<a id="__codelineno-4-75" name="__codelineno-4-75" href="#__codelineno-4-75"></a><span class="sx">    var</span><span class="w"> </span><span class="sx">producer</span><span class="w"> </span><span class="sx">= ctx.queue[].getProducer(handle)</span>
+<a id="__codelineno-4-76" name="__codelineno-4-76" href="#__codelineno-4-76"></a><span class="sx">    var</span><span class="w"> </span><span class="sx">produced</span><span class="w"> </span><span class="sx">= 0</span>
+<a id="__codelineno-4-77" name="__codelineno-4-77" href="#__codelineno-4-77"></a>
+<a id="__codelineno-4-78" name="__codelineno-4-78" href="#__codelineno-4-78"></a><span class="w">    </span><span class="sx">while</span><span class="w"> </span><span class="sx">running.load(moAcquire):</span>
+<a id="__codelineno-4-79" name="__codelineno-4-79" href="#__codelineno-4-79"></a><span class="sx">      # Simulate</span><span class="w"> </span><span class="sx">variable</span><span class="w"> </span><span class="sx">event</span><span class="w"> </span><span class="sx">rate</span><span class="w"> </span><span class="sx">with</span><span class="w"> </span><span class="sx">occasional</span><span class="w"> </span><span class="sx">bursts</span>
+<a id="__codelineno-4-80" name="__codelineno-4-80" href="#__codelineno-4-80"></a><span class="w">      </span><span class="sx">let</span><span class="w"> </span><span class="sx">burstMode</span><span class="w"> </span><span class="sx">= rand(100) &lt; 10</span><span class="w">  </span><span class="sx"># 10% chance</span><span class="w"> </span><span class="sx">of</span><span class="w"> </span><span class="sx">burst</span>
+<a id="__codelineno-4-81" name="__codelineno-4-81" href="#__codelineno-4-81"></a><span class="w">      </span><span class="sx">let</span><span class="w"> </span><span class="sx">eventCount</span><span class="w"> </span><span class="sx">= if</span><span class="w"> </span><span class="sx">burstMode</span>:<span class="w"> </span><span class="sx">rand(10..20) else</span>:<span class="w"> </span><span class="sx">rand(1..3)</span>
+<a id="__codelineno-4-82" name="__codelineno-4-82" href="#__codelineno-4-82"></a>
+<a id="__codelineno-4-83" name="__codelineno-4-83" href="#__codelineno-4-83"></a><span class="sx">      for</span><span class="w"> </span><span class="sx">_</span><span class="w"> </span><span class="sx">in</span><span class="w"> </span><span class="sx">0..&lt;eventCount</span>:
+<a id="__codelineno-4-84" name="__codelineno-4-84" href="#__codelineno-4-84"></a><span class="w">        </span><span class="sx">let</span><span class="w"> </span><span class="sx">event</span><span class="w"> </span><span class="sx">= Event(</span>
+<a id="__codelineno-4-85" name="__codelineno-4-85" href="#__codelineno-4-85"></a><span class="sx">          sourceId</span>:<span class="w"> </span><span class="sx">ctx.sourceId</span>,
+<a id="__codelineno-4-86" name="__codelineno-4-86" href="#__codelineno-4-86"></a><span class="w">          </span><span class="sx">kind</span>:<span class="w"> </span><span class="sx">EventKind(rand(ord(EventKind.high))),</span>
+<a id="__codelineno-4-87" name="__codelineno-4-87" href="#__codelineno-4-87"></a><span class="sx">          timestamp</span>:<span class="w"> </span><span class="sx">(getMonoTime() - ctx.startTime).inMicroseconds</span>,
+<a id="__codelineno-4-88" name="__codelineno-4-88" href="#__codelineno-4-88"></a><span class="w">          </span><span class="sx">value</span>:<span class="w"> </span><span class="sx">rand(1000)</span>
+<a id="__codelineno-4-89" name="__codelineno-4-89" href="#__codelineno-4-89"></a><span class="sx">        )</span>
+<a id="__codelineno-4-90" name="__codelineno-4-90" href="#__codelineno-4-90"></a>
+<a id="__codelineno-4-91" name="__codelineno-4-91" href="#__codelineno-4-91"></a><span class="sx">        producer.push(event)</span>
+<a id="__codelineno-4-92" name="__codelineno-4-92" href="#__codelineno-4-92"></a><span class="sx">        inc</span><span class="w"> </span><span class="sx">produced</span>
+<a id="__codelineno-4-93" name="__codelineno-4-93" href="#__codelineno-4-93"></a>
+<a id="__codelineno-4-94" name="__codelineno-4-94" href="#__codelineno-4-94"></a><span class="w">      </span><span class="sx"># Variable</span><span class="w"> </span><span class="sx">delay</span><span class="w"> </span><span class="sx">between</span><span class="w"> </span><span class="sx">event</span><span class="w"> </span><span class="sx">batches</span>
+<a id="__codelineno-4-95" name="__codelineno-4-95" href="#__codelineno-4-95"></a><span class="w">      </span><span class="sx">let</span><span class="w"> </span><span class="sx">delayMs</span><span class="w"> </span><span class="sx">= if</span><span class="w"> </span><span class="sx">burstMode</span>:<span class="w"> </span><span class="sx">1</span><span class="w"> </span><span class="sx">else</span>:<span class="w"> </span><span class="sx">rand(5..15)</span>
+<a id="__codelineno-4-96" name="__codelineno-4-96" href="#__codelineno-4-96"></a><span class="sx">      sleep(delayMs)</span>
+<a id="__codelineno-4-97" name="__codelineno-4-97" href="#__codelineno-4-97"></a>
+<a id="__codelineno-4-98" name="__codelineno-4-98" href="#__codelineno-4-98"></a><span class="sx">    eventsProduced[ctx.sourceId].store(produced</span>,<span class="w"> </span><span class="sx">moRelease)</span>
+<a id="__codelineno-4-99" name="__codelineno-4-99" href="#__codelineno-4-99"></a>
+<a id="__codelineno-4-100" name="__codelineno-4-100" href="#__codelineno-4-100"></a>
+<a id="__codelineno-4-101" name="__codelineno-4-101" href="#__codelineno-4-101"></a><span class="sx">proc</span><span class="w"> </span><span class="sx">processorThread(ctx</span>:<span class="w"> </span><span class="sx">ptr</span><span class="w"> </span><span class="sx">ProcessorContext) {.thread.}</span><span class="w"> </span><span class="o">=</span>
+<a id="__codelineno-4-102" name="__codelineno-4-102" href="#__codelineno-4-102"></a><span class="w">  </span><span class="sd">## Single processor consumes and processes all events.</span>
+<a id="__codelineno-4-103" name="__codelineno-4-103" href="#__codelineno-4-103"></a><span class="w">  </span><span class="sd">## Periodically triggers memory reclamation.</span>
+<a id="__codelineno-4-104" name="__codelineno-4-104" href="#__codelineno-4-104"></a><span class="w">  </span><span class="sx">{.cast(gcsafe).}:</span>
+<a id="__codelineno-4-105" name="__codelineno-4-105" href="#__codelineno-4-105"></a><span class="sx">    var</span><span class="w"> </span><span class="sx">consumed</span><span class="w"> </span><span class="sx">= 0</span>
+<a id="__codelineno-4-106" name="__codelineno-4-106" href="#__codelineno-4-106"></a><span class="w">    </span><span class="sx">var</span><span class="w"> </span><span class="sx">maxDepth</span><span class="w"> </span><span class="sx">= 0</span>
+<a id="__codelineno-4-107" name="__codelineno-4-107" href="#__codelineno-4-107"></a><span class="w">    </span><span class="sx">var</span><span class="w"> </span><span class="sx">lastReclaim</span><span class="w"> </span><span class="sx">= getMonoTime()</span>
+<a id="__codelineno-4-108" name="__codelineno-4-108" href="#__codelineno-4-108"></a><span class="sx">    var</span><span class="w"> </span><span class="sx">eventCounts</span>:<span class="w"> </span><span class="sx">array[EventKind</span>,<span class="w"> </span><span class="sx">int]</span>
+<a id="__codelineno-4-109" name="__codelineno-4-109" href="#__codelineno-4-109"></a>
+<a id="__codelineno-4-110" name="__codelineno-4-110" href="#__codelineno-4-110"></a><span class="sx">    while</span><span class="w"> </span><span class="sx">running.load(moAcquire) or</span><span class="w"> </span><span class="sx">ctx.queue[].len() &gt; 0</span>:
+<a id="__codelineno-4-111" name="__codelineno-4-111" href="#__codelineno-4-111"></a><span class="w">      </span><span class="sx">let</span><span class="w"> </span><span class="sx">event</span><span class="w"> </span><span class="sx">= ctx.queue[].pop()</span>
+<a id="__codelineno-4-112" name="__codelineno-4-112" href="#__codelineno-4-112"></a>
+<a id="__codelineno-4-113" name="__codelineno-4-113" href="#__codelineno-4-113"></a><span class="sx">      if</span><span class="w"> </span><span class="sx">event.isSome</span>:
+<a id="__codelineno-4-114" name="__codelineno-4-114" href="#__codelineno-4-114"></a><span class="w">        </span><span class="sx"># Process</span><span class="w"> </span><span class="sx">the</span><span class="w"> </span><span class="sx">event</span>
+<a id="__codelineno-4-115" name="__codelineno-4-115" href="#__codelineno-4-115"></a><span class="w">        </span><span class="sx">inc</span><span class="w"> </span><span class="sx">eventCounts[event.get.kind]</span>
+<a id="__codelineno-4-116" name="__codelineno-4-116" href="#__codelineno-4-116"></a><span class="sx">        inc</span><span class="w"> </span><span class="sx">consumed</span>
+<a id="__codelineno-4-117" name="__codelineno-4-117" href="#__codelineno-4-117"></a>
+<a id="__codelineno-4-118" name="__codelineno-4-118" href="#__codelineno-4-118"></a><span class="w">        </span><span class="sx"># Track</span><span class="w"> </span><span class="sx">queue</span><span class="w"> </span><span class="sx">depth</span>
+<a id="__codelineno-4-119" name="__codelineno-4-119" href="#__codelineno-4-119"></a><span class="w">        </span><span class="sx">let</span><span class="w"> </span><span class="sx">depth</span><span class="w"> </span><span class="sx">= ctx.queue[].len()</span>
+<a id="__codelineno-4-120" name="__codelineno-4-120" href="#__codelineno-4-120"></a><span class="sx">        if</span><span class="w"> </span><span class="sx">depth</span><span class="w"> </span><span class="sx">&gt; maxDepth</span>:
+<a id="__codelineno-4-121" name="__codelineno-4-121" href="#__codelineno-4-121"></a><span class="w">          </span><span class="sx">maxDepth</span><span class="w"> </span><span class="sx">= depth</span>
+<a id="__codelineno-4-122" name="__codelineno-4-122" href="#__codelineno-4-122"></a>
+<a id="__codelineno-4-123" name="__codelineno-4-123" href="#__codelineno-4-123"></a><span class="w">        </span><span class="sx"># Periodic</span><span class="w"> </span><span class="sx">memory</span><span class="w"> </span><span class="sx">reclamation</span><span class="w"> </span><span class="sx">(every</span><span class="w"> </span><span class="sx">10ms)</span>
+<a id="__codelineno-4-124" name="__codelineno-4-124" href="#__codelineno-4-124"></a><span class="sx">        if</span><span class="w"> </span><span class="sx">(getMonoTime() - lastReclaim).inMilliseconds</span><span class="w"> </span><span class="sx">&gt; 10</span>:
+<a id="__codelineno-4-125" name="__codelineno-4-125" href="#__codelineno-4-125"></a><span class="w">          </span><span class="sx">ctx.manager[].advance()</span>
+<a id="__codelineno-4-126" name="__codelineno-4-126" href="#__codelineno-4-126"></a><span class="sx">          discard</span><span class="w"> </span><span class="sx">reclaimNow(ctx.consumerHandle)</span>
+<a id="__codelineno-4-127" name="__codelineno-4-127" href="#__codelineno-4-127"></a><span class="sx">          lastReclaim</span><span class="w"> </span><span class="sx">= getMonoTime()</span>
+<a id="__codelineno-4-128" name="__codelineno-4-128" href="#__codelineno-4-128"></a><span class="sx">      else</span>:
+<a id="__codelineno-4-129" name="__codelineno-4-129" href="#__codelineno-4-129"></a><span class="w">        </span><span class="sx"># No</span><span class="w"> </span><span class="sx">events</span>,<span class="w"> </span><span class="sx">brief</span><span class="w"> </span><span class="sx">pause</span>
+<a id="__codelineno-4-130" name="__codelineno-4-130" href="#__codelineno-4-130"></a><span class="w">        </span><span class="sx">sleep(1)</span>
+<a id="__codelineno-4-131" name="__codelineno-4-131" href="#__codelineno-4-131"></a>
+<a id="__codelineno-4-132" name="__codelineno-4-132" href="#__codelineno-4-132"></a><span class="sx">    eventsConsumed.store(consumed</span>,<span class="w"> </span><span class="sx">moRelease)</span>
+<a id="__codelineno-4-133" name="__codelineno-4-133" href="#__codelineno-4-133"></a><span class="sx">    maxQueueDepth.store(maxDepth</span>,<span class="w"> </span><span class="sx">moRelease)</span>
+<a id="__codelineno-4-134" name="__codelineno-4-134" href="#__codelineno-4-134"></a>
+<a id="__codelineno-4-135" name="__codelineno-4-135" href="#__codelineno-4-135"></a><span class="sx">    echo</span><span class="w"> </span><span class="sx">""</span>
+<a id="__codelineno-4-136" name="__codelineno-4-136" href="#__codelineno-4-136"></a><span class="sx">    echo</span><span class="w"> </span><span class="sx">"Event</span><span class="w"> </span><span class="sx">breakdown</span>:<span class="sx">"</span>
+<a id="__codelineno-4-137" name="__codelineno-4-137" href="#__codelineno-4-137"></a><span class="sx">    for</span><span class="w"> </span><span class="sx">kind</span><span class="w"> </span><span class="sx">in</span><span class="w"> </span><span class="sx">EventKind</span>:
+<a id="__codelineno-4-138" name="__codelineno-4-138" href="#__codelineno-4-138"></a><span class="w">      </span><span class="sx">echo</span><span class="w"> </span><span class="sx">"  ", kind</span>,<span class="w"> </span><span class="sx">": ", eventCounts[kind]</span>
+<a id="__codelineno-4-139" name="__codelineno-4-139" href="#__codelineno-4-139"></a>
+<a id="__codelineno-4-140" name="__codelineno-4-140" href="#__codelineno-4-140"></a>
+<a id="__codelineno-4-141" name="__codelineno-4-141" href="#__codelineno-4-141"></a><span class="sx">when</span><span class="w"> </span><span class="sx">isMainModule</span>:
+<a id="__codelineno-4-142" name="__codelineno-4-142" href="#__codelineno-4-142"></a><span class="w">  </span><span class="sx">randomize()</span>
+<a id="__codelineno-4-143" name="__codelineno-4-143" href="#__codelineno-4-143"></a>
+<a id="__codelineno-4-144" name="__codelineno-4-144" href="#__codelineno-4-144"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">"Event</span><span class="w"> </span><span class="sx">Collector</span><span class="w"> </span><span class="sx">Example"</span>
+<a id="__codelineno-4-145" name="__codelineno-4-145" href="#__codelineno-4-145"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">"======================="</span>
+<a id="__codelineno-4-146" name="__codelineno-4-146" href="#__codelineno-4-146"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">"Segment</span><span class="w"> </span><span class="sx">size</span>:<span class="w"> </span><span class="sx">", SegmentSize</span>
+<a id="__codelineno-4-147" name="__codelineno-4-147" href="#__codelineno-4-147"></a><span class="w">  </span><span class="sx">echo</span><span class="w"> </span><span class="sx">"Event</span><span class="w"> </span><span class="sx">sources</span>:<span class="w"> </span><span class="sx">", NumSources</span>
+<a id="__codelineno-4-148" name="__codelineno-4-148" href="#__codelineno-4-148"></a><span class="w">  </span><span class="sx">echo</span><span class="w"> </span><span class="sx">"Duration</span>:<span class="w"> </span><span class="sx">", DurationMs</span>,<span class="w"> </span><span class="sx">"ms"</span>
+<a id="__codelineno-4-149" name="__codelineno-4-149" href="#__codelineno-4-149"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">""</span>
+<a id="__codelineno-4-150" name="__codelineno-4-150" href="#__codelineno-4-150"></a>
+<a id="__codelineno-4-151" name="__codelineno-4-151" href="#__codelineno-4-151"></a><span class="sx">  running.store(true</span>,<span class="w"> </span><span class="sx">moRelease)</span>
+<a id="__codelineno-4-152" name="__codelineno-4-152" href="#__codelineno-4-152"></a><span class="sx">  eventsConsumed.store(0</span>,<span class="w"> </span><span class="sx">moRelaxed)</span>
+<a id="__codelineno-4-153" name="__codelineno-4-153" href="#__codelineno-4-153"></a><span class="sx">  maxQueueDepth.store(0</span>,<span class="w"> </span><span class="sx">moRelaxed)</span>
+<a id="__codelineno-4-154" name="__codelineno-4-154" href="#__codelineno-4-154"></a><span class="sx">  for</span><span class="w"> </span><span class="sx">i</span><span class="w"> </span><span class="sx">in</span><span class="w"> </span><span class="sx">0..&lt;NumSources</span>:
+<a id="__codelineno-4-155" name="__codelineno-4-155" href="#__codelineno-4-155"></a><span class="w">    </span><span class="sx">eventsProduced[i].store(0</span>,<span class="w"> </span><span class="sx">moRelaxed)</span>
+<a id="__codelineno-4-156" name="__codelineno-4-156" href="#__codelineno-4-156"></a>
+<a id="__codelineno-4-157" name="__codelineno-4-157" href="#__codelineno-4-157"></a><span class="sx">  let</span><span class="w"> </span><span class="sx">startTime</span><span class="w"> </span><span class="sx">= getMonoTime()</span>
+<a id="__codelineno-4-158" name="__codelineno-4-158" href="#__codelineno-4-158"></a>
+<a id="__codelineno-4-159" name="__codelineno-4-159" href="#__codelineno-4-159"></a><span class="sx">  # Start</span><span class="w"> </span><span class="sx">processor</span>
+<a id="__codelineno-4-160" name="__codelineno-4-160" href="#__codelineno-4-160"></a><span class="w">  </span><span class="sx">var</span><span class="w"> </span><span class="sx">procCtx</span><span class="w"> </span><span class="sx">= ProcessorContext(</span>
+<a id="__codelineno-4-161" name="__codelineno-4-161" href="#__codelineno-4-161"></a><span class="sx">    queue</span>:<span class="w"> </span><span class="sx">addr</span><span class="w"> </span><span class="sx">queue</span>,
+<a id="__codelineno-4-162" name="__codelineno-4-162" href="#__codelineno-4-162"></a><span class="w">    </span><span class="sx">manager</span>:<span class="w"> </span><span class="sx">addr</span><span class="w"> </span><span class="sx">manager</span>,
+<a id="__codelineno-4-163" name="__codelineno-4-163" href="#__codelineno-4-163"></a><span class="w">    </span><span class="sx">consumerHandle</span>:<span class="w"> </span><span class="sx">consumerHandle</span>,
+<a id="__codelineno-4-164" name="__codelineno-4-164" href="#__codelineno-4-164"></a><span class="w">  </span><span class="sx">)</span>
+<a id="__codelineno-4-165" name="__codelineno-4-165" href="#__codelineno-4-165"></a><span class="sx">  var</span><span class="w"> </span><span class="sx">processor</span>:<span class="w"> </span><span class="sx">Thread[ptr</span><span class="w"> </span><span class="sx">ProcessorContext]</span>
+<a id="__codelineno-4-166" name="__codelineno-4-166" href="#__codelineno-4-166"></a><span class="sx">  createThread(processor</span>,<span class="w"> </span><span class="sx">processorThread</span>,<span class="w"> </span><span class="sx">addr</span><span class="w"> </span><span class="sx">procCtx)</span>
+<a id="__codelineno-4-167" name="__codelineno-4-167" href="#__codelineno-4-167"></a>
+<a id="__codelineno-4-168" name="__codelineno-4-168" href="#__codelineno-4-168"></a><span class="sx">  # Start</span><span class="w"> </span><span class="sx">event</span><span class="w"> </span><span class="sx">sources</span>
+<a id="__codelineno-4-169" name="__codelineno-4-169" href="#__codelineno-4-169"></a><span class="w">  </span><span class="sx">var</span><span class="w"> </span><span class="sx">sourceContexts</span>:<span class="w"> </span><span class="sx">array[NumSources</span>,<span class="w"> </span><span class="sx">SourceContext]</span>
+<a id="__codelineno-4-170" name="__codelineno-4-170" href="#__codelineno-4-170"></a><span class="sx">  for</span><span class="w"> </span><span class="sx">i</span><span class="w"> </span><span class="sx">in</span><span class="w"> </span><span class="sx">0..&lt;NumSources</span>:
+<a id="__codelineno-4-171" name="__codelineno-4-171" href="#__codelineno-4-171"></a><span class="w">    </span><span class="sx">sourceContexts[i] = SourceContext(</span>
+<a id="__codelineno-4-172" name="__codelineno-4-172" href="#__codelineno-4-172"></a><span class="sx">      queue</span>:<span class="w"> </span><span class="sx">addr</span><span class="w"> </span><span class="sx">queue</span>,
+<a id="__codelineno-4-173" name="__codelineno-4-173" href="#__codelineno-4-173"></a><span class="w">      </span><span class="sx">manager</span>:<span class="w"> </span><span class="sx">addr</span><span class="w"> </span><span class="sx">manager</span>,
+<a id="__codelineno-4-174" name="__codelineno-4-174" href="#__codelineno-4-174"></a><span class="w">      </span><span class="sx">sourceId</span>:<span class="w"> </span><span class="sx">i</span>,
+<a id="__codelineno-4-175" name="__codelineno-4-175" href="#__codelineno-4-175"></a><span class="w">      </span><span class="sx">startTime</span>:<span class="w"> </span><span class="sx">startTime</span>,
+<a id="__codelineno-4-176" name="__codelineno-4-176" href="#__codelineno-4-176"></a><span class="w">    </span><span class="sx">)</span>
+<a id="__codelineno-4-177" name="__codelineno-4-177" href="#__codelineno-4-177"></a>
+<a id="__codelineno-4-178" name="__codelineno-4-178" href="#__codelineno-4-178"></a><span class="sx">  var</span><span class="w"> </span><span class="sx">sources</span>:<span class="w"> </span><span class="sx">array[NumSources</span>,<span class="w"> </span><span class="sx">Thread[ptr</span><span class="w"> </span><span class="sx">SourceContext]]</span>
+<a id="__codelineno-4-179" name="__codelineno-4-179" href="#__codelineno-4-179"></a><span class="sx">  for</span><span class="w"> </span><span class="sx">i</span><span class="w"> </span><span class="sx">in</span><span class="w"> </span><span class="sx">0..&lt;NumSources</span>:
+<a id="__codelineno-4-180" name="__codelineno-4-180" href="#__codelineno-4-180"></a><span class="w">    </span><span class="sx">createThread(sources[i], eventSourceThread</span>,<span class="w"> </span><span class="sx">addr</span><span class="w"> </span><span class="sx">sourceContexts[i])</span>
+<a id="__codelineno-4-181" name="__codelineno-4-181" href="#__codelineno-4-181"></a>
+<a id="__codelineno-4-182" name="__codelineno-4-182" href="#__codelineno-4-182"></a><span class="sx">  # Run</span><span class="w"> </span><span class="sx">for</span><span class="w"> </span><span class="sx">specified</span><span class="w"> </span><span class="sx">duration</span>
+<a id="__codelineno-4-183" name="__codelineno-4-183" href="#__codelineno-4-183"></a><span class="w">  </span><span class="sx">sleep(DurationMs)</span>
+<a id="__codelineno-4-184" name="__codelineno-4-184" href="#__codelineno-4-184"></a><span class="sx">  running.store(false</span>,<span class="w"> </span><span class="sx">moRelease)</span>
+<a id="__codelineno-4-185" name="__codelineno-4-185" href="#__codelineno-4-185"></a>
+<a id="__codelineno-4-186" name="__codelineno-4-186" href="#__codelineno-4-186"></a><span class="sx">  # Wait</span><span class="w"> </span><span class="sx">for</span><span class="w"> </span><span class="sx">completion</span>
+<a id="__codelineno-4-187" name="__codelineno-4-187" href="#__codelineno-4-187"></a><span class="w">  </span><span class="sx">for</span><span class="w"> </span><span class="sx">i</span><span class="w"> </span><span class="sx">in</span><span class="w"> </span><span class="sx">0..&lt;NumSources</span>:
+<a id="__codelineno-4-188" name="__codelineno-4-188" href="#__codelineno-4-188"></a><span class="w">    </span><span class="sx">joinThread(sources[i])</span>
+<a id="__codelineno-4-189" name="__codelineno-4-189" href="#__codelineno-4-189"></a><span class="sx">  sleep(50)  # Let</span><span class="w"> </span><span class="sx">processor</span><span class="w"> </span><span class="sx">drain</span>
+<a id="__codelineno-4-190" name="__codelineno-4-190" href="#__codelineno-4-190"></a><span class="w">  </span><span class="sx">joinThread(processor)</span>
+<a id="__codelineno-4-191" name="__codelineno-4-191" href="#__codelineno-4-191"></a>
+<a id="__codelineno-4-192" name="__codelineno-4-192" href="#__codelineno-4-192"></a><span class="sx">  let</span><span class="w"> </span><span class="sx">totalTime</span><span class="w"> </span><span class="sx">= (getMonoTime() - startTime).inMilliseconds</span>
+<a id="__codelineno-4-193" name="__codelineno-4-193" href="#__codelineno-4-193"></a>
+<a id="__codelineno-4-194" name="__codelineno-4-194" href="#__codelineno-4-194"></a><span class="w">  </span><span class="sx"># Report</span><span class="w"> </span><span class="sx">results</span>
+<a id="__codelineno-4-195" name="__codelineno-4-195" href="#__codelineno-4-195"></a><span class="w">  </span><span class="sx">echo</span><span class="w"> </span><span class="sx">""</span>
+<a id="__codelineno-4-196" name="__codelineno-4-196" href="#__codelineno-4-196"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">"Results</span>:<span class="sx">"</span>
+<a id="__codelineno-4-197" name="__codelineno-4-197" href="#__codelineno-4-197"></a><span class="sx">  var</span><span class="w"> </span><span class="sx">totalProduced</span><span class="w"> </span><span class="sx">= 0</span>
+<a id="__codelineno-4-198" name="__codelineno-4-198" href="#__codelineno-4-198"></a><span class="w">  </span><span class="sx">for</span><span class="w"> </span><span class="sx">i</span><span class="w"> </span><span class="sx">in</span><span class="w"> </span><span class="sx">0..&lt;NumSources</span>:
+<a id="__codelineno-4-199" name="__codelineno-4-199" href="#__codelineno-4-199"></a><span class="w">    </span><span class="sx">let</span><span class="w"> </span><span class="sx">produced</span><span class="w"> </span><span class="sx">= eventsProduced[i].load(moAcquire)</span>
+<a id="__codelineno-4-200" name="__codelineno-4-200" href="#__codelineno-4-200"></a><span class="sx">    echo</span><span class="w"> </span><span class="sx">"  Source</span><span class="w"> </span><span class="sx">", i</span>,<span class="w"> </span><span class="sx">": ", produced</span>,<span class="w"> </span><span class="sx">" events"</span>
+<a id="__codelineno-4-201" name="__codelineno-4-201" href="#__codelineno-4-201"></a><span class="sx">    totalProduced</span><span class="w"> </span><span class="sx">+= produced</span>
+<a id="__codelineno-4-202" name="__codelineno-4-202" href="#__codelineno-4-202"></a>
+<a id="__codelineno-4-203" name="__codelineno-4-203" href="#__codelineno-4-203"></a><span class="w">  </span><span class="sx">let</span><span class="w"> </span><span class="sx">consumed</span><span class="w"> </span><span class="sx">= eventsConsumed.load(moAcquire)</span>
+<a id="__codelineno-4-204" name="__codelineno-4-204" href="#__codelineno-4-204"></a><span class="sx">  let</span><span class="w"> </span><span class="sx">maxDepth</span><span class="w"> </span><span class="sx">= maxQueueDepth.load(moAcquire)</span>
+<a id="__codelineno-4-205" name="__codelineno-4-205" href="#__codelineno-4-205"></a>
+<a id="__codelineno-4-206" name="__codelineno-4-206" href="#__codelineno-4-206"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">""</span>
+<a id="__codelineno-4-207" name="__codelineno-4-207" href="#__codelineno-4-207"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">"Total</span><span class="w"> </span><span class="sx">produced</span>:<span class="w"> </span><span class="sx">", totalProduced</span>
+<a id="__codelineno-4-208" name="__codelineno-4-208" href="#__codelineno-4-208"></a><span class="w">  </span><span class="sx">echo</span><span class="w"> </span><span class="sx">"Total</span><span class="w"> </span><span class="sx">consumed</span>:<span class="w"> </span><span class="sx">", consumed</span>
+<a id="__codelineno-4-209" name="__codelineno-4-209" href="#__codelineno-4-209"></a><span class="w">  </span><span class="sx">echo</span><span class="w"> </span><span class="sx">"Max</span><span class="w"> </span><span class="sx">queue</span><span class="w"> </span><span class="sx">depth</span>:<span class="w"> </span><span class="sx">", maxDepth</span>
+<a id="__codelineno-4-210" name="__codelineno-4-210" href="#__codelineno-4-210"></a><span class="w">  </span><span class="sx">echo</span><span class="w"> </span><span class="sx">"Final</span><span class="w"> </span><span class="sx">segments</span>:<span class="w"> </span><span class="sx">", queue.segmentCount()</span>
+<a id="__codelineno-4-211" name="__codelineno-4-211" href="#__codelineno-4-211"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">"Total</span><span class="w"> </span><span class="sx">time</span>:<span class="w"> </span><span class="sx">", totalTime</span>,<span class="w"> </span><span class="sx">"ms"</span>
+<a id="__codelineno-4-212" name="__codelineno-4-212" href="#__codelineno-4-212"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">"Throughput</span>:<span class="w"> </span><span class="sx">", (consumed</span><span class="w"> </span><span class="sx">* 1000) div</span><span class="w"> </span><span class="sx">max(1</span>,<span class="w"> </span><span class="sx">totalTime.int), " events/sec"</span>
+<a id="__codelineno-4-213" name="__codelineno-4-213" href="#__codelineno-4-213"></a>
+<a id="__codelineno-4-214" name="__codelineno-4-214" href="#__codelineno-4-214"></a><span class="sx">  if</span><span class="w"> </span><span class="sx">totalProduced</span><span class="w"> </span><span class="sx">== consumed</span>:
+<a id="__codelineno-4-215" name="__codelineno-4-215" href="#__codelineno-4-215"></a><span class="w">    </span><span class="sx">echo</span><span class="w"> </span><span class="sx">""</span>
+<a id="__codelineno-4-216" name="__codelineno-4-216" href="#__codelineno-4-216"></a><span class="sx">    echo</span><span class="w"> </span><span class="sx">"All</span><span class="w"> </span><span class="sx">events</span><span class="w"> </span><span class="sx">processed</span><span class="w"> </span><span class="sx">- no</span><span class="w"> </span><span class="sx">data</span><span class="w"> </span><span class="sx">loss!"</span>
+</code></pre></div>
+<hr>
+<h2 id="job-scheduler-unbounded-mpmc">Job Scheduler (Unbounded MPMC)<a class="headerlink" href="#job-scheduler-unbounded-mpmc" title="Permanent link">¶</a></h2>
+<p>Dynamic job scheduling with multiple submitters and workers.</p>
+<p><strong>Key properties:</strong></p>
+<ul>
+<li>Elastic capacity grows with pending work</li>
+<li>Lock-free operations for high concurrency</li>
+<li>Dynamic scaling of producers and consumers</li>
+</ul>
+<p><strong>Use cases:</strong> Background job processing, build systems, database query scheduling</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="sd">## Job Scheduler Example</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="sd">##</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="sd">## Demonstrates using an unbounded Mupmuc (MPMC) queue for a dynamic job</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="sd">## scheduling system with multiple producers and consumers.</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="sd">##</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="sd">## Pattern: Multiple submitters → Job queue → Multiple workers</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="sd">##</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="sd">## Key properties:</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="sd">## - Elastic capacity: queue grows with pending work</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="sd">## - Lock-free operations: submitters and workers don't block each other</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="sd">## - Dynamic scaling: workers can be added/removed at runtime</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="sd">## - Fair scheduling: committed flag ensures FIFO within segments</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="sd">##</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="sd">## Use cases:</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="sd">## - Web server request handling</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="sd">## - Background job processing (like Sidekiq/Celery)</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="sd">## - Build system task execution</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="sd">## - Database query scheduling</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span><span class="o">/</span><span class="n">atomic_dsl</span>
+<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="kn">import</span><span class="w"> </span><span class="n">os</span>
+<a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="kn">import</span><span class="w"> </span><span class="n">options</span>
+<a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="kn">import</span><span class="w"> </span><span class="n">random</span>
+<a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="kn">import</span><span class="w"> </span><span class="n">std</span><span class="o">/</span><span class="n">monotimes</span>
+<a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="kn">import</span><span class="w"> </span><span class="n">strutils</span>
+<a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a><span class="kn">import</span><span class="w"> </span><span class="n">times</span>
+<a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a>
+<a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="kn">import</span><span class="w"> </span><span class="n">debra</span>
+<a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
+<a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a>
+<a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a><span class="k">const</span>
+<a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a><span class="w">  </span><span class="n">SegmentSize</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">32</span>
+<a id="__codelineno-5-33" name="__codelineno-5-33" href="#__codelineno-5-33"></a><span class="w">  </span><span class="n">NumSubmitters</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">3</span>
+<a id="__codelineno-5-34" name="__codelineno-5-34" href="#__codelineno-5-34"></a><span class="w">  </span><span class="n">NumWorkers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span>
+<a id="__codelineno-5-35" name="__codelineno-5-35" href="#__codelineno-5-35"></a><span class="w">  </span><span class="n">JobsPerSubmitter</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">50</span>
+<a id="__codelineno-5-36" name="__codelineno-5-36" href="#__codelineno-5-36"></a><span class="w">  </span><span class="n">MaxThreads</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">NumSubmitters</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">NumWorkers</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">4</span><span class="w">  </span><span class="c"># producers + consumers + main + slack</span>
+<a id="__codelineno-5-37" name="__codelineno-5-37" href="#__codelineno-5-37"></a>
+<a id="__codelineno-5-38" name="__codelineno-5-38" href="#__codelineno-5-38"></a><span class="k">type</span>
+<a id="__codelineno-5-39" name="__codelineno-5-39" href="#__codelineno-5-39"></a><span class="w">  </span><span class="n">Priority</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">enum</span>
+<a id="__codelineno-5-40" name="__codelineno-5-40" href="#__codelineno-5-40"></a><span class="w">    </span><span class="n">pLow</span>
+<a id="__codelineno-5-41" name="__codelineno-5-41" href="#__codelineno-5-41"></a><span class="w">    </span><span class="n">pNormal</span>
+<a id="__codelineno-5-42" name="__codelineno-5-42" href="#__codelineno-5-42"></a><span class="w">    </span><span class="n">pHigh</span>
+<a id="__codelineno-5-43" name="__codelineno-5-43" href="#__codelineno-5-43"></a>
+<a id="__codelineno-5-44" name="__codelineno-5-44" href="#__codelineno-5-44"></a><span class="w">  </span><span class="n">Job</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">object</span>
+<a id="__codelineno-5-45" name="__codelineno-5-45" href="#__codelineno-5-45"></a><span class="w">    </span><span class="n">id</span><span class="p">:</span><span class="w"> </span><span class="nb">int</span>
+<a id="__codelineno-5-46" name="__codelineno-5-46" href="#__codelineno-5-46"></a><span class="w">    </span><span class="n">submitterId</span><span class="p">:</span><span class="w"> </span><span class="nb">int</span>
+<a id="__codelineno-5-47" name="__codelineno-5-47" href="#__codelineno-5-47"></a><span class="w">    </span><span class="n">priority</span><span class="p">:</span><span class="w"> </span><span class="n">Priority</span>
+<a id="__codelineno-5-48" name="__codelineno-5-48" href="#__codelineno-5-48"></a><span class="w">    </span><span class="n">workMs</span><span class="p">:</span><span class="w"> </span><span class="nb">int</span><span class="w">  </span><span class="c"># Simulated work duration</span>
+<a id="__codelineno-5-49" name="__codelineno-5-49" href="#__codelineno-5-49"></a>
+<a id="__codelineno-5-50" name="__codelineno-5-50" href="#__codelineno-5-50"></a><span class="w">  </span><span class="n">SubmitterContext</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">object</span>
+<a id="__codelineno-5-51" name="__codelineno-5-51" href="#__codelineno-5-51"></a><span class="w">    </span><span class="n">queue</span><span class="p">:</span><span class="w"> </span><span class="k">ptr</span><span class="w"> </span><span class="n">UnboundedMupmuc</span><span class="o">[</span><span class="n">SegmentSize</span><span class="p">,</span><span class="w"> </span><span class="n">Job</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span>
+<a id="__codelineno-5-52" name="__codelineno-5-52" href="#__codelineno-5-52"></a><span class="w">    </span><span class="n">manager</span><span class="p">:</span><span class="w"> </span><span class="k">ptr</span><span class="w"> </span><span class="n">DebraManager</span><span class="o">[</span><span class="n">MaxThreads</span><span class="o">]</span>
+<a id="__codelineno-5-53" name="__codelineno-5-53" href="#__codelineno-5-53"></a><span class="w">    </span><span class="n">submitterId</span><span class="p">:</span><span class="w"> </span><span class="nb">int</span>
+<a id="__codelineno-5-54" name="__codelineno-5-54" href="#__codelineno-5-54"></a>
+<a id="__codelineno-5-55" name="__codelineno-5-55" href="#__codelineno-5-55"></a><span class="w">  </span><span class="n">WorkerContext</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">object</span>
+<a id="__codelineno-5-56" name="__codelineno-5-56" href="#__codelineno-5-56"></a><span class="w">    </span><span class="n">queue</span><span class="p">:</span><span class="w"> </span><span class="k">ptr</span><span class="w"> </span><span class="n">UnboundedMupmuc</span><span class="o">[</span><span class="n">SegmentSize</span><span class="p">,</span><span class="w"> </span><span class="n">Job</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span>
+<a id="__codelineno-5-57" name="__codelineno-5-57" href="#__codelineno-5-57"></a><span class="w">    </span><span class="n">manager</span><span class="p">:</span><span class="w"> </span><span class="k">ptr</span><span class="w"> </span><span class="n">DebraManager</span><span class="o">[</span><span class="n">MaxThreads</span><span class="o">]</span>
+<a id="__codelineno-5-58" name="__codelineno-5-58" href="#__codelineno-5-58"></a><span class="w">    </span><span class="n">workerId</span><span class="p">:</span><span class="w"> </span><span class="nb">int</span>
+<a id="__codelineno-5-59" name="__codelineno-5-59" href="#__codelineno-5-59"></a>
+<a id="__codelineno-5-60" name="__codelineno-5-60" href="#__codelineno-5-60"></a><span class="kd">var</span>
+<a id="__codelineno-5-61" name="__codelineno-5-61" href="#__codelineno-5-61"></a><span class="w">  </span><span class="n">manager</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initDebraManager</span><span class="o">[</span><span class="n">MaxThreads</span><span class="o">]</span><span class="p">()</span>
+<a id="__codelineno-5-62" name="__codelineno-5-62" href="#__codelineno-5-62"></a><span class="w">  </span><span class="n">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">newUnboundedMupmuc</span><span class="o">[</span><span class="n">SegmentSize</span><span class="p">,</span><span class="w"> </span><span class="n">Job</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span><span class="p">(</span><span class="k">addr</span><span class="w"> </span><span class="n">manager</span><span class="p">)</span>
+<a id="__codelineno-5-63" name="__codelineno-5-63" href="#__codelineno-5-63"></a><span class="w">  </span><span class="n">running</span><span class="p">:</span><span class="w"> </span><span class="n">Atomic</span><span class="o">[</span><span class="nb">bool</span><span class="o">]</span>
+<a id="__codelineno-5-64" name="__codelineno-5-64" href="#__codelineno-5-64"></a><span class="w">  </span><span class="n">jobsSubmitted</span><span class="p">:</span><span class="w"> </span><span class="nb">array</span><span class="o">[</span><span class="n">NumSubmitters</span><span class="p">,</span><span class="w"> </span><span class="n">Atomic</span><span class="o">[</span><span class="nb">int</span><span class="o">]]</span>
+<a id="__codelineno-5-65" name="__codelineno-5-65" href="#__codelineno-5-65"></a><span class="w">  </span><span class="n">jobsCompleted</span><span class="p">:</span><span class="w"> </span><span class="nb">array</span><span class="o">[</span><span class="n">NumWorkers</span><span class="p">,</span><span class="w"> </span><span class="n">Atomic</span><span class="o">[</span><span class="nb">int</span><span class="o">]]</span>
+<a id="__codelineno-5-66" name="__codelineno-5-66" href="#__codelineno-5-66"></a><span class="w">  </span><span class="n">nextJobId</span><span class="p">:</span><span class="w"> </span><span class="n">Atomic</span><span class="o">[</span><span class="nb">int</span><span class="o">]</span>
+<a id="__codelineno-5-67" name="__codelineno-5-67" href="#__codelineno-5-67"></a>
+<a id="__codelineno-5-68" name="__codelineno-5-68" href="#__codelineno-5-68"></a>
+<a id="__codelineno-5-69" name="__codelineno-5-69" href="#__codelineno-5-69"></a><span class="k">proc</span><span class="w"> </span><span class="nf">submitterThread</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span><span class="w"> </span><span class="k">ptr</span><span class="w"> </span><span class="n">SubmitterContext</span><span class="p">)</span><span class="w"> </span><span class="sx">{.thread.}</span><span class="w"> </span><span class="o">=</span>
+<a id="__codelineno-5-70" name="__codelineno-5-70" href="#__codelineno-5-70"></a><span class="w">  </span><span class="sd">## Job submitter - creates and enqueues jobs.</span>
+<a id="__codelineno-5-71" name="__codelineno-5-71" href="#__codelineno-5-71"></a><span class="w">  </span><span class="sx">{.cast(gcsafe).}:</span>
+<a id="__codelineno-5-72" name="__codelineno-5-72" href="#__codelineno-5-72"></a><span class="sx">    let</span><span class="w"> </span><span class="sx">handle</span><span class="w"> </span><span class="sx">= registerThread(ctx.manager[])</span>
+<a id="__codelineno-5-73" name="__codelineno-5-73" href="#__codelineno-5-73"></a><span class="sx">    var</span><span class="w"> </span><span class="sx">producer</span><span class="w"> </span><span class="sx">= ctx.queue[].getProducer(handle)</span>
+<a id="__codelineno-5-74" name="__codelineno-5-74" href="#__codelineno-5-74"></a><span class="sx">    var</span><span class="w"> </span><span class="sx">submitted</span><span class="w"> </span><span class="sx">= 0</span>
+<a id="__codelineno-5-75" name="__codelineno-5-75" href="#__codelineno-5-75"></a>
+<a id="__codelineno-5-76" name="__codelineno-5-76" href="#__codelineno-5-76"></a><span class="w">    </span><span class="sx">for</span><span class="w"> </span><span class="sx">i</span><span class="w"> </span><span class="sx">in</span><span class="w"> </span><span class="sx">0..&lt;JobsPerSubmitter</span>:
+<a id="__codelineno-5-77" name="__codelineno-5-77" href="#__codelineno-5-77"></a><span class="w">      </span><span class="sx">let</span><span class="w"> </span><span class="sx">jobId</span><span class="w"> </span><span class="sx">= nextJobId.fetchAdd(1</span>,<span class="w"> </span><span class="sx">moRelaxed)</span>
+<a id="__codelineno-5-78" name="__codelineno-5-78" href="#__codelineno-5-78"></a>
+<a id="__codelineno-5-79" name="__codelineno-5-79" href="#__codelineno-5-79"></a><span class="sx">      # Varied</span><span class="w"> </span><span class="sx">job</span><span class="w"> </span><span class="sx">characteristics</span>
+<a id="__codelineno-5-80" name="__codelineno-5-80" href="#__codelineno-5-80"></a><span class="w">      </span><span class="sx">let</span><span class="w"> </span><span class="sx">priority</span><span class="w"> </span><span class="sx">= case</span><span class="w"> </span><span class="sx">rand(10)</span>
+<a id="__codelineno-5-81" name="__codelineno-5-81" href="#__codelineno-5-81"></a><span class="sx">        of</span><span class="w"> </span><span class="sx">0</span>:<span class="w"> </span><span class="sx">pHigh</span>
+<a id="__codelineno-5-82" name="__codelineno-5-82" href="#__codelineno-5-82"></a><span class="w">        </span><span class="sx">of</span><span class="w"> </span><span class="sx">1..3</span>:<span class="w"> </span><span class="sx">pNormal</span>
+<a id="__codelineno-5-83" name="__codelineno-5-83" href="#__codelineno-5-83"></a><span class="w">        </span><span class="sx">else</span>:<span class="w"> </span><span class="sx">pLow</span>
+<a id="__codelineno-5-84" name="__codelineno-5-84" href="#__codelineno-5-84"></a>
+<a id="__codelineno-5-85" name="__codelineno-5-85" href="#__codelineno-5-85"></a><span class="w">      </span><span class="sx">let</span><span class="w"> </span><span class="sx">workMs</span><span class="w"> </span><span class="sx">= case</span><span class="w"> </span><span class="sx">priority</span>
+<a id="__codelineno-5-86" name="__codelineno-5-86" href="#__codelineno-5-86"></a><span class="w">        </span><span class="sx">of</span><span class="w"> </span><span class="sx">pHigh</span>:<span class="w"> </span><span class="sx">rand(1..5)</span>
+<a id="__codelineno-5-87" name="__codelineno-5-87" href="#__codelineno-5-87"></a><span class="sx">        of</span><span class="w"> </span><span class="sx">pNormal</span>:<span class="w"> </span><span class="sx">rand(5..15)</span>
+<a id="__codelineno-5-88" name="__codelineno-5-88" href="#__codelineno-5-88"></a><span class="sx">        of</span><span class="w"> </span><span class="sx">pLow</span>:<span class="w"> </span><span class="sx">rand(10..30)</span>
+<a id="__codelineno-5-89" name="__codelineno-5-89" href="#__codelineno-5-89"></a>
+<a id="__codelineno-5-90" name="__codelineno-5-90" href="#__codelineno-5-90"></a><span class="sx">      let</span><span class="w"> </span><span class="sx">job</span><span class="w"> </span><span class="sx">= Job(</span>
+<a id="__codelineno-5-91" name="__codelineno-5-91" href="#__codelineno-5-91"></a><span class="sx">        id</span>:<span class="w"> </span><span class="sx">jobId</span>,
+<a id="__codelineno-5-92" name="__codelineno-5-92" href="#__codelineno-5-92"></a><span class="w">        </span><span class="sx">submitterId</span>:<span class="w"> </span><span class="sx">ctx.submitterId</span>,
+<a id="__codelineno-5-93" name="__codelineno-5-93" href="#__codelineno-5-93"></a><span class="w">        </span><span class="sx">priority</span>:<span class="w"> </span><span class="sx">priority</span>,
+<a id="__codelineno-5-94" name="__codelineno-5-94" href="#__codelineno-5-94"></a><span class="w">        </span><span class="sx">workMs</span>:<span class="w"> </span><span class="sx">workMs</span>
+<a id="__codelineno-5-95" name="__codelineno-5-95" href="#__codelineno-5-95"></a><span class="w">      </span><span class="sx">)</span>
+<a id="__codelineno-5-96" name="__codelineno-5-96" href="#__codelineno-5-96"></a>
+<a id="__codelineno-5-97" name="__codelineno-5-97" href="#__codelineno-5-97"></a><span class="sx">      producer.push(job)</span>
+<a id="__codelineno-5-98" name="__codelineno-5-98" href="#__codelineno-5-98"></a><span class="sx">      inc</span><span class="w"> </span><span class="sx">submitted</span>
+<a id="__codelineno-5-99" name="__codelineno-5-99" href="#__codelineno-5-99"></a>
+<a id="__codelineno-5-100" name="__codelineno-5-100" href="#__codelineno-5-100"></a><span class="w">      </span><span class="sx"># Variable</span><span class="w"> </span><span class="sx">submission</span><span class="w"> </span><span class="sx">rate</span>
+<a id="__codelineno-5-101" name="__codelineno-5-101" href="#__codelineno-5-101"></a><span class="w">      </span><span class="sx">sleep(rand(1..10))</span>
+<a id="__codelineno-5-102" name="__codelineno-5-102" href="#__codelineno-5-102"></a>
+<a id="__codelineno-5-103" name="__codelineno-5-103" href="#__codelineno-5-103"></a><span class="sx">    jobsSubmitted[ctx.submitterId].store(submitted</span>,<span class="w"> </span><span class="sx">moRelease)</span>
+<a id="__codelineno-5-104" name="__codelineno-5-104" href="#__codelineno-5-104"></a>
+<a id="__codelineno-5-105" name="__codelineno-5-105" href="#__codelineno-5-105"></a>
+<a id="__codelineno-5-106" name="__codelineno-5-106" href="#__codelineno-5-106"></a><span class="sx">proc</span><span class="w"> </span><span class="sx">workerThread(ctx</span>:<span class="w"> </span><span class="sx">ptr</span><span class="w"> </span><span class="sx">WorkerContext) {.thread.}</span><span class="w"> </span><span class="o">=</span>
+<a id="__codelineno-5-107" name="__codelineno-5-107" href="#__codelineno-5-107"></a><span class="w">  </span><span class="sd">## Worker - fetches and executes jobs.</span>
+<a id="__codelineno-5-108" name="__codelineno-5-108" href="#__codelineno-5-108"></a><span class="w">  </span><span class="sx">{.cast(gcsafe).}:</span>
+<a id="__codelineno-5-109" name="__codelineno-5-109" href="#__codelineno-5-109"></a><span class="sx">    let</span><span class="w"> </span><span class="sx">handle</span><span class="w"> </span><span class="sx">= registerThread(ctx.manager[])</span>
+<a id="__codelineno-5-110" name="__codelineno-5-110" href="#__codelineno-5-110"></a><span class="sx">    var</span><span class="w"> </span><span class="sx">consumer</span><span class="w"> </span><span class="sx">= ctx.queue[].getConsumer(handle)</span>
+<a id="__codelineno-5-111" name="__codelineno-5-111" href="#__codelineno-5-111"></a><span class="sx">    var</span><span class="w"> </span><span class="sx">completed</span><span class="w"> </span><span class="sx">= 0</span>
+<a id="__codelineno-5-112" name="__codelineno-5-112" href="#__codelineno-5-112"></a><span class="w">    </span><span class="sx">var</span><span class="w"> </span><span class="sx">workTime</span>:<span class="w"> </span><span class="sx">int64</span><span class="w"> </span><span class="sx">= 0</span>
+<a id="__codelineno-5-113" name="__codelineno-5-113" href="#__codelineno-5-113"></a>
+<a id="__codelineno-5-114" name="__codelineno-5-114" href="#__codelineno-5-114"></a><span class="w">    </span><span class="sx">while</span><span class="w"> </span><span class="sx">running.load(moAcquire) or</span><span class="w"> </span><span class="sx">ctx.queue[].len() &gt; 0</span>:
+<a id="__codelineno-5-115" name="__codelineno-5-115" href="#__codelineno-5-115"></a><span class="w">      </span><span class="sx">let</span><span class="w"> </span><span class="sx">job</span><span class="w"> </span><span class="sx">= consumer.pop()</span>
+<a id="__codelineno-5-116" name="__codelineno-5-116" href="#__codelineno-5-116"></a>
+<a id="__codelineno-5-117" name="__codelineno-5-117" href="#__codelineno-5-117"></a><span class="sx">      if</span><span class="w"> </span><span class="sx">job.isSome</span>:
+<a id="__codelineno-5-118" name="__codelineno-5-118" href="#__codelineno-5-118"></a><span class="w">        </span><span class="sx">let</span><span class="w"> </span><span class="sx">j</span><span class="w"> </span><span class="sx">= job.get</span>
+<a id="__codelineno-5-119" name="__codelineno-5-119" href="#__codelineno-5-119"></a>
+<a id="__codelineno-5-120" name="__codelineno-5-120" href="#__codelineno-5-120"></a><span class="w">        </span><span class="sx"># Simulate</span><span class="w"> </span><span class="sx">work</span>
+<a id="__codelineno-5-121" name="__codelineno-5-121" href="#__codelineno-5-121"></a><span class="w">        </span><span class="sx">let</span><span class="w"> </span><span class="sx">start</span><span class="w"> </span><span class="sx">= getMonoTime()</span>
+<a id="__codelineno-5-122" name="__codelineno-5-122" href="#__codelineno-5-122"></a><span class="sx">        sleep(j.workMs)</span>
+<a id="__codelineno-5-123" name="__codelineno-5-123" href="#__codelineno-5-123"></a><span class="sx">        workTime</span><span class="w"> </span><span class="sx">+= (getMonoTime() - start).inMilliseconds</span>
+<a id="__codelineno-5-124" name="__codelineno-5-124" href="#__codelineno-5-124"></a>
+<a id="__codelineno-5-125" name="__codelineno-5-125" href="#__codelineno-5-125"></a><span class="w">        </span><span class="sx">inc</span><span class="w"> </span><span class="sx">completed</span>
+<a id="__codelineno-5-126" name="__codelineno-5-126" href="#__codelineno-5-126"></a>
+<a id="__codelineno-5-127" name="__codelineno-5-127" href="#__codelineno-5-127"></a><span class="w">        </span><span class="sx"># Periodic</span><span class="w"> </span><span class="sx">reclamation</span>
+<a id="__codelineno-5-128" name="__codelineno-5-128" href="#__codelineno-5-128"></a><span class="w">        </span><span class="sx">if</span><span class="w"> </span><span class="sx">completed</span><span class="w"> </span><span class="sx">mod</span><span class="w"> </span><span class="sx">10</span><span class="w"> </span><span class="sx">== 0</span>:
+<a id="__codelineno-5-129" name="__codelineno-5-129" href="#__codelineno-5-129"></a><span class="w">          </span><span class="sx">ctx.manager[].advance()</span>
+<a id="__codelineno-5-130" name="__codelineno-5-130" href="#__codelineno-5-130"></a><span class="sx">          discard</span><span class="w"> </span><span class="sx">reclaimNow(handle)</span>
+<a id="__codelineno-5-131" name="__codelineno-5-131" href="#__codelineno-5-131"></a><span class="sx">      else</span>:
+<a id="__codelineno-5-132" name="__codelineno-5-132" href="#__codelineno-5-132"></a><span class="w">        </span><span class="sx">sleep(1)</span>
+<a id="__codelineno-5-133" name="__codelineno-5-133" href="#__codelineno-5-133"></a>
+<a id="__codelineno-5-134" name="__codelineno-5-134" href="#__codelineno-5-134"></a><span class="sx">    jobsCompleted[ctx.workerId].store(completed</span>,<span class="w"> </span><span class="sx">moRelease)</span>
+<a id="__codelineno-5-135" name="__codelineno-5-135" href="#__codelineno-5-135"></a><span class="sx">    echo</span><span class="w"> </span><span class="sx">"Worker</span><span class="w"> </span><span class="sx">", ctx.workerId</span>,<span class="w"> </span><span class="sx">" completed</span><span class="w"> </span><span class="sx">", completed</span>,<span class="w"> </span><span class="sx">" jobs</span><span class="w"> </span><span class="sx">(", workTime</span>,<span class="w"> </span><span class="sx">"ms</span><span class="w"> </span><span class="sx">work)"</span>
+<a id="__codelineno-5-136" name="__codelineno-5-136" href="#__codelineno-5-136"></a>
+<a id="__codelineno-5-137" name="__codelineno-5-137" href="#__codelineno-5-137"></a>
+<a id="__codelineno-5-138" name="__codelineno-5-138" href="#__codelineno-5-138"></a><span class="sx">when</span><span class="w"> </span><span class="sx">isMainModule</span>:
+<a id="__codelineno-5-139" name="__codelineno-5-139" href="#__codelineno-5-139"></a><span class="w">  </span><span class="sx">randomize()</span>
+<a id="__codelineno-5-140" name="__codelineno-5-140" href="#__codelineno-5-140"></a>
+<a id="__codelineno-5-141" name="__codelineno-5-141" href="#__codelineno-5-141"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">"Job</span><span class="w"> </span><span class="sx">Scheduler</span><span class="w"> </span><span class="sx">Example"</span>
+<a id="__codelineno-5-142" name="__codelineno-5-142" href="#__codelineno-5-142"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">"====================="</span>
+<a id="__codelineno-5-143" name="__codelineno-5-143" href="#__codelineno-5-143"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">"Segment</span><span class="w"> </span><span class="sx">size</span>:<span class="w"> </span><span class="sx">", SegmentSize</span>
+<a id="__codelineno-5-144" name="__codelineno-5-144" href="#__codelineno-5-144"></a><span class="w">  </span><span class="sx">echo</span><span class="w"> </span><span class="sx">"Submitters</span>:<span class="w"> </span><span class="sx">", NumSubmitters</span>
+<a id="__codelineno-5-145" name="__codelineno-5-145" href="#__codelineno-5-145"></a><span class="w">  </span><span class="sx">echo</span><span class="w"> </span><span class="sx">"Workers</span>:<span class="w"> </span><span class="sx">", NumWorkers</span>
+<a id="__codelineno-5-146" name="__codelineno-5-146" href="#__codelineno-5-146"></a><span class="w">  </span><span class="sx">echo</span><span class="w"> </span><span class="sx">"Jobs</span><span class="w"> </span><span class="sx">per</span><span class="w"> </span><span class="sx">submitter</span>:<span class="w"> </span><span class="sx">", JobsPerSubmitter</span>
+<a id="__codelineno-5-147" name="__codelineno-5-147" href="#__codelineno-5-147"></a><span class="w">  </span><span class="sx">echo</span><span class="w"> </span><span class="sx">"Total</span><span class="w"> </span><span class="sx">jobs</span>:<span class="w"> </span><span class="sx">", NumSubmitters</span><span class="w"> </span><span class="sx">* JobsPerSubmitter</span>
+<a id="__codelineno-5-148" name="__codelineno-5-148" href="#__codelineno-5-148"></a><span class="w">  </span><span class="sx">echo</span><span class="w"> </span><span class="sx">""</span>
+<a id="__codelineno-5-149" name="__codelineno-5-149" href="#__codelineno-5-149"></a>
+<a id="__codelineno-5-150" name="__codelineno-5-150" href="#__codelineno-5-150"></a><span class="sx">  running.store(true</span>,<span class="w"> </span><span class="sx">moRelease)</span>
+<a id="__codelineno-5-151" name="__codelineno-5-151" href="#__codelineno-5-151"></a><span class="sx">  nextJobId.store(0</span>,<span class="w"> </span><span class="sx">moRelaxed)</span>
+<a id="__codelineno-5-152" name="__codelineno-5-152" href="#__codelineno-5-152"></a><span class="sx">  for</span><span class="w"> </span><span class="sx">i</span><span class="w"> </span><span class="sx">in</span><span class="w"> </span><span class="sx">0..&lt;NumSubmitters</span>:
+<a id="__codelineno-5-153" name="__codelineno-5-153" href="#__codelineno-5-153"></a><span class="w">    </span><span class="sx">jobsSubmitted[i].store(0</span>,<span class="w"> </span><span class="sx">moRelaxed)</span>
+<a id="__codelineno-5-154" name="__codelineno-5-154" href="#__codelineno-5-154"></a><span class="sx">  for</span><span class="w"> </span><span class="sx">i</span><span class="w"> </span><span class="sx">in</span><span class="w"> </span><span class="sx">0..&lt;NumWorkers</span>:
+<a id="__codelineno-5-155" name="__codelineno-5-155" href="#__codelineno-5-155"></a><span class="w">    </span><span class="sx">jobsCompleted[i].store(0</span>,<span class="w"> </span><span class="sx">moRelaxed)</span>
+<a id="__codelineno-5-156" name="__codelineno-5-156" href="#__codelineno-5-156"></a>
+<a id="__codelineno-5-157" name="__codelineno-5-157" href="#__codelineno-5-157"></a><span class="sx">  let</span><span class="w"> </span><span class="sx">startTime</span><span class="w"> </span><span class="sx">= getMonoTime()</span>
+<a id="__codelineno-5-158" name="__codelineno-5-158" href="#__codelineno-5-158"></a>
+<a id="__codelineno-5-159" name="__codelineno-5-159" href="#__codelineno-5-159"></a><span class="sx">  # Start</span><span class="w"> </span><span class="sx">workers</span>
+<a id="__codelineno-5-160" name="__codelineno-5-160" href="#__codelineno-5-160"></a><span class="w">  </span><span class="sx">var</span><span class="w"> </span><span class="sx">workerContexts</span>:<span class="w"> </span><span class="sx">array[NumWorkers</span>,<span class="w"> </span><span class="sx">WorkerContext]</span>
+<a id="__codelineno-5-161" name="__codelineno-5-161" href="#__codelineno-5-161"></a><span class="sx">  for</span><span class="w"> </span><span class="sx">i</span><span class="w"> </span><span class="sx">in</span><span class="w"> </span><span class="sx">0..&lt;NumWorkers</span>:
+<a id="__codelineno-5-162" name="__codelineno-5-162" href="#__codelineno-5-162"></a><span class="w">    </span><span class="sx">workerContexts[i] = WorkerContext(</span>
+<a id="__codelineno-5-163" name="__codelineno-5-163" href="#__codelineno-5-163"></a><span class="sx">      queue</span>:<span class="w"> </span><span class="sx">addr</span><span class="w"> </span><span class="sx">queue</span>,
+<a id="__codelineno-5-164" name="__codelineno-5-164" href="#__codelineno-5-164"></a><span class="w">      </span><span class="sx">manager</span>:<span class="w"> </span><span class="sx">addr</span><span class="w"> </span><span class="sx">manager</span>,
+<a id="__codelineno-5-165" name="__codelineno-5-165" href="#__codelineno-5-165"></a><span class="w">      </span><span class="sx">workerId</span>:<span class="w"> </span><span class="sx">i</span>,
+<a id="__codelineno-5-166" name="__codelineno-5-166" href="#__codelineno-5-166"></a><span class="w">    </span><span class="sx">)</span>
+<a id="__codelineno-5-167" name="__codelineno-5-167" href="#__codelineno-5-167"></a>
+<a id="__codelineno-5-168" name="__codelineno-5-168" href="#__codelineno-5-168"></a><span class="sx">  var</span><span class="w"> </span><span class="sx">workers</span>:<span class="w"> </span><span class="sx">array[NumWorkers</span>,<span class="w"> </span><span class="sx">Thread[ptr</span><span class="w"> </span><span class="sx">WorkerContext]]</span>
+<a id="__codelineno-5-169" name="__codelineno-5-169" href="#__codelineno-5-169"></a><span class="sx">  for</span><span class="w"> </span><span class="sx">i</span><span class="w"> </span><span class="sx">in</span><span class="w"> </span><span class="sx">0..&lt;NumWorkers</span>:
+<a id="__codelineno-5-170" name="__codelineno-5-170" href="#__codelineno-5-170"></a><span class="w">    </span><span class="sx">createThread(workers[i], workerThread</span>,<span class="w"> </span><span class="sx">addr</span><span class="w"> </span><span class="sx">workerContexts[i])</span>
+<a id="__codelineno-5-171" name="__codelineno-5-171" href="#__codelineno-5-171"></a>
+<a id="__codelineno-5-172" name="__codelineno-5-172" href="#__codelineno-5-172"></a><span class="sx">  # Start</span><span class="w"> </span><span class="sx">submitters</span>
+<a id="__codelineno-5-173" name="__codelineno-5-173" href="#__codelineno-5-173"></a><span class="w">  </span><span class="sx">var</span><span class="w"> </span><span class="sx">submitterContexts</span>:<span class="w"> </span><span class="sx">array[NumSubmitters</span>,<span class="w"> </span><span class="sx">SubmitterContext]</span>
+<a id="__codelineno-5-174" name="__codelineno-5-174" href="#__codelineno-5-174"></a><span class="sx">  for</span><span class="w"> </span><span class="sx">i</span><span class="w"> </span><span class="sx">in</span><span class="w"> </span><span class="sx">0..&lt;NumSubmitters</span>:
+<a id="__codelineno-5-175" name="__codelineno-5-175" href="#__codelineno-5-175"></a><span class="w">    </span><span class="sx">submitterContexts[i] = SubmitterContext(</span>
+<a id="__codelineno-5-176" name="__codelineno-5-176" href="#__codelineno-5-176"></a><span class="sx">      queue</span>:<span class="w"> </span><span class="sx">addr</span><span class="w"> </span><span class="sx">queue</span>,
+<a id="__codelineno-5-177" name="__codelineno-5-177" href="#__codelineno-5-177"></a><span class="w">      </span><span class="sx">manager</span>:<span class="w"> </span><span class="sx">addr</span><span class="w"> </span><span class="sx">manager</span>,
+<a id="__codelineno-5-178" name="__codelineno-5-178" href="#__codelineno-5-178"></a><span class="w">      </span><span class="sx">submitterId</span>:<span class="w"> </span><span class="sx">i</span>,
+<a id="__codelineno-5-179" name="__codelineno-5-179" href="#__codelineno-5-179"></a><span class="w">    </span><span class="sx">)</span>
+<a id="__codelineno-5-180" name="__codelineno-5-180" href="#__codelineno-5-180"></a>
+<a id="__codelineno-5-181" name="__codelineno-5-181" href="#__codelineno-5-181"></a><span class="sx">  var</span><span class="w"> </span><span class="sx">submitters</span>:<span class="w"> </span><span class="sx">array[NumSubmitters</span>,<span class="w"> </span><span class="sx">Thread[ptr</span><span class="w"> </span><span class="sx">SubmitterContext]]</span>
+<a id="__codelineno-5-182" name="__codelineno-5-182" href="#__codelineno-5-182"></a><span class="sx">  for</span><span class="w"> </span><span class="sx">i</span><span class="w"> </span><span class="sx">in</span><span class="w"> </span><span class="sx">0..&lt;NumSubmitters</span>:
+<a id="__codelineno-5-183" name="__codelineno-5-183" href="#__codelineno-5-183"></a><span class="w">    </span><span class="sx">createThread(submitters[i], submitterThread</span>,<span class="w"> </span><span class="sx">addr</span><span class="w"> </span><span class="sx">submitterContexts[i])</span>
+<a id="__codelineno-5-184" name="__codelineno-5-184" href="#__codelineno-5-184"></a>
+<a id="__codelineno-5-185" name="__codelineno-5-185" href="#__codelineno-5-185"></a><span class="sx">  # Wait</span><span class="w"> </span><span class="sx">for</span><span class="w"> </span><span class="sx">submitters</span><span class="w"> </span><span class="sx">to</span><span class="w"> </span><span class="sx">finish</span>
+<a id="__codelineno-5-186" name="__codelineno-5-186" href="#__codelineno-5-186"></a><span class="w">  </span><span class="sx">for</span><span class="w"> </span><span class="sx">i</span><span class="w"> </span><span class="sx">in</span><span class="w"> </span><span class="sx">0..&lt;NumSubmitters</span>:
+<a id="__codelineno-5-187" name="__codelineno-5-187" href="#__codelineno-5-187"></a><span class="w">    </span><span class="sx">joinThread(submitters[i])</span>
+<a id="__codelineno-5-188" name="__codelineno-5-188" href="#__codelineno-5-188"></a>
+<a id="__codelineno-5-189" name="__codelineno-5-189" href="#__codelineno-5-189"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">"All</span><span class="w"> </span><span class="sx">jobs</span><span class="w"> </span><span class="sx">submitted</span>,<span class="w"> </span><span class="sx">waiting</span><span class="w"> </span><span class="sx">for</span><span class="w"> </span><span class="sx">workers..."</span>
+<a id="__codelineno-5-190" name="__codelineno-5-190" href="#__codelineno-5-190"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">""</span>
+<a id="__codelineno-5-191" name="__codelineno-5-191" href="#__codelineno-5-191"></a>
+<a id="__codelineno-5-192" name="__codelineno-5-192" href="#__codelineno-5-192"></a><span class="sx">  # Signal</span><span class="w"> </span><span class="sx">shutdown</span><span class="w"> </span><span class="sx">and</span><span class="w"> </span><span class="sx">wait</span><span class="w"> </span><span class="sx">for</span><span class="w"> </span><span class="sx">workers</span>
+<a id="__codelineno-5-193" name="__codelineno-5-193" href="#__codelineno-5-193"></a><span class="w">  </span><span class="sx">sleep(100)  # Let</span><span class="w"> </span><span class="sx">workers</span><span class="w"> </span><span class="sx">drain</span>
+<a id="__codelineno-5-194" name="__codelineno-5-194" href="#__codelineno-5-194"></a><span class="w">  </span><span class="sx">running.store(false</span>,<span class="w"> </span><span class="sx">moRelease)</span>
+<a id="__codelineno-5-195" name="__codelineno-5-195" href="#__codelineno-5-195"></a>
+<a id="__codelineno-5-196" name="__codelineno-5-196" href="#__codelineno-5-196"></a><span class="sx">  for</span><span class="w"> </span><span class="sx">i</span><span class="w"> </span><span class="sx">in</span><span class="w"> </span><span class="sx">0..&lt;NumWorkers</span>:
+<a id="__codelineno-5-197" name="__codelineno-5-197" href="#__codelineno-5-197"></a><span class="w">    </span><span class="sx">joinThread(workers[i])</span>
+<a id="__codelineno-5-198" name="__codelineno-5-198" href="#__codelineno-5-198"></a>
+<a id="__codelineno-5-199" name="__codelineno-5-199" href="#__codelineno-5-199"></a><span class="sx">  let</span><span class="w"> </span><span class="sx">totalTime</span><span class="w"> </span><span class="sx">= (getMonoTime() - startTime).inMilliseconds</span>
+<a id="__codelineno-5-200" name="__codelineno-5-200" href="#__codelineno-5-200"></a>
+<a id="__codelineno-5-201" name="__codelineno-5-201" href="#__codelineno-5-201"></a><span class="w">  </span><span class="sx"># Report</span><span class="w"> </span><span class="sx">results</span>
+<a id="__codelineno-5-202" name="__codelineno-5-202" href="#__codelineno-5-202"></a><span class="w">  </span><span class="sx">echo</span><span class="w"> </span><span class="sx">""</span>
+<a id="__codelineno-5-203" name="__codelineno-5-203" href="#__codelineno-5-203"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">"Submission</span><span class="w"> </span><span class="sx">summary</span>:<span class="sx">"</span>
+<a id="__codelineno-5-204" name="__codelineno-5-204" href="#__codelineno-5-204"></a><span class="sx">  var</span><span class="w"> </span><span class="sx">totalSubmitted</span><span class="w"> </span><span class="sx">= 0</span>
+<a id="__codelineno-5-205" name="__codelineno-5-205" href="#__codelineno-5-205"></a><span class="w">  </span><span class="sx">for</span><span class="w"> </span><span class="sx">i</span><span class="w"> </span><span class="sx">in</span><span class="w"> </span><span class="sx">0..&lt;NumSubmitters</span>:
+<a id="__codelineno-5-206" name="__codelineno-5-206" href="#__codelineno-5-206"></a><span class="w">    </span><span class="sx">let</span><span class="w"> </span><span class="sx">submitted</span><span class="w"> </span><span class="sx">= jobsSubmitted[i].load(moAcquire)</span>
+<a id="__codelineno-5-207" name="__codelineno-5-207" href="#__codelineno-5-207"></a><span class="sx">    echo</span><span class="w"> </span><span class="sx">"  Submitter</span><span class="w"> </span><span class="sx">", i</span>,<span class="w"> </span><span class="sx">": ", submitted</span>,<span class="w"> </span><span class="sx">" jobs"</span>
+<a id="__codelineno-5-208" name="__codelineno-5-208" href="#__codelineno-5-208"></a><span class="sx">    totalSubmitted</span><span class="w"> </span><span class="sx">+= submitted</span>
+<a id="__codelineno-5-209" name="__codelineno-5-209" href="#__codelineno-5-209"></a>
+<a id="__codelineno-5-210" name="__codelineno-5-210" href="#__codelineno-5-210"></a><span class="w">  </span><span class="sx">echo</span><span class="w"> </span><span class="sx">""</span>
+<a id="__codelineno-5-211" name="__codelineno-5-211" href="#__codelineno-5-211"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">"Completion</span><span class="w"> </span><span class="sx">summary</span>:<span class="sx">"</span>
+<a id="__codelineno-5-212" name="__codelineno-5-212" href="#__codelineno-5-212"></a><span class="sx">  var</span><span class="w"> </span><span class="sx">totalCompleted</span><span class="w"> </span><span class="sx">= 0</span>
+<a id="__codelineno-5-213" name="__codelineno-5-213" href="#__codelineno-5-213"></a><span class="w">  </span><span class="sx">for</span><span class="w"> </span><span class="sx">i</span><span class="w"> </span><span class="sx">in</span><span class="w"> </span><span class="sx">0..&lt;NumWorkers</span>:
+<a id="__codelineno-5-214" name="__codelineno-5-214" href="#__codelineno-5-214"></a><span class="w">    </span><span class="sx">let</span><span class="w"> </span><span class="sx">completed</span><span class="w"> </span><span class="sx">= jobsCompleted[i].load(moAcquire)</span>
+<a id="__codelineno-5-215" name="__codelineno-5-215" href="#__codelineno-5-215"></a><span class="sx">    totalCompleted</span><span class="w"> </span><span class="sx">+= completed</span>
+<a id="__codelineno-5-216" name="__codelineno-5-216" href="#__codelineno-5-216"></a>
+<a id="__codelineno-5-217" name="__codelineno-5-217" href="#__codelineno-5-217"></a><span class="w">  </span><span class="sx">echo</span><span class="w"> </span><span class="sx">""</span>
+<a id="__codelineno-5-218" name="__codelineno-5-218" href="#__codelineno-5-218"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">"Total</span><span class="w"> </span><span class="sx">submitted</span>:<span class="w"> </span><span class="sx">", totalSubmitted</span>
+<a id="__codelineno-5-219" name="__codelineno-5-219" href="#__codelineno-5-219"></a><span class="w">  </span><span class="sx">echo</span><span class="w"> </span><span class="sx">"Total</span><span class="w"> </span><span class="sx">completed</span>:<span class="w"> </span><span class="sx">", totalCompleted</span>
+<a id="__codelineno-5-220" name="__codelineno-5-220" href="#__codelineno-5-220"></a><span class="w">  </span><span class="sx">echo</span><span class="w"> </span><span class="sx">"Queue</span><span class="w"> </span><span class="sx">remaining</span>:<span class="w"> </span><span class="sx">", queue.len()</span>
+<a id="__codelineno-5-221" name="__codelineno-5-221" href="#__codelineno-5-221"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">"Segments</span><span class="w"> </span><span class="sx">used</span>:<span class="w"> </span><span class="sx">", queue.segmentCount()</span>
+<a id="__codelineno-5-222" name="__codelineno-5-222" href="#__codelineno-5-222"></a><span class="sx">  echo</span><span class="w"> </span><span class="sx">"Total</span><span class="w"> </span><span class="sx">time</span>:<span class="w"> </span><span class="sx">", totalTime</span>,<span class="w"> </span><span class="sx">"ms"</span>
+<a id="__codelineno-5-223" name="__codelineno-5-223" href="#__codelineno-5-223"></a>
+<a id="__codelineno-5-224" name="__codelineno-5-224" href="#__codelineno-5-224"></a><span class="sx">  if</span><span class="w"> </span><span class="sx">totalSubmitted</span><span class="w"> </span><span class="sx">== totalCompleted</span>:
+<a id="__codelineno-5-225" name="__codelineno-5-225" href="#__codelineno-5-225"></a><span class="w">    </span><span class="sx">echo</span><span class="w"> </span><span class="sx">""</span>
+<a id="__codelineno-5-226" name="__codelineno-5-226" href="#__codelineno-5-226"></a><span class="sx">    echo</span><span class="w"> </span><span class="sx">"All</span><span class="w"> </span><span class="sx">jobs</span><span class="w"> </span><span class="sx">completed</span><span class="w"> </span><span class="sx">successfully!"</span>
+</code></pre></div>
+<hr>
+<h2 id="pattern-guide">Pattern Guide<a class="headerlink" href="#pattern-guide" title="Permanent link">¶</a></h2>
+<table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>Queue Type</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Real-time audio/video</td>
+<td>Bounded Sipsic</td>
+<td>Audio buffer</td>
+</tr>
+<tr>
+<td>Work distribution</td>
+<td>Bounded Sipmuc</td>
+<td>Task fan-out</td>
+</tr>
+<tr>
+<td>Event aggregation</td>
+<td>Unbounded Mupsic</td>
+<td>Event collector</td>
+</tr>
+<tr>
+<td>Job scheduling</td>
+<td>Unbounded Mupmuc</td>
+<td>Job scheduler</td>
+</tr>
+<tr>
+<td>Sensor data</td>
+<td>Bounded Sipsic/Mupsic</td>
+<td>-</td>
+</tr>
+<tr>
+<td>Request routing</td>
+<td>Bounded Sipmuc</td>
+<td>Task fan-out</td>
+</tr>
+<tr>
+<td>Log collection</td>
+<td>Unbounded Mupsic</td>
+<td>Event collector</td>
+</tr>
+<tr>
+<td>Thread pool</td>
+<td>Unbounded Mupmuc</td>
+<td>Job scheduler</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+  
+    
+  
+  
+    
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"></path></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="April 28, 2026 02:43:49 UTC"><span class="timeago" datetime="2026-04-28T02:43:49+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="April 28, 2026 02:43:49 UTC">2026-04-28</span>
+  </span>
+
+    
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Created">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"></path></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="April 28, 2026 02:43:49 UTC"><span class="timeago" datetime="2026-04-28T02:43:49+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="April 28, 2026 02:43:49 UTC">2026-04-28</span>
+  </span>
+
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/elijahr/lockfreequeues" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"></path></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.copy", "content.code.annotate", "navigation.instant", "navigation.sections", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../js/timeago.min.js"></script>
+      
+        <script src="../js/timeago_mkdocs_material.js"></script>
+      
+    
+  
+<script id="init-glightbox">const lightbox = GLightbox({"touchNavigation": true, "loop": false, "zoomable": true, "draggable": true, "openEffect": "zoom", "closeEffect": "zoom", "slideEffect": "slide"});
+document$.subscribe(()=>{ lightbox.reload(); });
+</script></body></html>
