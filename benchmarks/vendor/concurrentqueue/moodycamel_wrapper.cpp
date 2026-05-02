@@ -25,6 +25,7 @@
 #include "concurrentqueue.h"
 
 #include <cstdint>
+#include <new>
 
 extern "C" {
 
@@ -38,12 +39,28 @@ typedef void *mc_queue_t;
 // queue (upstream rejects 0). A zero argument from Nim is treated as
 // "use the default capacity" by mapping to 32 (upstream's documented
 // minimum block size).
+//
+// Returns nullptr on allocation failure. Critical: `extern "C"` forbids
+// exceptions from escaping across the C ABI boundary, so we use
+// `std::nothrow` (returns nullptr on bad_alloc) and a try/catch around
+// any other constructor exception (e.g. from internal block-pool init)
+// to map failure to nullptr. The caller MUST check the return value;
+// see moodycamel_adapter.nim's `makeMoodycamelAdapter` for the Nim-side
+// fail-fast on nullptr.
 mc_queue_t mc_init(unsigned long long initial_capacity) {
   std::size_t capacity = static_cast<std::size_t>(initial_capacity);
   if (capacity == 0) {
     capacity = 32;
   }
-  return new moodycamel::ConcurrentQueue<std::uint64_t>(capacity);
+  try {
+    return new (std::nothrow)
+        moodycamel::ConcurrentQueue<std::uint64_t>(capacity);
+  } catch (...) {
+    // bad_alloc is already turned into nullptr by `nothrow`; this
+    // catch-all guards against any other ConcurrentQueue constructor
+    // exception from leaking across the C ABI boundary.
+    return nullptr;
+  }
 }
 
 // Enqueue. `enqueue` returns false only on allocation failure; on

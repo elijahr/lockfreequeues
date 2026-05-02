@@ -58,8 +58,21 @@ when defined(adapter_moodycamel_available):
     ## ``capacity`` is an initial-block-size hint. ``0`` selects
     ## upstream's default minimum (32) — see
     ## ``moodycamel_wrapper.cpp``.
+    ##
+    ## Fails fast if the C++ wrapper returned ``nullptr`` (allocation
+    ## failure or queue-construction exception swallowed by the
+    ## ``extern "C"`` boundary). Without this check a failed init would
+    ## propagate as a silent ``a.queue == nil`` and the producer thread
+    ## would spin-retry ``push`` returning ``prFull`` forever, masking
+    ## the failure as a benchmark hang.
     let cap = if capacity < 0: 0'u64 else: uint64(capacity)
     result.queue = mc_init(culonglong(cap))
+    if result.queue == nil:
+      raise newException(
+        OutOfMemDefect,
+        "mc_init returned nullptr (moodycamel ConcurrentQueue " &
+        "construction failed; capacity hint = " & $cap & ")"
+      )
 
   proc cleanup*[T](a: var MoodycamelAdapter[T]) =
     if a.queue != nil:
