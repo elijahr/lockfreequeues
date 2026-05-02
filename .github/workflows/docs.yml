@@ -73,7 +73,7 @@ jobs:
           github.ref == 'refs/heads/devel'
         run: |
           set -euo pipefail
-          URL="https://elijahr.github.io/lockfreequeues/dev/benchmarks/assets/bench-results/latest.json"
+          URL="https://elijahr.github.io/lockfreequeues/dev/assets/bench-results/latest.json"
           sleep 30
           HTTP_CODE=$(curl -sS -o /tmp/latest.json -w "%{http_code}" "$URL")
           if [ "$HTTP_CODE" != "200" ]; then

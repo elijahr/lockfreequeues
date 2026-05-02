@@ -63,12 +63,12 @@ underlying measure carries one.
   <div id="bench-chart">
     <noscript>
       Charts require JavaScript. The raw data is published at
-      <code>./assets/bench-results/latest.json</code>; download the JSON
+      <code>../assets/bench-results/latest.json</code>; download the JSON
       snapshot if you need to consume it programmatically.
     </noscript>
   </div>
-  <script src="./assets/uplot-1.6.27.iife.min.js"></script>
-  <script src="./assets/bench-charts.js"></script>
+  <script src="../assets/uplot-1.6.27.iife.min.js"></script>
+  <script src="../assets/bench-charts.js"></script>
 </div>
 
 ### Methodology and fairness caveats

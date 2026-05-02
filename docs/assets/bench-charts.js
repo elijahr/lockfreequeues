@@ -1,8 +1,10 @@
 /* lockfreequeues bench charts — uPlot wiring for docs/benchmarks.md.
  *
  * Loads the merged Bencher Metric Format (BMF) snapshot from
- * `./assets/bench-results/latest.json` (relative path so the same page
- * works under /dev/, /latest/, and /v*\/ mike aliases without rewrite),
+ * `../assets/bench-results/latest.json` — page lives at
+ * `/<version>/benchmarks/` under mike + mkdocs `use_directory_urls`,
+ * so we go up one level to reach `/<version>/assets/`. The same
+ * relative path works under /dev/, /latest/, and /v*\/ aliases,
  * groups slugs by library, and renders a single uPlot line chart of
  * throughput_ops_ms across (P,C) shapes. The X axis is the producer/
  * consumer-count index; the Y axis is throughput in ops/ms with an
@@ -27,7 +29,7 @@
 (function () {
   'use strict';
 
-  const SNAPSHOT_URL = './assets/bench-results/latest.json';
+  const SNAPSHOT_URL = '../assets/bench-results/latest.json';
   const CHART_MEASURE = 'throughput_ops_ms';
 
   // Stable colour palette (uPlot has no default cycle for many series).
@@ -269,10 +271,17 @@
     };
   }
 
-  function attachResizeObserver(host, plot) {
+  /* Single persistent ResizeObserver — `getPlot` is a closure that
+   * always returns the *current* uPlot instance, so the toggle's
+   * rebuild() can destroy + replace `plot` without re-attaching the
+   * observer. Re-attaching on every rebuild leaks an observer +
+   * orphaned setSize callbacks per toggle.
+   */
+  function attachResizeObserver(host, getPlot) {
     if (typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(() => {
-      plot.setSize({ width: host.clientWidth, height: 420 });
+      const plot = getPlot();
+      if (plot) plot.setSize({ width: host.clientWidth, height: 420 });
     });
     ro.observe(host);
   }
@@ -331,13 +340,17 @@
     const data = toUplotData(xLabels, libraries);
 
     const rebuild = () => {
+      // Drop the previous uPlot instance before mounting the next.
+      // Without destroy() the toggle accumulates uPlot DOM/listeners
+      // per click; the observer attaches once below and re-resolves
+      // `plot` via the closure on each setSize.
+      if (plot) plot.destroy();
       plotMount.innerHTML = '';
       plot = new window.uPlot(
         makeOpts(plotMount, libraries, xLabels, logScale),
         data,
         plotMount
       );
-      attachResizeObserver(plotMount, plot);
     };
 
     const controls = buildControls(logScale, (next) => {
@@ -356,6 +369,12 @@
     host.appendChild(plotMount);
     host.appendChild(legend);
     rebuild();
+
+    // Attach the ResizeObserver once, after plotMount is mounted and
+    // sized. The closure resolves `plot` on each callback so a later
+    // rebuild() (log-scale toggle) just hands the observer a new
+    // instance — no observer churn.
+    attachResizeObserver(plotMount, () => plot);
   }
 
   if (document.readyState === 'loading') {
