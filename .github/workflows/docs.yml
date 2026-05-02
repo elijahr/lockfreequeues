@@ -67,13 +67,23 @@ jobs:
       # `sleep 30` accommodates GitHub Pages CDN propagation; raise to
       # 60 if this step ever flakes.
       - name: Verify mike asset path
+        # Derive the Pages URL from the repository context so a fork or
+        # repo rename does not falsely fail this verification step. The
+        # default GitHub Pages URL convention is
+        # `https://<owner>.github.io/<repo>/`. If the project ever moves
+        # to a custom domain the URL becomes wrong again, but at that
+        # point we'd update the workflow to read site_url from
+        # mkdocs.yml; for now the convention is stable.
         if: |
           github.ref == 'refs/heads/main' ||
           github.ref == 'refs/heads/master' ||
           github.ref == 'refs/heads/devel'
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
         run: |
           set -euo pipefail
-          URL="https://elijahr.github.io/lockfreequeues/dev/assets/bench-results/latest.json"
+          URL="https://${OWNER}.github.io/${REPO}/dev/assets/bench-results/latest.json"
           sleep 30
           HTTP_CODE=$(curl -sS -o /tmp/latest.json -w "%{http_code}" "$URL")
           if [ "$HTTP_CODE" != "200" ]; then

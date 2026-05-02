@@ -134,8 +134,15 @@
 
   /* Convert {xLabels, libraries} into the column-major arrays uPlot
    * expects: data[0] is the X axis; data[i+1] is the Y series for
-   * libraries[i]. Missing (library, shape) cells are NaN, which uPlot
-   * skips in line drawing.
+   * libraries[i]. Missing (library, shape) cells are null, which uPlot
+   * skips in line drawing. Non-positive values are also treated as
+   * null: throughput in ops/ms cannot legitimately be <= 0 (a 0 means
+   * a degenerate run our throughput.nim guards already reject), and
+   * the chart's default Y axis is log-scale (`distr: 3`) which is
+   * undefined for non-positive values. merge_bmf.py only enforces
+   * finiteness, so a malformed BMF could in principle deliver a 0 or
+   * negative value; rather than letting it break the log axis,
+   * surface it as missing data.
    */
   function toUplotData(xLabels, libraries) {
     const x = xLabels.map((_, i) => i + 1);
@@ -143,7 +150,8 @@
       const byShape = new Map(lib.points.map((p) => [p.shape, p]));
       return xLabels.map((label) => {
         const p = byShape.get(label);
-        return p ? p.value : null;
+        if (!p) return null;
+        return p.value > 0 ? p.value : null;
       });
     });
     return [x, ...series];

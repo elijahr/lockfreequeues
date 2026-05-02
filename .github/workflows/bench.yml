@@ -789,4 +789,25 @@ jobs:
             exit 0
           fi
           git commit -m "chore(bench): refresh snapshot [skip ci]"
-          git push origin devel
+          # Long bench runs leave a wide window for `devel` to advance
+          # before we push (a docs-only follow-up commit, an unrelated
+          # merge, etc.); a plain `git push` would then be rejected
+          # non-fast-forward and fail the entire bench-upload job.
+          # Retry: fetch+rebase+push up to 3 times. Skip-CI is on the
+          # commit so the retry loop cannot trigger an infinite bench
+          # workflow regardless of how many fast-forwards happen.
+          for attempt in 1 2 3; do
+            if git push origin HEAD:devel; then
+              exit 0
+            fi
+            echo "::notice::push attempt $attempt rejected; rebasing onto origin/devel and retrying."
+            git fetch origin devel
+            # Rebase preserves our snapshot commit on top of any new
+            # commits that landed since checkout. Conflict on the
+            # snapshot files themselves is impossible (no other workflow
+            # writes to docs/assets/bench-results/), so a clean rebase
+            # is the expected outcome.
+            git rebase origin/devel
+          done
+          echo "::error::Snapshot push failed after 3 retries; aborting." >&2
+          exit 1
