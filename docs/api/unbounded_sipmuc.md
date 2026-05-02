@@ -4,15 +4,20 @@ Unbounded single-producer, multiple-consumer (SPMC) queue using linked segments.
 
 ## Overview
 
-`UnboundedSipmuc` provides an unbounded SPMC queue where a single producer distributes work to multiple consumers. Uses DEBRA+ epoch-based memory reclamation (via [nim-debra](https://github.com/elijahr/nim-debra)) for safe segment deallocation, and a per-slot committed flag inside each segment for safe publication to concurrent consumers.
+`UnboundedSipmuc` provides an unbounded SPMC queue where a single producer distributes work to multiple consumers. Uses DEBRA+ epoch-based memory reclamation (via [nim-debra](https://github.com/elijahr/nim-debra)) for safe segment deallocation, and a segment-level `tail` atomic for safe publication to concurrent consumers.
 
-> **Note:** This per-slot committed flag is the *segment-local* publication
-> mechanism for the unbounded queues. It is distinct from the per-slot
-> sequence-counter protocol used by the bounded variants (`Mupmuc`, `Mupsic`,
-> `Sipmuc`). Unbounded segments are single-use linked nodes (no generation
-> rollover), so the simpler one-shot committed flag is sufficient. See
-> [slot-ownership-typestates.md](../slot-ownership-typestates.md) for the
-> full distinction.
+> **Note:** With a single producer there is no race on the slot itself,
+> so each segment carries one `tail: Atomic[int]` rather than a per-slot
+> commit/sequence marker. The producer writes the item then bumps `tail`
+> with release ordering; consumers acquire-load `tail` and treat any
+> slot below it as fully published. The unbounded MP variants
+> (`UnboundedMupsic`, `UnboundedMupmuc`) need a per-slot committed flag
+> because multiple producers race on `tail` via CAS to claim a slot
+> before writing, so `tail` can advance past not-yet-written slots; the
+> bounded MP variants use a per-slot sequence-counter protocol with
+> generation rollover. See [slot-ownership-typestates.md](../slot-ownership-typestates.md)
+> for the full distinction across all four bounded × unbounded × SP × MP
+> combinations.
 
 **Performance characteristics:**
 

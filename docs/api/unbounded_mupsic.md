@@ -4,7 +4,7 @@ Unbounded multiple-producer, single-consumer (MPSC) queue using linked segments.
 
 ## Overview
 
-`UnboundedMupsic` provides an unbounded MPSC queue where multiple producers feed a single consumer. Uses epoch-based memory reclamation (DEBRA) and a per-slot committed flag inside each segment for safe concurrent writes.
+`UnboundedMupsic` provides an unbounded MPSC queue where multiple producers feed a single consumer. Uses DEBRA+ epoch-based memory reclamation (via [nim-debra](https://github.com/elijahr/nim-debra)) and a per-slot committed flag inside each segment for safe concurrent writes.
 
 > **Note:** This per-slot committed flag is the *segment-local* publication
 > mechanism for the unbounded queues. It is distinct from the per-slot
