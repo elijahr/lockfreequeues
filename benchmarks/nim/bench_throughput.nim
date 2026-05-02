@@ -137,6 +137,11 @@ proc runThroughputBenchmark*[Q](
     joinThread(consumerThreads[i])
 
   let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
+  if elapsedNs <= 0.0:
+    # Guard against zero-duration measurements producing inf/NaN. The
+    # downstream `merge_bmf.py` rejects non-finite values; emit 0.0 so
+    # the run is recorded as a valid (degenerate) sample instead.
+    return 0.0
   result = float(messageCount) * 1_000_000.0 / elapsedNs
 
 proc benchmarkThroughput*[Q](
@@ -257,6 +262,11 @@ proc runMupmucBenchmark[N, P, C: static int, T](
     joinThread(consumerThreads[i])
 
   let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
+  if elapsedNs <= 0.0:
+    # Guard against zero-duration measurements producing inf/NaN. The
+    # downstream `merge_bmf.py` rejects non-finite values; emit 0.0 so
+    # the run is recorded as a valid (degenerate) sample instead.
+    return 0.0
   result = float(messageCount) * 1_000_000.0 / elapsedNs
 
 # Fixed-size Mupmuc benchmark functions for common thread counts
@@ -442,6 +452,11 @@ proc runUnboundedMupsicBenchmark[S: static int, T; MaxThreads: static int](
   joinThread(consumerThread)
 
   let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
+  if elapsedNs <= 0.0:
+    # Guard against zero-duration measurements producing inf/NaN. The
+    # downstream `merge_bmf.py` rejects non-finite values; emit 0.0 so
+    # the run is recorded as a valid (degenerate) sample instead.
+    return 0.0
   result = float(messageCount) * 1_000_000.0 / elapsedNs
 
 proc benchmarkUnboundedMupsicNP1C(

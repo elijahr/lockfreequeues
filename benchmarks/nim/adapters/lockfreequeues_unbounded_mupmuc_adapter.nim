@@ -43,9 +43,12 @@ proc makeLockfreequeuesUnboundedMupmucAdapter*[S: static int, T;
 proc cleanup*[S: static int, T; MaxThreads: static int](
     a: var LockfreequeuesUnboundedMupmucAdapter[S, T, MaxThreads]
 ) =
-  ## Free manager only; queue is inline and its `=destroy` runs when
-  ## the adapter object goes out of scope.
+  ## Order matters: the inline queue's `=destroy` calls
+  ## `unbindClient(manager[])`, so the manager must outlive the queue.
+  ## Reset the queue first (running its destructor while `manager` is
+  ## still valid), then free the manager.
   if a.manager != nil:
+    reset(a.queue)
     reset(a.manager[])
     dealloc(a.manager)
     a.manager = nil

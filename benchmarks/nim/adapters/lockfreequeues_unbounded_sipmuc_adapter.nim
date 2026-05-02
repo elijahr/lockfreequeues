@@ -43,12 +43,13 @@ proc makeLockfreequeuesUnboundedSipmucAdapter*[S: static int, T;
 proc cleanup*[S: static int, T; MaxThreads: static int](
     a: var LockfreequeuesUnboundedSipmucAdapter[S, T, MaxThreads]
 ) =
-  ## Tear down manager. Queue is inline; its `=destroy` is run
-  ## automatically when the adapter object goes out of scope.
-  ## IMPORTANT: this proc only frees `manager`. Callers must NOT keep
-  ## using `a.queue` after `cleanup` because the manager-tracked retired
-  ## segments are gone.
+  ## Order matters: the inline queue's `=destroy` calls
+  ## `unbindClient(manager[])`, so the manager must outlive the queue.
+  ## Reset the queue first (running its destructor while `manager` is
+  ## still valid), then free the manager. After this proc returns the
+  ## queue is destroyed; callers must not keep using `a.queue`.
   if a.manager != nil:
+    reset(a.queue)
     reset(a.manager[])
     dealloc(a.manager)
     a.manager = nil
