@@ -29,12 +29,17 @@
 ## consumer drains between the two calls and the second one pops a
 ## false-empty.
 ##
-## **Encoding range.** ``push`` accepts ``T`` values in
-## ``0 .. uint64.high - 1`` (after the ``+1`` step the upper bound saturates
-## the ``uint64`` width before the ``shl 3``). ``uint64.high`` would wrap
-## to ``0`` and be misread as an empty slot. The harness pushes
-## ``uint64(i)`` for ``i in 0 ..< messageCount`` so this bound is academic
-## at current message-count tuning, but it is the contractual range.
+## **Encoding range.** The encoding is ``(v + 1) shl 3`` and pop reverses
+## it as ``(raw shr 3) - 1``. The ``shl 3`` discards the top 3 bits, so
+## the round-trip is invertible only when ``v + 1`` already fits in the
+## low 61 bits — i.e. for input values in the closed range
+## ``0 .. (1'u64 shl 61) - 2`` (≈ ``2.3 * 10^18``). Any value above this
+## range silently truncates on push and pops back as a different value.
+## The harness pushes ``uint64(i)`` for ``i in 0 ..< messageCount`` and
+## ``messageCount`` is bounded by ``int.high`` ≈ ``2^63``, far below the
+## safe limit at any tuning we'll ever ship, so this is academic — but
+## it is the contractual range and a debug-mode assert below makes a
+## misuse fail loudly instead of silently corrupting data.
 ##
 ## Topology: ``mpmc_unbounded``. Capacity argument is ignored.
 ##
@@ -52,6 +57,11 @@ when defined(adapter_loony_available):
   const LoonyTagShift* = 3
     ## Number of low bits Loony reserves for slot-state flags. Items with
     ## non-zero bits in this region collide with RESUME/WRITER/READER.
+  const LoonyMaxValue* = (1'u64 shl (64 - LoonyTagShift)) - 2'u64
+    ## Inclusive upper bound on the input value to ``push``. Above this,
+    ## the ``(v + 1) shl 3`` encoding overflows past 64 bits and the
+    ## round-trip is no longer invertible. See the "Encoding range"
+    ## section in the module docstring.
 
   type LoonyAdapter*[T] = object
     queue*: LoonyQueue[uint64]
@@ -70,6 +80,13 @@ when defined(adapter_loony_available):
     discard a
 
   proc push*[T](a: var LoonyAdapter[T], item: T): PushResult =
+    # Debug-mode assert that the value fits the encoding range. Stripped
+    # in `-d:release`/`-d:danger` builds (which is what the bench
+    # binaries use), so there is zero overhead in measurement runs while
+    # development builds still catch encoding misuse loudly.
+    assert uint64(item) <= LoonyMaxValue,
+      "value " & $uint64(item) & " exceeds Loony adapter encoding range " &
+      "(0 .. " & $LoonyMaxValue & "); see module docstring."
     a.queue.push((uint64(item) + 1'u64) shl LoonyTagShift)
     prSuccess
 

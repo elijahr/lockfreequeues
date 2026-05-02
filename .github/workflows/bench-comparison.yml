@@ -34,6 +34,17 @@ jobs:
     # workflow's separate Bencher report.
     name: bench-crossbeam (ubuntu-latest)
     runs-on: ubuntu-latest
+    # Mirror bench.yml's bench-upload permissions: bencher run uses
+    # `--github-actions ${{ secrets.GITHUB_TOKEN }}` to publish check
+    # runs / PR annotations, which require explicit `checks: write` and
+    # `pull-requests: write` on repos with default read-only token
+    # permissions. `contents: read` and `actions: read` cover
+    # actions/checkout and any future artifact downloads.
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+      checks: write
     timeout-minutes: 30
 
     steps:

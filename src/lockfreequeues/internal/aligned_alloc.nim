@@ -33,7 +33,8 @@ import ../atomic_dsl
 export CacheLineBytes
 
 proc allocAligned*[T](): ptr T =
-  ## Allocate one zero-initialized ``T`` on a ``CacheLineBytes`` boundary.
+  ## Allocate one zero-initialized ``T`` on at least a ``CacheLineBytes``
+  ## boundary, but honor ``alignof(T)`` if it is larger.
   ##
   ## Raises ``OutOfMemDefect`` on allocation failure (matches the existing
   ## ``c_calloc`` failure path in unbounded queue ``newSegment`` procs).
@@ -41,8 +42,18 @@ proc allocAligned*[T](): ptr T =
   ## The caller owns the returned pointer; release with ``freeAligned`` or
   ## the standard ``c_free`` (``posix_memalign`` blocks are compatible with
   ## ``free`` per POSIX).
+  ##
+  ## ``posix_memalign`` requires ``alignment`` to be a power of two and a
+  ## multiple of ``sizeof(pointer)``. ``CacheLineBytes`` (64) satisfies both
+  ## on every platform we target; ``alignof(T)`` is always a power of two
+  ## per the C standard, and an over-aligned ``T`` (e.g. an SSE/AVX vector
+  ## or a manually ``{.align: 128.}``-pragma'd object) would have
+  ## ``alignof(T) >= sizeof(pointer)`` as well, so taking ``max`` of the
+  ## two keeps the constraint valid. We compute the max at compile time so
+  ## the runtime alignment argument is constant per instantiation.
+  const alignment = max(CacheLineBytes, alignof(T))
   var p: pointer
-  if posix_memalign(addr p, csize_t(CacheLineBytes), csize_t(sizeof(T))) != 0:
+  if posix_memalign(addr p, csize_t(alignment), csize_t(sizeof(T))) != 0:
     raise newException(OutOfMemDefect, "posix_memalign failed for " & $T)
   zeroMem(p, sizeof(T))
   result = cast[ptr T](p)
