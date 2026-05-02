@@ -23,8 +23,8 @@ proc main() =
   echo "threading_channels smoke: starting"
 
   block:
-    var a = initThreadingChannelsAdapter[uint64](capacity = 64)
-    defer: deinitThreadingChannelsAdapter(a)
+    var a = makeThreadingChannelsAdapter[uint64](capacity = 64)
+    defer: cleanup(a)
     for i in 0'u64 ..< 32'u64:
       let r = a.push(i)
       doAssert r == prSuccess, "threading_channels push failed at i=" & $i

@@ -155,7 +155,7 @@ proc runMupsicShape[N, P: static int; T](
 
 when defined(adapter_nim_channel_available):
   proc initNimChannelQ(capacity: int): NimChannelAdapter[uint64] =
-    initNimChannelAdapter[uint64](capacity)
+    makeNimChannelAdapter[uint64](capacity)
 
   proc runNimChannelShape(
       em: var BMFEmitter,

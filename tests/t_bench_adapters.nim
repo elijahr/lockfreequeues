@@ -123,8 +123,8 @@ when defined(adapter_threading_channels_available):
   suite "threading_channels_adapter":
     test "push/pop 1000 uint64 round-trip preserves set":
       runRoundTrip[ThreadingChannelsAdapter[uint64]](
-        initThreadingChannelsAdapter[uint64](capacity = 4096),
-        deinitThreadingChannelsAdapter(adapter)
+        makeThreadingChannelsAdapter[uint64](capacity = 4096),
+        cleanup(adapter)
       )
 
 when defined(adapter_nim_channel_available):
@@ -134,6 +134,6 @@ when defined(adapter_nim_channel_available):
   suite "nim_channel_adapter":
     test "push/pop 1000 uint64 round-trip preserves set":
       runRoundTrip[NimChannelAdapter[uint64]](
-        initNimChannelAdapter[uint64](capacity = 4096),
-        deinitNimChannelAdapter(adapter)
+        makeNimChannelAdapter[uint64](capacity = 4096),
+        cleanup(adapter)
       )

@@ -86,4 +86,4 @@ when defined(adapter_moodycamel_available):
       PopResult[T](success: false)
 
   proc name*[T](a: MoodycamelAdapter[T]): string =
-    "moodycamel/ConcurrentQueue[uint64]"
+    "moodycamel/ConcurrentQueue[" & $T & "]"

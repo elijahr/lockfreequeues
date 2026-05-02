@@ -296,7 +296,7 @@ when defined(adapter_crossbeam_array_queue_available):
 
 when defined(adapter_threading_channels_available):
   proc initThreadingChannelsQ(capacity: int): ThreadingChannelsAdapter[uint64] =
-    initThreadingChannelsAdapter[uint64](capacity)
+    makeThreadingChannelsAdapter[uint64](capacity)
 
 proc runMvpMpmcShape[A](
     em: var BMFEmitter,

@@ -45,7 +45,7 @@ when defined(adapter_threading_channels_available):
       ## module reclaims the underlying buffer; we never call it
       ## directly.
 
-  proc initThreadingChannelsAdapter*[T](capacity: int = 1024
+  proc makeThreadingChannelsAdapter*[T](capacity: int = 1024
   ): ThreadingChannelsAdapter[T] =
     ## ``capacity`` maps to ``newChan[T]``'s ``elements`` argument.
     ## Defaulted to 1024 for parity with other bounded MPMC adapters.
@@ -54,12 +54,11 @@ when defined(adapter_threading_channels_available):
     let cap = if capacity <= 0: 1 else: capacity
     result.chan = newChan[T](elements = cap)
 
-  proc deinitThreadingChannelsAdapter*[T](
-      a: var ThreadingChannelsAdapter[T]) =
+  proc cleanup*[T](a: var ThreadingChannelsAdapter[T]) =
     ## Explicit teardown is a no-op: ``Chan[T]`` cleans itself up
     ## via its move/destroy hooks. The proc exists so callers can
-    ## use ``defer: deinitThreadingChannelsAdapter(a)`` for parity
-    ## with other adapters' ``cleanup`` shapes.
+    ## use ``defer: cleanup(a)`` for parity with other adapters'
+    ## ``cleanup`` shapes.
     discard a
 
   proc push*[T](a: var ThreadingChannelsAdapter[T], item: T): PushResult =

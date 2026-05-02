@@ -53,7 +53,7 @@ when defined(adapter_nim_channel_available):
         ## stdlib's pre-ARC channel implementation does not
         ## support cleanly).
 
-  proc initNimChannelAdapter*[T](capacity: int = 1024
+  proc makeNimChannelAdapter*[T](capacity: int = 1024
   ): NimChannelAdapter[T] =
     ## ``capacity`` is the maximum number of in-flight messages.
     ## ``capacity <= 0`` selects an unlimited channel (matches
@@ -62,7 +62,7 @@ when defined(adapter_nim_channel_available):
     result.chan = create(Channel[T])
     result.chan[].open(if capacity < 0: 0 else: capacity)
 
-  proc deinitNimChannelAdapter*[T](a: var NimChannelAdapter[T]) =
+  proc cleanup*[T](a: var NimChannelAdapter[T]) =
     if a.chan != nil:
       a.chan[].close()
       dealloc(a.chan)
