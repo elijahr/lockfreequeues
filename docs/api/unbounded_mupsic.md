@@ -24,10 +24,16 @@ Unbounded multiple-producer, single-consumer (MPSC) queue using linked segments.
 ```nim
 import lockfreequeues
 
-let manager = newEpochManager()
-var queue = newUnboundedMupsic[64, int](manager)
+# Generic params are [SegmentSize, ItemType, MaxThreads]; auto-create
+# overload (no args) heap-allocates a private DebraManager owned by
+# the queue and registers the calling thread as the (single) consumer.
+# The caller MUST be the consumer thread; if you need to construct on
+# a different thread than the one that will pop, use the explicit
+# `(addr manager, consumerHandle, strategy)` overload with a handle
+# obtained on the consumer thread.
+var queue = newUnboundedMupsic[64, int, 4]()
 
-# Each producer gets a handle
+# Each producer thread gets a handle (auto-registers a thread slot)
 var producer1 = queue.getProducer()
 var producer2 = queue.getProducer()
 
@@ -35,7 +41,7 @@ var producer2 = queue.getProducer()
 producer1.push(42)
 producer2.push(123)
 
-# Single consumer pops
+# Single consumer pops directly off the queue (no Consumer handle)
 let item = queue.pop()  # some(42) or some(123)
 ```
 

@@ -24,10 +24,13 @@ Unbounded multiple-producer, multiple-consumer (MPMC) queue using linked segment
 ```nim
 import lockfreequeues
 
-let manager = newEpochManager()
-var queue = newUnboundedMupmuc[64, int](manager)
+# Generic params are [SegmentSize, ItemType, MaxThreads]; auto-create
+# overload (no args) heap-allocates a private DebraManager owned by
+# the queue. For multi-queue setups sharing a manager, use the
+# explicit `(manager, strategy)` overload instead.
+var queue = newUnboundedMupmuc[64, int, 4]()
 
-# Each thread gets its own handle
+# Each thread gets its own handle (auto-registers a thread slot)
 var producer = queue.getProducer()
 var consumer = queue.getConsumer()
 
