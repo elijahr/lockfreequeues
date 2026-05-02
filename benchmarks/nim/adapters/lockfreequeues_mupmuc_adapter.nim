@@ -30,8 +30,15 @@ proc initMupmucAdapter*[N: static int, T](): MupmucAdapter[N, T] =
 
 proc deinitMupmucAdapter*[N: static int, T](a: var MupmucAdapter[N, T]) =
   if a.queue != nil:
+    reset(a.queue[])
     dealloc(a.queue)
     a.queue = nil
+
+proc cleanup*[N: static int, T](a: var MupmucAdapter[N, T]) =
+  ## Alias for `deinitMupmucAdapter` matching the lockfreequeues bounded
+  ## adapter naming convention. Lets the bench harness drop the queue
+  ## via a uniform `cleanup(queue)` mixin call.
+  deinitMupmucAdapter(a)
 
 proc push*[N: static int, T](a: var MupmucAdapter[N, T], item: T): PushResult =
   if a.producer.push(item):

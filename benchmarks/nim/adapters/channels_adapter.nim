@@ -23,6 +23,12 @@ proc deinitChannelsAdapter*[T](a: var ChannelsAdapter[T]) =
     dealloc(a.chan)
     a.chan = nil
 
+proc cleanup*[T](a: var ChannelsAdapter[T]) =
+  ## Alias for `deinitChannelsAdapter` matching the lockfreequeues
+  ## adapter naming convention. Lets the bench harness drop the channel
+  ## via a uniform `cleanup(queue)` mixin call.
+  deinitChannelsAdapter(a)
+
 proc push*[T](a: var ChannelsAdapter[T], item: T): PushResult =
   if a.chan[].trySend(item):
     prSuccess

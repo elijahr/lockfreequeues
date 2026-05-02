@@ -395,6 +395,18 @@ proc runOneLatencyRun[Q](
     samples: hist.seenAll,
   )
 
+  # Drop heap-allocated queue state. Adapters whose `Q` heap-allocates
+  # (e.g. lockfreequeues bounded adapters via `create(...)`) leak the
+  # backing queue otherwise — `var fwd: Q` only frees the adapter
+  # struct's own stack slot at scope exit, not the pointee. `when
+  # compiles` keeps the harness usable for value-type adapters that
+  # don't define a `cleanup`.
+  mixin cleanup
+  when compiles(cleanup(fwd)):
+    cleanup(fwd)
+  when compiles(cleanup(rev)):
+    cleanup(rev)
+
 proc runLatencyHarness*[Q](
     queueInit: proc(): Q,
     messageCount: int,
@@ -534,6 +546,15 @@ proc runOneThroughputRun[Q](
     joinThread(consumerThreads[i])
 
   let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
+
+  # See `runOneLatencyRun`: `var queue: Q` only frees the adapter
+  # struct's stack slot, leaking any heap-allocated backing queue.
+  # Run cleanup before any return so the leak is plugged on both the
+  # zero-elapsed early return and the normal path.
+  mixin cleanup
+  when compiles(cleanup(queue)):
+    cleanup(queue)
+
   if elapsedNs <= 0.0:
     return 0.0
   result = float(messageCount) * 1_000_000.0 / elapsedNs

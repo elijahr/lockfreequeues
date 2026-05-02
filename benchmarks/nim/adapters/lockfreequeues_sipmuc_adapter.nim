@@ -46,6 +46,7 @@ proc cleanup*[N, C: static int, T](
     a: var LockfreequeuesSipmucAdapter[N, C, T]
 ) =
   if a.queue != nil:
+    reset(a.queue[])
     dealloc(a.queue)
     a.queue = nil
 

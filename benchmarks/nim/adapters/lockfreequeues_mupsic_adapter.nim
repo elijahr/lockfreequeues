@@ -33,6 +33,7 @@ proc cleanup*[N, P: static int, T](
     a: var LockfreequeuesMupsicAdapter[N, P, T]
 ) =
   if a.queue != nil:
+    reset(a.queue[])
     dealloc(a.queue)
     a.queue = nil
 
