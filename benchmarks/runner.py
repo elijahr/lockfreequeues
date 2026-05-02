@@ -61,29 +61,38 @@ def run_nim(runs: int, output_file: Path):
     """
     print(f"Running Nim topology-split benchmarks ({runs} runs)...")
     fragments: list[Path] = []
-    for bin_name in NIM_BINARIES:
-        bin_path = PROJECT_ROOT / ".tmp" / bin_name
-        out = output_file.parent / f"{output_file.stem}-{bin_name}.json"
-        print(f"  -> {bin_name} -> {out.name}")
+    try:
+        for bin_name in NIM_BINARIES:
+            bin_path = PROJECT_ROOT / ".tmp" / bin_name
+            out = output_file.parent / f"{output_file.stem}-{bin_name}.json"
+            print(f"  -> {bin_name} -> {out.name}")
+            subprocess.run(
+                [str(bin_path), f"--bmf-out={out}"],
+                check=True,
+            )
+            fragments.append(out)
+        # Merge the 5 BMF fragments into the requested output file via
+        # merge_bmf.py. Unions per-slug measure dicts and exits 1 on
+        # (slug, measure) collisions.
+        print(f"Merging {len(fragments)} fragments -> {output_file}")
         subprocess.run(
-            [str(bin_path), f"--bmf-out={out}"],
+            [
+                sys.executable,
+                str(BENCHMARK_DIR / "merge_bmf.py"),
+                str(output_file),
+                *[str(p) for p in fragments],
+            ],
             check=True,
         )
-        fragments.append(out)
-    # Merge the 5 BMF fragments into the requested output file via
-    # merge_bmf.py. Unions per-slug measure dicts and exits 1 on
-    # (slug, measure) collisions.
-    print(f"Merging {len(fragments)} fragments -> {output_file}")
-    subprocess.run(
-        [
-            sys.executable,
-            str(BENCHMARK_DIR / "merge_bmf.py"),
-            str(output_file),
-            *[str(p) for p in fragments],
-        ],
-        check=True,
-    )
-    print(f"Combined results written to {output_file}")
+        print(f"Combined results written to {output_file}")
+    finally:
+        # The merged file at output_file is the canonical artifact; the
+        # per-binary fragments are intermediate. Drop them so RESULTS_DIR
+        # doesn't accumulate one set per invocation. `finally` so a
+        # bench-binary failure or a merge collision still cleans up
+        # whatever fragments were produced.
+        for f in fragments:
+            f.unlink(missing_ok=True)
 
 
 def build(args):

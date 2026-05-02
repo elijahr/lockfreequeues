@@ -116,6 +116,7 @@ job log so local debugging is possible without the upload.
       "upper_value": <mean + stddev>
     },
     "latency_p50_ns": {"value": <ns>},
+    "latency_p95_ns": {"value": <ns>},
     "latency_p99_ns": {"value": <ns>}
   }
 }
@@ -126,8 +127,9 @@ within each slug. `lower_value` / `upper_value` are omitted when the
 emitter receives `NaN` sentinels for the bounds. After `merge_bmf.py`
 unions the five binary fragments, a single slug can carry both
 `throughput_ops_ms` (from the matching topology binary) AND
-`latency_p50_ns` / `latency_p99_ns` (from `bench_latency`) when the
-slug shape matches `1p1c` on a bounded variant.
+`latency_p50_ns` / `latency_p95_ns` / `latency_p99_ns` (from
+`bench_latency`) when the slug shape matches `1p1c` on a bounded
+variant.
 
 Current slug set emitted across the five binaries:
 
