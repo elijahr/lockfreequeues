@@ -78,7 +78,7 @@ jobs:
   bench:
     # Track 2 PR 2: matrix over the 5 topology-split binaries. Each
     # matrix entry is its own GitHub Actions job with an independent
-    # `timeout-minutes: 12` budget so a hang in one binary cannot burn
+    # `timeout-minutes: 18` budget so a hang in one binary cannot burn
     # the entire workflow's clock — the surviving binaries finish, the
     # bench-upload job merges what arrived, and the operator gets
     # partial Bencher coverage rather than no coverage. Per-binary
@@ -203,7 +203,7 @@ jobs:
       - name: Run ${{ matrix.binary }}
         # Step-level timeout: a runtime hang in one variant (lost
         # message, missed wakeup, livelock regression) would otherwise
-        # spin until the job-level 12-min budget expired. Fail fast at
+        # spin until the job-level 18-min budget expired. Fail fast at
         # 10 min so the upload step still records the partial result.
         timeout-minutes: 10
         run: |
@@ -211,10 +211,18 @@ jobs:
             | tee ${{ matrix.binary }}_output.txt
 
       - name: Upload ${{ matrix.binary }} BMF artifact
+        # `if: always()` so a step-level timeout in `Run ${{ matrix.binary }}`
+        # still uploads any partial JSON the binary managed to flush;
+        # `if-no-files-found: ignore` so a binary that crashed before
+        # writing the file does not turn the whole job red — the
+        # bench-upload job merges whatever artifacts arrive and the
+        # operator gets partial coverage rather than zero coverage.
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: bench-${{ matrix.binary }}-bmf
           path: ${{ matrix.binary }}.json
+          if-no-files-found: ignore
 
   bench-upload:
     # Merges per-binary BMF artifacts into a single JSON before a single
@@ -223,9 +231,15 @@ jobs:
     # single per-slug history (design 1 / Track 1 Task 1.4).
     name: Merge BMF + Bencher upload (ubuntu-latest)
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # `always()` so a single matrix-leg failure (e.g. one binary timed
+    # out) does not skip the merge+upload; the operator still gets
+    # partial Bencher coverage from the surviving binaries. The fork-PR
+    # guard remains the same.
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     needs: [bench]
     permissions:
+      contents: read
+      actions: read
       pull-requests: write
       checks: write
     timeout-minutes: 10
@@ -238,15 +252,29 @@ jobs:
         # Pattern matches every per-binary artifact uploaded by the
         # bench matrix (`bench-bench_spsc-bmf`, `bench-bench_mpsc-bmf`,
         # `bench-bench_mpmc-bmf`, `bench-bench_unbounded-bmf`,
-        # `bench-bench_latency-bmf`).
+        # `bench-bench_latency-bmf`). Each artifact lands in its own
+        # subdir under `bmf-inputs/` (no `merge-multiple`) so any future
+        # filename overlap between binaries cannot silently overwrite.
         uses: actions/download-artifact@v4
         with:
           pattern: bench-*-bmf
           path: ./bmf-inputs/
-          merge-multiple: true
 
       - name: List BMF inputs (debug)
-        run: ls -la bmf-inputs/
+        run: find bmf-inputs/ -type f -name '*.json' -print
+
+      - name: Verify BMF inputs present
+        # If every matrix leg failed before producing JSON we have
+        # nothing to merge. Fail loudly here so the workflow surfaces
+        # a clear "no benchmarks ran" signal instead of crashing inside
+        # merge_bmf.py with an empty argv.
+        run: |
+          count=$(find bmf-inputs/ -type f -name '*.json' | wc -l)
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No BMF JSON fragments found in bmf-inputs/. All bench matrix legs must have failed before writing output." >&2
+            exit 1
+          fi
+          echo "Found $count BMF JSON fragment(s) to merge."
 
       - name: Merge BMF JSON
         # `merge_bmf.py` unions per-slug measure dicts across N inputs
@@ -254,16 +282,13 @@ jobs:
         # third-party deps), so no Python install step is needed beyond
         # the ubuntu-latest default.
         #
-        # `$(ls ...)` is intentionally unquoted: each path must arrive
-        # as a separate positional argv to merge_bmf.py. shellcheck
-        # SC2046 flags this as a word-splitting risk; the risk is real
-        # ONLY if an artifact filename contains whitespace or glob
-        # characters. Artifacts are produced by upload-artifact@v4
-        # with names we control (`bench_*.json`); none contain
-        # whitespace, so the warning does not apply here.
+        # Inputs live one subdir deep under `bmf-inputs/<artifact-name>/`
+        # (no `merge-multiple`); enumerate all `*.json` recursively and
+        # NUL-delimit so filenames with whitespace cannot break argv
+        # splitting in the future.
         run: |
-          # shellcheck disable=SC2046
-          python3 benchmarks/merge_bmf.py merged.json $(ls bmf-inputs/*.json)
+          find bmf-inputs/ -type f -name '*.json' -print0 | \
+            xargs -0 python3 benchmarks/merge_bmf.py merged.json
 
       - name: Verify deletion-safety against pre-split fixture
         # Track 2 PR 2 Task 2.7 deletion-safety guard. Asserts the
