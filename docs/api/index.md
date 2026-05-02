@@ -20,7 +20,6 @@ Dynamic-capacity linked segment implementations. Grow as needed with DEBRA+ epoc
 
 ## Support Types
 
-- **[Ops](ops.md)** - Ring buffer index operations (internal).
 - **DeallocationStrategy** - Memory reclamation policy:
   - `Manual` - Retire segments to epoch manager. User calls `tryReclaim()` periodically. Best for `--mm:none`.
   - `Eager` - Retire segments and immediately call `tryReclaim()`. Best for GC environments.

@@ -73,3 +73,5 @@ proc consumer() {.thread.} =
       # Process item
       discard
 ```
+
+::: lockfreequeues/sipmuc
