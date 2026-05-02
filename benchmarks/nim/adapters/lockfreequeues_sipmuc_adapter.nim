@@ -26,8 +26,23 @@ const topologiesSupported* = {tMpmc}
 
 type
   LockfreequeuesSipmucAdapter*[N, C: static int, T] = object
-    queue: ptr Sipmuc[N, C, T]
+    queue*: ptr Sipmuc[N, C, T]
+      ## Exported so multi-consumer shapes can register their own
+      ## per-thread consumer via `adapter.getConsumer(idx)` (or, for
+      ## advanced callers, `adapter.queue[].getConsumer(idx)` directly).
+      ## See the `getConsumer` proc below for the documented entry point.
     consumer: Consumer[N, C, T]
+      ## Pre-built consumer for the 1C shape. Multi-consumer shapes
+      ## bypass this slot and call `getConsumer(idx)` per-thread.
+
+proc getConsumer*[N, C: static int, T](
+    a: var LockfreequeuesSipmucAdapter[N, C, T], idx: int
+): Consumer[N, C, T] =
+  ## Acquire a per-thread consumer from the underlying Sipmuc queue.
+  ## Multi-consumer benchmark shapes (`1p<C>c` for C > 1) MUST call
+  ## this on each consumer thread with a unique `idx in 0 ..< C`;
+  ## sharing a single `Consumer` across threads is unsafe.
+  a.queue[].getConsumer(idx = idx)
 
 proc makeLockfreequeuesSipmucAdapter*[N, C: static int, T](
     capacity: int = N

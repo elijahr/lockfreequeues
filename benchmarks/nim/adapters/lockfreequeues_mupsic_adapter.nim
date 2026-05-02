@@ -14,8 +14,23 @@ const topologiesSupported* = {tMpsc}
 
 type
   LockfreequeuesMupsicAdapter*[N, P: static int, T] = object
-    queue: ptr Mupsic[N, P, T]
+    queue*: ptr Mupsic[N, P, T]
+      ## Exported so multi-producer shapes can register their own
+      ## per-thread producer via `adapter.getProducer(idx)` (or, for
+      ## advanced callers, `adapter.queue[].getProducer(idx)` directly).
+      ## See the `getProducer` proc below for the documented entry point.
     producer: Producer[N, P, T]
+      ## Pre-built producer for the 1P shape. Multi-producer shapes
+      ## bypass this slot and call `getProducer(idx)` per-thread.
+
+proc getProducer*[N, P: static int, T](
+    a: var LockfreequeuesMupsicAdapter[N, P, T], idx: int
+): Producer[N, P, T] =
+  ## Acquire a per-thread producer from the underlying Mupsic queue.
+  ## Multi-producer benchmark shapes (`<P>p1c` for P > 1) MUST call
+  ## this on each producer thread with a unique `idx in 0 ..< P`;
+  ## sharing a single `Producer` across threads is unsafe.
+  a.queue[].getProducer(idx = idx)
 
 proc makeLockfreequeuesMupsicAdapter*[N, P: static int, T](
     capacity: int = N

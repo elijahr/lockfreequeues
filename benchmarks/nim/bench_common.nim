@@ -61,7 +61,13 @@ proc initBMFEmitter*(): BMFEmitter =
 
 proc toBound(v: float): Option[float] =
   ## NaN sentinel -> none[float](); finite values -> some(v).
-  if v.classify == fcNaN: none(float) else: some(v)
+  ## A non-finite (`inf`/`-inf`) bound also maps to `none` so we never
+  ## emit a non-finite number — `merge_bmf.py` rejects those at upload
+  ## time and would fail CI on the whole bench rather than just this
+  ## measure.
+  case v.classify
+  of fcNaN, fcInf, fcNegInf: none(float)
+  else: some(v)
 
 proc addMeasure*(
     em: var BMFEmitter,
@@ -71,8 +77,21 @@ proc addMeasure*(
     lower: float = NaN,
     upper: float = NaN,
 ) =
-  ## Record one measure on one slug. NaN sentinels for `lower` / `upper`
-  ## map to `none[float]()`; finite values map to `some(v)`.
+  ## Record one measure on one slug. NaN/inf sentinels for `lower` /
+  ## `upper` map to `none[float]()`; finite values map to `some(v)`.
+  ##
+  ## Defense-in-depth: if `value` itself is non-finite (NaN or inf —
+  ## e.g. a zero-duration measurement that escaped the harness's
+  ## `elapsedNs <= 0` guard) we silently skip recording the measure
+  ## rather than poisoning the BMF JSON. `merge_bmf.py` rejects
+  ## non-finite numbers and would fail the entire upload on a single
+  ## bad value; dropping the offending (slug, measure) entry preserves
+  ## the rest of the run. The dropped measure is visible in the
+  ## emitter's stdout (no row appended) so the operator can still see
+  ## the gap.
+  case value.classify
+  of fcNaN, fcInf, fcNegInf: return
+  else: discard
   if slug notin em.data:
     em.data[slug] = initTable[string, MeasureValue]()
   em.data[slug][measure] = MeasureValue(
@@ -498,6 +517,21 @@ proc runOneThroughputRun[Q](
   ## enqueue) or strands items in the queue (consumers stop early).
   ## Spread the remainder over the first `messageCount mod N` workers so
   ## totals match exactly for any (P, C, messageCount) triple.
+  ##
+  ## Misuse guard: `messageCount div numProducers` would crash on
+  ## `numProducers = 0` (DivByZeroDefect). The harness is exported, so
+  ## a future caller could plausibly pass 0 thinking "no producers" is
+  ## a degenerate but valid shape. Fail fast with a clear message
+  ## instead of letting div/mod crash the worker thread.
+  doAssert numProducers > 0,
+    "runThroughputHarness requires numProducers > 0 (got " &
+    $numProducers & ")"
+  doAssert numConsumers > 0,
+    "runThroughputHarness requires numConsumers > 0 (got " &
+    $numConsumers & ")"
+  doAssert messageCount >= 0,
+    "runThroughputHarness requires messageCount >= 0 (got " &
+    $messageCount & ")"
   var queue = queueInit(capacity)
   let baseP = messageCount div numProducers
   let remP = messageCount mod numProducers
