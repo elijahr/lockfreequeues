@@ -28,13 +28,12 @@ Unbounded single-producer, multiple-consumer (SPMC) queue using linked segments.
 
 ```nim
 import lockfreequeues
-import debra
 
-# Auto-create overload: queue owns a private DebraManager (torn down
-# with the queue). For multi-queue setups sharing a manager, see the
-# explicit `(manager, strategy)` overload.
-const MaxThreads = 4
-var queue = newUnboundedSipmuc[64, int, MaxThreads]()
+# Generic params are [SegmentSize, ItemType, MaxThreads]; auto-create
+# overload (no args) heap-allocates a private DebraManager owned by
+# the queue. For multi-queue setups sharing a manager, use the
+# explicit `(manager, strategy)` overload instead.
+var queue = newUnboundedSipmuc[64, int, 4]()
 
 # Producer pushes
 queue.push(42)
