@@ -441,9 +441,14 @@ proc runVariant(variant: string, em: var BMFEmitter) =
       UnboundedSipmucMessageCount)
     runUSipmucShape[2](em, UnboundedSipmucRuns, BenchUnboundedWarmup,
       UnboundedSipmucMessageCount)
-    runUSipmucShape[4](em, UnboundedSipmucRuns, BenchUnboundedWarmup,
-      UnboundedSipmucMessageCount)
+    when not defined(BenchSkipOversubscribed):
+      runUSipmucShape[4](em, UnboundedSipmucRuns, BenchUnboundedWarmup,
+        UnboundedSipmucMessageCount)
   of "unbounded_mupsic":
+    # mupsic shapes are kept under BenchSkipOversubscribed: a single
+    # consumer cannot trigger the round-robin starvation that hangs
+    # sipmuc/mupmuc with C >= 4, and `mpsc_unbounded/4p1c` is in the
+    # pre-split deletion-safety fixture.
     runUMupsicShape[1](em, UnboundedMupsicRuns, BenchUnboundedWarmup,
       UnboundedMupsicMessageCount)
     runUMupsicShape[2](em, UnboundedMupsicRuns, BenchUnboundedWarmup,
@@ -451,25 +456,33 @@ proc runVariant(variant: string, em: var BMFEmitter) =
     runUMupsicShape[4](em, UnboundedMupsicRuns, BenchUnboundedWarmup,
       UnboundedMupsicMessageCount)
   of "unbounded_mupmuc":
-    # {1,2,4} P x {1,2,4} C grid (9 shapes).
+    # {1,2,4} P x {1,2,4} C grid (9 shapes). Shapes with P + C > 4
+    # hang under 4-vCPU oversubscription: the round-robin consumer
+    # ordering in unbounded_sipmuc/mupmuc forces strict per-shape
+    # turn-taking, so a single descheduled consumer blocks every
+    # other consumer. `-d:BenchSkipOversubscribed` (set in PR CI)
+    # drops the offending shapes; the full grid still runs in
+    # `bench-comparison.yml` nightly cron / on workflow_dispatch
+    # where a beefier runner is available.
     runUMupmucShape[1, 1](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
       UnboundedMupmucMessageCount)
     runUMupmucShape[1, 2](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
-      UnboundedMupmucMessageCount)
-    runUMupmucShape[1, 4](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
       UnboundedMupmucMessageCount)
     runUMupmucShape[2, 1](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
       UnboundedMupmucMessageCount)
     runUMupmucShape[2, 2](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
       UnboundedMupmucMessageCount)
-    runUMupmucShape[2, 4](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
-      UnboundedMupmucMessageCount)
-    runUMupmucShape[4, 1](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
-      UnboundedMupmucMessageCount)
-    runUMupmucShape[4, 2](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
-      UnboundedMupmucMessageCount)
-    runUMupmucShape[4, 4](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
-      UnboundedMupmucMessageCount)
+    when not defined(BenchSkipOversubscribed):
+      runUMupmucShape[1, 4](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
+        UnboundedMupmucMessageCount)
+      runUMupmucShape[2, 4](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
+        UnboundedMupmucMessageCount)
+      runUMupmucShape[4, 1](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
+        UnboundedMupmucMessageCount)
+      runUMupmucShape[4, 2](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
+        UnboundedMupmucMessageCount)
+      runUMupmucShape[4, 4](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
+        UnboundedMupmucMessageCount)
   else:
     raise newException(ValueError, "unknown variant: " & variant)
 
