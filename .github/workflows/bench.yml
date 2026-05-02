@@ -579,14 +579,14 @@ jobs:
        github.event.pull_request.head.repo.full_name == github.repository)
     needs: [bench]
     permissions:
-      contents: read
+      # `contents: write` covers both the read needed by
+      # actions/checkout and the write needed by the snapshot-push step
+      # (Task 5.5.b). The push only fires on `push` to `refs/heads/devel`;
+      # PR runs and other branches keep contents:write unused.
+      contents: write
       actions: read
       pull-requests: write
       checks: write
-      # Required by the snapshot-push step (Task 5.5.b). The push only
-      # fires on `push` to `refs/heads/devel`; PR runs and other
-      # branches keep contents:write unused.
-      contents: write
     timeout-minutes: 10
 
     steps:
