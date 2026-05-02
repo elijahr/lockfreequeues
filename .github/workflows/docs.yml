@@ -69,6 +69,42 @@ jobs:
         run: |
           pip install -r docs-requirements.txt
 
+      - name: Resolve docs source ref
+        # mkdocs.yml reads source_ref from $DOCS_SOURCE_REF (with default
+        # `main`). Set it explicitly per trigger so mkdocstrings-nim does
+        # not warn about a detached-HEAD branch lookup (warning becomes
+        # error under `mkdocs build --strict`):
+        #   pull_request    -> the PR head branch (so blob URLs in the
+        #                      PR-verified build point at the branch
+        #                      under review)
+        #   v* tag          -> the tag (versioned docs link to release sha)
+        #   devel push      -> devel
+        #   main push       -> main
+        #   workflow_dispatch -> branch name
+        id: docs_ref
+        run: |
+          set -euo pipefail
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              ref="${GITHUB_HEAD_REF}"
+              ;;
+            push)
+              if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+                ref="${GITHUB_REF#refs/tags/}"
+              else
+                ref="${GITHUB_REF#refs/heads/}"
+              fi
+              ;;
+            workflow_dispatch)
+              ref="${GITHUB_REF#refs/heads/}"
+              ;;
+            *)
+              ref="main"
+              ;;
+          esac
+          echo "DOCS_SOURCE_REF=$ref" >> "$GITHUB_ENV"
+          echo "Resolved DOCS_SOURCE_REF=$ref"
+
       - name: Build docs (PR verification, no deploy)
         # On pull_request runs we only build to verify the docs compile;
         # we deliberately skip mike + git push so PR branches never touch
