@@ -38,7 +38,10 @@ var queue = newUnboundedSipmuc[64, int, 4]()
 # Producer pushes
 queue.push(42)
 
-# Each consumer gets a handle (auto-registers a thread slot)
+# Each consumer gets a handle (auto-registers a thread slot in the
+# manager). Slots are not released until the manager is destroyed, so
+# reuse one handle per long-running consumer thread rather than calling
+# `getConsumer()` repeatedly.
 var consumer1 = queue.getConsumer()
 var consumer2 = queue.getConsumer()
 

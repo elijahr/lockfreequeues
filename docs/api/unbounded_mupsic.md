@@ -33,7 +33,10 @@ import lockfreequeues
 # on the consumer thread.
 var queue = newUnboundedMupsic[64, int, 4]()
 
-# Each producer thread gets a handle (auto-registers a thread slot)
+# Each producer thread gets a handle (auto-registers a thread slot in
+# the manager). Slots are not released until the manager is destroyed,
+# so reuse one handle per long-running producer thread rather than
+# calling `getProducer()` repeatedly.
 var producer1 = queue.getProducer()
 var producer2 = queue.getProducer()
 

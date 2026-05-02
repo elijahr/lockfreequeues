@@ -30,7 +30,10 @@ import lockfreequeues
 # explicit `(manager, strategy)` overload instead.
 var queue = newUnboundedMupmuc[64, int, 4]()
 
-# Each thread gets its own handle (auto-registers a thread slot)
+# Each thread gets its own handle (auto-registers a thread slot in the
+# manager). Slots are not released until the manager is destroyed, so
+# reuse one handle per long-running thread rather than calling
+# `getProducer()` / `getConsumer()` repeatedly.
 var producer = queue.getProducer()
 var consumer = queue.getConsumer()
 
