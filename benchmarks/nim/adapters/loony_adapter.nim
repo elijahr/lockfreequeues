@@ -21,8 +21,20 @@
 ## non-null, naturally-aligned addresses; it does NOT change the queue
 ## algorithm.
 ##
-## ``pop`` returns the default-constructed value of ``T`` when the queue is
-## empty, so this adapter consults ``isEmpty(q)`` before each pop.
+## ``pop`` returns the default-constructed value of the queue's element type
+## (``0`` for ``uint64``) when the queue is empty. Because our encoding
+## guarantees that every pushed value is non-zero (``(v + 1) shl 3``), we
+## can use ``raw == 0`` as the empty sentinel directly — racing
+## ``isEmpty()`` against ``pop()`` would leave a window where another
+## consumer drains between the two calls and the second one pops a
+## false-empty.
+##
+## **Encoding range.** ``push`` accepts ``T`` values in
+## ``0 .. uint64.high - 1`` (after the ``+1`` step the upper bound saturates
+## the ``uint64`` width before the ``shl 3``). ``uint64.high`` would wrap
+## to ``0`` and be misread as an empty slot. The harness pushes
+## ``uint64(i)`` for ``i in 0 ..< messageCount`` so this bound is academic
+## at current message-count tuning, but it is the contractual range.
 ##
 ## Topology: ``mpmc_unbounded``. Capacity argument is ignored.
 ##
@@ -62,10 +74,16 @@ when defined(adapter_loony_available):
     prSuccess
 
   proc pop*[T](a: var LoonyAdapter[T]): PopResult[T] =
-    if a.queue.isEmpty():
+    let raw = a.queue.pop()
+    if raw == 0'u64:
+      # Loony returned the default uint64 (0). Our encoding ensures every
+      # pushed value has the form (v+1) shl 3 — strictly non-zero — so
+      # ``raw == 0`` unambiguously means "queue was empty when pop ran".
+      # Doing the empty check on the pop result instead of via a
+      # separate isEmpty() call avoids the empty/pop TOCTOU window
+      # under multi-consumer load.
       PopResult[T](success: false)
     else:
-      let raw = a.queue.pop()
       PopResult[T](success: true, value: T((raw shr LoonyTagShift) - 1'u64))
 
   proc name*[T](a: LoonyAdapter[T]): string =
