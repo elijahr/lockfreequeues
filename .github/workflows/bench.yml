@@ -236,6 +236,8 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: [bench-throughput, bench-latency]
     permissions:
+      contents: read
+      actions: read
       pull-requests: write
       checks: write
     timeout-minutes: 10
@@ -248,14 +250,17 @@ jobs:
         # Pattern matches both bench-throughput-bmf and bench-latency-bmf
         # (and any future per-binary artifact uploaded by PR 2's topology
         # split, which uses the same `bench-*-bmf` naming convention).
+        # Each artifact downloads into its own subdirectory under
+        # `bmf-inputs/<artifact-name>/` (no `merge-multiple`) so two
+        # artifacts that happen to contain a same-named file (e.g. both
+        # write `throughput.json`) cannot overwrite each other.
         uses: actions/download-artifact@v4
         with:
           pattern: bench-*-bmf
           path: ./bmf-inputs/
-          merge-multiple: true
 
       - name: List BMF inputs (debug)
-        run: ls -la bmf-inputs/
+        run: find bmf-inputs/ -type f -name '*.json' -print
 
       - name: Merge BMF JSON
         # `merge_bmf.py` unions per-slug measure dicts across N inputs and
@@ -263,16 +268,12 @@ jobs:
         # party deps), so no Python install step is needed beyond the
         # ubuntu-latest default.
         #
-        # `$(ls ...)` is intentionally unquoted: each path must arrive as
-        # a separate positional argv to merge_bmf.py. shellcheck SC2046
-        # flags this as a word-splitting risk; the risk is real ONLY if
-        # an artifact filename contains whitespace or glob characters.
-        # Artifacts are produced by upload-artifact@v4 with names we
-        # control (`throughput.json`, `latency.json`); none contain
-        # whitespace, so the warning does not apply here.
+        # Inputs live one subdir deep (no `merge-multiple`); enumerate
+        # all `*.json` recursively. `xargs` arranges argv splitting; we
+        # NUL-delimit to be robust against any future filename quirks.
         run: |
-          # shellcheck disable=SC2046
-          python3 benchmarks/merge_bmf.py merged.json $(ls bmf-inputs/*.json)
+          find bmf-inputs/ -type f -name '*.json' -print0 | \
+            xargs -0 python3 benchmarks/merge_bmf.py merged.json
 
       - name: Show BMF JSON (debug)
         run: cat merged.json
