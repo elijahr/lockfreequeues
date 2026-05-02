@@ -164,7 +164,8 @@ when isMainModule:
             quit 1
           bmfOutPath = p.val
         else:
-          echo "Unknown flag: --", p.key
+          let prefix = (if p.kind == cmdLongOption: "--" else: "-")
+          echo "Unknown flag: ", prefix, p.key
           quit 1
       of cmdArgument:
         positional.add(p.key)
@@ -174,14 +175,14 @@ when isMainModule:
     if positional.len == 0:
       supported
     else:
-      var groups = initHashSet[string]()
+      var variants = initHashSet[string]()
       for arg in positional:
         if arg notin supported:
           echo "Unknown variant: ", arg
           echo "Supported: ", SupportedVariants
           quit 1
-        groups.incl arg
-      groups
+        variants.incl arg
+      variants
 
   echo "Latency Benchmark (ping-pong RTT)"
   echo "================================="
