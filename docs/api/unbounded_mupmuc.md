@@ -4,7 +4,7 @@ Unbounded multiple-producer, multiple-consumer (MPMC) queue using linked segment
 
 ## Overview
 
-`UnboundedMupmuc` provides an unbounded MPMC queue with fully concurrent access. Uses epoch-based memory reclamation (DEBRA) and a per-slot committed flag inside each segment for safe concurrent operations.
+`UnboundedMupmuc` provides an unbounded MPMC queue with fully concurrent access. Uses DEBRA+ epoch-based memory reclamation (via [nim-debra](https://github.com/elijahr/nim-debra)) and a per-slot committed flag inside each segment for safe concurrent operations.
 
 > **Note:** This per-slot committed flag is the *segment-local* publication
 > mechanism for the unbounded queues. It is distinct from the per-slot
@@ -24,10 +24,16 @@ Unbounded multiple-producer, multiple-consumer (MPMC) queue using linked segment
 ```nim
 import lockfreequeues
 
-let manager = newEpochManager()
-var queue = newUnboundedMupmuc[64, int](manager)
+# Generic params are [SegmentSize, ItemType, MaxThreads]; auto-create
+# overload (no args) heap-allocates a private DebraManager owned by
+# the queue. For multi-queue setups sharing a manager, use the
+# explicit `(manager, strategy)` overload instead.
+var queue = newUnboundedMupmuc[64, int, 4]()
 
-# Each thread gets its own handle
+# Each thread gets its own handle (auto-registers a thread slot in the
+# manager). Slots are not released until the manager is destroyed, so
+# reuse one handle per long-running thread rather than calling
+# `getProducer()` / `getConsumer()` repeatedly.
 var producer = queue.getProducer()
 var consumer = queue.getConsumer()
 

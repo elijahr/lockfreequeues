@@ -31,24 +31,8 @@ let item = consumer.pop()  # some(42)
 - `C: static int` - Maximum number of consumers
 - `T` - Item type
 
-## API
-
-### Queue Operations
-
-```nim
-proc initSipmuc*[N, C: static int, T](): Sipmuc[N, C, T]
-proc push*[N, C, T](self: var Sipmuc[N, C, T], item: T): bool
-proc push*[N, C, T](self: var Sipmuc[N, C, T], items: openArray[T]): Option[HSlice[int, int]]
-proc getConsumer*[N, C, T](self: var Sipmuc[N, C, T]): Consumer[N, C, T]
-proc capacity*[N, C, T](self: Sipmuc[N, C, T]): int
-```
-
-### Consumer Operations
-
-```nim
-proc pop*[N, C, T](self: var Consumer[N, C, T]): Option[T]
-proc pop*[N, C, T](self: var Consumer[N, C, T], count: int): Option[seq[T]]
-```
+The full proc/type signatures and per-symbol docs are auto-generated
+from source by the `:::` directive at the bottom of this page.
 
 ## Example: Fan-Out Pattern
 
@@ -73,3 +57,5 @@ proc consumer() {.thread.} =
       # Process item
       discard
 ```
+
+::: lockfreequeues/sipmuc
