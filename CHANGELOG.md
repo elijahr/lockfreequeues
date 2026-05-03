@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Cloud bench harness gating workflow at `.github/workflows/bench.yml`. Runs `benchmarks/nim/bench_throughput.nim` against [Bencher.dev](https://bencher.dev) so PRs that touch performance-sensitive code are compared against a tracked baseline and gated on regression thresholds. Used in PR #16 (UnboundedMupsic tail re-check trial) to rule out an optimization with no measurable signal; PR closed without merging.
+
 ## [4.0.0] - 2026-04-30
 
 ### BREAKING
