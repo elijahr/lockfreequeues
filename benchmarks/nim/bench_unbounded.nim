@@ -222,6 +222,13 @@ proc runUSipmucShape[C: static int](
   #    raw-allocated (`create`/`dealloc`) rather than `new`-allocated so
   #    the harness can measure cold queue allocation cost without ref
   #    cycles tying the manager's lifetime to the iterator scope.
+  #
+  # Note on `create(T)`: it is `cast[ptr T](alloc0(sizeof(T) * size))`
+  # in the Nim std lib (system/memalloc.nim) — pure zero-initialised
+  # allocation with NO destructor / hook invocation. The follow-up
+  # `manager[] = initDebraManager[...]()` then performs the only
+  # construction, into zeroed memory. This is intentional and safe;
+  # `create` is NOT a hidden destructor on uninit memory.
   for _ in 0 ..< warmup:
     var manager = create(DebraManager[MaxThreads])
     manager[] = initDebraManager[MaxThreads]()
