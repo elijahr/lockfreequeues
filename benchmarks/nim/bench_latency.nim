@@ -154,7 +154,10 @@ proc runVariant(
   # (Task 6.2) sits well above the 100-sample p999 tail at the default
   # MessageCount and reserves headroom for larger MessageCount overrides
   # before p999 spills into the rescaled-reservoir stratum. max is
-  # `percentile(1.0)`, always the top-K head.
+  # `percentile(1.0)`, which after sorting the snapshotted top-K returns
+  # `topk[^1]` (the largest element). This is NOT the heap head: the
+  # min-heap's root (`topKHeap[0]`) is the SMALLEST of the top-K, the
+  # admission threshold for new outliers, not the maximum sample seen.
   em.addMeasure(slug, "latency_p999_ns", metrics.p999_ns)
   em.addMeasure(slug, "latency_max_ns", metrics.max_ns)
 
