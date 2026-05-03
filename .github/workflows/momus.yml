@@ -24,6 +24,6 @@ jobs:
       event_name: ${{ github.event_name }}
       trigger_mention: "@axiomantic-momus[bot]"
     secrets:
-      OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
       MOMUS_APP_ID: ${{ secrets.MOMUS_APP_ID }}
       MOMUS_APP_PRIVATE_KEY: ${{ secrets.MOMUS_APP_PRIVATE_KEY }}
