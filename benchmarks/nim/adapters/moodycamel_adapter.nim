@@ -55,6 +55,23 @@ when defined(adapter_moodycamel_available):
       ## ``mc_destroy``. Always treated as a void* on the Nim side.
 
   proc makeMoodycamelAdapter*[T](capacity: int = 0): MoodycamelAdapter[T] =
+    ## The C++ wrapper is hardcoded to ``uint64_t`` payload, so ``T`` MUST
+    ## be exactly 8 bytes. ``cast[uint64](item)`` / ``cast[T](uint64(raw))``
+    ## (push/pop below) round-trip the bit pattern, but the cast is only
+    ## sound when the source and destination width match.
+    ##
+    ## ``T`` must also be POD-shaped: a ``ref`` payload would be unsafe
+    ## here because the C++ queue is opaque to Nim's GC, so a refcount
+    ## bump on push would never happen and the underlying object could be
+    ## collected before ``pop``. Restrict to integer / ptr-like payloads.
+    static:
+      assert sizeof(T) == 8,
+        "MoodycamelAdapter requires sizeof(T) == 8 (the C++ wrapper " &
+        "stores `uint64_t`); got sizeof(" & $T & ") = " & $sizeof(T)
+      assert not (T is ref),
+        "MoodycamelAdapter cannot transport ref types: the C++ queue " &
+        "bypasses Nim's GC, so refcounts wouldn't be maintained across " &
+        "the boundary. Use a non-ref 64-bit payload (uint64, ptr, etc)."
     ## ``capacity`` is an initial-block-size hint. ``0`` selects
     ## upstream's default minimum (32) — see
     ## ``moodycamel_wrapper.cpp``.
