@@ -1,0 +1,5 @@
+Couldn't get registers: Input/output error.
+
+Thread 5 (LWP 61 "bench_throughpu"):
+Selected thread is running.
+Couldn't write debug register: Input/output error.
