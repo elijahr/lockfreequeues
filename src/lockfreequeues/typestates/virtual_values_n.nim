@@ -27,7 +27,12 @@ type
 typestate VirtualValueN[N: static int]:
   inheritsFromRootObj = true
   consumeOnTransition = false # Values can be reused after validation
+  opaqueStates = true
   states RawLoadedN[N], WrappedValueN[N], UnwrappedSumN[N], PhysicalSlotN[N]
+  initial:
+    RawLoadedN[N]
+  terminal:
+    PhysicalSlotN[N]
   transitions:
     RawLoadedN[N] -> WrappedValueN[N] # validate()
     WrappedValueN[N] -> UnwrappedSumN[N] # add()

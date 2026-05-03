@@ -22,7 +22,13 @@ type
   CASFailed* = distinct CASResult
 
 typestate CASAttempt:
+  opaqueStates = true
   states CASPending, CASSucceeded, CASFailed
+  initial:
+    CASPending
+  terminal:
+    CASSucceeded
+    CASFailed
   transitions:
     CASPending -> CASSucceeded
     CASPending -> CASFailed

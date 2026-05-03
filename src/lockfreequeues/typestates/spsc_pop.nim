@@ -30,7 +30,13 @@ type
 
 typestate SPSCPopOp[N: static int]:
   inheritsFromRootObj = true
+  opaqueStates = true
   states SPSCPopStart[N], SPSCPopPointersLoaded[N], SPSCPopNotEmpty[N], SPSCPopEmpty[N]
+  initial:
+    SPSCPopStart[N]
+  terminal:
+    SPSCPopNotEmpty[N]
+    SPSCPopEmpty[N]
   transitions:
     SPSCPopStart[N] -> SPSCPopPointersLoaded[N]
     SPSCPopPointersLoaded[N] -> SPSCPopNotEmpty[N] | SPSCPopEmpty[N] as SPSCEmptyCheck[

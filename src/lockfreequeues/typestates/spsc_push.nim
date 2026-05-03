@@ -34,10 +34,16 @@ type
 
 typestate SPSCPushOp[N: static int]:
   inheritsFromRootObj = true
+  opaqueStates = true
   states SPSCPushStart[N],
     SPSCPushPointersLoaded[N],
     SPSCPushNotFull[N],
     SPSCPushDataWritten[N],
+    SPSCPushFull[N]
+  initial:
+    SPSCPushStart[N]
+  terminal:
+    SPSCPushDataWritten[N]
     SPSCPushFull[N]
   transitions:
     SPSCPushStart[N] -> SPSCPushPointersLoaded[N]
