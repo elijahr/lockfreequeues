@@ -4,13 +4,14 @@ name: bench
 
 # yamllint disable rule:truthy
 on:
+  # Only fire on PRs that actually target an integration branch. Stacked
+  # feature-to-feature PRs (`feat/foo` -> `feat/bar`) used to be in this
+  # allowlist; they have been removed because cascade-rebases would
+  # otherwise burn Bencher quota uploading near-identical reports for
+  # every intermediate stack PR. The topmost PR (base=devel) still gets
+  # PR-time bench treatment, gated further by the `bench` label below.
   pull_request:
-    branches:
-      - main
-      - devel
-      - 'feat/**'
-      - 'perf/**'
-      - 'fix/**'
+    branches: [main, devel]
     paths-ignore:
       - '*.md'
       - '.github/workflows/docs.yml'
@@ -131,21 +132,37 @@ jobs:
       - name: Install Bencher CLI
         uses: bencherdev/bencher@main
 
-      - name: Bencher token preflight
-        # Always runs. Surfaces a yellow PR-check warning when the upload
-        # secret is unset so it is obvious from the check summary why the
-        # downstream Bencher steps were skipped, rather than the bench
-        # silently appearing to "do nothing" with the data.
+      - name: Bencher upload preflight
+        # Always runs. Surfaces a yellow PR-check warning whenever the
+        # downstream `bencher run` would be skipped, so the reason is
+        # obvious from the check summary rather than the bench silently
+        # appearing to "do nothing" with the data. Skip reasons:
+        #   1. BENCHER_API_TOKEN secret unset (any event)
+        #   2. PR event without the `bench` label (cost gate — Bencher
+        #      ingest charges per metric, so PR comparisons are opt-in
+        #      via label rather than firing on every cascade-rebase push)
+        # Push to main/devel and workflow_dispatch never need the label.
         run: |
           if [ -z "$BENCHER_API_TOKEN" ]; then
             echo "::warning title=Bencher upload skipped::BENCHER_API_TOKEN secret is not set on this repo. The bench ran successfully and produced merged.json (visible in the 'Show BMF JSON (debug)' step), but no data is being uploaded to Bencher.dev. Set up the project at bencher.dev with slug 'lockfreequeues' and add BENCHER_API_TOKEN as a repo secret to enable upload."
-          else
-            echo "Bencher token present; proceeding with upload."
+            exit 0
           fi
+          if [ "${{ github.event_name }}" = "pull_request" ] \
+             && ! ${{ contains(github.event.pull_request.labels.*.name, 'bench') }}; then
+            echo "::warning title=Bencher upload skipped::This is a pull_request event but the PR does not carry the 'bench' label. PR-time Bencher uploads are opt-in to control metric-ingest costs. Add the 'bench' label to the PR and re-run this workflow if you want a Bencher comparison report on this revision."
+            exit 0
+          fi
+          echo "Bencher upload preconditions met; proceeding."
 
       # PR runs: compare against base branch and post a comment.
+      # Gated on the `bench` PR label so cascade-rebases of stacked PRs
+      # do not burn Bencher quota; add the label deliberately when you
+      # want a comparison report.
       - name: Track PR benchmarks with Bencher
-        if: github.event_name == 'pull_request' && env.BENCHER_API_TOKEN != ''
+        if: |
+          github.event_name == 'pull_request'
+          && env.BENCHER_API_TOKEN != ''
+          && contains(github.event.pull_request.labels.*.name, 'bench')
         run: |
           bencher run \
             --project lockfreequeues \
