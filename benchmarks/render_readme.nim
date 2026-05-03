@@ -18,7 +18,8 @@
 ## file walks the slug to recover the (impl, thread_config) pair the
 ## table renders.
 
-import std/[json, os, strformat, strutils, algorithm]
+import std/[json, os, strformat, strutils, algorithm, times]
+import std/[cpuinfo]
 
 const
   StartMarker = "<!-- BENCHMARKS:start -->"
@@ -47,20 +48,54 @@ proc fmtFloat(x: float, digits: int = 1): string =
   if digits == 0 and result.endsWith('.'):
     result.setLen(result.len - 1)
 
+proc detectMetadata(): tuple[platform: string, cores: int, timestamp: string] =
+  ## BMF (per-slug measures keyed by name) does not carry a metadata block,
+  ## so render_readme reconstructs the platform / cores / timestamp line
+  ## from the renderer's own runtime instead of pulling from JSON. Devs
+  ## who want to override (e.g. when re-rendering historical snapshots
+  ## from a different host) can set the BENCH_RENDER_PLATFORM /
+  ## BENCH_RENDER_CORES / BENCH_RENDER_TIMESTAMP env vars.
+  let envPlat = getEnv("BENCH_RENDER_PLATFORM")
+  let platform =
+    if envPlat.len > 0: envPlat
+    else: hostOS & "/" & hostCPU
+  let envCores = getEnv("BENCH_RENDER_CORES")
+  var cores = 0
+  if envCores.len > 0:
+    try: cores = parseInt(envCores)
+    except CatchableError: cores = 0
+  if cores <= 0:
+    cores = countProcessors()
+  let envTs = getEnv("BENCH_RENDER_TIMESTAMP")
+  let timestamp =
+    if envTs.len > 0: envTs
+    else: now().utc.format("yyyy-MM-dd HH:mm:ss") & " UTC"
+  result = (platform, cores, timestamp)
+
 proc renderTable(rows: seq[Row], meta: JsonNode): string =
   var lines: seq[string]
-  if meta != nil:
-    let platform = meta{"platform"}.getStr("unknown")
-    let cores = meta{"cores"}.getInt(0)
-    let timestamp = meta{"timestamp"}.getStr("")
-    var metaLine = "_Platform: " & platform
-    if cores > 0:
-      metaLine &= ", " & $cores & " cores"
-    if timestamp.len > 0:
-      metaLine &= ", " & timestamp
-    metaLine &= "._"
-    lines.add metaLine
-    lines.add ""
+  # `meta` is reserved for callers that DO carry a metadata block (older
+  # JSON shapes, future BMF-with-metadata extensions). When meta is nil
+  # — the BMF default — fall back to runtime detection so the README
+  # still surfaces a "Platform / cores / timestamp" line for context.
+  let detected = detectMetadata()
+  let platform =
+    if meta != nil: meta{"platform"}.getStr(detected.platform)
+    else: detected.platform
+  let cores =
+    if meta != nil: meta{"cores"}.getInt(detected.cores)
+    else: detected.cores
+  let timestamp =
+    if meta != nil: meta{"timestamp"}.getStr(detected.timestamp)
+    else: detected.timestamp
+  var metaLine = "_Platform: " & platform
+  if cores > 0:
+    metaLine &= ", " & $cores & " cores"
+  if timestamp.len > 0:
+    metaLine &= ", " & timestamp
+  metaLine &= "._"
+  lines.add metaLine
+  lines.add ""
   lines.add "| implementation | threads | throughput (ops/ms) | p50 latency (ns) |"
   lines.add "|----------------|---------|---------------------|------------------|"
   for r in rows:
@@ -139,9 +174,14 @@ proc loadRows(path: string): tuple[rows: seq[Row], meta: JsonNode] =
       if result == 0:
         result = cmp(a.threads, b.threads)
   )
-  # Cap to 8 rows to keep the README compact.
-  if rows.len > 8:
-    rows.setLen(8)
+  # Cap rows to keep the README compact, but high enough that the cap is
+  # only an emergency brake — the variant set today is ~11 (1 sipsic, 4
+  # mupmuc shapes, 3 unbounded mupsic, 3 channels) and grows in PR 3 / PR
+  # 4 with comparison adapters. PR 5 replaces this auto-rendered block
+  # with a hand-curated 4-row summary plus a link to the live docs chart,
+  # so this cap is a transitional safeguard, not the long-term shape.
+  if rows.len > 32:
+    rows.setLen(32)
   return (rows, nil)
 
 proc renderBlock(jsonPath: string): string =
