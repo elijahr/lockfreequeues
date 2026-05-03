@@ -16,6 +16,17 @@ const
   RepoRoot = currentSourcePath().parentDir.parentDir
   BenchLatencySrc = RepoRoot / "benchmarks" / "nim" / "bench_latency.nim"
 
+proc newTestWorkspace(prefix: string): string =
+  ## Allocate a private workspace dir for one test. Each test that
+  ## compiles a bench_latency binary or writes a BMF file uses this so:
+  ##   1. parallel runs (or repeated runs in the same shell) cannot
+  ##      collide on a static `/tmp/bench_latency_t11_*` filename, and
+  ##   2. compiled binaries don't accumulate in the system temp dir.
+  ## The caller is responsible for `removeDir` (typically via `defer`).
+  ## `prefix` is a per-test stem that matches the original static suffix
+  ## so test failure messages stay legible.
+  result = createTempDir("bench_latency_" & prefix & "_", "")
+
 # ---------- Task 1.1: intdefine defaults + override ----------
 
 suite "bench_latency intdefines (Task 1.1)":
@@ -24,7 +35,9 @@ suite "bench_latency intdefines (Task 1.1)":
     # The binary, when this define is set, runs a `static` block that
     # asserts the two intdefine defaults; if they are wrong, compilation
     # fails with the static assert message.
-    let outBin = getTempDir() / "bench_latency_t11_defaults"
+    let dir = newTestWorkspace("t11_defaults")
+    defer: removeDir(dir)
+    let outBin = dir / ("bench_latency" & ExeExt)
     let cmd = "nim c --threads:on -d:release -d:BenchLatencyTestCompileTime=1 " &
               "-o:" & outBin & " " & BenchLatencySrc
     let (output, exitCode) = execCmdEx(cmd)
@@ -35,7 +48,9 @@ suite "bench_latency intdefines (Task 1.1)":
   test "overrides: -d:BenchLatencyRuns=2 -d:BenchLatencyMessageCount=1000 take effect":
     # Compile with overrides + a different test flag that checks the
     # overridden values rather than the defaults.
-    let outBin = getTempDir() / "bench_latency_t11_overrides"
+    let dir = newTestWorkspace("t11_overrides")
+    defer: removeDir(dir)
+    let outBin = dir / ("bench_latency" & ExeExt)
     let cmd = "nim c --threads:on -d:release " &
               "-d:BenchLatencyTestCompileTimeOverrides=1 " &
               "-d:BenchLatencyRuns=2 -d:BenchLatencyMessageCount=1000 " &
@@ -47,11 +62,14 @@ suite "bench_latency intdefines (Task 1.1)":
 
 # ---------- Task 1.2: --bmf-out integration ----------
 
-proc compileBenchLatency(extraDefs: openArray[string], suffix: string): string =
-  ## Compile bench_latency.nim with extra -d: defines, return path to the
-  ## resulting binary. Compiles in release mode for realistic timing but
-  ## with tiny message counts so the integration test stays fast.
-  let outBin = getTempDir() / ("bench_latency_t" & suffix)
+proc compileBenchLatency(
+    extraDefs: openArray[string], dir: string
+): string =
+  ## Compile bench_latency.nim with extra -d: defines into `dir` and
+  ## return the binary path. Caller owns `dir` and must remove it.
+  ## Compiles in release mode for realistic timing but with tiny
+  ## message counts so the integration test stays fast.
+  let outBin = dir / ("bench_latency" & ExeExt)
   var cmd = "nim c --threads:on -d:release"
   for d in extraDefs:
     cmd.add(" -d:" & d)
@@ -64,12 +82,13 @@ proc compileBenchLatency(extraDefs: openArray[string], suffix: string): string =
 suite "bench_latency --bmf-out integration (Task 1.2)":
   test "sipsic variant emits latency_p50_ns / latency_p99_ns on expected slug":
     # Override message count + runs to keep the integration run under ~5s.
+    let dir = newTestWorkspace("t12_sipsic")
+    defer: removeDir(dir)
     let bin = compileBenchLatency(@[
       "BenchLatencyMessageCount=200",
       "BenchLatencyRuns=2",
-    ], suffix = "12_sipsic")
-    let bmfPath = getTempDir() / "bench_latency_t12_sipsic.json"
-    if fileExists(bmfPath): removeFile(bmfPath)
+    ], dir = dir)
+    let bmfPath = dir / "bench_latency.json"
     let cmd = bin & " --bmf-out=" & bmfPath & " sipsic"
     let (output, exitCode) = execCmdEx(cmd)
     check exitCode == 0
@@ -86,18 +105,18 @@ suite "bench_latency --bmf-out integration (Task 1.2)":
     check s["latency_p99_ns"]["value"].getFloat() >= s["latency_p50_ns"]["value"].getFloat()
     # Stdout text output preserved (acceptance: positional CLI behavior).
     check output.contains("Sipsic") or output.contains("sipsic")
-    removeFile(bmfPath)
 
   test "all four bounded variants emit latency_p50_ns / latency_p99_ns":
     # Per impl plan Track 1 Acceptance Criteria: BMF JSON contains
     # latency_p50_ns and latency_p99_ns for sipsic / sipmuc / mupsic /
     # mupmuc on the 1p1c smoke shape.
+    let dir = newTestWorkspace("t12_all4")
+    defer: removeDir(dir)
     let bin = compileBenchLatency(@[
       "BenchLatencyMessageCount=200",
       "BenchLatencyRuns=2",
-    ], suffix = "12_all4")
-    let bmfPath = getTempDir() / "bench_latency_t12_all4.json"
-    if fileExists(bmfPath): removeFile(bmfPath)
+    ], dir = dir)
+    let bmfPath = dir / "bench_latency.json"
     let cmd = bin & " --bmf-out=" & bmfPath &
               " sipsic mupmuc sipmuc mupsic"
     let (_, exitCode) = execCmdEx(cmd)
@@ -113,13 +132,14 @@ suite "bench_latency --bmf-out integration (Task 1.2)":
       check node.hasKey(slug)
       check node[slug].hasKey("latency_p50_ns")
       check node[slug].hasKey("latency_p99_ns")
-    removeFile(bmfPath)
 
   test "unknown variant exits 1":
+    let dir = newTestWorkspace("t12_unknown")
+    defer: removeDir(dir)
     let bin = compileBenchLatency(@[
       "BenchLatencyMessageCount=200",
       "BenchLatencyRuns=2",
-    ], suffix = "12_unknown")
+    ], dir = dir)
     let cmd = bin & " bogus_variant"
     let (_, exitCode) = execCmdEx(cmd)
     check exitCode == 1
