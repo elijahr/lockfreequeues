@@ -17,13 +17,9 @@
 when defined(adapter_crossbeam_seg_queue_available):
   import ../bench_common
   import ../adapter
-
-  when defined(crossbeamLibDir):
-    {.passL: "-L" & crossbeamLibDir.}
-  else:
-    {.passL: "-Lbenchmarks/rust/bench-ffi-crossbeam/target/release".}
-
-  {.passL: "-lbench_ffi_crossbeam".}
+  # See ./crossbeam_link.nim — shared link-flag emission, fires once per
+  # bench binary that imports ANY crossbeam adapter.
+  import ./crossbeam_link
 
   proc cb_seg_init(): pointer {.importc, cdecl.}
   proc cb_seg_push(q: pointer; item: uint64): bool {.importc, cdecl.}

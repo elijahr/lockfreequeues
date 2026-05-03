@@ -23,18 +23,11 @@
 when defined(adapter_crossbeam_array_queue_available):
   import ../bench_common
   import ../adapter
-
-  # Skip the link flags if the seg-queue adapter (the other consumer of
-  # the same cdylib) is also enabled; we'd otherwise emit -L/-l twice and
-  # the Apple linker prints a duplicate-library warning. The seg adapter
-  # owns the link-flag emission when both gates are set, since it sorts
-  # last alphabetically among the two crossbeam adapter compile units.
-  when not defined(adapter_crossbeam_seg_queue_available):
-    when defined(crossbeamLibDir):
-      {.passL: "-L" & crossbeamLibDir.}
-    else:
-      {.passL: "-Lbenchmarks/rust/bench-ffi-crossbeam/target/release".}
-    {.passL: "-lbench_ffi_crossbeam".}
+  # Link-flag emission lives in a shared module so it fires exactly once
+  # per bench binary that imports ANY crossbeam adapter, decoupled from
+  # which gates happen to be globally set. See crossbeam_link.nim header
+  # for the failure mode this avoids.
+  import ./crossbeam_link
 
   # The Rust cdylib exports `cb_array_*` with C linkage. We model the
   # opaque queue handle as `pointer` (Nim) <-> `*mut c_void` (Rust). All
