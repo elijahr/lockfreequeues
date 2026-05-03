@@ -160,18 +160,28 @@ proc maxVal*(data: openArray[float]): float =
   for x in data:
     if x > result: result = x
 
-proc percentile*(data: openArray[float], p: float): float =
-  ## Linear-interpolation percentile over a sorted copy of `data`.
-  ## `p` clamped to [0, 1]. Empty input returns 0.0.
-  if data.len == 0: return 0.0
+proc percentileSorted*(sorted: openArray[float], p: float): float =
+  ## Linear-interpolation percentile from `sorted` (caller-sorted ascending).
+  ## `p` clamped to [0, 1]. Empty input returns 0.0. Use this when computing
+  ## multiple percentiles over the same dataset to amortize the sort cost.
+  if sorted.len == 0: return 0.0
   let pc = max(0.0, min(1.0, p))
-  var sorted = @data
-  sorted.sort()
   let pos = pc * float(sorted.len - 1)
   let lo = int(pos)
   let hi = min(lo + 1, sorted.len - 1)
   let frac = pos - float(lo)
   sorted[lo] + frac * (sorted[hi] - sorted[lo])
+
+proc percentile*(data: openArray[float], p: float): float =
+  ## Linear-interpolation percentile over a sorted copy of `data`.
+  ## `p` clamped to [0, 1]. Empty input returns 0.0.
+  ##
+  ## Allocates and sorts on every call. For multiple percentiles over the
+  ## same dataset, sort once and call `percentileSorted` instead.
+  if data.len == 0: return 0.0
+  var sorted = @data
+  sorted.sort()
+  percentileSorted(sorted, p)
 
 # ---------- Histogram (top-K min-heap + uniform reservoir) ----------
 
@@ -315,6 +325,48 @@ proc percentile*(h: Histogram, p: float): float =
   let pBodyClamped = max(0.0, min(1.0, pBody))
   return percentile(h.reservoir, pBodyClamped)
 
+proc percentiles*(h: Histogram, ps: openArray[float]): seq[float] =
+  ## Compute multiple percentiles in a single pass. Sorts the reservoir
+  ## (and snapshots top-K) at most once regardless of how many percentiles
+  ## are requested, so this is O((R + K) log (R + K) + len(ps)) rather
+  ## than O(len(ps) * R log R) for repeated single-percentile calls.
+  ## Same lookup rules as `percentile(h, p)`.
+  result = newSeq[float](ps.len)
+  if ps.len == 0: return
+  if h.debugMode:
+    var sorted = @(h.debugAll)
+    sorted.sort()
+    for i, p in ps:
+      result[i] = percentileSorted(sorted, p)
+    return
+  if h.seenAll == 0: return  # already zero-initialised
+  let topkLen = h.topKHeap.len
+  let topkSnap = h.topK()  # ascending; <= K elements
+  var reservoirSorted = @(h.reservoir)
+  reservoirSorted.sort()
+  for i, p in ps:
+    let pc = max(0.0, min(1.0, p))
+    if pc == 1.0:
+      if topkLen == 0: result[i] = 0.0
+      else: result[i] = topkSnap[^1]
+      continue
+    let tailCount = float(h.seenAll) * (1.0 - pc)
+    if tailCount <= float(topkLen):
+      let pos = float(topkLen) - tailCount
+      let lo = max(0, int(floor(pos)))
+      let hi = min(lo + 1, topkSnap.len - 1)
+      let frac = pos - float(lo)
+      result[i] = topkSnap[lo] + frac * (topkSnap[hi] - topkSnap[lo])
+      continue
+    let bodySize = h.seenAll - topkLen
+    if bodySize <= 0 or reservoirSorted.len == 0:
+      if topkSnap.len == 0: result[i] = 0.0
+      else: result[i] = percentileSorted(topkSnap, pc)
+      continue
+    let pBody = (pc * float(h.seenAll)) / float(bodySize)
+    let pBodyClamped = max(0.0, min(1.0, pBody))
+    result[i] = percentileSorted(reservoirSorted, pBodyClamped)
+
 # ---------- Latency harness ----------
 
 type
@@ -405,12 +457,16 @@ proc runOneLatencyRun[Q](
   joinThread(pingerThread)
   joinThread(pongerThread)
 
+  # Bulk-percentile so the reservoir/top-K snapshot is sorted once per
+  # run rather than five times. Order MUST match the LatencyMetrics
+  # field order below.
+  let pcts = hist.percentiles([0.50, 0.95, 0.99, 0.999, 1.0])
   result = LatencyMetrics(
-    p50_ns: hist.percentile(0.50),
-    p95_ns: hist.percentile(0.95),
-    p99_ns: hist.percentile(0.99),
-    p999_ns: hist.percentile(0.999),
-    max_ns: hist.percentile(1.0),
+    p50_ns: pcts[0],
+    p95_ns: pcts[1],
+    p99_ns: pcts[2],
+    p999_ns: pcts[3],
+    max_ns: pcts[4],
     samples: hist.seenAll,
   )
 
