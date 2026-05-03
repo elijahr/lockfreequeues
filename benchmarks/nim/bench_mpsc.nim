@@ -17,6 +17,7 @@
 
 import std/[monotimes, options, os, parseopt, sets, strformat, syncio, times]
 import ./bench_common
+import lockfreequeues/backoff
 import lockfreequeues/mupsic
 
 const
@@ -61,7 +62,7 @@ proc mupsicProducerThread[N, P: static int; T](
 ) {.thread.} =
   for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
     while not ctx.producer.push(T(i)):
-      discard
+      backoffOnPeerWait()
 
 proc mupsicConsumerThread[N, P: static int; T](
     ctx: ptr MupsicConsumerCtx[N, P, T]
@@ -71,6 +72,8 @@ proc mupsicConsumerThread[N, P: static int; T](
     let item = ctx.queue[].pop()
     if item.isSome:
       inc local
+    else:
+      backoffOnPeerWait()
 
 proc runOneMupsicRun[N, P: static int; T](
     queue: var Mupsic[N, P, T], messageCount: int

@@ -37,6 +37,7 @@ import std/[atomics, monotimes, options, os, parseopt, sets, strformat,
             syncio, times]
 import ./bench_common
 import ./adapters/lockfreequeues_unbounded_mupsic_adapter
+import lockfreequeues/backoff
 import lockfreequeues/unbounded_sipsic
 import lockfreequeues/unbounded_sipmuc
 import lockfreequeues/unbounded_mupmuc
@@ -94,6 +95,8 @@ proc usipsicConsumerThread[S: static int; T](
     let r = ctx.queue[].pop()
     if r.isSome:
       inc local
+    else:
+      backoffOnPeerWait()
 
 proc runOneUSipsicRun[S: static int; T](
     queue: ptr UnboundedSipsic[S, T], messageCount: int
@@ -161,6 +164,8 @@ proc usipmucConsumerThread[S: static int; T; MaxT: static int](
       let r = consumer.pop()
       if r.isSome:
         inc local
+      else:
+        backoffOnPeerWait()
 
 proc runOneUSipmucRun[S: static int; T; MaxT: static int; C: static int](
     queue: ptr UnboundedSipmuc[S, T, MaxT],
@@ -202,6 +207,21 @@ proc runUSipmucShape[C: static int](
 ) =
   let slug = "lockfreequeues_unbounded_sipmuc/mpmc_unbounded/1p" & $C & "c"
   echo fmt"UnboundedSipmuc 1p{C}c ({slug}):"
+  # Per-iteration teardown order (applies to both warmup and timed loops):
+  #
+  # 1. `reset(q)` invokes UnboundedSipmuc's `=destroy` hook, which calls
+  #    `unbindClient(self.manager[])` (see src/lockfreequeues/unbounded_sipmuc.nim
+  #    `=destroy`). In Nim 2.x ARC/ORC, `system.reset(x)` is equivalent
+  #    to `=destroy(x); =wasMoved(x)` — it does NOT skip destructors. The
+  #    `wasMoved` half also keeps end-of-iteration auto-destruction from
+  #    re-running on a moved-from value.
+  # 2. `reset(manager[])` then runs DebraManager's `=destroy` (drains
+  #    limbo bags, asserts clientCount == 0). The queue MUST be destroyed
+  #    first because step 2 verifies the manager has no live clients.
+  # 3. `dealloc(manager)` releases the heap allocation. The manager is
+  #    raw-allocated (`create`/`dealloc`) rather than `new`-allocated so
+  #    the harness can measure cold queue allocation cost without ref
+  #    cycles tying the manager's lifetime to the iterator scope.
   for _ in 0 ..< warmup:
     var manager = create(DebraManager[MaxThreads])
     manager[] = initDebraManager[MaxThreads]()
@@ -279,6 +299,8 @@ proc runOneUMupsicRun[S: static int; T; MaxT: static int; P: static int](
     let r = queue[].pop()
     if r.isSome:
       inc local
+    else:
+      backoffOnPeerWait()
   for i in 0 ..< P: joinThread(producerThreads[i])
   let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
   if elapsedNs <= 0.0: return 0.0
@@ -343,6 +365,8 @@ proc umupmucConsumerThread[S: static int; T; MaxT: static int](
       let r = consumer.pop()
       if r.isSome:
         inc local
+      else:
+        backoffOnPeerWait()
 
 proc runOneUMupmucRun[S: static int; T; MaxT: static int;
                       P: static int; C: static int](
@@ -397,6 +421,9 @@ proc runUMupmucShape[P: static int; C: static int](
   let slug = "lockfreequeues_unbounded_mupmuc/mpmc_unbounded/" &
     $P & "p" & $C & "c"
   echo fmt"UnboundedMupmuc {P}p{C}c ({slug}):"
+  # Per-iteration teardown order is identical to runUSipmucShape; see the
+  # block comment there for why `reset(q)` must precede `reset(manager[])`
+  # (and why reset DOES invoke `=destroy` under Nim 2.x ARC/ORC).
   for _ in 0 ..< warmup:
     var manager = create(DebraManager[MaxThreads])
     manager[] = initDebraManager[MaxThreads]()

@@ -77,6 +77,8 @@ proc mupmucConsumerThread[N, P, C: static int; T](
     let item = ctx.consumer.pop()
     if item.isSome:
       inc local
+    else:
+      backoffOnPeerWait()
 
 proc runOneMupmucRun[N, P, C: static int; T](
     queue: var Mupmuc[N, P, C, T], messageCount: int
@@ -166,7 +168,7 @@ proc sipmucProducerThread[N, C: static int; T](
 ) {.thread.} =
   for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
     while not ctx.queue[].push(T(i)):
-      discard
+      backoffOnPeerWait()
 
 proc sipmucConsumerThread[N, C: static int; T](
     ctx: ptr SipmucConsumerCtx[N, C, T]
@@ -176,6 +178,8 @@ proc sipmucConsumerThread[N, C: static int; T](
     let item = ctx.consumer.pop()
     if item.isSome:
       inc local
+    else:
+      backoffOnPeerWait()
 
 proc runOneSipmucRun[N, C: static int; T](
     queue: var Sipmuc[N, C, T], messageCount: int
