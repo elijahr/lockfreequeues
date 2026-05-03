@@ -24,6 +24,7 @@
 
 #include "concurrentqueue.h"
 
+#include <cstddef>  // SIZE_MAX
 #include <cstdint>
 #include <new>
 
@@ -48,7 +49,17 @@ typedef void *mc_queue_t;
 // see moodycamel_adapter.nim's `makeMoodycamelAdapter` for the Nim-side
 // fail-fast on nullptr.
 mc_queue_t mc_init(unsigned long long initial_capacity) {
-  std::size_t capacity = static_cast<std::size_t>(initial_capacity);
+  // The Nim adapter passes a uint64 capacity hint, but `std::size_t` is
+  // 32 bits on ILP32 targets (32-bit Linux/Windows). Clamp to the host
+  // size_t maximum before casting so a >4 GiB hint truncates to "as much
+  // as the platform can address" rather than wrapping to a small value.
+  // This matters only on 32-bit hosts; the bench harness in CI is x86_64
+  // and will never exercise the clamp.
+  unsigned long long clamped = initial_capacity;
+  if (clamped > static_cast<unsigned long long>(SIZE_MAX)) {
+    clamped = static_cast<unsigned long long>(SIZE_MAX);
+  }
+  std::size_t capacity = static_cast<std::size_t>(clamped);
   if (capacity == 0) {
     capacity = 32;
   }

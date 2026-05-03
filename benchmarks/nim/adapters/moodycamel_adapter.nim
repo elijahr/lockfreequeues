@@ -82,7 +82,12 @@ when defined(adapter_moodycamel_available):
   proc push*[T](a: var MoodycamelAdapter[T], item: T): PushResult =
     if a.queue == nil:
       return prFull
-    if mc_push(a.queue, culonglong(uint64(item))) != cint(0):
+    # `cast[uint64](item)` (not `uint64(item)`) so non-numeric 64-bit
+    # payloads — pointers, refs, or distinct-int aliases that the
+    # bench harness might exercise in the future — round-trip through
+    # the C++ uint64 wire format by their bit pattern. For T=uint64
+    # this is equivalent to a value conversion.
+    if mc_push(a.queue, culonglong(cast[uint64](item))) != cint(0):
       prSuccess
     else:
       # MoodyCamel only fails on allocation failure — treat as
@@ -94,7 +99,10 @@ when defined(adapter_moodycamel_available):
       return PopResult[T](success: false)
     var raw: culonglong
     if mc_pop(a.queue, addr raw) != cint(0):
-      PopResult[T](success: true, value: T(uint64(raw)))
+      # `cast[T]` mirrors the push side so pointer/ref payloads recover
+      # their original bit pattern; for T=uint64 this is again
+      # equivalent to a value conversion.
+      PopResult[T](success: true, value: cast[T](uint64(raw)))
     else:
       PopResult[T](success: false)
 
