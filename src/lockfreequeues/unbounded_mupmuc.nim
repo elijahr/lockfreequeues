@@ -37,7 +37,6 @@ import ./backoff
 import ./internal/aligned_alloc
 import std/options
 import std/typetraits
-from system/ansi_c import c_free
 
 import debra
 
@@ -167,19 +166,24 @@ proc newUnboundedMupmuc*[S: static int, T; MaxThreads: static int](
   ## `=destroy` after segment cleanup. For multi-queue setups that
   ## share a manager, use the `(manager, strategy)` overload instead.
   let mgr = allocAligned[DebraManager[MaxThreads]]()
+  var ok = false
   try:
     mgr[] = initDebraManager[MaxThreads]()
     result = newUnboundedMupmuc[S, T, MaxThreads](mgr, strategy)
     result.ownsManager = true
-  except:
-    # Run the manager's =destroy (drains any limbo bags + asserts the
-    # client refcount is zero) before freeing the heap slot. Safe for
-    # both partially- and fully-initialized state because c_calloc
-    # zeroed it: nil limboBagTail pointers walk no list, boundClients
-    # is 0 so the destructor's invariant assertion passes.
-    reset(mgr[])
-    c_free(mgr)
-    raise
+    ok = true
+  finally:
+    # `finally` (not `except:`) so the cleanup also runs on `Defect`-class
+    # raises (e.g. `OutOfMemDefect` from inside `initDebraManager`). Under
+    # Nim 2.0, bare `except:` matches only `CatchableError`, leaving
+    # Defect-shaped failures to leak `mgr`. Run the manager's `=destroy`
+    # (drains any limbo bags + asserts the client refcount is zero) before
+    # freeing the heap slot. Safe for both partially- and fully-initialized
+    # state because `allocAligned` zeroed it: nil limboBagTail pointers walk
+    # no list, boundClients is 0 so the destructor's invariant passes.
+    if not ok:
+      reset(mgr[])
+      freeAligned(mgr)
 
 proc segmentCount*[S: static int, T; MaxThreads: static int](
     self: var UnboundedMupmuc[S, T, MaxThreads]
@@ -286,7 +290,7 @@ proc push*[S: static int, T; MaxThreads: static int](
           else:
             # Lost the segment-alloc race: another producer linked first.
             # Free our orphan segment and back off before retrying.
-            c_free(newSeg)
+            freeAligned(newSeg)
             backoffOnRetry(spins)
             continue
         else:
@@ -317,14 +321,14 @@ proc push*[S: static int, T; MaxThreads: static int](
 # Typed destructor for retired segments. Must be generic over `(S, T)`
 # because the segment's `data: array[S, T]` slots may hold managed types
 # (`string`, `seq`, `ref`, ...) whose internal allocations would leak if
-# we just `c_free`'d the segment block. For POD `T` (`supportsCopyMem`),
+# we just `freeAligned`'d the segment block. For POD `T` (`supportsCopyMem`),
 # the `reset` loop is compile-time-elided, so this costs nothing.
 proc segmentDestructor[S: static int, T](p: pointer) {.nimcall, raises: [].} =
   when not supportsCopyMem(T):
     let seg = cast[ptr Segment[S, T]](p)
     for i in 0 ..< S:
       reset(seg.data[i])
-  c_free(p)
+  freeAligned(p)
 
 proc pop*[S: static int, T; MaxThreads: static int](
     self: var Consumer[S, T, MaxThreads]
@@ -462,11 +466,11 @@ proc `=destroy`*[S: static int, T; MaxThreads: static int](
     let next = seg.next.load(moRelaxed)
     when not supportsCopyMem(T):
       # Run the destructor for any managed slots (string/seq/ref) before
-      # `c_free`'s away the segment block — otherwise their internal
+      # `freeAligned`'s away the segment block — otherwise their internal
       # allocations leak.
       for i in 0 ..< S:
         reset(seg.data[i])
-    c_free(seg)
+    freeAligned(seg)
     seg = next
 
   # Release our refcount on the manager. Conceptually pairs with the
@@ -480,4 +484,4 @@ proc `=destroy`*[S: static int, T; MaxThreads: static int](
       # without the parsing surprise of the backtick form, which trips
       # `expr(nkIdent); unknown node kind` inside a generic destructor.
       reset(self.manager[])
-      c_free(self.manager)
+      freeAligned(self.manager)

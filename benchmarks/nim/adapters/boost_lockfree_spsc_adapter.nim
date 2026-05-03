@@ -22,6 +22,7 @@ when defined(adapter_boost_lockfree_spsc_available):
 
   import ../bench_common
   import ../adapter
+  import lockfreequeues/internal/aligned_alloc
 
   when defined(boostIncludeDir):
     {.passC: "-I" & boostIncludeDir.}
@@ -51,13 +52,16 @@ when defined(adapter_boost_lockfree_spsc_available):
 
   proc makeBoostLockfreeSpscAdapter*[T](capacity: int = 1024): BoostLockfreeSpscAdapter[T] =
     result.capacity = capacity
-    result.queue = cast[ptr BoostSpscRaw](alloc0(sizeof(BoostSpscRaw)))
+    # `allocAligned` (cache-line aligned, zeroed) instead of `alloc0` so the
+    # placement-constructed Boost spsc_queue gets the alignment its internal
+    # padding pragmas expect; matches the bounded `lockfree::queue` adapter.
+    result.queue = allocAligned[BoostSpscRaw]()
     {.emit: ["new (", result.queue, ") boost::lockfree::spsc_queue<unsigned long long>(", csize_t(capacity), ");"].}
 
   proc cleanup*[T](a: var BoostLockfreeSpscAdapter[T]) =
     if a.queue != nil:
       {.emit: [a.queue, "->~spsc_queue();"].}
-      dealloc(a.queue)
+      freeAligned(a.queue)
       a.queue = nil
 
   proc push*[T](a: var BoostLockfreeSpscAdapter[T], item: T): PushResult =

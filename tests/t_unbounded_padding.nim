@@ -41,6 +41,7 @@ suite "Unbounded queue Segment cache-line padding":
   test "Segment field offsets are CacheLineBytes-aligned (mupsic)":
     let off = segmentHeadOffsetForTest(UnboundedMupsic[64, uint64, 4])
     check off.tail mod Cl == 0
+    check off.head mod Cl == 0
     check off.committed mod Cl == 0
 
   test "Segment field offsets are CacheLineBytes-aligned (mupmuc)":

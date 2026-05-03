@@ -29,6 +29,7 @@ when defined(adapter_boost_lockfree_queue_available):
 
   import ../bench_common
   import ../adapter
+  import lockfreequeues/internal/aligned_alloc
 
   # Header search paths. Order: explicit override -> brew arm64 -> brew/macports
   # x86_64 / FreeBSD ports -> Linux apt default.
@@ -72,8 +73,13 @@ when defined(adapter_boost_lockfree_queue_available):
   proc makeBoostLockfreeQueueAdapter*[T](capacity: int = 1024): BoostLockfreeQueueAdapter[T] =
     ## ``capacity`` is the fixed node-pool size; pushes that exceed it
     ## return ``prFull``. Default 1024 mirrors other bounded adapters.
+    ## Backing storage uses ``allocAligned`` (cache-line aligned, zeroed)
+    ## rather than ``alloc0`` so the placement-constructed Boost queue gets
+    ## the alignment its internal padding pragmas expect — ``alloc0`` only
+    ## guarantees ``alignof(max_align_t)`` (typically 16 bytes), which can
+    ## leave Boost's per-cache-line atomics straddling line boundaries.
     result.capacity = capacity
-    result.queue = cast[ptr BoostQueueRaw](alloc0(sizeof(BoostQueueRaw)))
+    result.queue = allocAligned[BoostQueueRaw]()
     # Placement-construct the C++ object in the alloc'd storage. Going via
     # an importcpp constructor proc keeps Nim from emitting a Nim-level
     # constructor call.
@@ -82,7 +88,7 @@ when defined(adapter_boost_lockfree_queue_available):
   proc cleanup*[T](a: var BoostLockfreeQueueAdapter[T]) =
     if a.queue != nil:
       {.emit: [a.queue, "->~queue();"].}
-      dealloc(a.queue)
+      freeAligned(a.queue)
       a.queue = nil
 
   proc push*[T](a: var BoostLockfreeQueueAdapter[T], item: T): PushResult =

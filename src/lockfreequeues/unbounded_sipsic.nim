@@ -19,7 +19,6 @@ import ./atomic_dsl
 import ./internal/aligned_alloc
 import std/options
 import std/typetraits
-from system/ansi_c import c_free
 
 type
   Segment*[S: static int, T] = object
@@ -164,7 +163,7 @@ proc pop*[S: static int, T](self: var UnboundedSipsic[S, T]): Option[T] =
     self.headSegment.store(nextSeg, moRelease)
     seg = nextSeg
     discard self.segments.fetchSub(1, moRelaxed)
-    c_free(oldSeg)
+    freeAligned(oldSeg)
 
 proc pop*[S: static int, T](
     self: var UnboundedSipsic[S, T], count: int
@@ -209,9 +208,9 @@ proc `=destroy`*[S: static int, T](self: var UnboundedSipsic[S, T]) =
     let next = seg.next.load(moRelaxed)
     when not supportsCopyMem(T):
       # Run the destructor for any managed slots (string/seq/ref) before
-      # `c_free`'s away the segment block — otherwise their internal
+      # `freeAligned`'s away the segment block — otherwise their internal
       # allocations leak.
       for i in 0 ..< S:
         reset(seg.data[i])
-    c_free(seg)
+    freeAligned(seg)
     seg = next

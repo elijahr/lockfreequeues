@@ -39,7 +39,6 @@ import ./backoff
 import ./internal/aligned_alloc
 import std/options
 import std/typetraits
-from system/ansi_c import c_free
 
 import debra
 
@@ -70,7 +69,12 @@ type
     next {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
     tail {.align: CacheLineBytes.}: Atomic[int]
       # CAS coordination for producers
-    head: int # Consumer read position within segment (single consumer, no atomic)
+    head {.align: CacheLineBytes.}: int
+      # Consumer read position within segment (single consumer, no atomic).
+      # Aligned to its own cache line so consumer head writes do not
+      # invalidate producers' cached `tail` line. Without the pragma `head`
+      # would share a 64-byte chunk with `tail` because Nim packs object
+      # fields back-to-back unless explicitly aligned.
     committed {.align: CacheLineBytes.}: array[S, Atomic[bool]]
       # Track which slots are ready to read
 
@@ -171,19 +175,24 @@ proc newUnboundedMupsic*[S: static int, T; MaxThreads: static int](
   ##
   ## For multi-queue setups that share a manager, pass it explicitly.
   let mgr = allocAligned[DebraManager[MaxThreads]]()
+  var ok = false
   try:
     mgr[] = initDebraManager[MaxThreads]()
     let consumerHandle = registerThread(mgr[])
     result = newUnboundedMupsic[S, T, MaxThreads](mgr, consumerHandle, strategy)
     result.ownsManager = true
-  except:
-    # Run the manager's =destroy (drains any limbo bags + asserts the
-    # client refcount is zero) before freeing the heap slot. Safe for
-    # both partially- and fully-initialized state because c_calloc
-    # zeroed it.
-    reset(mgr[])
-    c_free(mgr)
-    raise
+    ok = true
+  finally:
+    # `finally` (not `except:`) so the cleanup also runs on `Defect`-class
+    # raises (e.g. `OutOfMemDefect` from inside `initDebraManager`). Under
+    # Nim 2.0, bare `except:` matches only `CatchableError`, leaving
+    # Defect-shaped failures to leak `mgr`. Run the manager's `=destroy`
+    # (drains any limbo bags + asserts the client refcount is zero) before
+    # freeing the heap slot. Safe for both partially- and fully-initialized
+    # state because `allocAligned` zeroed it.
+    if not ok:
+      reset(mgr[])
+      freeAligned(mgr)
 
 proc segmentCount*[S: static int, T; MaxThreads: static int](
     self: var UnboundedMupsic[S, T, MaxThreads]
@@ -266,7 +275,7 @@ proc push*[S: static int, T; MaxThreads: static int](
             continue
           else:
             # Lost the segment-alloc race, free our orphan and back off.
-            c_free(newSeg)
+            freeAligned(newSeg)
             backoffOnRetry(spins)
             continue
         else:
@@ -298,14 +307,14 @@ proc push*[S: static int, T; MaxThreads: static int](
 
 # Typed destructor for retired segments. Generic over `(S, T)` so we can
 # `reset` any managed slots (`string`, `seq`, `ref`, ...) before
-# `c_free`'s away the segment block. For POD `T` (`supportsCopyMem`),
+# `freeAligned`'s away the segment block. For POD `T` (`supportsCopyMem`),
 # the loop is compile-time-elided.
 proc segmentDestructor[S: static int, T](p: pointer) {.nimcall, raises: [].} =
   when not supportsCopyMem(T):
     let seg = cast[ptr Segment[S, T]](p)
     for i in 0 ..< S:
       reset(seg.data[i])
-  c_free(p)
+  freeAligned(p)
 
 proc pop*[S: static int, T; MaxThreads: static int](
     self: var UnboundedMupsic[S, T, MaxThreads]
@@ -402,10 +411,16 @@ when defined(testing):
 
   proc segmentHeadOffsetForTest*[S: static int, T; MaxThreads: static int](
       _: typedesc[UnboundedMupsic[S, T, MaxThreads]]
-  ): tuple[tail: int, committed: int] =
+  ): tuple[tail: int, head: int, committed: int] =
     ## Test-only accessor: returns offsets of cache-line-padded fields within
-    ## the unbounded mupsic Segment for the cache-line padding audit.
-    result = (offsetOf(Segment[S, T], tail), offsetOf(Segment[S, T], committed))
+    ## the unbounded mupsic Segment for the cache-line padding audit. ``head``
+    ## (consumer cursor) MUST live on its own line because every consumer write
+    ## would otherwise invalidate producers' cached ``tail``.
+    result = (
+      offsetOf(Segment[S, T], tail),
+      offsetOf(Segment[S, T], head),
+      offsetOf(Segment[S, T], committed),
+    )
 
 proc `=destroy`*[S: static int, T; MaxThreads: static int](
     self: var UnboundedMupsic[S, T, MaxThreads]
@@ -418,11 +433,11 @@ proc `=destroy`*[S: static int, T; MaxThreads: static int](
     let next = seg.next.load(moRelaxed)
     when not supportsCopyMem(T):
       # Run the destructor for any managed slots (string/seq/ref) before
-      # `c_free`'s away the segment block — otherwise their internal
+      # `freeAligned`'s away the segment block — otherwise their internal
       # allocations leak.
       for i in 0 ..< S:
         reset(seg.data[i])
-    c_free(seg)
+    freeAligned(seg)
     seg = next
 
   # Release our refcount on the manager. Conceptually pairs with the
@@ -436,4 +451,4 @@ proc `=destroy`*[S: static int, T; MaxThreads: static int](
       # without the parsing surprise of the backtick form, which trips
       # `expr(nkIdent); unknown node kind` inside a generic destructor.
       reset(self.manager[])
-      c_free(self.manager)
+      freeAligned(self.manager)
