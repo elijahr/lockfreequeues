@@ -27,6 +27,7 @@ asserting it accepts a plausible BMF and rejects malformed inputs.
 from __future__ import annotations
 
 import json
+import math
 import re
 import unittest
 from pathlib import Path
@@ -125,9 +126,7 @@ class ChartContractTests(unittest.TestCase):
                 v = mv["value"]
                 self.assertIsInstance(v, (int, float))
                 self.assertTrue(
-                    isinstance(v, (int, float))
-                    and v == v  # noqa: PLR0124  (NaN check)
-                    and v not in (float("inf"), float("-inf")),
+                    math.isfinite(v),
                     msg=f"{slug}/{measure} value not finite: {v!r}",
                 )
                 for opt in ("lower_value", "upper_value"):

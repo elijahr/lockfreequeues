@@ -112,18 +112,26 @@
     // Shape ordering: sort by total thread count, then by P, then by C.
     // This puts 1p1c before 2p2c before 4p4c naturally and groups
     // P-skewed shapes near their balanced peers.
-    const xLabels = Array.from(shapeSet).sort((a, b) => {
-      const pa = /^(\d+)p(\d+)c$/.exec(a);
-      const pb = /^(\d+)p(\d+)c$/.exec(b);
-      if (!pa || !pb) return a.localeCompare(b);
-      const ta = parseInt(pa[1], 10) + parseInt(pa[2], 10);
-      const tb = parseInt(pb[1], 10) + parseInt(pb[2], 10);
-      if (ta !== tb) return ta - tb;
-      const pap = parseInt(pa[1], 10);
-      const pbp = parseInt(pb[1], 10);
-      if (pap !== pbp) return pap - pbp;
-      return parseInt(pa[2], 10) - parseInt(pb[2], 10);
-    });
+    /* Pre-parse each `<P>p<C>c` shape label into numeric sort keys so the
+     * comparator doesn't re-run regex + parseInt on every comparison.
+     * Non-matching labels fall back to lexicographic order via the
+     * sentinel keys (-1 sorts them before any matched entry, then a
+     * stable localeCompare on `label` orders them among themselves). */
+    const xLabels = Array.from(shapeSet)
+      .map(label => {
+        const m = /^(\d+)p(\d+)c$/.exec(label);
+        if (!m) return { label, p: -1, c: -1, total: -1 };
+        const p = parseInt(m[1], 10);
+        const c = parseInt(m[2], 10);
+        return { label, p, c, total: p + c };
+      })
+      .sort((a, b) => {
+        if (a.total === -1 && b.total === -1) return a.label.localeCompare(b.label);
+        if (a.total === -1) return -1;
+        if (b.total === -1) return 1;
+        return (a.total - b.total) || (a.p - b.p) || (a.c - b.c);
+      })
+      .map(item => item.label);
 
     const libraries = Array.from(byLibrary.values()).sort((a, b) =>
       a.name.localeCompare(b.name)

@@ -81,14 +81,18 @@ and inherits the project's MIT license.
 - **Source:** https://github.com/leeoniya/uPlot
 - **Version:** `1.6.27`
 - **License:** MIT
-- **Vendored at:** `docs/assets/uplot-1.6.27.iife.min.js`
-- **Upgrade procedure:** download the new IIFE bundle from
-  `https://cdn.jsdelivr.net/npm/uplot@<new-version>/dist/uPlot.iife.min.js`,
-  rename the file with the new version suffix, update the
-  `<script src=...>` reference in `docs/benchmarks.md`, update the
-  `Version:` field above, and verify SHA-256 against jsdelivr's
+- **Vendored at:**
+  - `docs/assets/uplot-1.6.27.iife.min.js` (chart runtime)
+  - `docs/assets/uplot-1.6.27.min.css` (companion stylesheet for axes /
+    grid lines / cursor; without it uPlot DOM elements stack incorrectly)
+- **Upgrade procedure:** download both bundles from
+  `https://cdn.jsdelivr.net/npm/uplot@<new-version>/dist/uPlot.iife.min.js`
+  and `.../dist/uPlot.min.css`, rename each with the new version suffix,
+  update the `<script src=...>` and `<link rel="stylesheet" ...>`
+  references in `docs/benchmarks.md`, update `extra_css` in `mkdocs.yml`,
+  update the `Version:` field above, and verify SHA-256 against jsdelivr's
   package metadata (`https://data.jsdelivr.com/v1/package/npm/uplot@<new-version>`).
-  Delete the old version's file in the same commit.
+  Delete the old version's files in the same commit.
 
 ## Comparison expansion libraries (PR 4)
 

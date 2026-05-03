@@ -60,6 +60,7 @@ the chart to switch to linear. Hovering a shape shows mean ± stddev when the
 underlying measure carries one.
 
 <div markdown="0">
+  <link rel="stylesheet" href="../assets/uplot-1.6.27.min.css">
   <div id="bench-chart">
     <noscript>
       Charts require JavaScript. The raw data is published at
