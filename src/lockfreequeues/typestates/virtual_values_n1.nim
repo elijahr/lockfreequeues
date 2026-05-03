@@ -26,16 +26,16 @@ typestate VirtualValueN1[N: static int]:
     WrappedValueN1[N] -> WrappedValueN1[N]
 
 # Accessors
-proc rawValue*[N: static int](r: RawLoadedN1[N]): int {.inline.} =
+proc rawValue*[N: static int](r: RawLoadedN1[N]): int {.notATransition.} =
   VirtualValueN1[N](r).v
 
-proc value*[N: static int](w: WrappedValueN1[N]): int {.inline.} =
+proc value*[N: static int](w: WrappedValueN1[N]): int {.notATransition.} =
   VirtualValueN1[N](w).v
 
-proc unwrappedValue*[N: static int](u: UnwrappedSumN1[N]): int {.inline.} =
+proc unwrappedValue*[N: static int](u: UnwrappedSumN1[N]): int {.notATransition.} =
   VirtualValueN1[N](u).v
 
-proc slotValue*[N: static int](p: PhysicalSlotN1[N]): int {.inline.} =
+proc slotValue*[N: static int](p: PhysicalSlotN1[N]): int {.notATransition.} =
   VirtualValueN1[N](p).v
 
 # Constructor

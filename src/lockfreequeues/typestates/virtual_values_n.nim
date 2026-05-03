@@ -36,16 +36,16 @@ typestate VirtualValueN[N: static int]:
     WrappedValueN[N] -> WrappedValueN[N] # incOrResetN() - convenience
 
 # Accessors - only specific fields visible in each state
-proc rawValue*[N: static int](r: RawLoadedN[N]): int {.inline.} =
+proc rawValue*[N: static int](r: RawLoadedN[N]): int {.notATransition.} =
   VirtualValueN[N](r).v
 
-proc value*[N: static int](w: WrappedValueN[N]): int {.inline.} =
+proc value*[N: static int](w: WrappedValueN[N]): int {.notATransition.} =
   VirtualValueN[N](w).v
 
-proc unwrappedValue*[N: static int](u: UnwrappedSumN[N]): int {.inline.} =
+proc unwrappedValue*[N: static int](u: UnwrappedSumN[N]): int {.notATransition.} =
   VirtualValueN[N](u).v
 
-proc slotValue*[N: static int](p: PhysicalSlotN[N]): int {.inline.} =
+proc slotValue*[N: static int](p: PhysicalSlotN[N]): int {.notATransition.} =
   VirtualValueN[N](p).v
 
 # Constructor

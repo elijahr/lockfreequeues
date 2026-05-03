@@ -28,16 +28,16 @@ typestate CASAttempt:
     CASPending -> CASFailed
 
 # Accessors
-proc expectedVal*(p: CASPending): int {.inline.} =
+proc expectedVal*(p: CASPending): int {.notATransition.} =
   CASAttempt(p).expected
 
-proc desiredVal*(p: CASPending): int {.inline.} =
+proc desiredVal*(p: CASPending): int {.notATransition.} =
   CASAttempt(p).desired
 
-proc newVal*(s: CASSucceeded): int {.inline.} =
+proc newVal*(s: CASSucceeded): int {.notATransition.} =
   CASResult(s).newVal
 
-proc actualVal*(f: CASFailed): int {.inline.} =
+proc actualVal*(f: CASFailed): int {.notATransition.} =
   CASResult(f).actualVal
 
 # Constructor
@@ -45,7 +45,7 @@ proc prepareCAS*(atom: ptr Atomic[int], expected, desired: int): CASPending {.in
   CASPending(CASAttempt(atom: atom, expected: expected, desired: desired))
 
 # Execute CAS - returns result that must be checked
-proc executeCAS*(p: CASPending): CASResult {.inline.} =
+proc executeCAS*(p: CASPending): CASResult {.notATransition.} =
   let attempt = CASAttempt(p)
   var expected = attempt.expected
   let success =

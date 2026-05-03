@@ -89,6 +89,6 @@ proc complete*[N: static int, T](
   queue.tail.storeReleaseN1(op.newTail)
   true
 
-proc extractFalse*[N: static int](op: SPSCPushFull[N]): bool {.inline.} =
+proc extractFalse*[N: static int](op: SPSCPushFull[N]): bool {.notATransition.} =
   ## Terminal: extract false result (queue was full).
   false
