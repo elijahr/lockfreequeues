@@ -88,9 +88,13 @@ and inherits the project's MIT license.
 - **Upgrade procedure:** download both bundles from
   `https://cdn.jsdelivr.net/npm/uplot@<new-version>/dist/uPlot.iife.min.js`
   and `.../dist/uPlot.min.css`, rename each with the new version suffix,
-  update the `<script src=...>` and `<link rel="stylesheet" ...>`
-  references in `docs/benchmarks.md`, update `extra_css` in `mkdocs.yml`,
-  update the `Version:` field above, and verify SHA-256 against jsdelivr's
+  update the `<script src=...>` reference in `docs/benchmarks.md` (the
+  CSS is loaded via `extra_css` in `mkdocs.yml`, not a `<link>` tag —
+  bump both the `extra_css` entry and the bundle filename in lockstep),
+  update the version-suffixed filenames in
+  `benchmarks/tests/test_bench_charts_contract.py`
+  (`test_chart_assets_present` checks the literal filename), update the
+  `Version:` field above, and verify SHA-256 against jsdelivr's
   package metadata (`https://data.jsdelivr.com/v1/package/npm/uplot@<new-version>`).
   Delete the old version's files in the same commit.
 

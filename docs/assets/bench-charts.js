@@ -92,10 +92,15 @@
       const parsed = parseSlug(slug);
       if (!parsed) continue;
       shapeSet.add(parsed.shape);
-      let lib = byLibrary.get(parsed.library);
+      // Composite key: library + topology, so a single library
+      // exposing multiple topologies (e.g. `lockfreequeues_mupmuc/spsc`
+      // AND `lockfreequeues_mupmuc/mpmc`) renders as separate series
+      // instead of silently overwriting one shape with another.
+      const seriesKey = parsed.library + ' (' + parsed.topology + ')';
+      let lib = byLibrary.get(seriesKey);
       if (!lib) {
-        lib = { name: parsed.library, points: [] };
-        byLibrary.set(parsed.library, lib);
+        lib = { name: seriesKey, points: [] };
+        byLibrary.set(seriesKey, lib);
       }
       lib.points.push({
         slug,
@@ -222,7 +227,14 @@
             const s = u.series[i + 1];
             if (!s.show) continue;
             const lib = libraries[i];
-            const point = lib.points.find((p) => p.shape === shape);
+            // Cache an O(1) shape→point map on first hover; setCursor
+            // fires on every mousemove so a per-call linear `find` is
+            // wasteful even for the small per-library point counts we
+            // ship today.
+            if (!lib._shapeMap) {
+              lib._shapeMap = new Map(lib.points.map((p) => [p.shape, p]));
+            }
+            const point = lib._shapeMap.get(shape);
             if (!point) continue;
             let line = lib.name + ': ' + point.value.toFixed(1) + ' ops/ms';
             if (point.lower != null && point.upper != null) {
