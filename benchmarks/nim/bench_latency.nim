@@ -133,9 +133,13 @@ proc runVariant(
       )
     else:
       raise newException(ValueError, "unknown variant: " & variant)
+  # p999 / max are printed for operator visibility but NOT emitted to BMF
+  # at this PR (latency_p999_ns / latency_max_ns wire-up is deferred to
+  # PR 6 along with their threshold configuration).
   echo fmt"  p50:  {metrics.p50_ns:.0f} ns"
   echo fmt"  p95:  {metrics.p95_ns:.0f} ns"
   echo fmt"  p99:  {metrics.p99_ns:.0f} ns"
+  echo fmt"  p999: {metrics.p999_ns:.0f} ns"
   echo fmt"  max:  {metrics.max_ns:.0f} ns"
   echo fmt"  samples: {metrics.samples}"
   echo ""
