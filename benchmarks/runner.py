@@ -44,8 +44,13 @@ def build_nim():
     for bin_name in NIM_BINARIES:
         src = BENCHMARK_DIR / "nim" / f"{bin_name}.nim"
         print(f"  -> {bin_name}")
+        # Match the CI compile shape in `.github/workflows/bench.yml`
+        # (`-d:release -d:danger`). `-d:danger` strips runtime checks
+        # the queue hot path treats as cold-path overhead in production
+        # benches; without it, locally produced numbers are not
+        # comparable to the cloud baseline.
         subprocess.run(
-            ["nim", "c", "-d:release", "--threads:on", str(src)],
+            ["nim", "c", "-d:release", "-d:danger", "--threads:on", str(src)],
             check=True,
         )
     print("Nim benchmarks built.")
