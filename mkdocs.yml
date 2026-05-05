@@ -50,7 +50,15 @@ plugins:
             show_signature: true
             heading_level: 3  # h3 so procs nest under h2 API section in TOC
             source_url: https://github.com/elijahr/lockfreequeues
-            # source_ref auto-detected from git branch; set explicitly for releases
+            # source_ref drives the github blob URL stamped on each
+            # source-link. Auto-detection from the working tree fails on
+            # CI (actions/checkout produces a detached HEAD), so we read
+            # it from DOCS_SOURCE_REF and default to `devel` (this repo's
+            # default branch — verified via gh repo view) so local
+            # `mkdocs serve` produces working source links without env
+            # setup. CI exports the right value per trigger: PR -> head
+            # ref, devel push -> devel, v* tag -> tag name.
+            source_ref: !ENV [DOCS_SOURCE_REF, devel]
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -81,8 +89,9 @@ nav:
       - UnboundedSipmuc: api/unbounded_sipmuc.md
       - UnboundedMupsic: api/unbounded_mupsic.md
       - UnboundedMupmuc: api/unbounded_mupmuc.md
-    - Support:
-      - Operations: api/ops.md
+  - Concepts:
+    - Safety Model: safety-model.md
+    - Slot Ownership Typestates: slot-ownership-typestates.md
   - Benchmarks: benchmarks.md
   - Examples: examples.md
 

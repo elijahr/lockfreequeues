@@ -119,6 +119,6 @@ proc complete*[N, C: static int, T](
   queue.cells.seqStore(op.slot, op.pos + 1, moRelease) # P5 publish
   true
 
-proc extractFalse*[N: static int](op: SPMCPushFull[N]): bool {.inline.} =
+proc extractFalse*[N: static int](op: SPMCPushFull[N]): bool {.notATransition.} =
   ## Terminal: extract false result (queue was full this generation).
   false

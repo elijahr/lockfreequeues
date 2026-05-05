@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+
+- `CASAttempt` typestate restructured into a proper typestate union. `CASPending` now transitions to `CASSucceeded | CASFailed` (aliased as `CASResult`) via `executeCAS`, replacing the previous single-state design with `assumeSuccess` / `assumeFailure` escape hatches. The `assumeSuccess` and `assumeFailure` procs have been removed. Callers that drove `CASAttempt` outside the bundled MPMC machinery must migrate to the union return form. These helpers were only consumed by `tests/t_cas.nim`; the bundled MPMC machinery calls `compareExchangeWeak` directly and was unaffected. No public lock-free queue API is affected.
+
 ### Added
 
 - Latency p99 + throughput regression gating in Bencher (PR 6, Track 6).
@@ -396,6 +400,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tests/fixtures/pre-split-slugs.json` plus the `superset_check.py`
   guard wired into bench.yml enforces that no slug from the legacy
   binary silently disappears across the split (PR 2).
+### Changed (typestates 0.7 uplift)
+
+- Bump minimum `typestates` to 0.7.2. Pulls in the upstream `match` macro fixes for generic and cross-module contexts shipped in nim-typestates v0.7.1 / v0.7.2.
+- `opaqueStates = true` and `initial:` / `terminal:` DSL blocks added to 5 SET typestates: `CASAttempt`, `SPSCPopOp`, `SPSCPushOp`, `VirtualValueN`, and `VirtualValueN1`.
+- 8 hand-written `case .kind` dispatches across 4 facade modules (`sipsic.nim`, `mupmuc.nim`, `mupsic.nim`, `sipmuc.nim`) replaced with the generated `match` macro for compile-time exhaustiveness.
+
+### Added (typestates 0.7 uplift)
+
+- CI: `typestates verify -W --format=github src/` step in `build.yml` to gate the typestate model against drift.
+
+### Fixed (typestates 0.7 uplift)
+
+- 22 read-only typestate accessors across `src/lockfreequeues/typestates/` now carry `{.notATransition.}`. typestates' verifier flagged these once `typestates verify -W` was wired into CI; the procs are pure data extraction and were never transitions.
 
 ## [4.1.0] - 2026-05-01
 

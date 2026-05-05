@@ -4,7 +4,7 @@ Unbounded single-producer, single-consumer (SPSC) queue using linked segments.
 
 ## Overview
 
-`UnboundedSipsic` provides an unbounded SPSC queue that grows dynamically as items are added. Uses epoch-based memory reclamation for safe segment deallocation.
+`UnboundedSipsic` provides an unbounded SPSC queue that grows dynamically as items are added. Single-producer, single-consumer means there is no DEBRA manager: the consumer frees each retired segment inline once it advances past it. This is safe because the producer publishes the new segment via a release-store on `seg.next` *before* moving on, and never writes to the old segment afterwards. By the time the consumer can observe `seg.next != nil` and free the old segment, the producer has already abandoned it.
 
 **Performance characteristics:**
 
@@ -16,8 +16,9 @@ Unbounded single-producer, single-consumer (SPSC) queue using linked segments.
 ```nim
 import lockfreequeues
 
-let manager = newEpochManager()
-var queue = newUnboundedSipsic[64, int](manager)
+# Generic params are [SegmentSize, ItemType]. SPSC needs no DEBRA
+# manager and no MaxThreads parameter — the constructor takes none.
+var queue = newUnboundedSipsic[64, int]()
 
 # Push items (never fails - grows as needed)
 queue.push(42)
