@@ -16,6 +16,11 @@ on:
       - '.github/workflows/docs.yml'
       - 'src/**'
   workflow_dispatch:
+  schedule:
+    - cron: '17 5 * * *'   # daily at 05:17 UTC; redeploys docs to pick up
+                           # snapshot pushes that carried [skip ci] (per
+                           # bench.yml Patch A) so the chart is at most
+                           # ~24h stale even if devel is quiet.
 
 permissions:
   contents: write
@@ -39,31 +44,27 @@ jobs:
       - name: Setup Nim
         uses: jiro4989/setup-nim-action@v2
         with:
-          nim-version: 'stable'
+          nim-version: '2.2.8'
 
-      - name: Expose Nim compiler API for mkdocstrings-nim
+      - name: Cache Nimble packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nimble
+          key: ${{ runner.os }}-nimble-docs-${{ hashFiles('*.nimble') }}
+          restore-keys: |
+            ${{ runner.os }}-nimble-docs-
+
+      - name: Install Nim compiler API package (for mkdocstrings-nim)
         # mkdocstrings-nim's extractor.nim does `import compiler/[ast, parser, ...]`,
-        # which expects Nim's compiler/ source tree to be on the search path.
-        # The bundled Nim distribution includes compiler/ on disk but does not
-        # add it to the path; jiro4989/setup-nim-action does not install the
-        # compiler-as-Nimble-package either. Append `path="$lib/.."` to the
-        # bundled config/nim.cfg so `import compiler/<X>` resolves to
-        # `<nim-install-root>/compiler/<X>.nim`. Done after Setup Nim and
-        # before pip install so the mkdocstrings-nim extractor can compile
-        # on first invocation.
-        run: |
-          set -euo pipefail
-          nim_root="$(dirname "$(dirname "$(readlink -f "$(which nim)")")")"
-          if [ ! -d "$nim_root/compiler" ] || [ ! -f "$nim_root/config/nim.cfg" ]; then
-            echo "::error::expected $nim_root to contain compiler/ and config/nim.cfg"
-            exit 1
-          fi
-          # `$lib` here is a Nim config-file variable resolved by Nim, not a
-          # bash variable — heredoc with quoted delimiter writes it literal.
-          cat >> "$nim_root/config/nim.cfg" <<'NIMCFG'
-          path="$lib/.."
-          NIMCFG
-          echo "Appended compiler-API path to $nim_root/config/nim.cfg"
+        # which expects Nim's compiler/ source tree to be importable. Installing
+        # the `nim` Nimble package places the compiler source on the Nimble path
+        # so `import compiler/<X>` resolves cleanly. This matches the typestates
+        # repo's docs.yml pattern and replaces the previous in-place nim.cfg
+        # patching (preserved as a ROLLBACK comment at bottom of file).
+        run: nimble install nim -y
+
+      - name: Create watch directories
+        run: mkdir -p docs/overrides
 
       - name: Install dependencies
         run: |
@@ -171,3 +172,11 @@ jobs:
           fi
           python3 -c "import json; json.load(open('/tmp/latest.json'))"
           echo "::notice::mike asset endpoint OK: $URL"
+
+### ROLLBACK ###
+# If `nimble install nim -y` ever breaks (registry change, package rename,
+# layout regression), revert the "Install Nim compiler API package" step
+# to the previous in-place nim.cfg patch:
+#   - locate nim_root via `dirname (dirname (readlink -f $(which nim)))`
+#   - append `path="$lib/.."` to `$nim_root/config/nim.cfg`
+# Remove this rollback block after one release cycle (v4.3.0).
