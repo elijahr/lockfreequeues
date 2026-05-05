@@ -50,23 +50,44 @@ python benchmarks/runner.py run --runs=33
 
 Results are generated per-platform. See the `benchmarks/results/` directory for JSON output.
 
-### Live throughput chart
+### Live charts
 
-The chart below pulls from a snapshot published by the `bench` CI workflow on
-every push to `devel` (see `.github/workflows/bench.yml`). Each line is one
-library across the producer/consumer shape grid; the legend toggles individual
-libraries on and off. The Y axis defaults to log scale; uncheck the box above
-the chart to switch to linear. Hovering a shape shows mean ± stddev when the
-underlying measure carries one.
+The charts below pull from a snapshot published by the `bench` CI workflow on
+every push to `devel` (see `.github/workflows/bench.yml`). The hero panel
+shows lockfreequeues vs alternatives at a single representative shape; the
+per-topology panels trace each library across the producer/consumer shape
+grid. Each panel's legend toggles libraries on and off; the Y axis defaults
+to log scale and is per-panel switchable to linear. Hovering a shape shows
+mean ± stddev when the underlying measure carries one. Dotted lines (and an
+asterisk in the legend) mark libraries with blocking-on-full semantics — see
+the methodology section below.
 
 <div markdown="0">
-  <div id="bench-chart">
+  <div id="bench-status" class="bench-status" hidden></div>
+
+  <div id="bench-hero" class="bench-panel bench-panel-hero">
     <noscript>
       Charts require JavaScript. The raw data is published at
       <code>../assets/bench-results/latest.json</code>; download the JSON
       snapshot if you need to consume it programmatically.
     </noscript>
   </div>
+</div>
+
+#### Throughput by topology
+
+<div markdown="0">
+  <div id="bench-throughput-spsc"           class="bench-panel"></div>
+  <div id="bench-throughput-mpsc"           class="bench-panel"></div>
+  <div id="bench-throughput-mpmc-bounded"   class="bench-panel"></div>
+  <div id="bench-throughput-mpmc-unbounded" class="bench-panel"></div>
+</div>
+
+#### Latency
+
+<div markdown="0">
+  <div id="bench-latency" class="bench-panel"></div>
+
   <script src="../assets/uplot-1.6.27.iife.min.js"></script>
   <script src="../assets/bench-charts.js"></script>
 </div>
