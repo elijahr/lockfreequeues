@@ -762,8 +762,32 @@ jobs:
       # `--threshold-measure throughput`; the actual measure key emitted by
       # bench_{spsc,mpsc,mpmc,unbounded}.nim is `throughput_ops_ms`, so the
       # earlier threshold never matched any measure. Track 6 corrects this.
+      #
+      # NOTE on continue-on-error (v4.2.0): the Bencher CLI is currently
+      # rejecting the multi-measure threshold configuration with
+      # "Failed to validate the model for the throughput_ops_ms Measure
+      # Threshold: Invalid threshold model: Invalid model, no boundary
+      # provided" even though the invocation matches the documented
+      # bencher.dev pattern (see https://bencher.dev/docs/explanation/thresholds/
+      # "Two-Measure Example"). The failing step short-circuits the job
+      # before `Snapshot to docs assets` runs, leaving the chart on
+      # docs/benchmarks.md without fresh data. As a release-day band-aid
+      # we mark this step continue-on-error so the snapshot path keeps
+      # flowing; the threshold gating itself remains dormant until
+      # Task 6.4's 10-run soak completes anyway, so functionally nothing
+      # is lost in the short term.
+      #
+      # TODO(post-v4.2.0): diagnose the boundary-flag binding issue.
+      # Hypothesis: clap absorbs the trailing `--threshold-lower-boundary`
+      # into the first measure block (latency) instead of the second
+      # (throughput), so throughput's model has no boundary. Try giving
+      # each measure both boundaries explicitly, splitting into two
+      # `bencher run` invocations, or pinning the bencherdev/bencher
+      # action to a specific tag once Bencher confirms the bug/expected
+      # syntax.
       - name: Track base branch benchmarks with Bencher
         if: github.event_name == 'push' && env.BENCHER_API_TOKEN != ''
+        continue-on-error: true
         run: |
           bencher run \
             --project lockfreequeues \
