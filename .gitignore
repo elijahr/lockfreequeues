@@ -11,8 +11,12 @@ nimblecache/
 .tmp/
 
 # Generated documentation
-/htmldocs/
 /site/
+
+# Legacy nim doc artifacts (removed in v4.2.0)
+/json/
+/nimdoc.cfg
+/htmldocs/
 
 # Personal IDE / chatmode tooling — keep out of the repo entirely.
 .github/instructions/
