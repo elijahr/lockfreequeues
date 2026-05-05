@@ -19,9 +19,12 @@
 ##
 ## Memory management: ``Chan[T]`` is a reference-counted object that
 ## owns its underlying buffer. We hold it as a value field on the
-## adapter so the destructor runs automatically when the adapter goes
-## out of scope; the optional ``deinit`` proc explicitly tears down a
-## migrated value before the adapter is dropped.
+## adapter so the package's ``=destroy`` hook runs automatically when
+## the adapter goes out of scope. The ``cleanup`` proc below is a
+## no-op kept for shape parity with other adapters (callers pattern
+## ``defer: cleanup(a)`` uniformly across the adapter set); the actual
+## buffer reclamation is driven entirely by Nim's ``=destroy`` hook on
+## ``Chan[T]``.
 ##
 ## Build constraint: the ``threading`` package documents that its
 ## channel implementation requires ``--mm:arc`` / ``--mm:atomicArc`` /
