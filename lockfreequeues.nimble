@@ -59,6 +59,19 @@ task benchmarks, "Runs the benchmark suite":
   exec ".tmp/bench_throughput --bmf-out=benchmarks/results/latest.json"
 
 
+task benchtests, "Runs the bench harness test suite":
+  # The bench harness lives outside `srcDir`, so its dedicated tests
+  # (`tests/t_bench_*.nim`) are NOT imported by `tests/test.nim` to
+  # keep the regular `nimble test` matrix free of the bench harness's
+  # threading/atomic dependencies. This task runs them explicitly so
+  # CI can validate harness invariants. Single MM (orc default) is
+  # sufficient because the bench harness itself is the system under
+  # test, not the queue MM matrix. Later PRs in the bench rollup
+  # extend this task with additional `t_bench_*.nim` files as they
+  # land.
+  exec "nim c --threads:on -r -f tests/t_bench_common.nim"
+
+
 task stresstests, "Runs the stress test suite (multi-threaded)":
   # C with default MM (orc)
   exec "nim c --path:src --threads:on -r -f stress-tests/stress_test.nim"

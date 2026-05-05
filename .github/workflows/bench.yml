@@ -31,6 +31,50 @@ env:
   BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
 
 jobs:
+  bench-tests:
+    # Compiles and runs `tests/t_bench_*.nim` (the bench harness's own
+    # unit tests). Lives in bench.yml because the bench harness itself
+    # is what these tests exercise, but takes no secrets — fork PRs
+    # are allowed so contributors get the same harness validation as
+    # maintainer pushes. The bot-actor guard prevents loop-back from
+    # the bench-snapshot push commit (see docs.yml). Sibling Nim deps
+    # are pinned to tagged releases (not `main`) for deterministic CI;
+    # bump in lockstep with build.yml/bench.yml's `benchmark` job and
+    # lockfreequeues.nimble's `requires`.
+    name: bench-tests (ubuntu-latest)
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Setup Nim
+        uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: 'stable'
+
+      - name: Install build deps (Linux)
+        run: |
+          sudo apt-get update -q -y
+          sudo apt-get -qq install -y clang
+
+      - name: Clone and install sibling Nim deps (nim-debra, nim-typestates)
+        run: |
+          set -e
+          cd ..
+          git clone --depth 1 --branch v0.6.0 https://github.com/elijahr/nim-debra.git
+          git clone --depth 1 --branch v0.7.0 https://github.com/elijahr/nim-typestates.git
+          (cd nim-typestates && nimble install -y)
+          (cd nim-debra && nimble install -y)
+
+      - name: Vendor unittest2
+        run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
+
+      - name: Run bench harness tests
+        run: nimble benchtests
+
   benchmark:
     name: Throughput bench (ubuntu-latest)
     runs-on: ubuntu-latest
