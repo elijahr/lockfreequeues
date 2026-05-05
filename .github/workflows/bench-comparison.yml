@@ -193,7 +193,7 @@ jobs:
             --token '${{ secrets.BENCHER_API_TOKEN }}' \
             --branch devel \
             --testbed ubuntu-latest \
-            --threshold-measure throughput \
+            --threshold-measure throughput_ops_ms \
             --threshold-test t_test \
             --threshold-max-sample-size 64 \
             --threshold-lower-boundary 0.99 \

@@ -289,14 +289,14 @@ proc percentile*(h: Histogram, p: float): float =
   ##   target rank in top-K stratum                -> top-K rank lookup
   ##                       (i.e. seenAll*(1-p) <= heap.len)
   ##   else                                        -> reservoir, with the
-  ##     percentile rescaled to the body stratum: p_body = (p*seenAll - K)
+  ##     percentile rescaled to the body stratum: p_body = (p*seenAll)
   ##     / (seenAll - K). The reservoir samples uniformly from the body,
   ##     so the rescaled percentile is unbiased.
   ##
   ## Worked example (K=1000, seenAll=100_000):
   ##   p=0.99, target rank 99_000. Top-K covers ranks 99_001..100_000
   ##     (count K=1000), so target is in the body stratum at the very
-  ##     top edge. p_body = (99_000 - 0) / 99_000 = 1.0 -> reservoir max.
+  ##     top edge. p_body = 99_000 / 99_000 = 1.0 -> reservoir max.
   ##   p=0.999, target rank 99_900. Tail count = 100. <= heap.len -> top-K.
   ##   p=1.0, max -> top-K.
   ##   p=0.50, target rank 50_000 -> body, p_body = 50_000/99_000 ≈ 0.505.
