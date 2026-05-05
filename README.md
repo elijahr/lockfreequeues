@@ -159,7 +159,7 @@ Slots are stored in a plain `array[S, T]` and shared across threads. When a prod
 
 Use a value type, a `ptr T`, or, if you accept the trade-off, compile with `-d:allowNonLockFreeQueueItems` to disable the check.
 
-The full safety model — slot-ownership typestates, why the queue itself is lock-free even when items are not, and the matrix of MM x sanitiser combinations under CI — lives in [`docs/safety-model.md`](docs/safety-model.md). The typestate transitions are documented in [`docs/slot-ownership-typestates.md`](docs/slot-ownership-typestates.md).
+The full safety model — slot-ownership typestates, why the queue itself is lock-free even when items are not, and the matrix of MM x sanitiser combinations under CI — lives in [`docs/guide/safety-model.md`](docs/guide/safety-model.md). The typestate transitions are documented in [`docs/guide/slot-ownership-typestates.md`](docs/guide/slot-ownership-typestates.md).
 
 ## Benchmarks
 

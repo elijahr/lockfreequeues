@@ -11,7 +11,7 @@ Unbounded multiple-producer, single-consumer (MPSC) queue using linked segments.
 > sequence-counter protocol used by the bounded variants (`Mupmuc`, `Mupsic`,
 > `Sipmuc`). Unbounded segments are single-use linked nodes (no generation
 > rollover), so the simpler one-shot committed flag is sufficient. See
-> [slot-ownership-typestates.md](../slot-ownership-typestates.md) for the
+> [slot-ownership-typestates.md](../guide/slot-ownership-typestates.md) for the
 > full distinction.
 
 **Performance characteristics:**

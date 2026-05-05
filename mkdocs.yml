@@ -96,10 +96,10 @@ nav:
       - UnboundedMupsic: api/unbounded_mupsic.md
       - UnboundedMupmuc: api/unbounded_mupmuc.md
   - Concepts:
-    - Safety Model: safety-model.md
-    - Slot Ownership Typestates: slot-ownership-typestates.md
+    - Safety Model: guide/safety-model.md
+    - Slot Ownership Typestates: guide/slot-ownership-typestates.md
   - Benchmarks: benchmarks.md
-  - Examples: examples.md
+  - Examples: guide/examples.md
 
 watch:
   - docs

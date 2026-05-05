@@ -15,7 +15,7 @@ Unbounded single-producer, multiple-consumer (SPMC) queue using linked segments.
 > because multiple producers race on `tail` via CAS to claim a slot
 > before writing, so `tail` can advance past not-yet-written slots; the
 > bounded MP variants use a per-slot sequence-counter protocol with
-> generation rollover. See [slot-ownership-typestates.md](../slot-ownership-typestates.md)
+> generation rollover. See [slot-ownership-typestates.md](../guide/slot-ownership-typestates.md)
 > for the full distinction across all four bounded × unbounded × SP × MP
 > combinations.
 
