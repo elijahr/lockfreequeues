@@ -176,16 +176,16 @@ proc push*[N, P, C: static int, T](self: MupmucProducer[N, P, C, T], item: T): b
   var op = mpmc_push.start[N]()
   var spins = InitialSpin
   while true:
-    let claim = op.tryClaim(queueBase[])
-    case claim.kind
-    of mMPMCPushFull:
-      return claim.mpmcpushfull.extractFalse()
-    of mMPMCPushSlotClaimed:
-      return claim.mpmcpushslotclaimed.complete(queueBase[], item)
-    of mMPMCPushStart:
-      op = claim.mpmcpushstart # CAS race or producer raced ahead: retry
-      backoffOnRetry(spins)
-      continue
+    var claim = op.tryClaim(queueBase[])
+    match claim:
+      MPMCPushFull(full):
+        return full.extractFalse()
+      MPMCPushSlotClaimed(slotClaimed):
+        return slotClaimed.complete(queueBase[], item)
+      MPMCPushStart(restart):
+        op = restart # CAS race or producer raced ahead: retry
+        backoffOnRetry(spins)
+        continue
 
 proc push*[N, P, C: static int, T](
     self: MupmucProducer[N, P, C, T], items: openArray[T]
@@ -225,16 +225,16 @@ proc pop*[N, P, C: static int, T](self: Consumer[N, P, C, T]): Option[T] =
   var op = mpmc_pop.start[N]()
   var spins = InitialSpin
   while true:
-    let claim = op.tryClaim(queueBase[])
-    case claim.kind
-    of mMPMCPopEmpty:
-      return none(T)
-    of mMPMCPopSlotClaimed:
-      return some(claim.mpmcpopslotclaimed.complete(queueBase[]))
-    of mMPMCPopStart:
-      op = claim.mpmcpopstart # CAS race or consumer raced ahead: retry
-      backoffOnRetry(spins)
-      continue
+    var claim = op.tryClaim(queueBase[])
+    match claim:
+      MPMCPopEmpty(_):
+        return none(T)
+      MPMCPopSlotClaimed(slotClaimed):
+        return some(slotClaimed.complete(queueBase[]))
+      MPMCPopStart(restart):
+        op = restart # CAS race or consumer raced ahead: retry
+        backoffOnRetry(spins)
+        continue
 
 proc pop*[N, P, C: static int, T](
     self: Consumer[N, P, C, T], count: int

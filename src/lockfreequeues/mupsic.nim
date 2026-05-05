@@ -59,18 +59,17 @@ type
 # object-field offsets are computed structurally, so a match for one
 # instantiation implies a match for all.
 static:
-  doAssert offsetOf(Mupsic[8, 4, int], head) ==
-    offsetOf(MupsicPushBase[8, 4, int], head)
-  doAssert offsetOf(Mupsic[8, 4, int], tail) ==
-    offsetOf(MupsicPushBase[8, 4, int], tail)
+  doAssert offsetOf(Mupsic[8, 4, int], head) == offsetOf(
+    MupsicPushBase[8, 4, int], head
+  )
+  doAssert offsetOf(Mupsic[8, 4, int], tail) == offsetOf(
+    MupsicPushBase[8, 4, int], tail
+  )
   doAssert offsetOf(Mupsic[8, 4, int], cells) ==
     offsetOf(MupsicPushBase[8, 4, int], cells)
-  doAssert offsetOf(Mupsic[8, 4, int], head) ==
-    offsetOf(MupsicBase[8, 4, int], head)
-  doAssert offsetOf(Mupsic[8, 4, int], tail) ==
-    offsetOf(MupsicBase[8, 4, int], tail)
-  doAssert offsetOf(Mupsic[8, 4, int], cells) ==
-    offsetOf(MupsicBase[8, 4, int], cells)
+  doAssert offsetOf(Mupsic[8, 4, int], head) == offsetOf(MupsicBase[8, 4, int], head)
+  doAssert offsetOf(Mupsic[8, 4, int], tail) == offsetOf(MupsicBase[8, 4, int], tail)
+  doAssert offsetOf(Mupsic[8, 4, int], cells) == offsetOf(MupsicBase[8, 4, int], cells)
 
 proc clear[N, P: static int, T](self: var Mupsic[N, P, T]) =
   self.head.store(0'u64, moRelaxed)
@@ -133,16 +132,16 @@ proc push*[N, P: static int, T](self: Producer[N, P, T], item: T): bool =
   var op = mpsc_push.start[N]()
   var spins = InitialSpin
   while true:
-    let claim = op.tryClaim(queueBase[])
-    case claim.kind
-    of mMPSCPushFull:
-      return claim.mpscpushfull.extractFalse()
-    of mMPSCPushSlotClaimed:
-      return claim.mpscpushslotclaimed.complete(queueBase[], item)
-    of mMPSCPushStart:
-      op = claim.mpscpushstart # CAS race or producer raced ahead: retry
-      backoffOnRetry(spins)
-      continue
+    var claim = op.tryClaim(queueBase[])
+    match claim:
+      MPSCPushFull(full):
+        return full.extractFalse()
+      MPSCPushSlotClaimed(slotClaimed):
+        return slotClaimed.complete(queueBase[], item)
+      MPSCPushStart(restart):
+        op = restart # CAS race or producer raced ahead: retry
+        backoffOnRetry(spins)
+        continue
 
 proc push*[N, P: static int, T](
     self: Producer[N, P, T], items: openArray[T]
@@ -193,16 +192,16 @@ proc pop*[N, P: static int, T](self: var Mupsic[N, P, T]): Option[T] =
   var op = mpsc_pop.start[N]()
   var spins = InitialSpin
   while true:
-    let claim = op.tryClaim(queueBase[])
-    case claim.kind
-    of mMPSCPopEmpty:
-      return none(T)
-    of mMPSCPopSlotClaimed:
-      return some(claim.mpscpopslotclaimed.complete(queueBase[]))
-    of mMPSCPopStart:
-      op = claim.mpscpopstart # CAS race or consumer raced ahead: retry
-      backoffOnRetry(spins)
-      continue
+    var claim = op.tryClaim(queueBase[])
+    match claim:
+      MPSCPopEmpty(_):
+        return none(T)
+      MPSCPopSlotClaimed(slotClaimed):
+        return some(slotClaimed.complete(queueBase[]))
+      MPSCPopStart(restart):
+        op = restart # CAS race or consumer raced ahead: retry
+        backoffOnRetry(spins)
+        continue
 
 proc pop*[N, P: static int, T](self: var Mupsic[N, P, T], count: int): Option[seq[T]] =
   ## Pop up to `count` items from the queue (best-effort drain).

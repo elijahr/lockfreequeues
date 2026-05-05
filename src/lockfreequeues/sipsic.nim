@@ -43,12 +43,11 @@ proc push*[N: static int, T](self: var Sipsic[N, T], item: T): bool =
   let loaded = op.loadPointers(queueBase[])
   var fullCheck = loaded.checkFull()
 
-  case fullCheck.kind
-  of sSPSCPushFull:
-    return move(fullCheck).spscpushfull.extractFalse()
-  of sSPSCPushNotFull:
-    return
-      move(fullCheck).spscpushnotfull.writeData(queueBase[], item).complete(queueBase[])
+  match fullCheck:
+    SPSCPushFull(full):
+      return full.extractFalse()
+    SPSCPushNotFull(notFull):
+      return notFull.writeData(queueBase[], item).complete(queueBase[])
 
 proc push*[N: static int, T](
     self: var Sipsic[N, T], items: openArray[T]
@@ -96,11 +95,11 @@ proc pop*[N: static int, T](self: var Sipsic[N, T]): Option[T] =
   let loaded = op.loadPointers(queueBase[])
   var emptyCheck = loaded.checkEmpty()
 
-  case emptyCheck.kind
-  of sSPSCPopEmpty:
-    return none(T)
-  of sSPSCPopNotEmpty:
-    return some(move(emptyCheck).spscpopnotempty.complete(queueBase[]))
+  match emptyCheck:
+    SPSCPopEmpty(_):
+      return none(T)
+    SPSCPopNotEmpty(notEmpty):
+      return some(notEmpty.complete(queueBase[]))
 
 proc pop*[N: static int, T](self: var Sipsic[N, T], count: int): Option[seq[T]] =
   ## Pop `count` items from the queue.
