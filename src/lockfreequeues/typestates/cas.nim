@@ -1,6 +1,10 @@
 ## Type-safe CAS operations.
 ##
-## Forces explicit handling of success and failure paths.
+## Forces explicit handling of success and failure paths via a typestate
+## union: a `CASPending` is consumed by `executeCAS` and produces either a
+## `CASSucceeded` (carrying the written value) or a `CASFailed` (carrying the
+## value actually observed at the address). Callers `match` on the resulting
+## `CASResult` union and cannot reach the payload without selecting a branch.
 
 import ../atomic_dsl
 import typestates
@@ -13,13 +17,12 @@ type
 
   CASPending* = distinct CASAttempt ## CAS prepared but not executed.
 
-  CASResult* = object ## Result of CAS - must check succeeded before extracting values.
-    succeeded*: bool
-    newVal*: int # Valid if succeeded
-    actualVal*: int # Valid if not succeeded (what was actually there)
+  CASSucceeded* = object ## Terminal: CAS succeeded; carries the written value.
+    newVal*: int
 
-  CASSucceeded* = distinct CASResult
-  CASFailed* = distinct CASResult
+  CASFailed* = object
+    ## Terminal: CAS failed; carries the value actually observed at the address.
+    actualVal*: int
 
 typestate CASAttempt:
   opaqueStates = true
@@ -30,8 +33,7 @@ typestate CASAttempt:
     CASSucceeded
     CASFailed
   transitions:
-    CASPending -> CASSucceeded
-    CASPending -> CASFailed
+    CASPending -> CASSucceeded | CASFailed as CASResult
 
 # Accessors
 proc expectedVal*(p: CASPending): int {.notATransition.} =
@@ -40,32 +42,17 @@ proc expectedVal*(p: CASPending): int {.notATransition.} =
 proc desiredVal*(p: CASPending): int {.notATransition.} =
   CASAttempt(p).desired
 
-proc newVal*(s: CASSucceeded): int {.notATransition.} =
-  CASResult(s).newVal
-
-proc actualVal*(f: CASFailed): int {.notATransition.} =
-  CASResult(f).actualVal
-
 # Constructor
 proc prepareCAS*(atom: ptr Atomic[int], expected, desired: int): CASPending {.inline.} =
   CASPending(CASAttempt(atom: atom, expected: expected, desired: desired))
 
-# Execute CAS - returns result that must be checked
-proc executeCAS*(p: CASPending): CASResult {.notATransition.} =
+# Execute CAS - returns the typestate union; caller MUST match on it.
+proc executeCAS*(p: CASPending): CASResult {.transition.} =
   let attempt = CASAttempt(p)
   var expected = attempt.expected
   let success =
     attempt.atom[].compareExchangeWeak(expected, attempt.desired, moRelease, moAcquire)
   if success:
-    CASResult(succeeded: true, newVal: attempt.desired, actualVal: 0)
+    CASResult -> CASSucceeded(newVal: attempt.desired)
   else:
-    CASResult(succeeded: false, newVal: 0, actualVal: expected)
-
-# Safe extraction
-proc assumeSuccess*(r: CASResult): CASSucceeded {.inline.} =
-  assert r.succeeded, "CAS did not succeed"
-  CASSucceeded(r)
-
-proc assumeFailure*(r: CASResult): CASFailed {.inline.} =
-  assert not r.succeeded, "CAS did not fail"
-  CASFailed(r)
+    CASResult -> CASFailed(actualVal: expected)
