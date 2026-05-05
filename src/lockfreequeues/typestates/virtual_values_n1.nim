@@ -17,7 +17,12 @@ type
 typestate VirtualValueN1[N: static int]:
   inheritsFromRootObj = true
   consumeOnTransition = false # Values can be reused after validation
+  opaqueStates = true
   states RawLoadedN1[N], WrappedValueN1[N], UnwrappedSumN1[N], PhysicalSlotN1[N]
+  initial:
+    RawLoadedN1[N]
+  terminal:
+    PhysicalSlotN1[N]
   transitions:
     RawLoadedN1[N] -> WrappedValueN1[N]
     WrappedValueN1[N] -> UnwrappedSumN1[N]
@@ -26,16 +31,16 @@ typestate VirtualValueN1[N: static int]:
     WrappedValueN1[N] -> WrappedValueN1[N]
 
 # Accessors
-proc rawValue*[N: static int](r: RawLoadedN1[N]): int {.inline.} =
+proc rawValue*[N: static int](r: RawLoadedN1[N]): int {.notATransition.} =
   VirtualValueN1[N](r).v
 
-proc value*[N: static int](w: WrappedValueN1[N]): int {.inline.} =
+proc value*[N: static int](w: WrappedValueN1[N]): int {.notATransition.} =
   VirtualValueN1[N](w).v
 
-proc unwrappedValue*[N: static int](u: UnwrappedSumN1[N]): int {.inline.} =
+proc unwrappedValue*[N: static int](u: UnwrappedSumN1[N]): int {.notATransition.} =
   VirtualValueN1[N](u).v
 
-proc slotValue*[N: static int](p: PhysicalSlotN1[N]): int {.inline.} =
+proc slotValue*[N: static int](p: PhysicalSlotN1[N]): int {.notATransition.} =
   VirtualValueN1[N](p).v
 
 # Constructor

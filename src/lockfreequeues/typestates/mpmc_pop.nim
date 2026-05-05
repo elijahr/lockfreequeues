@@ -44,8 +44,7 @@ typestate MPMCPopOp[N: static int]:
   states MPMCPopStart[N], MPMCPopSlotClaimed[N], MPMCPopEmpty[N]
   transitions:
     MPMCPopStart[N] ->
-      MPMCPopSlotClaimed[N] | MPMCPopEmpty[N] | MPMCPopStart[N] as
-      MPMCPopClaimResult[N]
+      MPMCPopSlotClaimed[N] | MPMCPopEmpty[N] | MPMCPopStart[N] as MPMCPopClaimResult[N]
 
 # Forward declaration for Mupmuc (avoid circular import).
 # Field order MUST stay in lockstep with MupmucPushBase in mpmc_push.nim

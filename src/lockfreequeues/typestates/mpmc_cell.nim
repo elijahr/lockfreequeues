@@ -70,9 +70,7 @@ proc init*[N: static int, T](a: var MPMCCellArrayN[N, T]) =
     a.cells[i].payload.seq.store(uint64(i), moRelaxed)
 
 proc seqLoad*[N: static int, T](
-    a: var MPMCCellArrayN[N, T],
-    idx: PhysicalSlotN[N],
-    order: static MemoryOrder,
+    a: var MPMCCellArrayN[N, T], idx: PhysicalSlotN[N], order: static MemoryOrder
 ): uint64 {.inline.} =
   a.cells[idx.slotValue].payload.seq.load(order)
 

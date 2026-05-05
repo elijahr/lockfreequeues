@@ -32,16 +32,11 @@ proc init*[N: static int](s: var SlotSeqN[N]) =
     s.seqs[i].store(uint64(i), moRelaxed)
 
 proc load*[N: static int](
-    s: var SlotSeqN[N],
-    idx: PhysicalSlotN[N],
-    order: static MemoryOrder,
+    s: var SlotSeqN[N], idx: PhysicalSlotN[N], order: static MemoryOrder
 ): uint64 {.inline.} =
   s.seqs[idx.slotValue].load(order)
 
 proc store*[N: static int](
-    s: var SlotSeqN[N],
-    idx: PhysicalSlotN[N],
-    val: uint64,
-    order: static MemoryOrder,
+    s: var SlotSeqN[N], idx: PhysicalSlotN[N], val: uint64, order: static MemoryOrder
 ) {.inline.} =
   s.seqs[idx.slotValue].store(val, order)

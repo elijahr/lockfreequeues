@@ -34,10 +34,16 @@ type
 
 typestate SPSCPushOp[N: static int]:
   inheritsFromRootObj = true
+  opaqueStates = true
   states SPSCPushStart[N],
     SPSCPushPointersLoaded[N],
     SPSCPushNotFull[N],
     SPSCPushDataWritten[N],
+    SPSCPushFull[N]
+  initial:
+    SPSCPushStart[N]
+  terminal:
+    SPSCPushDataWritten[N]
     SPSCPushFull[N]
   transitions:
     SPSCPushStart[N] -> SPSCPushPointersLoaded[N]
@@ -89,6 +95,6 @@ proc complete*[N: static int, T](
   queue.tail.storeReleaseN1(op.newTail)
   true
 
-proc extractFalse*[N: static int](op: SPSCPushFull[N]): bool {.inline.} =
+proc extractFalse*[N: static int](op: SPSCPushFull[N]): bool {.notATransition.} =
   ## Terminal: extract false result (queue was full).
   false

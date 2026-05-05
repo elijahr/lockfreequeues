@@ -58,18 +58,17 @@ type
 # object-field offsets are computed structurally, so a match for one
 # instantiation implies a match for all.
 static:
-  doAssert offsetOf(Sipmuc[8, 4, int], head) ==
-    offsetOf(SipmucPushBase[8, 4, int], head)
-  doAssert offsetOf(Sipmuc[8, 4, int], tail) ==
-    offsetOf(SipmucPushBase[8, 4, int], tail)
+  doAssert offsetOf(Sipmuc[8, 4, int], head) == offsetOf(
+    SipmucPushBase[8, 4, int], head
+  )
+  doAssert offsetOf(Sipmuc[8, 4, int], tail) == offsetOf(
+    SipmucPushBase[8, 4, int], tail
+  )
   doAssert offsetOf(Sipmuc[8, 4, int], cells) ==
     offsetOf(SipmucPushBase[8, 4, int], cells)
-  doAssert offsetOf(Sipmuc[8, 4, int], head) ==
-    offsetOf(SipmucBase[8, 4, int], head)
-  doAssert offsetOf(Sipmuc[8, 4, int], tail) ==
-    offsetOf(SipmucBase[8, 4, int], tail)
-  doAssert offsetOf(Sipmuc[8, 4, int], cells) ==
-    offsetOf(SipmucBase[8, 4, int], cells)
+  doAssert offsetOf(Sipmuc[8, 4, int], head) == offsetOf(SipmucBase[8, 4, int], head)
+  doAssert offsetOf(Sipmuc[8, 4, int], tail) == offsetOf(SipmucBase[8, 4, int], tail)
+  doAssert offsetOf(Sipmuc[8, 4, int], cells) == offsetOf(SipmucBase[8, 4, int], cells)
 
 proc clear[N, C: static int, T](self: var Sipmuc[N, C, T]) =
   self.head.store(0'u64, moRelaxed)
@@ -106,16 +105,16 @@ proc push*[N, C: static int, T](self: var Sipmuc[N, C, T], item: T): bool =
   var op = spmc_push.start[N]()
   var spins = InitialSpin
   while true:
-    let claim = op.tryClaim(queueBase[])
-    case claim.kind
-    of sSPMCPushFull:
-      return claim.spmcpushfull.extractFalse()
-    of sSPMCPushSlotClaimed:
-      return claim.spmcpushslotclaimed.complete(queueBase[], item)
-    of sSPMCPushStart:
-      op = claim.spmcpushstart # CAS race or producer raced ahead: retry
-      backoffOnRetry(spins)
-      continue
+    var claim = op.tryClaim(queueBase[])
+    match claim:
+      SPMCPushFull(full):
+        return full.extractFalse()
+      SPMCPushSlotClaimed(slotClaimed):
+        return slotClaimed.complete(queueBase[], item)
+      SPMCPushStart(restart):
+        op = restart # CAS race or producer raced ahead: retry
+        backoffOnRetry(spins)
+        continue
 
 proc push*[N, C: static int, T](
     self: var Sipmuc[N, C, T], items: openArray[T]
@@ -184,16 +183,16 @@ proc pop*[N, C: static int, T](self: Consumer[N, C, T]): Option[T] =
   var op = spmc_pop.start[N]()
   var spins = InitialSpin
   while true:
-    let claim = op.tryClaim(queueBase[])
-    case claim.kind
-    of sSPMCPopEmpty:
-      return none(T)
-    of sSPMCPopSlotClaimed:
-      return some(claim.spmcpopslotclaimed.complete(queueBase[]))
-    of sSPMCPopStart:
-      op = claim.spmcpopstart # CAS race or consumer raced ahead: retry
-      backoffOnRetry(spins)
-      continue
+    var claim = op.tryClaim(queueBase[])
+    match claim:
+      SPMCPopEmpty(_):
+        return none(T)
+      SPMCPopSlotClaimed(slotClaimed):
+        return some(slotClaimed.complete(queueBase[]))
+      SPMCPopStart(restart):
+        op = restart # CAS race or consumer raced ahead: retry
+        backoffOnRetry(spins)
+        continue
 
 proc pop*[N, C: static int, T](self: Consumer[N, C, T], count: int): Option[seq[T]] =
   ## Pop up to `count` items from the queue (best-effort drain).

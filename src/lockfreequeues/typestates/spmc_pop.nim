@@ -47,8 +47,7 @@ typestate SPMCPopOp[N: static int]:
   states SPMCPopStart[N], SPMCPopSlotClaimed[N], SPMCPopEmpty[N]
   transitions:
     SPMCPopStart[N] ->
-      SPMCPopSlotClaimed[N] | SPMCPopEmpty[N] | SPMCPopStart[N] as
-      SPMCPopClaimResult[N]
+      SPMCPopSlotClaimed[N] | SPMCPopEmpty[N] | SPMCPopStart[N] as SPMCPopClaimResult[N]
 
 # Forward declaration for Sipmuc (avoid circular import).
 # Field order MUST stay in lockstep with SipmucPushBase in spmc_push.nim
