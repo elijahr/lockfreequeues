@@ -7,7 +7,6 @@
 import lockfreequeues/atomic_dsl
 import lockfreequeues/internal/aligned_alloc
 import unittest2
-from system/ansi_c import c_free
 
 type
   Tiny = object
@@ -32,7 +31,7 @@ suite "internal/aligned_alloc.allocAligned":
     check p != nil
     check (cast[uint](p) mod CacheLineBytes.uint) == 0
     check p.a == 0 # zero-initialized
-    c_free(p)
+    freeAligned(p)
 
   test "line-sized payload (sizeof == CacheLineBytes) is 64B-aligned":
     let p = allocAligned[Line]()
@@ -40,7 +39,7 @@ suite "internal/aligned_alloc.allocAligned":
     check (cast[uint](p) mod CacheLineBytes.uint) == 0
     check p.a == 0
     check p.h == 0
-    c_free(p)
+    freeAligned(p)
 
   test "big payload (sizeof > CacheLineBytes) is 64B-aligned":
     let p = allocAligned[Big]()
@@ -48,7 +47,7 @@ suite "internal/aligned_alloc.allocAligned":
     check (cast[uint](p) mod CacheLineBytes.uint) == 0
     for i in 0 ..< 256:
       check p.a[i] == 0.byte
-    c_free(p)
+    freeAligned(p)
 
   test "many allocations are all 64B-aligned":
     var ptrs: array[64, ptr Line]
@@ -57,4 +56,4 @@ suite "internal/aligned_alloc.allocAligned":
       check ptrs[i] != nil
       check (cast[uint](ptrs[i]) mod CacheLineBytes.uint) == 0
     for i in 0 ..< 64:
-      c_free(ptrs[i])
+      freeAligned(ptrs[i])
