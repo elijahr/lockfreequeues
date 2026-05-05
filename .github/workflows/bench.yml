@@ -110,8 +110,8 @@ jobs:
         run: |
           set -e
           cd ..
-          git clone --depth 1 --branch v0.6.0 https://github.com/elijahr/nim-debra.git
-          git clone --depth 1 --branch v0.7.0 https://github.com/elijahr/nim-typestates.git
+          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
+          git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
           (cd nim-typestates && nimble install -y)
           (cd nim-debra && nimble install -y)
 
@@ -178,14 +178,14 @@ jobs:
       - name: Clone and install sibling Nim deps (nim-debra, nim-typestates)
         # Mirrors build.yml: nim.cfg uses --path:"../nim-debra/src" and
         # --path:"../nim-typestates/src", and nimble's resolver runs before
-        # the compiler so we must install matching tags locally. Pin to
-        # specific release tags (not `main`) for deterministic CI; bump in
+        # the compiler so we must install matching branches locally. Tracks
+        # `main` until nimble.directory picks up the relevant tags; bump in
         # lockstep with build.yml and lockfreequeues.nimble's `requires`.
         run: |
           set -e
           cd ..
-          git clone --depth 1 --branch v0.6.0 https://github.com/elijahr/nim-debra.git
-          git clone --depth 1 --branch v0.7.0 https://github.com/elijahr/nim-typestates.git
+          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
+          git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
           (cd nim-typestates && nimble install -y)
           (cd nim-debra && nimble install -y)
 
