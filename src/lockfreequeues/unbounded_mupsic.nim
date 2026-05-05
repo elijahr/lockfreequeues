@@ -166,13 +166,11 @@ proc newUnboundedMupsic*[S: static int, T; MaxThreads: static int](
   ## handle obtained on the consumer thread.
   ##
   ## For multi-queue setups that share a manager, pass it explicitly.
-  let mgr = cast[ptr DebraManager[MaxThreads]](
-    c_calloc(1.csize_t, sizeof(DebraManager[MaxThreads]).csize_t)
-  )
+  let mgr = cast[ptr DebraManager[MaxThreads]](c_calloc(
+    1.csize_t, sizeof(DebraManager[MaxThreads]).csize_t
+  ))
   if mgr == nil:
-    raise newException(
-      OutOfMemDefect, "newUnboundedMupsic: c_calloc returned nil"
-    )
+    raise newException(OutOfMemDefect, "newUnboundedMupsic: c_calloc returned nil")
   try:
     mgr[] = initDebraManager[MaxThreads]()
     let consumerHandle = registerThread(mgr[])

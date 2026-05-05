@@ -50,8 +50,7 @@ typestate MPSCPopOp[N: static int]:
   states MPSCPopStart[N], MPSCPopSlotClaimed[N], MPSCPopEmpty[N]
   transitions:
     MPSCPopStart[N] ->
-      MPSCPopSlotClaimed[N] | MPSCPopEmpty[N] | MPSCPopStart[N] as
-      MPSCPopClaimResult[N]
+      MPSCPopSlotClaimed[N] | MPSCPopEmpty[N] | MPSCPopStart[N] as MPSCPopClaimResult[N]
 
 # Forward declaration for Mupsic (avoid circular import).
 # Field order MUST stay in lockstep with MupsicPushBase in mpsc_push.nim

@@ -161,13 +161,11 @@ proc newUnboundedMupmuc*[S: static int, T; MaxThreads: static int](
   ## owned by this queue. Manager teardown happens inside this queue's
   ## `=destroy` after segment cleanup. For multi-queue setups that
   ## share a manager, use the `(manager, strategy)` overload instead.
-  let mgr = cast[ptr DebraManager[MaxThreads]](
-    c_calloc(1.csize_t, sizeof(DebraManager[MaxThreads]).csize_t)
-  )
+  let mgr = cast[ptr DebraManager[MaxThreads]](c_calloc(
+    1.csize_t, sizeof(DebraManager[MaxThreads]).csize_t
+  ))
   if mgr == nil:
-    raise newException(
-      OutOfMemDefect, "newUnboundedMupmuc: c_calloc returned nil"
-    )
+    raise newException(OutOfMemDefect, "newUnboundedMupmuc: c_calloc returned nil")
   try:
     mgr[] = initDebraManager[MaxThreads]()
     result = newUnboundedMupmuc[S, T, MaxThreads](mgr, strategy)
