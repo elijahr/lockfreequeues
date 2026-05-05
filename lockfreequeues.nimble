@@ -70,6 +70,7 @@ task benchtests, "Runs the bench harness test suite":
   # extend this task with additional `t_bench_*.nim` files as they
   # land.
   exec "nim c --threads:on -r -f tests/t_bench_common.nim"
+  exec "nim c --threads:on -r -f tests/t_bench_latency.nim"
 
 
 task stresstests, "Runs the stress test suite (multi-threaded)":
