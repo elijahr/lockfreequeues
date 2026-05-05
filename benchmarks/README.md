@@ -27,10 +27,13 @@ regression gate via [Bencher.dev](https://bencher.dev).
 # Run all Nim throughput benchmarks (1M messages x 33 runs - takes a while).
 nim c -r -d:release -d:danger --threads:on benchmarks/nim/bench_throughput.nim
 
-# Same, but the CI wall-clock budget (100k x 5).
+# Same, but the CI wall-clock budget. Bounded variants run at 1M x 5
+# runs; unbounded_mupsic is gated separately to 500k x 3 runs because
+# its wall-clock cost is super-linear in message count. Bump in lockstep
+# with `.github/workflows/bench.yml` if you change the CI shape.
 nim c -r -d:release -d:danger --threads:on \
-  -d:MessageCount=100000 -d:DefaultRuns=5 -d:WarmupRuns=2 \
-  -d:UnboundedMupsicRuns=5 \
+  -d:MessageCount=1000000 -d:DefaultRuns=5 -d:WarmupRuns=2 \
+  -d:UnboundedMupsicMessageCount=500000 -d:UnboundedMupsicRuns=3 \
   benchmarks/nim/bench_throughput.nim
 
 # Emit BMF JSON natively (no Python parser; see merge step below).
