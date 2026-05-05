@@ -84,6 +84,7 @@ task benchtests, "Runs the bench harness test suite":
   # land.
   exec "nim c --threads:on -r -f tests/t_bench_common.nim"
   exec "nim c --threads:on -r -f tests/t_bench_latency.nim"
+  exec "nim c --threads:on -r -f tests/t_bench_adapters.nim"
 
 
 task stresstests, "Runs the stress test suite (multi-threaded)":
