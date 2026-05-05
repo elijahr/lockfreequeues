@@ -15,10 +15,14 @@ on:
     paths-ignore:
       - '*.md'
       - '.github/workflows/docs.yml'
-      # Loop-prevention layer 2 of 3 (design §5.X): the snapshot push
+      # Loop-prevention layer 1 of 2 (design §5.X): the snapshot push
       # writes BMF JSON under docs/assets/bench-results/. paths-ignore
       # makes the bench job skip any push consisting solely of these
-      # snapshot files, in case [skip ci] is ever stripped manually.
+      # snapshot files, so the snapshot commit cannot retrigger bench.
+      # The companion guard is the bot-actor `if:` on the matrix and
+      # bench-upload jobs below. The snapshot commit has NO `[skip ci]`
+      # marker because docs.yml has no paths-ignore and must run on
+      # snapshot pushes to deploy the fresh chart data to Pages.
       - 'docs/assets/bench-results/**'
   push:
     branches: [main, devel]
@@ -125,11 +129,10 @@ jobs:
     #   1. PRs from forks cannot read BENCHER_API_TOKEN. Skip rather
     #      than fail noisily; maintainer pushes / merges still record
     #      the baseline.
-    #   2. Loop-prevention layer 3 of 3 (design §5.X): the snapshot
+    #   2. Loop-prevention layer 2 of 2 (design §5.X): the snapshot
     #      push step (Task 5.5.b) commits as `github-actions[bot]`.
-    #      Even if [skip ci] is stripped AND paths-ignore is somehow
-    #      bypassed, the bot-actor guard short-circuits before the
-    #      job grows any cost.
+    #      Even if paths-ignore is ever loosened, the bot-actor guard
+    #      short-circuits before the job grows any cost.
     if: |
       github.actor != 'github-actions[bot]' &&
       (github.event_name != 'pull_request' ||
@@ -758,15 +761,23 @@ jobs:
 
       # Track 5 PR 5 Task 5.5.b: snapshot the merged BMF into the docs
       # assets tree so the chart on `docs/benchmarks.md` always points
-      # at the most recent devel run. Loop-prevention is layered (see
-      # design §5.X / Task 5.5.a):
-      #   1. `[skip ci]` in the commit message — GitHub natively skips
-      #      workflow runs on commits containing this marker.
-      #   2. `paths-ignore: docs/assets/bench-results/**` (Task 5.5.a)
-      #      — bench job skipped at workflow-evaluation time.
-      #   3. `if: github.actor != 'github-actions[bot]'` on the parent
-      #      bench / bench-upload jobs (Task 5.5.a) — a bot-authored
-      #      commit short-circuits before any work happens.
+      # at the most recent devel run. Loop-prevention against bench.yml
+      # itself relies on two layers (no `[skip ci]` marker — see below):
+      #   1. `paths-ignore: docs/assets/bench-results/**` on bench.yml
+      #      — the snapshot push only changes files under that prefix,
+      #      so bench.yml does not re-evaluate at all.
+      #   2. `if: github.actor != 'github-actions[bot]'` on the parent
+      #      bench / bench-upload jobs — defense-in-depth in case the
+      #      paths-ignore is ever loosened.
+      #
+      # We deliberately do NOT include `[skip ci]` in the commit
+      # message: GitHub's native skip applies to ALL workflows on the
+      # commit, and docs.yml has no paths-ignore. Suppressing docs.yml
+      # would leave the freshly snapshotted JSON un-deployed on Pages,
+      # so the chart on the live docs site would lag the bench run
+      # that produced the snapshot. The two layers above already
+      # prevent bench.yml self-trigger; docs.yml does not trigger any
+      # bench work, so allowing it to run is the desired behavior.
       # Only fires on `push` to `refs/heads/devel`; tag pushes,
       # workflow_dispatch, PR runs, and main pushes do nothing here.
       - name: Snapshot to docs assets (devel push only)
@@ -788,14 +799,15 @@ jobs:
             echo "::notice::Snapshot identical to current checked-in latest.json; skipping commit."
             exit 0
           fi
-          git commit -m "chore(bench): refresh snapshot [skip ci]"
+          git commit -m "chore(bench): refresh snapshot"
           # Long bench runs leave a wide window for `devel` to advance
           # before we push (a docs-only follow-up commit, an unrelated
           # merge, etc.); a plain `git push` would then be rejected
           # non-fast-forward and fail the entire bench-upload job.
-          # Retry: fetch+rebase+push up to 3 times. Skip-CI is on the
-          # commit so the retry loop cannot trigger an infinite bench
-          # workflow regardless of how many fast-forwards happen.
+          # Retry: fetch+rebase+push up to 3 times. bench.yml's
+          # paths-ignore on docs/assets/bench-results/** prevents this
+          # commit from retriggering bench.yml, so the retry loop is
+          # safe regardless of how many fast-forwards happen.
           for attempt in 1 2 3; do
             if git push origin HEAD:devel; then
               exit 0

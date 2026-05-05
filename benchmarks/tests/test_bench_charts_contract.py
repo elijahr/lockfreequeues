@@ -37,7 +37,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # Mirrors the slug grammar enforced by `merge_bmf.py` schema validation
 # AND consumed by `docs/assets/bench-charts.js` `parseSlug()`. Drift
 # between the two would silently drop slugs from the chart.
-SLUG_RE = re.compile(r"^[a-z][a-z0-9_]*/[a-z][a-z0-9_]*/\d+p\d+c$")
+SLUG_RE = re.compile(r"^[a-z][a-z0-9_]*(?:/[a-z][a-z0-9_]*)+/\d+p\d+c$")
+# Mirrors `parseSlug` in bench-charts.js, which uses
+# `parts.slice(1, -1).join('/')` for topology and therefore accepts
+# nested topologies (3+ segments). The python regex must accept the
+# same shape so the contract test does not reject slugs the JS chart
+# would happily render — e.g. a hypothetical
+# `library/mpmc/unbounded/1p1c` from a future topology split.
 SHAPE_RE = re.compile(r"^(\d+)p(\d+)c$")
 MEASURE_KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 CHART_MEASURE = "throughput_ops_ms"
