@@ -1,0 +1,67 @@
+## Adapter for lockfreequeues Mupsic (bounded MPSC, multi-producer +
+## single consumer).
+##
+## Topology: `mpsc` with shapes `<P>p1c`. Multi-producer shapes drive a
+## per-thread `Producer` via `queue.getProducer(idx)` on each producer
+## thread. The single-consumer pop path goes through the queue object
+## directly.
+
+import options
+import lockfreequeues/mupsic
+import ../bench_common
+
+const topologiesSupported* = {tMpsc}
+
+type
+  LockfreequeuesMupsicAdapter*[N, P: static int, T] = object
+    queue*: ptr Mupsic[N, P, T]
+      ## Exported so multi-producer shapes can register their own
+      ## per-thread producer via `adapter.getProducer(idx)` (or, for
+      ## advanced callers, `adapter.queue[].getProducer(idx)` directly).
+      ## See the `getProducer` proc below for the documented entry point.
+    producer: Producer[N, P, T]
+      ## Pre-built producer for the 1P shape. Multi-producer shapes
+      ## bypass this slot and call `getProducer(idx)` per-thread.
+
+proc getProducer*[N, P: static int, T](
+    a: var LockfreequeuesMupsicAdapter[N, P, T], idx: int
+): Producer[N, P, T] =
+  ## Acquire a per-thread producer from the underlying Mupsic queue.
+  ## Multi-producer benchmark shapes (`<P>p1c` for P > 1) MUST call
+  ## this on each producer thread with a unique `idx in 0 ..< P`;
+  ## sharing a single `Producer` across threads is unsafe.
+  a.queue[].getProducer(idx = idx)
+
+proc makeLockfreequeuesMupsicAdapter*[N, P: static int, T](
+    capacity: int = N
+): LockfreequeuesMupsicAdapter[N, P, T] =
+  ## Allocate and initialize a Mupsic[N, P, T]. The pre-built `producer`
+  ## slot lets the smoke / 1p1c shape drive push from the calling
+  ## thread; multi-producer shapes register additional producers
+  ## per-thread via `queue.getProducer(idx = i)`.
+  doAssert capacity == N, "capacity must equal static N"
+  result.queue = create(Mupsic[N, P, T])
+  result.queue[] = initMupsic[N, P, T]()
+  result.producer = result.queue[].getProducer(idx = 0)
+
+proc cleanup*[N, P: static int, T](
+    a: var LockfreequeuesMupsicAdapter[N, P, T]
+) =
+  if a.queue != nil:
+    reset(a.queue[])
+    dealloc(a.queue)
+    a.queue = nil
+
+proc push*[N, P: static int, T](
+    a: var LockfreequeuesMupsicAdapter[N, P, T], item: T
+): PushResult =
+  if a.producer.push(item): prSuccess else: prFull
+
+proc pop*[N, P: static int, T](
+    a: var LockfreequeuesMupsicAdapter[N, P, T]
+): PopResult[T] =
+  let r = a.queue[].pop()
+  if r.isSome:
+    PopResult[T](success: true, value: r.get)
+  else:
+    PopResult[T](success: false)

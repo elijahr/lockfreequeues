@@ -16,32 +16,34 @@
 ## ```
 
 import ./atomic_dsl
+import ./internal/aligned_alloc
 import std/options
 import std/typetraits
-from system/ansi_c import c_calloc, c_free
 
 type
   Segment*[S: static int, T] = object
     data*: array[S, T]
-    next*: Atomic[ptr Segment[S, T]]
-    head*: Atomic[int]
-    tail*: Atomic[int]
+    next* {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
+    head* {.align: CacheLineBytes.}: Atomic[int]
+    tail* {.align: CacheLineBytes.}: Atomic[int]
 
   UnboundedSipsic*[S: static int, T] = object
     ## Unbounded SPSC queue using linked segments.
     ##
     ## - S: Segment size (compile-time constant).
     ## - T: Data type.
-    headSegment: Atomic[ptr Segment[S, T]] # Consumer reads from here
-    tailSegment: Atomic[ptr Segment[S, T]] # Producer writes here
+    headSegment {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
+      # Consumer reads from here
+    tailSegment {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
+      # Producer writes here
     itemCount: Atomic[int] # Total items in queue
     segments: Atomic[int] # Number of segments
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
-  ## Allocate a new segment via libc calloc (zero-initialized, truly shared).
-  result = cast[ptr Segment[S, T]](c_calloc(1.csize_t, sizeof(Segment[S, T]).csize_t))
-  if result == nil:
-    raise newException(OutOfMemDefect, "newSegment: c_calloc returned nil")
+  ## Allocate a new segment on a CacheLineBytes boundary so the
+  ## ``{.align.}`` pragmas above land on distinct physical cache lines
+  ## rather than sharing the 16-byte-aligned base that ``c_calloc`` returns.
+  result = allocAligned[Segment[S, T]]()
   result.next.store(nil, moRelaxed)
   result.head.store(0, moRelaxed)
   result.tail.store(0, moRelaxed)
@@ -161,7 +163,7 @@ proc pop*[S: static int, T](self: var UnboundedSipsic[S, T]): Option[T] =
     self.headSegment.store(nextSeg, moRelease)
     seg = nextSeg
     discard self.segments.fetchSub(1, moRelaxed)
-    c_free(oldSeg)
+    freeAligned(oldSeg)
 
 proc pop*[S: static int, T](
     self: var UnboundedSipsic[S, T], count: int
@@ -184,6 +186,21 @@ proc pop*[S: static int, T](
     return none(seq[T])
   return some(items)
 
+when defined(testing):
+  proc headSegmentForTest*[S: static int, T](
+      self: var UnboundedSipsic[S, T]
+  ): pointer =
+    ## Test-only accessor: returns the queue's current head segment pointer
+    ## so the cache-line padding audit can verify base alignment.
+    result = cast[pointer](self.headSegment.load(moRelaxed))
+
+  proc segmentHeadOffsetForTest*[S: static int, T](
+      _: typedesc[UnboundedSipsic[S, T]]
+  ): tuple[head: int, tail: int] =
+    ## Test-only accessor: returns offsets of cache-line-padded fields within
+    ## the unbounded sipsic Segment for the cache-line padding audit.
+    result = (offsetOf(Segment[S, T], head), offsetOf(Segment[S, T], tail))
+
 proc `=destroy`*[S: static int, T](self: var UnboundedSipsic[S, T]) =
   ## Clean up all segments.
   var seg = self.headSegment.load(moRelaxed)
@@ -191,9 +208,9 @@ proc `=destroy`*[S: static int, T](self: var UnboundedSipsic[S, T]) =
     let next = seg.next.load(moRelaxed)
     when not supportsCopyMem(T):
       # Run the destructor for any managed slots (string/seq/ref) before
-      # `c_free`'s away the segment block — otherwise their internal
+      # `freeAligned`'s away the segment block — otherwise their internal
       # allocations leak.
       for i in 0 ..< S:
         reset(seg.data[i])
-    c_free(seg)
+    freeAligned(seg)
     seg = next

@@ -1,9 +1,13 @@
-## Adapter for Nim built-in channels (bounded MPMC)
+## Adapter for Nim built-in channels (bounded MPMC).
 ##
 ## Uses the system's Channel[T] type which is automatically available
-## when compiling with --threads:on.
+## when compiling with --threads:on. `topologiesSupported` exported per
+## design 2.2 (PR 3 Task 3.11 consumes it).
 
 import ../adapter
+from ../bench_common import Topology, tMpmc
+
+const topologiesSupported*: set[Topology] = {tMpmc}
 
 type
   ChannelsAdapter*[T] = object
@@ -18,6 +22,12 @@ proc deinitChannelsAdapter*[T](a: var ChannelsAdapter[T]) =
     a.chan[].close()
     dealloc(a.chan)
     a.chan = nil
+
+proc cleanup*[T](a: var ChannelsAdapter[T]) =
+  ## Alias for `deinitChannelsAdapter` matching the lockfreequeues
+  ## adapter naming convention. Lets the bench harness drop the channel
+  ## via a uniform `cleanup(queue)` mixin call.
+  deinitChannelsAdapter(a)
 
 proc push*[T](a: var ChannelsAdapter[T], item: T): PushResult =
   if a.chan[].trySend(item):

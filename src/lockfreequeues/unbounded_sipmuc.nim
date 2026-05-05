@@ -38,9 +38,9 @@
 
 import ./atomic_dsl
 import ./backoff
+import ./internal/aligned_alloc
 import std/options
 import std/typetraits
-from system/ansi_c import c_calloc, c_free
 
 import debra
 
@@ -68,9 +68,11 @@ else:
 type
   Segment[S: static int, T] = object ## A fixed-size segment in the linked list.
     data: array[S, T]
-    next: Atomic[ptr Segment[S, T]]
-    tail: Atomic[int] # Producer write position within segment
-    prevConsumerIdx: Atomic[int] # CAS coordination for consumers
+    next {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
+    tail {.align: CacheLineBytes.}: Atomic[int]
+      # Producer write position within segment
+    prevConsumerIdx {.align: CacheLineBytes.}: Atomic[int]
+      # CAS coordination for consumers
 
   UnboundedSipmuc*[S: static int, T; MaxThreads: static int] = object
     ## Unbounded SPMC queue using linked segments.
@@ -79,8 +81,10 @@ type
     ## - T: Data type.
     ## - MaxThreads: Maximum number of threads (compile-time constant).
     manager: ptr DebraManager[MaxThreads]
-    headSegment: Atomic[ptr Segment[S, T]] # Consumers read from here
-    tailSegment: ptr Segment[S, T] # Producer writes here (single-producer)
+    headSegment {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
+      # Consumers read from here
+    tailSegment {.align: CacheLineBytes.}: ptr Segment[S, T]
+      # Producer writes here (single-producer)
     strategy: DeallocationStrategy
     itemCount: Atomic[int] # Total items in queue
     segments: Atomic[int] # Number of segments
@@ -103,10 +107,9 @@ type
     handle: ThreadHandle[MaxThreads] # Thread handle for pin/unpin
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
-  ## Allocate a new segment via libc calloc (zero-initialized, truly shared).
-  result = cast[ptr Segment[S, T]](c_calloc(1.csize_t, sizeof(Segment[S, T]).csize_t))
-  if result == nil:
-    raise newException(OutOfMemDefect, "newSegment: c_calloc returned nil")
+  ## Allocate a new segment on a CacheLineBytes boundary so the
+  ## ``{.align.}`` pragmas above land on distinct physical cache lines.
+  result = allocAligned[Segment[S, T]]()
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
   result.prevConsumerIdx.store(-1, moRelaxed) # No consumer yet
@@ -160,23 +163,24 @@ proc newUnboundedSipmuc*[S: static int, T; MaxThreads: static int](
   ## owned by this queue. Manager teardown happens inside this queue's
   ## `=destroy` after segment cleanup. For multi-queue setups that
   ## share a manager, use the `(manager, strategy)` overload instead.
-  let mgr = cast[ptr DebraManager[MaxThreads]](c_calloc(
-    1.csize_t, sizeof(DebraManager[MaxThreads]).csize_t
-  ))
-  if mgr == nil:
-    raise newException(OutOfMemDefect, "newUnboundedSipmuc: c_calloc returned nil")
+  let mgr = allocAligned[DebraManager[MaxThreads]]()
+  var ok = false
   try:
     mgr[] = initDebraManager[MaxThreads]()
     result = newUnboundedSipmuc[S, T, MaxThreads](mgr, strategy)
     result.ownsManager = true
-  except:
-    # Run the manager's =destroy (drains any limbo bags + asserts the
-    # client refcount is zero) before freeing the heap slot. Safe for
-    # both partially- and fully-initialized state because c_calloc
-    # zeroed it.
-    reset(mgr[])
-    c_free(mgr)
-    raise
+    ok = true
+  finally:
+    # `finally` (not `except:`) so the cleanup also runs on `Defect`-class
+    # raises (e.g. `OutOfMemDefect` from inside `initDebraManager`). Under
+    # Nim 2.0, bare `except:` matches only `CatchableError`, leaving
+    # Defect-shaped failures to leak `mgr`. Run the manager's `=destroy`
+    # (drains any limbo bags + asserts the client refcount is zero) before
+    # freeing the heap slot. Safe for both partially- and fully-initialized
+    # state because `allocAligned` zeroed it.
+    if not ok:
+      reset(mgr[])
+      freeAligned(mgr)
 
 proc segmentCount*[S: static int, T; MaxThreads: static int](
     self: var UnboundedSipmuc[S, T, MaxThreads]
@@ -265,14 +269,14 @@ proc getConsumer*[S: static int, T; MaxThreads: static int](
 
 # Typed destructor for retired segments. Generic over `(S, T)` so we can
 # `reset` any managed slots (`string`, `seq`, `ref`, ...) before
-# `c_free`'s away the segment block. For POD `T` (`supportsCopyMem`),
+# `freeAligned`'s away the segment block. For POD `T` (`supportsCopyMem`),
 # the loop is compile-time-elided.
 proc segmentDestructor[S: static int, T](p: pointer) {.nimcall, raises: [].} =
   when not supportsCopyMem(T):
     let seg = cast[ptr Segment[S, T]](p)
     for i in 0 ..< S:
       reset(seg.data[i])
-  c_free(p)
+  freeAligned(p)
 
 proc pop*[S: static int, T; MaxThreads: static int](
     self: var Consumer[S, T, MaxThreads]
@@ -371,6 +375,21 @@ proc pop*[S: static int, T; MaxThreads: static int](
     return none(seq[T])
   return some(items)
 
+when defined(testing):
+  proc headSegmentForTest*[S: static int, T; MaxThreads: static int](
+      self: var UnboundedSipmuc[S, T, MaxThreads]
+  ): pointer =
+    ## Test-only accessor: returns the queue's current head segment pointer
+    ## so the cache-line padding audit can verify base alignment.
+    result = cast[pointer](self.headSegment.load(moRelaxed))
+
+  proc segmentHeadOffsetForTest*[S: static int, T; MaxThreads: static int](
+      _: typedesc[UnboundedSipmuc[S, T, MaxThreads]]
+  ): tuple[tail: int, prevConsumerIdx: int] =
+    ## Test-only accessor: returns offsets of cache-line-padded fields within
+    ## the unbounded sipmuc Segment for the cache-line padding audit.
+    result = (offsetOf(Segment[S, T], tail), offsetOf(Segment[S, T], prevConsumerIdx))
+
 proc `=destroy`*[S: static int, T; MaxThreads: static int](
     self: var UnboundedSipmuc[S, T, MaxThreads]
 ) =
@@ -381,12 +400,12 @@ proc `=destroy`*[S: static int, T; MaxThreads: static int](
   while seg != nil:
     when not supportsCopyMem(T):
       # Run the destructor for any managed slots (string/seq/ref) before
-      # `c_free`'s away the segment block — otherwise their internal
+      # `freeAligned`'s away the segment block — otherwise their internal
       # allocations leak.
       for i in 0 ..< S:
         reset(seg.data[i])
     let next = seg.next.load(moRelaxed)
-    c_free(seg)
+    freeAligned(seg)
     seg = next
 
   # Release our refcount on the manager. Conceptually pairs with the
@@ -400,4 +419,4 @@ proc `=destroy`*[S: static int, T; MaxThreads: static int](
       # without the parsing surprise of the backtick form, which trips
       # `expr(nkIdent); unknown node kind` inside a generic destructor.
       reset(self.manager[])
-      c_free(self.manager)
+      freeAligned(self.manager)

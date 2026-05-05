@@ -1,0 +1,22 @@
+[package]
+name = "bench_ffi_crossbeam"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "C-ABI cdylib wrapping crossbeam-queue::ArrayQueue and SegQueue for the lockfreequeues bench harness"
+license = "Apache-2.0 OR MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+# rlib is included so `cargo test` can link the integration test binary
+# against the same code path that the cdylib exposes.
+
+[dependencies]
+crossbeam-queue = "0.3"
+
+[profile.release]
+# Unwinding a Rust panic across the C-ABI boundary into Nim is undefined
+# behavior (the Nim caller has no panic-aware unwinder). `panic = "abort"`
+# turns any in-FFI panic into an immediate process abort, which is the
+# only sound option for a `cdylib` exposed to a non-Rust runtime.
+panic = "abort"

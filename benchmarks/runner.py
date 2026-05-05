@@ -2,6 +2,10 @@
 """Benchmark runner for lockfreequeues.
 
 Orchestrates benchmark execution across languages and collects results.
+PR 2 (bench-rollup) replaced the single `bench_throughput` driver with
+five topology-split binaries; this runner now builds + runs all five
+in sequence and merges the BMF fragments via `merge_bmf.py` so callers
+keep getting one combined JSON file.
 """
 
 import argparse
@@ -15,26 +19,85 @@ BENCHMARK_DIR = Path(__file__).parent
 PROJECT_ROOT = BENCHMARK_DIR.parent
 RESULTS_DIR = BENCHMARK_DIR / "results"
 
+# Track 2 PR 2: 5 topology-split binaries (one binary per topology
+# slice + the latency binary from PR 1). Each is built and run
+# separately; merge_bmf.py unions the fragments before downstream
+# consumers see a single JSON.
+NIM_BINARIES = (
+    "bench_spsc",
+    "bench_mpsc",
+    "bench_mpmc",
+    "bench_unbounded",
+    "bench_latency",
+)
+
 
 def build_nim():
-    """Build Nim benchmarks."""
-    print("Building Nim benchmarks...")
-    subprocess.run([
-        "nim", "c", "-d:release", "--threads:on",
-        str(BENCHMARK_DIR / "nim" / "bench_main.nim")
-    ], check=True)
+    """Build all Nim topology-split benchmark binaries.
+
+    Uses default {.intdefine.} run shapes (1M messages * 33 runs for
+    bounded throughput, 500K * 3 for unbounded, 100K * 33 for latency).
+    For tighter wall-clock budgets pass `-d:` overrides to nim
+    directly; the runner does not surface those through its CLI.
+    """
+    print("Building Nim topology-split benchmarks...")
+    for bin_name in NIM_BINARIES:
+        src = BENCHMARK_DIR / "nim" / f"{bin_name}.nim"
+        print(f"  -> {bin_name}")
+        # Match the CI compile shape in `.github/workflows/bench.yml`
+        # (`-d:release -d:danger`). `-d:danger` strips runtime checks
+        # the queue hot path treats as cold-path overhead in production
+        # benches; without it, locally produced numbers are not
+        # comparable to the cloud baseline.
+        subprocess.run(
+            ["nim", "c", "-d:release", "-d:danger", "--threads:on", str(src)],
+            check=True,
+        )
     print("Nim benchmarks built.")
 
 
 def run_nim(runs: int, output_file: Path):
-    """Run Nim benchmarks."""
-    print(f"Running Nim benchmarks ({runs} runs)...")
-    subprocess.run([
-        str(BENCHMARK_DIR / "nim" / "bench_main"),
-        f"--runs={runs}",
-        f"-o={output_file}"
-    ], check=True)
-    print(f"Results written to {output_file}")
+    """Run all 5 Nim topology-split binaries and merge their BMF outputs.
+
+    The `runs` argument is honored at compile time (via per-binary
+    `-d:Bench<Topo>Runs=<n>` overrides) — kept as a no-op runtime arg
+    for CLI back-compat. Use `python3 benchmarks/runner.py build` with
+    explicit `nim c -d:` flags ahead of `run` to set the run count.
+    """
+    print(f"Running Nim topology-split benchmarks ({runs} runs)...")
+    fragments: list[Path] = []
+    try:
+        for bin_name in NIM_BINARIES:
+            bin_path = PROJECT_ROOT / ".tmp" / bin_name
+            out = output_file.parent / f"{output_file.stem}-{bin_name}.json"
+            print(f"  -> {bin_name} -> {out.name}")
+            subprocess.run(
+                [str(bin_path), f"--bmf-out={out}"],
+                check=True,
+            )
+            fragments.append(out)
+        # Merge the 5 BMF fragments into the requested output file via
+        # merge_bmf.py. Unions per-slug measure dicts and exits 1 on
+        # (slug, measure) collisions.
+        print(f"Merging {len(fragments)} fragments -> {output_file}")
+        subprocess.run(
+            [
+                sys.executable,
+                str(BENCHMARK_DIR / "merge_bmf.py"),
+                str(output_file),
+                *[str(p) for p in fragments],
+            ],
+            check=True,
+        )
+        print(f"Combined results written to {output_file}")
+    finally:
+        # The merged file at output_file is the canonical artifact; the
+        # per-binary fragments are intermediate. Drop them so RESULTS_DIR
+        # doesn't accumulate one set per invocation. `finally` so a
+        # bench-binary failure or a merge collision still cleans up
+        # whatever fragments were produced.
+        for f in fragments:
+            f.unlink(missing_ok=True)
 
 
 def build(args):
@@ -53,7 +116,7 @@ def run(args):
         run_nim(args.runs, output_file)
 
         if args.output:
-            # Copy to specified output file
+            # Copy to specified output file.
             with open(output_file) as f:
                 data = json.load(f)
             with open(args.output, "w") as f:

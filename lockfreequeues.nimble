@@ -52,8 +52,46 @@ task examples, "Runs the examples":
   exec "nim c --threads:on -r -f examples/job_scheduler.nim"
 
 task benchmarks, "Runs the benchmark suite":
-  exec "nim c -d:release --threads:on benchmarks/nim/bench_main.nim"
-  exec "benchmarks/nim/bench_main --runs=10 -o=benchmarks/results/latest.json"
+  # PR 2 (bench-rollup) replaced bench_throughput.nim with five
+  # topology-split binaries. Each emits its own Bencher Metric Format
+  # JSON fragment; merge_bmf.py unions them into one final file.
+  # Binaries land in `.tmp/` per the project nim.cfg (`--outdir:.tmp`).
+  mkDir "benchmarks/results"
+  for binName in [
+    "bench_spsc", "bench_mpsc", "bench_mpmc",
+    "bench_unbounded", "bench_latency",
+  ]:
+    exec "nim c -d:release --threads:on benchmarks/nim/" & binName & ".nim"
+    exec ".tmp/" & binName & " --bmf-out=benchmarks/results/" & binName & ".json"
+  # Union the per-binary fragments. Exits 1 on (slug, measure) collisions.
+  exec "python3 benchmarks/merge_bmf.py benchmarks/results/latest.json " &
+       "benchmarks/results/bench_spsc.json " &
+       "benchmarks/results/bench_mpsc.json " &
+       "benchmarks/results/bench_mpmc.json " &
+       "benchmarks/results/bench_unbounded.json " &
+       "benchmarks/results/bench_latency.json"
+
+
+task benchtests, "Runs the bench harness test suite":
+  # The bench harness lives outside `srcDir`, so its dedicated tests
+  # (`tests/t_bench_*.nim`) are NOT imported by `tests/test.nim` to
+  # keep the regular `nimble test` matrix free of the bench harness's
+  # threading/atomic dependencies. This task runs them explicitly so
+  # CI can validate HistogramTopK sizing, latency CLI assertions, and
+  # adapter round-trip behavior. Single MM (orc default) is sufficient
+  # because the bench harness itself is the system under test, not the
+  # queue MM matrix.
+  exec "nim c --threads:on -r -f tests/t_bench_common.nim"
+  exec "nim c --threads:on -r -f tests/t_bench_latency.nim"
+  exec "nim c --threads:on -r -f tests/t_bench_adapters.nim"
+
+
+task benchteststress, "Runs the bench harness test suite including 3.3M-sample stress shapes":
+  # Like `benchtests` but enables the gated 3.3M-sample p999 stress
+  # shape in t_bench_common (HistogramTopK headroom validation against
+  # an operator-driven MessageCount override). Slow (~10-15s release)
+  # so it is opt-in rather than part of every CI run.
+  exec "nim c -d:release -d:BenchCommonStress --threads:on -r -f tests/t_bench_common.nim"
 
 
 task stresstests, "Runs the stress test suite (multi-threaded)":

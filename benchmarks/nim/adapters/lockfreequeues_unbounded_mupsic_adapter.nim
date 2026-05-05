@@ -1,5 +1,9 @@
 ## Adapter for lockfreequeues UnboundedMupsic (unbounded MPSC).
 ##
+## Renamed from `lockfreequeues_unbounded_mupsic.nim` in PR 0 Task 0.9
+## per design section 2.2. `topologiesSupported` is exported here for
+## PR 3 Task 3.11 consumption.
+##
 ## UnboundedMupsic differs from the bounded adapters in two ways:
 ##
 ## 1. It requires a `DebraManager` for epoch-based segment reclamation.
@@ -17,11 +21,15 @@
 ## consumer handle and exposes them so that bench code can register
 ## producers on the worker threads themselves.
 ##
-## The bench harness in `bench_throughput.nim` consumes this adapter
-## directly via specialized benchmark procs (mirroring the Mupmuc path).
+## The bench harness in `bench_unbounded.nim` consumes this adapter
+## directly via specialized benchmark procs (was `bench_throughput.nim`
+## prior to the PR 2 topology split).
 
 import lockfreequeues/unbounded_mupsic
 import debra
+from ../bench_common import Topology, tMpscUnbounded
+
+const topologiesSupported*: set[Topology] = {tMpscUnbounded}
 
 type UnboundedMupsicAdapter*[S: static int, T; MaxThreads: static int] = object
   ## Owns the heap-allocated queue and DebraManager. Consumer's

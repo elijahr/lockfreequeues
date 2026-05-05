@@ -1,0 +1,227 @@
+# yamllint disable rule:line-length
+
+name: bench-comparison
+
+# yamllint disable rule:truthy
+on:
+  workflow_dispatch:
+  schedule:
+    # Nightly at 04:00 UTC. Off-peak so the runner pool is fresh; the
+    # cdylib build adds ~30s vs the in-tree benches.
+    - cron: '0 4 * * *'
+  push:
+    branches: [devel]
+    paths:
+      - 'benchmarks/rust/**'
+      - 'benchmarks/nim/adapters/crossbeam_*'
+      - '.github/workflows/bench-comparison.yml'
+# yamllint enable rule:truthy
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
+  CARGO_TERM_COLOR: always
+
+jobs:
+  bench-crossbeam:
+    # Track 3 §3.13: Crossbeam-only comparison workflow.
+    #
+    # Crossbeam adds a Rust toolchain dependency (~5 min cold install),
+    # which would inflate the bench.yml critical path on every PR. Per
+    # design 2.6 / impl plan 3.13 it lives in this dedicated workflow,
+    # gated on nightly cron + workflow_dispatch + targeted path pushes
+    # to devel only. PR check feedback for crossbeam comes from this
+    # workflow's separate Bencher report.
+    name: bench-crossbeam (ubuntu-latest)
+    runs-on: ubuntu-latest
+    # Mirror bench.yml's bench-upload permissions: bencher run uses
+    # `--github-actions ${{ secrets.GITHUB_TOKEN }}` to publish check
+    # runs / PR annotations, which require explicit `checks: write` and
+    # `pull-requests: write` on repos with default read-only token
+    # permissions. `contents: read` and `actions: read` cover
+    # actions/checkout and any future artifact downloads.
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+      checks: write
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Setup Nim
+        uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: 'stable'
+
+      - name: Install build deps (Linux)
+        run: |
+          sudo apt-get update -q -y
+          sudo apt-get -qq install -y clang
+
+      - name: Clone and install sibling Nim deps (nim-debra, nim-typestates)
+        # Mirrors bench.yml -- nim.cfg in src/ resolves these via
+        # ../nim-debra/src and ../nim-typestates/src. Pin to release
+        # tags (not `main`) for deterministic CI; bump in lockstep with
+        # build.yml/bench.yml and lockfreequeues.nimble's `requires`.
+        run: |
+          set -e
+          cd ..
+          git clone --depth 1 --branch v0.6.0 https://github.com/elijahr/nim-debra.git
+          git clone --depth 1 --branch v0.7.0 https://github.com/elijahr/nim-typestates.git
+          (cd nim-typestates && nimble install -y)
+          (cd nim-debra && nimble install -y)
+
+      - name: Vendor unittest2
+        run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: benchmarks/rust/bench-ffi-crossbeam
+
+      - name: Build crossbeam cdylib
+        # Produces target/release/libbench_ffi_crossbeam.so on Linux.
+        # The Nim adapters' default {.passL.} includes -L for this path
+        # so no further wiring is needed.
+        run: |
+          cargo build --release \
+            --manifest-path benchmarks/rust/bench-ffi-crossbeam/Cargo.toml
+
+      - name: Run cdylib integration tests
+        # Sanity-check the C-ABI surface before paying for the bench
+        # compile. Runs in <1s; fails the workflow on regression.
+        run: |
+          cargo test --release \
+            --manifest-path benchmarks/rust/bench-ffi-crossbeam/Cargo.toml
+
+      - name: Smoke crossbeam adapters
+        # Compile-and-run sanity check that the adapters can resolve the
+        # cdylib symbols at runtime before we spend ~10 min on bench
+        # binaries with the same defines.
+        run: |
+          set -eu
+          nim c -d:release -d:danger --threads:on \
+            -d:adapter_crossbeam_array_queue_available \
+            -d:adapter_crossbeam_seg_queue_available \
+            --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
+            -o:.tmp/smoke_crossbeam \
+            benchmarks/nim/smoke/smoke_crossbeam.nim
+          ./.tmp/smoke_crossbeam
+
+      - name: Compile bench_mpmc with crossbeam_array_queue
+        # CI run shape mirrors bench.yml's bench_mpmc settings (1M / 5 / 2).
+        # rpath ensures the dylib loads from the in-tree build dir at
+        # runtime without needing LD_LIBRARY_PATH.
+        run: |
+          set -eu
+          nim c -d:release -d:danger --threads:on \
+            -d:BenchMpmcMessageCount=1000000 \
+            -d:BenchMpmcRuns=5 \
+            -d:BenchMpmcWarmup=2 \
+            -d:adapter_crossbeam_array_queue_available \
+            --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
+            benchmarks/nim/bench_mpmc.nim
+
+      - name: Compile bench_unbounded with crossbeam_seg_queue
+        run: |
+          set -eu
+          nim c -d:release -d:danger --threads:on \
+            -d:UnboundedSipsicMessageCount=500000 \
+            -d:UnboundedSipsicRuns=3 \
+            -d:UnboundedSipmucMessageCount=500000 \
+            -d:UnboundedSipmucRuns=3 \
+            -d:UnboundedMupsicMessageCount=500000 \
+            -d:UnboundedMupsicRuns=3 \
+            -d:UnboundedMupmucMessageCount=500000 \
+            -d:UnboundedMupmucRuns=3 \
+            -d:BenchUnboundedWarmup=2 \
+            -d:adapter_crossbeam_seg_queue_available \
+            --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
+            benchmarks/nim/bench_unbounded.nim
+
+      - name: Run bench_mpmc (crossbeam_array_queue only)
+        timeout-minutes: 12
+        run: |
+          ./.tmp/bench_mpmc crossbeam_array_queue \
+            --bmf-out=bench_mpmc_crossbeam.json \
+            | tee bench_mpmc_crossbeam_output.txt
+
+      - name: Run bench_unbounded (crossbeam_seg_queue only)
+        timeout-minutes: 12
+        run: |
+          ./.tmp/bench_unbounded crossbeam_seg_queue \
+            --bmf-out=bench_unbounded_crossbeam.json \
+            | tee bench_unbounded_crossbeam_output.txt
+
+      - name: Merge BMF JSON
+        run: |
+          python3 benchmarks/merge_bmf.py merged.json \
+            bench_mpmc_crossbeam.json \
+            bench_unbounded_crossbeam.json
+
+      - name: Show BMF JSON (debug)
+        run: cat merged.json
+
+      - name: Upload BMF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-comparison-crossbeam-bmf
+          path: merged.json
+
+      - name: Install Bencher CLI
+        uses: bencherdev/bencher@main
+
+      - name: Bencher token preflight
+        run: |
+          if [ -z "$BENCHER_API_TOKEN" ]; then
+            echo "::warning title=Bencher upload skipped::BENCHER_API_TOKEN is not set; bench-comparison ran but did not upload."
+          else
+            echo "Bencher token present; proceeding with upload."
+          fi
+
+      - name: Track scheduled benchmarks with Bencher
+        if: github.event_name == 'schedule' && env.BENCHER_API_TOKEN != ''
+        run: |
+          bencher run \
+            --project lockfreequeues \
+            --token '${{ secrets.BENCHER_API_TOKEN }}' \
+            --branch devel \
+            --testbed ubuntu-latest \
+            --threshold-measure throughput_ops_ms \
+            --threshold-test t_test \
+            --threshold-max-sample-size 64 \
+            --threshold-lower-boundary 0.99 \
+            --thresholds-reset \
+            --adapter json \
+            --file merged.json \
+            --github-actions '${{ secrets.GITHUB_TOKEN }}' \
+            --err
+
+      - name: Track devel-push benchmarks with Bencher
+        if: github.event_name == 'push' && env.BENCHER_API_TOKEN != ''
+        run: |
+          bencher run \
+            --project lockfreequeues \
+            --token '${{ secrets.BENCHER_API_TOKEN }}' \
+            --branch devel \
+            --testbed ubuntu-latest \
+            --adapter json \
+            --file merged.json \
+            --github-actions '${{ secrets.GITHUB_TOKEN }}'
+
+      - name: Track manual benchmarks with Bencher
+        if: github.event_name == 'workflow_dispatch' && env.BENCHER_API_TOKEN != ''
+        run: |
+          bencher run \
+            --project lockfreequeues \
+            --token '${{ secrets.BENCHER_API_TOKEN }}' \
+            --branch "${GITHUB_REF##*/}" \
+            --testbed ubuntu-latest \
+            --adapter json \
+            --file merged.json

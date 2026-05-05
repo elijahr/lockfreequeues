@@ -82,7 +82,7 @@ jobs:
         # nim.cfg uses --path:"../nim-debra/src" and --path:"../nim-typestates/src"
         # for compiler-side resolution. Nimble's dep resolver runs BEFORE
         # the compiler though, and `nimble test` will refuse to launch if
-        # `requires "debra >= 0.5.0"` is unsatisfiable from nimble's
+        # `requires "debra >= 0.7.0"` is unsatisfiable from nimble's
         # package store. So fetch matching branches and `nimble install`
         # them locally to satisfy the resolver. Once nimble.directory has
         # picked up the new tags, this whole step can be replaced with a
@@ -123,8 +123,9 @@ jobs:
           }
           # Skip `nimble develop -y` — nim.cfg's --noNimblePath +
           # explicit --path: directives mean nimble's package resolver is
-          # not used. Going through develop would only add a dep-resolution
-          # round trip that fails until debra 0.3.0 publishes.
+          # not used. The sibling-clone step above is what populates the
+          # local nimble store; going through `nimble develop` would only
+          # add a redundant dep-resolution round trip.
           echo "::group::Run test suite (includes arc, orc, refc, lock-free enforcement)"
           nimble_run nimble test
           echo "::endgroup::"
