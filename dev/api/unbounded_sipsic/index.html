@@ -56,6 +56,10 @@
     
       <link rel="stylesheet" href="../../css/custom.css">
     
+      <link rel="stylesheet" href="../../assets/bench-charts.css">
+    
+      <link rel="stylesheet" href="../../assets/uplot-1.6.27.min.css">
+    
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -822,6 +826,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#headSegmentForTest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        headSegmentForTest
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#segmentHeadOffsetForTest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        segmentHeadOffsetForTest
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#=" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1302,6 +1328,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#headSegmentForTest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        headSegmentForTest
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#segmentHeadOffsetForTest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        segmentHeadOffsetForTest
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#=" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1444,30 +1492,6 @@ per-thread heap routing). No DEBRA needed for SPSC.</p>
             
           </li>
           
-          <li class="doc-field">
-            <code class="doc-field-name">next</code>
-            <code class="doc-field-type">Atomic[ptr Segment[S, T]]</code>
-            
-            
-            
-          </li>
-          
-          <li class="doc-field">
-            <code class="doc-field-name">head</code>
-            <code class="doc-field-type">Atomic[int]</code>
-            
-            
-            
-          </li>
-          
-          <li class="doc-field">
-            <code class="doc-field-name">tail</code>
-            <code class="doc-field-type">Atomic[int]</code>
-            
-            
-            
-          </li>
-          
         </ul>
       </div>
       
@@ -1581,8 +1605,8 @@ per-thread heap routing). No DEBRA needed for SPSC.</p>
       <div class="doc-source">
         <span class="doc-source-label">Source:</span>
         
-          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_sipsic.nim#L49" target="_blank" rel="noopener">
-            src/lockfreequeues/unbounded_sipsic.nim:49
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_sipsic.nim#L51" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_sipsic.nim:51
           </a>
         
       </div>
@@ -1646,8 +1670,8 @@ per-thread heap routing). No DEBRA needed for SPSC.</p>
       <div class="doc-source">
         <span class="doc-source-label">Source:</span>
         
-          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_sipsic.nim#L73" target="_blank" rel="noopener">
-            src/lockfreequeues/unbounded_sipsic.nim:73
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_sipsic.nim#L75" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_sipsic.nim:75
           </a>
         
       </div>
@@ -1711,8 +1735,8 @@ per-thread heap routing). No DEBRA needed for SPSC.</p>
       <div class="doc-source">
         <span class="doc-source-label">Source:</span>
         
-          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_sipsic.nim#L77" target="_blank" rel="noopener">
-            src/lockfreequeues/unbounded_sipsic.nim:77
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_sipsic.nim#L79" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_sipsic.nim:79
           </a>
         
       </div>
@@ -1777,8 +1801,8 @@ per-thread heap routing). No DEBRA needed for SPSC.</p>
       <div class="doc-source">
         <span class="doc-source-label">Source:</span>
         
-          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_sipsic.nim#L81" target="_blank" rel="noopener">
-            src/lockfreequeues/unbounded_sipsic.nim:81
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_sipsic.nim#L83" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_sipsic.nim:83
           </a>
         
       </div>
@@ -1843,8 +1867,8 @@ per-thread heap routing). No DEBRA needed for SPSC.</p>
       <div class="doc-source">
         <span class="doc-source-label">Source:</span>
         
-          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_sipsic.nim#L115" target="_blank" rel="noopener">
-            src/lockfreequeues/unbounded_sipsic.nim:115
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_sipsic.nim#L117" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_sipsic.nim:117
           </a>
         
       </div>
@@ -1909,8 +1933,8 @@ per-thread heap routing). No DEBRA needed for SPSC.</p>
       <div class="doc-source">
         <span class="doc-source-label">Source:</span>
         
-          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_sipsic.nim#L120" target="_blank" rel="noopener">
-            src/lockfreequeues/unbounded_sipsic.nim:120
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_sipsic.nim#L122" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_sipsic.nim:122
           </a>
         
       </div>
@@ -1981,8 +2005,140 @@ per-thread heap routing). No DEBRA needed for SPSC.</p>
       <div class="doc-source">
         <span class="doc-source-label">Source:</span>
         
-          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_sipsic.nim#L166" target="_blank" rel="noopener">
-            src/lockfreequeues/unbounded_sipsic.nim:166
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_sipsic.nim#L168" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_sipsic.nim:168
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+      
+      
+        <div class="doc doc-object doc-proc">
+  
+
+  
+    <h4 id="headSegmentForTest" class="doc doc-heading">
+      
+      <span class="doc doc-object-name doc-proc-name">headSegmentForTest</span>
+      
+    <a href="#headSegmentForTest" class="headerlink" title="Permanent link">¶</a></h4>
+  
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">proc</span><span class="w"> </span><span class="nf">headSegmentForTest</span><span class="p">(</span><span class="n">self</span><span class="p">:</span><span class="w"> </span><span class="kd">var</span><span class="w"> </span><span class="n">UnboundedSipsic</span><span class="o">[</span><span class="n">S</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="o">]</span><span class="p">):</span><span class="w"> </span><span class="n">pointer</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents first">
+    
+      <div class="doc-description">
+        <p>Test-only accessor: returns the queue's current head segment pointer</p>
+<p>so the cache-line padding audit can verify base alignment.</p>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-parameters">
+        <h5>Parameters</h5>
+        <ul>
+          
+            <li>
+              <code>self</code>
+              (<code>var UnboundedSipsic[S, T]</code>)
+              
+            </li>
+          
+        </ul>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-returns">
+        <h5>Returns</h5>
+        <p><code>pointer</code></p>
+      </div>
+    
+
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_sipsic.nim#L190" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_sipsic.nim:190
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+      
+      
+        <div class="doc doc-object doc-proc">
+  
+
+  
+    <h4 id="segmentHeadOffsetForTest" class="doc doc-heading">
+      
+      <span class="doc doc-object-name doc-proc-name">segmentHeadOffsetForTest</span>
+      
+    <a href="#segmentHeadOffsetForTest" class="headerlink" title="Permanent link">¶</a></h4>
+  
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">proc</span><span class="w"> </span><span class="nf">segmentHeadOffsetForTest</span><span class="p">(</span><span class="err">_: typedesc[UnboundedSipsic[S, T]]): tuple[head: int, tail: int]</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents first">
+    
+      <div class="doc-description">
+        <p>Test-only accessor: returns offsets of cache-line-padded fields within</p>
+<p>the unbounded sipsic Segment for the cache-line padding audit.</p>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-parameters">
+        <h5>Parameters</h5>
+        <ul>
+          
+            <li>
+              <code>_</code>
+              (<code>typedesc[UnboundedSipsic[S, T]]</code>)
+              
+            </li>
+          
+        </ul>
+      </div>
+    
+
+    
+      <div class="doc-section doc-section-returns">
+        <h5>Returns</h5>
+        <p><code>tuple[head: int, tail: int]</code></p>
+      </div>
+    
+
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_sipsic.nim#L197" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_sipsic.nim:197
           </a>
         
       </div>
@@ -2041,8 +2197,8 @@ per-thread heap routing). No DEBRA needed for SPSC.</p>
       <div class="doc-source">
         <span class="doc-source-label">Source:</span>
         
-          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_sipsic.nim#L187" target="_blank" rel="noopener">
-            src/lockfreequeues/unbounded_sipsic.nim:187
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_sipsic.nim#L204" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_sipsic.nim:204
           </a>
         
       </div>
