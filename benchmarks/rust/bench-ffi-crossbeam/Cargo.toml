@@ -13,3 +13,10 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 crossbeam-queue = "0.3"
+
+[profile.release]
+# Unwinding a Rust panic across the C-ABI boundary into Nim is undefined
+# behavior (the Nim caller has no panic-aware unwinder). `panic = "abort"`
+# turns any in-FFI panic into an immediate process abort, which is the
+# only sound option for a `cdylib` exposed to a non-Rust runtime.
+panic = "abort"

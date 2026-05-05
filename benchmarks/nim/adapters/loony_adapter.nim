@@ -36,10 +36,16 @@
 ## ``0 .. (1'u64 shl 61) - 2`` (≈ ``2.3 * 10^18``). Any value above this
 ## range silently truncates on push and pops back as a different value.
 ## The harness pushes ``uint64(i)`` for ``i in 0 ..< messageCount`` and
-## ``messageCount`` is bounded by ``int.high`` ≈ ``2^63``, far below the
-## safe limit at any tuning we'll ever ship, so this is academic — but
-## it is the contractual range and a debug-mode assert below makes a
-## misuse fail loudly instead of silently corrupting data.
+## ``messageCount`` is a Nim ``int`` whose maximum (``int.high`` ≈
+## ``2^63 - 1``) sits ABOVE the ``2^61 - 2`` encoding ceiling, so the
+## type system alone does NOT guarantee safety. In practice every
+## tuning we ship runs with ``messageCount`` in the millions
+## (``BenchUnboundedMessageCount`` defaults around ``5M``, CI overrides
+## to ``500K``), which is roughly ten orders of magnitude below the
+## ``2^61`` ceiling — academic at every shape we plan to run, but a
+## pathological override could still cross the line. The debug-mode
+## assert below makes a misuse fail loudly instead of silently
+## corrupting data.
 ##
 ## Topology: ``mpmc_unbounded``. Capacity argument is ignored.
 ##
