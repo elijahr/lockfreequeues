@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [4.2.0] - 2026-05-06
+
 ### BREAKING
 
 - `CASAttempt` typestate restructured into a proper typestate union. `CASPending` now transitions to `CASSucceeded | CASFailed` (aliased as `CASResult`) via `executeCAS`, replacing the previous single-state design with `assumeSuccess` / `assumeFailure` escape hatches. The `assumeSuccess` and `assumeFailure` procs have been removed. Callers that drove `CASAttempt` outside the bundled MPMC machinery must migrate to the union return form. These helpers were only consumed by `tests/t_cas.nim`; the bundled MPMC machinery calls `compareExchangeWeak` directly and was unaffected. No public lock-free queue API is affected.
@@ -148,6 +158,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `benchmarks/README.md` "Updating the README summary" subsection
   codifies the new hand-curation procedure for the README BENCHMARKS
   markers (which shapes to read, where to read them, when to commit).
+- Five additional comparison libraries reach the bench matrix:
+  `atomic_queue` (Tier 1, header-only, MIT), `rigtorp/SPSCQueue`
+  (Tier 1, header-only, MIT), `rigtorp/MPMCQueue` (Tier 1,
+  header-only, MIT), `flume` (Rust crate, MPL-2.0, mpsc / mpmc
+  unbounded), `kanal` (Rust crate, MPL-2.0, mpmc / mpmc_unbounded).
+  C++ header-only libraries are vendored under `benchmarks/vendor/`
+  with pinned upstream SHAs and project-authored READMEs documenting
+  the upgrade procedure; Rust crates are consolidated into a single
+  cdylib at `benchmarks/rust/comparison/` (`libbench_ffi_comparison`)
+  alongside the existing Crossbeam adapters. Plus `liblfds` (a C
+  ringbuffer library, public-domain) wired through a thin C wrapper
+  for SPSC + MPMC bounded coverage.
+- First-class SPMC topology axis. A fifth throughput panel
+  `bench-throughput-spmc` lands in `docs/benchmarks.md` and the
+  sipmuc-family adapters (bounded `lockfreequeues_sipmuc` and
+  unbounded `lockfreequeues_unbounded_sipmuc`) are rerouted from
+  the MPMC panel to the new SPMC panel, with `spmc` /
+  `spmc_unbounded` slug roots replacing the prior `mpmc` /
+  `mpmc_unbounded` roots for those adapters.
+- Topology-based adapter dispatcher (Option C). Each bench binary
+  (`bench_spsc`, `bench_mpsc`, `bench_mpmc`, `bench_spmc`,
+  `bench_unbounded`) now owns a `seq[Adapter]` registry whose
+  per-adapter `topologiesSupported: set[Topology]` field declares
+  which topologies that adapter participates in. The harness
+  iterates the registry and dispatches by topology rather than by
+  the prior name-based `case variant of "X":` ladder. The bench
+  binaries take `<topology>` as `argv[1]` (e.g.
+  `./bench_mpmc spmc 1p2c`) instead of the legacy variant name.
+- `HarnessBackoff` in `benchmarks/nim/bench_common.nim`: a
+  schedYield-escalating consumer-wait backoff for unbounded
+  shapes. Initial spins use `cpuPause`; once the spin budget
+  exhausts, the backoff escalates to `schedYield` to release the
+  scheduler and break consumer-livelock on oversubscribed runners.
+  Tunable via `-d:HarnessSpinBudget=N` /
+  `-d:HarnessYieldThreshold=N` (defaults 128 / 1024).
+- uPlot bars for the per-topology throughput panels (categorical
+  X axis instead of a pseudo-continuous numeric axis), and a
+  canvas-rendered hero panel paired with an offscreen `<table>`
+  ARIA companion so screen readers can read the same data the
+  canvas renders visually.
+- Dark-mode-aware uPlot canvases. New `themeStroke()` /
+  `themeFont()` helpers in `docs/assets/bench-charts.js` resolve
+  axis stroke and font color from the active mkdocs theme, and a
+  `MutationObserver` on `<html data-md-color-scheme>` reflows
+  every chart when the user toggles the theme switch.
+- Inline `## Glossary` (32 entries) and
+  `## Why MPMC is harder than SPSC` (cache-line contention; ABA
+  and reclamation; ordering and asymmetry) sections in
+  `docs/benchmarks.md`, surfacing the methodology vocabulary and
+  the "why is this metric hard" intuition immediately above the
+  chart panels.
+- Per-library smoke-step `--path:` flag propagation in
+  `bench.yml`. The smoke-compile step now captures
+  `nimble path <pkg>` for any installed package adapter and
+  threads the resulting `--path:` flag through to the bench
+  compile step. Previously, libraries that passed install but
+  required an installed-package path on the bench compile would
+  fail silently and get omitted from the BMF as a soft-skipped
+  slug accompanied only by a yellow PR warning. The new flag
+  propagation closes that false-negative path.
+- Guard test
+  `benchmarks/tests/test_smoke_compiles.py`: a fixture-pinned
+  floor of expected comparison-library slugs in
+  `latest.json`. Gated on
+  `LOCKFREEQUEUES_BENCH_STRICT_FLOOR=1` until the post-merge
+  `bench.yml` run regenerates `latest.json` with the restored
+  boost / loony / threading_channels / crossbeam slugs; the
+  env-var gate retirement (make strict mode default) is a
+  v4.3.0 follow-up.
 
 ### Changed
 
@@ -186,6 +265,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fills them in. The chart page absorbs run-to-run noise; the README
   intentionally captures only the most recent release's headline
   numbers.
+- Bumped minimum `debra` from `>= 0.7.0` to `>= 0.7.1` to pull in
+  the upstream signal-handler stride fix in cross-slot reclamation.
+- `bench-comparison.yml` retired. The Crossbeam (Rust) adapters
+  now run inside `bench.yml`'s regular matrix, consolidated
+  alongside flume + kanal in a single Rust cdylib at
+  `benchmarks/rust/comparison/` (`libbench_ffi_comparison.{so,dylib}`).
+  Strict prefix-per-crate symbol naming
+  (`cb_*` / `flume_*` / `kanal_*`) prevents collision across the
+  consolidated FFI surface.
+- Log-scale axes (throughput + latency) now suppress null and
+  minor-tick labels — only major (power-of-10) ticks render. Cleans
+  up the prior axis clutter where uPlot's default minor-tick density
+  produced overlapping labels at small chart heights.
+- Bench harness binaries take `<topology>` as `argv[1]`
+  (e.g. `./bench_mpmc spmc 1p2c`) instead of the legacy
+  `<variant_name>`. The Matrix Run step in `bench.yml` was
+  updated to pass topology arguments.
 
 ### Removed
 
@@ -196,6 +292,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in their tagged tree; deleting on devel does not mutate those
   tags. No CI workflow, nimble task, or test runner referenced the
   renderer.
+
+- `.github/workflows/bench-comparison.yml`. The Crossbeam comparison
+  job folded into `bench.yml`'s regular matrix as part of the Rust
+  cdylib consolidation; a separate workflow is no longer needed.
+- Name-based `case variant of "X":` dispatch in the bench binaries.
+  Replaced by the topology-based `seq[Adapter]` registry described
+  in `### Added` above.
+- `-d:BenchSkipOversubscribed` removed from `bench.yml`'s
+  compile-flag list. The Nim-side `when not defined(...):` guards
+  remain in the source so the gate can be re-engaged by re-adding
+  the YAML line if a future regression demands it.
 
 - Legacy `nim doc`-generated HTML output (`json/` directory, 17
   files) and the `nimdoc.cfg` config that drove it. The mkdocs +
@@ -411,6 +518,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `unbounded_mupmuc`) allocate via `allocAligned[Segment[S, T]]()`
   instead of `c_calloc`. Verified by `tests/t_unbounded_padding.nim`
   (8 assertions across 4 variants, green under c/cpp/arc/refc).
+- Boost lockfree adapters (`boost_lockfree_queue_adapter`,
+  `boost_lockfree_spsc_adapter`) compile under CI again. The smoke
+  step's `nim cpp` invocation gained `--path:src` so the
+  `--noNimblePath` setting in the project's `nim.cfg` no longer
+  hides the project's own `srcDir` from the smoke compile. Without
+  the flag, the smoke step compiled clean against an empty path
+  list and the bench compile then failed with module-not-found,
+  flipping the slugs into the soft-skipped omit set.
+- loony / `threading.Chan` smoke compiles surface their
+  installed-package paths via `nimble path <pkg>` capture and feed
+  the resulting `--path:` flag into the bench compile step. Both
+  libraries are now restored in `latest.json` instead of being
+  silently omitted.
+- Oversubscribed unbounded shapes (e.g. `mpmc_unbounded 4p4c` on a
+  4-vCPU runner) no longer stall the bench. `HarnessBackoff`
+  escalates from `cpuPause` to `schedYield` after the spin budget
+  exhausts, breaking the consumer-livelock that the strict-FIFO
+  consumer-claim path plus a spin-only backoff produced under
+  scheduler pressure.
 
 ### Changed
 
@@ -492,6 +618,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed (typestates 0.7 uplift)
 
 - 22 read-only typestate accessors across `src/lockfreequeues/typestates/` now carry `{.notATransition.}`. typestates' verifier flagged these once `typestates verify -W` was wired into CI; the procs are pure data extraction and were never transitions.
+
+### Known Limitations
+
+- Queue-side `backoffOnPeerWait` does not yet escalate to
+  `schedYield` — only the harness-side `HarnessBackoff` wrapper
+  does. The canonical fix (queue-side schedYield plus relaxation of
+  the strict-FIFO consumer-claim path) is deferred to v4.3.0 to
+  keep this release's blast radius bounded;
+  `src/lockfreequeues/backoff.nim` is read-only this release
+  (Constraint #7).
+- **Strict-floor breach**: `folly_pcq` was DROPPED from the
+  comparison-library set. The transitive-include closure (15 unique
+  folly headers) exceeds the 6-header threshold, and folly main
+  additionally requires C++20 vs the repo's C++17. Final floor is
+  16/17. Revisit in v4.3.0+ once folly stabilizes a thinner-include
+  header export OR the repo upgrades to C++20.
+- The `LOCKFREEQUEUES_BENCH_STRICT_FLOOR=1` env-var gate on
+  `benchmarks/tests/test_smoke_compiles.py` remains in place until
+  the post-merge `bench.yml` run regenerates
+  `docs/assets/bench-results/latest.json` with the restored
+  boost / loony / threading_channels / crossbeam slugs. Retiring
+  the gate (making strict-mode the default) is a v4.3.0
+  follow-up.
+- **Bencher.dev threshold reset for sipmuc slugs**:
+  `lockfreequeues_*sipmuc/mpmc*` slug threshold history is
+  intentionally reset starting v4.2.0 because the sipmuc family
+  moved from MPMC to SPMC. The old slug history is retained on
+  Bencher.dev as a record but is not carried forward into the new
+  SPMC slug roots. The new slugs (`lockfreequeues_sipmuc/spmc/...`
+  and `lockfreequeues_unbounded_sipmuc/spmc_unbounded/...`) start
+  fresh.
 
 ## [4.1.0] - 2026-05-01
 
