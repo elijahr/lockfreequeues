@@ -148,60 +148,12 @@ jobs:
         run: |
           mike deploy --push dev
 
-      # Track 5 PR 5 Task 5.6 (design §5.Y): verify the chart's data
-      # endpoint is reachable AND parses as JSON after every dev
-      # deploy. The chart fails silently on a 404 (it renders an
-      # inline error rather than crashing the page) so without this
-      # check a broken asset path would only surface via user reports.
-      # `sleep 30` accommodates GitHub Pages CDN propagation; raise to
-      # 60 if this step ever flakes.
-      - name: Verify mike asset path
-        # Derive the Pages URL from the repository context so a fork or
-        # repo rename does not falsely fail this verification step. The
-        # default GitHub Pages URL convention is
-        # `https://<owner>.github.io/<repo>/`. If the project ever moves
-        # to a custom domain the URL becomes wrong again, but at that
-        # point we'd update the workflow to read site_url from
-        # mkdocs.yml; for now the convention is stable.
-        if: |
-          github.ref == 'refs/heads/main' ||
-          github.ref == 'refs/heads/master' ||
-          github.ref == 'refs/heads/devel'
-        env:
-          OWNER: ${{ github.repository_owner }}
-          REPO: ${{ github.event.repository.name }}
-        run: |
-          set -euo pipefail
-          URL="https://${OWNER}.github.io/${REPO}/dev/assets/bench-results/latest.json"
-          sleep 30
-          HTTP_CODE=$(curl -sS -o /tmp/latest.json -w "%{http_code}" "$URL")
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "::error::mike asset endpoint returned HTTP $HTTP_CODE for $URL"
-            exit 1
-          fi
-          python3 -c "import json; json.load(open('/tmp/latest.json'))"
-          echo "::notice::mike asset endpoint OK: $URL"
-          # Phase 4.6.3 green mirage audit: HTTP 200 + valid JSON is not
-          # enough — bench.yml's defensive fallback step (thread D1)
-          # writes a placeholder `{"_status": "fallback", ...}` when the
-          # bench pipeline breaks, and that placeholder satisfies both
-          # checks above. Without this freshness alert a silently-broken
-          # bench would render an explicit "no data" chart but the docs
-          # build would stay green indefinitely. Strategy:
-          #   - Always emit `::warning::` when _status == "fallback" so
-          #     the Actions tab shows yellow on every run.
-          #   - Fail (`::error::`) only on the daily `schedule` cron, so
-          #     unrelated docs PRs are not blocked while the bench is
-          #     broken — the maintainer still gets a daily nudge.
-          STATUS=$(jq -r '._status // "ok"' /tmp/latest.json)
-          if [ "$STATUS" = "fallback" ]; then
-            REASON=$(jq -r '._reason // "unknown"' /tmp/latest.json)
-            echo "::warning::Bench latest.json is in fallback mode (reason: ${REASON})"
-            if [ "${{ github.event_name }}" = "schedule" ]; then
-              echo "::error::Fallback persists across daily cron — bench pipeline is broken"
-              exit 1
-            fi
-          fi
+      # NOTE: `latest.json` freshness is bench.yml's concern, not docs.yml's.
+      # bench-upload commits the snapshot to docs/assets/bench-results/ and
+      # then dispatches this workflow (see bench.yml `Trigger docs redeploy`
+      # step) so the next run picks up the fresh JSON. The chart's
+      # example.json fallback (PR #29) handles transient 404s during the
+      # gap between docs deploy and bench publication.
 
 ### ROLLBACK ###
 # If `nimble install nim -y` ever breaks (registry change, package rename,

@@ -597,7 +597,9 @@ jobs:
       # (Task 5.5.b). The push only fires on `push` to `refs/heads/devel`;
       # PR runs and other branches keep contents:write unused.
       contents: write
-      actions: read
+      # `actions: write` is needed for the "Trigger docs redeploy" step
+      # at the end of this job to dispatch docs.yml via the GitHub API.
+      actions: write
       pull-requests: write
       checks: write
     timeout-minutes: 10
@@ -954,3 +956,22 @@ jobs:
           done
           echo "::error::Fallback snapshot push failed after 3 retries; aborting." >&2
           exit 1
+
+      # Wake docs.yml after bench-upload has committed latest.json (or the
+      # fallback placeholder). bench-upload's commits carry [skip-ci] for
+      # loop prevention, so they don't trigger docs.yml's push trigger on
+      # their own — this explicit dispatch is the wakeup signal. Eliminates
+      # the race where docs.yml deployed before bench had published
+      # latest.json. `if: always()` so a no-op snapshot (identical
+      # checked-in copy) still wakes docs in case earlier deploys missed
+      # the file. Scoped to devel push / dispatch to mirror the snapshot
+      # steps' `if:` conditions.
+      - name: Trigger docs redeploy
+        if: |
+          always() && (
+            (github.event_name == 'push' && github.ref == 'refs/heads/devel') ||
+            (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/devel')
+          )
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run docs.yml --ref devel
