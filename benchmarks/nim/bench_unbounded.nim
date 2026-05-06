@@ -105,12 +105,13 @@ proc usipsicConsumerThread[S: static int; T](
     ctx: ptr USipsicConsumerCtx[S, T]
 ) {.thread.} =
   var local = 0
+  var hb = initHarnessBackoff()
   while local < ctx.count:
     let r = ctx.queue[].pop()
     if r.isSome:
       inc local
     else:
-      backoffOnPeerWait()
+      hb.backoff()
 
 proc runOneUSipsicRun[S: static int; T](
     queue: ptr UnboundedSipsic[S, T], messageCount: int
@@ -174,12 +175,13 @@ proc usipmucConsumerThread[S: static int; T; MaxT: static int](
     let handle = registerThread(ctx.manager[])
     var consumer = ctx.queue[].getConsumer(handle)
     var local = 0
+    var hb = initHarnessBackoff()
     while local < ctx.count:
       let r = consumer.pop()
       if r.isSome:
         inc local
       else:
-        backoffOnPeerWait()
+        hb.backoff()
 
 proc runOneUSipmucRun[S: static int; T; MaxT: static int; C: static int](
     queue: ptr UnboundedSipmuc[S, T, MaxT],
@@ -316,12 +318,13 @@ proc runOneUMupsicRun[S: static int; T; MaxT: static int; P: static int](
       addr producerCtxs[i],
     )
   var local = 0
+  var hb = initHarnessBackoff()
   while local < messageCount:
     let r = queue[].pop()
     if r.isSome:
       inc local
     else:
-      backoffOnPeerWait()
+      hb.backoff()
   for i in 0 ..< P: joinThread(producerThreads[i])
   let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
   if elapsedNs <= 0.0: return 0.0
@@ -382,12 +385,13 @@ proc umupmucConsumerThread[S: static int; T; MaxT: static int](
     let handle = registerThread(ctx.manager[])
     var consumer = ctx.queue[].getConsumer(handle)
     var local = 0
+    var hb = initHarnessBackoff()
     while local < ctx.count:
       let r = consumer.pop()
       if r.isSome:
         inc local
       else:
-        backoffOnPeerWait()
+        hb.backoff()
 
 proc runOneUMupmucRun[S: static int; T; MaxT: static int;
                       P: static int; C: static int](

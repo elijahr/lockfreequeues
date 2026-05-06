@@ -718,7 +718,6 @@ jobs:
                 -d:UnboundedMupmucMessageCount=50000 \
                 -d:UnboundedMupmucRuns=2 \
                 -d:BenchUnboundedWarmup=1 \
-                -d:BenchSkipOversubscribed \
                 $ADAPTER_FLAGS \
                 $ADAPTER_PATHS \
                 benchmarks/nim/bench_unbounded.nim
