@@ -337,6 +337,36 @@
     return line;
   }
 
+  // Build the offscreen ARIA companion table for the hero canvas. Screen
+  // readers consume the rows via `aria-describedby`; the table is
+  // visually offscreen but kept in the accessibility tree.
+  function buildHeroAriaTable(rows) {
+    const table = el('table', {
+      id: 'bench-hero-aria-table',
+      class: 'bench-hero-aria-table',
+      'aria-hidden': 'false',
+      style: 'position: absolute; left: -9999px; top: auto; ' +
+        'width: 1px; height: 1px; overflow: hidden;',
+    });
+    const thead = el('thead', null,
+      el('tr', null,
+        el('th', null, 'Library'),
+        el('th', null, 'Throughput (ops/ms)')));
+    const tbody = el('tbody');
+    for (const r of rows) {
+      tbody.appendChild(el('tr', null,
+        el('td', null, r.library),
+        el('td', null, r.value.toFixed(1))));
+    }
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    return table;
+  }
+
+  // Hero panel renderer: canvas-rendered uPlot vertical bars when the
+  // library is available, with an offscreen ARIA companion table for
+  // screen-reader consumers. Falls back to DOM `<ol>` bars (the
+  // pre-canvas rendering) when uPlot or `paths.bars` is unavailable.
   function renderHero(host, byTopology) {
     host.innerHTML = '';
     const pick = pickHeroShape(byTopology);
@@ -376,24 +406,47 @@
       return;
     }
 
-    // Order: lockfreequeues bars first (descending value within the
-    // family), then alternatives sorted by descending value so the
-    // strongest non-lockfreequeues entry sits next to the lockfreequeues
-    // block for easy visual comparison.
-    rows.sort((a, b) => {
-      const aLfq = isLockfreequeues(a.library) ? 0 : 1;
-      const bLfq = isLockfreequeues(b.library) ? 0 : 1;
-      if (aLfq !== bLfq) return aLfq - bLfq;
-      return b.value - a.value;
-    });
-    const max = Math.max.apply(null, rows.map((r) => r.value));
+    // Sort descending by mean throughput so the strongest library sits
+    // leftmost. Ties are broken alphabetically for determinism.
+    rows.sort((a, b) => (b.value - a.value)
+      || a.library.localeCompare(b.library));
+    const sawBlocking = rows.some((r) => isBlocking(r.library));
 
+    const canBars =
+      typeof window.uPlot === 'function'
+      && window.uPlot.paths
+      && typeof window.uPlot.paths.bars === 'function';
+
+    if (canBars) {
+      renderHeroCanvas(host, rows, pick);
+    } else {
+      // Escape hatch (impl plan line 338): keep the legacy DOM
+      // `<ol>`-bar renderer when uPlot bars are unavailable.
+      renderHeroDomBars(host, rows, pick);
+    }
+
+    // Y-axis equivalent: a small caption under the bars naming the
+    // unit. Matches the throughput panels' "throughput (ops/ms)" label.
+    host.appendChild(el('p', { class: 'bench-hero-axis-caption' },
+      'throughput (ops/ms)'));
+
+    // Always emit the legend with a stable structure, regardless of
+    // whether a blocking library appears. Blocking rows carry a
+    // "(blocking)" badge; the legend itself documents what the dotted
+    // bar means, so there is no inline footnote.
+    host.appendChild(buildHeroLegend(rows, sawBlocking));
+
+    // Offscreen ARIA table: every render path gets one so screen
+    // readers can read the values regardless of canvas vs. DOM bars.
+    host.appendChild(buildHeroAriaTable(rows));
+  }
+
+  function renderHeroDomBars(host, rows, pick) {
+    const max = Math.max.apply(null, rows.map((r) => r.value));
     const list = el('ol', { class: 'bench-hero-bars' });
-    let sawBlocking = false;
     for (const r of rows) {
       const pct = max > 0 ? (r.value / max * 100) : 0;
       const blocking = isBlocking(r.library);
-      if (blocking) sawBlocking = true;
       const color = getColor(r.library);
       const barClass = 'bench-hero-bar' +
         (blocking ? ' bench-hero-bar-blocking' : '');
@@ -416,18 +469,118 @@
       list.appendChild(li);
     }
     host.appendChild(list);
+  }
 
-    // Y-axis equivalent for a horizontal-bar layout: a small caption
-    // under the bars naming the unit. Matches the throughput panels'
-    // "throughput (ops/ms)" Y-axis label.
-    host.appendChild(el('p', { class: 'bench-hero-axis-caption' },
-      'throughput (ops/ms)'));
+  // Tooltip plugin for the hero canvas: indexes back into the rows to
+  // surface "<library>: <value> ops/ms (±stddev) — <topology shape>".
+  function heroTooltipPlugin(rows, pick) {
+    let tip;
+    return {
+      hooks: {
+        init: (u) => {
+          tip = el('div', { class: 'bench-chart-tooltip' });
+          tip.style.display = 'none';
+          u.over.appendChild(tip);
+        },
+        setCursor: (u) => {
+          const { idx, left, top } = u.cursor;
+          if (idx == null || left < 0 || top < 0) {
+            if (tip) tip.style.display = 'none';
+            return;
+          }
+          const r = rows[idx];
+          if (!r) { tip.style.display = 'none'; return; }
+          tip.innerHTML = '<strong>' + escapeHtml(r.library) + '</strong><br>' +
+            escapeHtml(heroRowTitle(r.library, r, pick.topology, pick.shape));
+          tip.style.display = 'block';
+          tip.style.left = left + 12 + 'px';
+          tip.style.top = top + 12 + 'px';
+        },
+      },
+    };
+  }
 
-    // Always emit the legend with a stable structure, regardless of
-    // whether a blocking library appears. Blocking rows carry a
-    // "(blocking)" badge; the legend itself documents what the dotted
-    // bar means, so there is no inline footnote.
-    host.appendChild(buildHeroLegend(rows, sawBlocking));
+  // Render the hero panel as a uPlot canvas with one series per
+  // library (each carrying a single non-null value at its own x slot)
+  // so each bar can pick up its own stroke/fill color and dashed-stroke
+  // for blocking libraries.
+  function renderHeroCanvas(host, rows, pick) {
+    const wrap = el('div', { class: 'bench-hero-canvas-wrap' });
+    const plotMount = el('div', {
+      class: 'bench-chart-plot bench-hero-plot',
+      role: 'img',
+      'aria-describedby': 'bench-hero-aria-table',
+      'aria-label': 'Hero throughput chart, ' + rows.length +
+        ' libraries, see offscreen table for values',
+    });
+    wrap.appendChild(plotMount);
+    host.appendChild(wrap);
+
+    const xLabels = rows.map((r) => r.library);
+    const xs = rows.map((_, i) => i + 1);
+    // One series per library: each series carries a single non-null
+    // value at its own slot so it can render its own colored bar.
+    const seriesData = rows.map((r, i) =>
+      rows.map((_, j) => (i === j ? r.value : null))
+    );
+    const data = [xs, ...seriesData];
+
+    const bars = barsPath({ size: [0.85, 60, 1], gap: 4 });
+    const series = [{ label: 'library' }].concat(
+      rows.map((r) => {
+        const blocking = isBlocking(r.library);
+        const stroke = getColor(r.library);
+        const opt = {
+          label: displayLabel(r.library),
+          stroke,
+          width: 2,
+          points: { show: false },
+          spanGaps: false,
+          fill: blocking ? 'transparent' : stroke,
+        };
+        if (bars) opt.paths = bars;
+        if (blocking) opt.dash = [6, 4];
+        return opt;
+      })
+    );
+
+    const plot = new window.uPlot(
+      {
+        width: plotMount.clientWidth || (host.clientWidth || 800),
+        height: 320,
+        series,
+        scales: {
+          x: { time: false },
+          y: { distr: 1 },
+        },
+        axes: [
+          {
+            values: (_, ticks) => ticks.map((t) => xLabels[t - 1] || ''),
+            label: 'library',
+          },
+          {
+            label: 'throughput (ops/ms)',
+            values: (_, ticks) =>
+              ticks.map((v) => (v >= 1000 ? v.toExponential(1) : '' + v)),
+          },
+        ],
+        cursor: { drag: { x: false, y: false } },
+        legend: { show: false },
+        plugins: [heroTooltipPlugin(rows, pick)],
+      },
+      data,
+      plotMount
+    );
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => {
+        plot.setSize({
+          width: plotMount.clientWidth || (host.clientWidth || 800),
+          height: 320,
+        });
+      });
+      ro.observe(plotMount);
+    }
   }
 
   function buildHeroLegend(rows, sawBlocking) {
@@ -565,17 +718,39 @@
     };
   }
 
+  // Build a uPlot vertical-bar paths function. Categorical X axis pairs
+  // with a (log or linear) Y axis; non-blocking libraries render as
+  // filled bars, blocking libraries get a stroked-but-transparent bar
+  // (with the dashed stroke applied at the series level) so they read
+  // as outlined rather than solid.
+  function barsPath(opts) {
+    if (!window.uPlot || !window.uPlot.paths || !window.uPlot.paths.bars) {
+      return null;
+    }
+    return window.uPlot.paths.bars(opts || { size: [0.6, 60, 1], gap: 2 });
+  }
+
   function makeThroughputOpts(host, libraries, xLabels, logScale, panelLabel) {
+    const bars = barsPath({ size: [0.6, 60, 1], gap: 2 });
     const series = [{ label: 'shape' }].concat(
       libraries.map((lib) => {
+        const stroke = getColor(lib.library);
+        const blocking = isBlocking(lib.library);
         const opt = {
           label: displayLabel(lib.library),
-          stroke: getColor(lib.library),
+          stroke,
           width: 2,
-          points: { show: true, size: 6 },
+          // Bars carry their own footprint; per-point dots add visual
+          // noise on a categorical bar chart, so disable them.
+          points: { show: false },
           spanGaps: false,
+          // Blocking libraries get a transparent fill so the dashed
+          // stroke reads as an outlined bar; non-blocking libraries
+          // fill with the same hue as the stroke for solid bars.
+          fill: blocking ? 'transparent' : stroke,
         };
-        if (isBlocking(lib.library)) opt.dash = [6, 4];
+        if (bars) opt.paths = bars;
+        if (blocking) opt.dash = [6, 4];
         return opt;
       })
     );
