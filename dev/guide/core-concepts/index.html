@@ -7,31 +7,31 @@
       
       
       
-        <link rel="canonical" href="https://elijahr.github.io/lockfreequeues/latest/benchmarks/">
+        <link rel="canonical" href="https://elijahr.github.io/lockfreequeues/latest/guide/core-concepts/">
       
       
-        <link rel="prev" href="../api/unbounded_mupmuc/">
+        <link rel="prev" href="../getting-started/">
       
       
-        <link rel="next" href="../contributing/">
+        <link rel="next" href="../bounded-vs-unbounded/">
       
       
         
       
       
-      <link rel="icon" href="../assets/images/favicon.png">
+      <link rel="icon" href="../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
-        <title>Benchmarks - lockfreequeues</title>
+        <title>Core Concepts - lockfreequeues</title>
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -50,23 +50,23 @@
       
     
     
-      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../css/timeago.css">
+      <link rel="stylesheet" href="../../css/timeago.css">
     
-      <link rel="stylesheet" href="../css/custom.css">
+      <link rel="stylesheet" href="../../css/custom.css">
     
-      <link rel="stylesheet" href="../assets/bench-charts.css">
+      <link rel="stylesheet" href="../../assets/bench-charts.css">
     
-      <link rel="stylesheet" href="../assets/uplot-1.6.27.min.css">
+      <link rel="stylesheet" href="../../assets/uplot-1.6.27.min.css">
     
-    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
     
     
-  <link href="../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
+  <link href="../../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
             html.glightbox-open { overflow: initial; height: 100%; }
             .gslide-title { margin-top: 0px; user-select: text; }
             .gslide-desc { color: #666; user-select: text; }
@@ -95,7 +95,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#benchmarks" class="md-skip">
+        <a href="#core-concepts" class="md-skip">
           Skip to content
         </a>
       
@@ -115,7 +115,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href=".." title="lockfreequeues" class="md-header__button md-logo" aria-label="lockfreequeues" data-md-component="logo">
+    <a href="../.." title="lockfreequeues" class="md-header__button md-logo" aria-label="lockfreequeues" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
@@ -135,7 +135,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Benchmarks
+              Core Concepts
             
           </span>
         </div>
@@ -251,7 +251,7 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href=".." title="lockfreequeues" class="md-nav__button md-logo" aria-label="lockfreequeues" data-md-component="logo">
+    <a href="../.." title="lockfreequeues" class="md-nav__button md-logo" aria-label="lockfreequeues" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
@@ -281,7 +281,7 @@
   
   
     <li class="md-nav__item">
-      <a href=".." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -305,8 +305,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -317,13 +319,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2">
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked="">
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
@@ -344,7 +344,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -362,7 +362,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../guide/getting-started/" class="md-nav__link">
+      <a href="../getting-started/" class="md-nav__link">
         
   
   
@@ -387,10 +387,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../guide/core-concepts/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Concepts
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -406,6 +433,204 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
+      
+        <li class="md-nav__item">
+  <a href="#bounded-vs-unbounded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bounded vs Unbounded
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bounded vs Unbounded">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-you-know-the-upper-bound" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When you know the upper bound
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-you-dont" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When you don't
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backpressure-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backpressure semantics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lock-free-vs-wait-free" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lock-Free vs Wait-Free
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Lock-Free vs Wait-Free">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-operation-guarantees" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-operation guarantees
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-lockfreequeues-sits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where lockfreequeues sits
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spsc-spmc-mpsc-mpmc-quadrant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SPSC / SPMC / MPSC / MPMC quadrant
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SPSC / SPMC / MPSC / MPMC quadrant">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#one-table-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One-table summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-pick-which" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to pick which
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-mpmc-is-more-expensive-than-spsc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why MPMC is more expensive than SPSC
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capacity-segments-and-rollover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Capacity, segments, and rollover
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Capacity, segments, and rollover">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#bounded-ring-buffer-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bounded ring buffer model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unbounded-segment-list-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unbounded segment-list model
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -418,7 +643,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../guide/bounded-vs-unbounded/" class="md-nav__link">
+      <a href="../bounded-vs-unbounded/" class="md-nav__link">
         
   
   
@@ -446,7 +671,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../guide/slot-ownership-typestates/" class="md-nav__link">
+      <a href="../slot-ownership-typestates/" class="md-nav__link">
         
   
   
@@ -474,7 +699,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../guide/safety-model/" class="md-nav__link">
+      <a href="../safety-model/" class="md-nav__link">
         
   
   
@@ -502,7 +727,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../guide/memory-management/" class="md-nav__link">
+      <a href="../memory-management/" class="md-nav__link">
         
   
   
@@ -530,7 +755,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../guide/performance-tuning/" class="md-nav__link">
+      <a href="../performance-tuning/" class="md-nav__link">
         
   
   
@@ -558,7 +783,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../guide/examples/" class="md-nav__link">
+      <a href="../examples/" class="md-nav__link">
         
   
   
@@ -647,7 +872,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/" class="md-nav__link">
+      <a href="../../api/" class="md-nav__link">
         
   
   
@@ -726,7 +951,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/sipsic/" class="md-nav__link">
+      <a href="../../api/sipsic/" class="md-nav__link">
         
   
   
@@ -754,7 +979,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/sipmuc/" class="md-nav__link">
+      <a href="../../api/sipmuc/" class="md-nav__link">
         
   
   
@@ -782,7 +1007,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/mupsic/" class="md-nav__link">
+      <a href="../../api/mupsic/" class="md-nav__link">
         
   
   
@@ -810,7 +1035,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/mupmuc/" class="md-nav__link">
+      <a href="../../api/mupmuc/" class="md-nav__link">
         
   
   
@@ -897,7 +1122,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/unbounded_sipsic/" class="md-nav__link">
+      <a href="../../api/unbounded_sipsic/" class="md-nav__link">
         
   
   
@@ -925,7 +1150,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/unbounded_sipmuc/" class="md-nav__link">
+      <a href="../../api/unbounded_sipmuc/" class="md-nav__link">
         
   
   
@@ -953,7 +1178,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/unbounded_mupsic/" class="md-nav__link">
+      <a href="../../api/unbounded_mupsic/" class="md-nav__link">
         
   
   
@@ -981,7 +1206,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/unbounded_mupmuc/" class="md-nav__link">
+      <a href="../../api/unbounded_mupmuc/" class="md-nav__link">
         
   
   
@@ -1021,37 +1246,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Benchmarks
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../benchmarks/" class="md-nav__link">
         
   
   
@@ -1067,215 +1265,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
-      
-        <li class="md-nav__item">
-  <a href="#how-to-read-these-numbers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        How to read these numbers
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-to-pick-lockfreequeues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When to pick lockfreequeues
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#methodology" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Methodology
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Methodology">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#throughput-benchmark" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Throughput Benchmark
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#latency-benchmark" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Latency Benchmark
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#running-benchmarks" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Running Benchmarks
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#queue-types-compared" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Queue Types Compared
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Queue Types Compared">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#bounded-queues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Bounded Queues
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#unbounded-queues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Unbounded Queues
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#results" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Results
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Results">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#live-charts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Live charts
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Live charts">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#headline-lockfreequeues-vs-alternatives" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Headline: lockfreequeues vs alternatives
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#throughput-by-topology" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Throughput by topology
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#latency" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Latency
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#methodology-and-fairness-caveats" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Methodology and fairness caveats
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1287,7 +1276,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../contributing/" class="md-nav__link">
+      <a href="../../contributing/" class="md-nav__link">
         
   
   
@@ -1334,44 +1323,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
       
         <li class="md-nav__item">
-  <a href="#how-to-read-these-numbers" class="md-nav__link">
+  <a href="#bounded-vs-unbounded" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How to read these numbers
+        Bounded vs Unbounded
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-to-pick-lockfreequeues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When to pick lockfreequeues
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#methodology" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Methodology
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Methodology">
+    <nav class="md-nav" aria-label="Bounded vs Unbounded">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#throughput-benchmark" class="md-nav__link">
+  <a href="#when-you-know-the-upper-bound" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Throughput Benchmark
+        When you know the upper bound
       
     </span>
   </a>
@@ -1379,10 +1346,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#latency-benchmark" class="md-nav__link">
+  <a href="#when-you-dont" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Latency Benchmark
+        When you don't
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backpressure-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backpressure semantics
       
     </span>
   </a>
@@ -1395,33 +1373,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#running-benchmarks" class="md-nav__link">
+  <a href="#lock-free-vs-wait-free" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Running Benchmarks
+        Lock-Free vs Wait-Free
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#queue-types-compared" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Queue Types Compared
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Queue Types Compared">
+    <nav class="md-nav" aria-label="Lock-Free vs Wait-Free">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#bounded-queues" class="md-nav__link">
+  <a href="#per-operation-guarantees" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Bounded Queues
+        Per-operation guarantees
       
     </span>
   </a>
@@ -1429,10 +1396,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#unbounded-queues" class="md-nav__link">
+  <a href="#where-lockfreequeues-sits" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Unbounded Queues
+        Where lockfreequeues sits
       
     </span>
   </a>
@@ -1445,34 +1412,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#results" class="md-nav__link">
+  <a href="#spsc-spmc-mpsc-mpmc-quadrant" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Results
+        SPSC / SPMC / MPSC / MPMC quadrant
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Results">
+    <nav class="md-nav" aria-label="SPSC / SPMC / MPSC / MPMC quadrant">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#live-charts" class="md-nav__link">
+  <a href="#one-table-summary" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Live charts
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Live charts">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#headline-lockfreequeues-vs-alternatives" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Headline: lockfreequeues vs alternatives
+        One-table summary
       
     </span>
   </a>
@@ -1480,10 +1435,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#throughput-by-topology" class="md-nav__link">
+  <a href="#when-to-pick-which" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Throughput by topology
+        When to pick which
       
     </span>
   </a>
@@ -1491,10 +1446,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#latency" class="md-nav__link">
+  <a href="#why-mpmc-is-more-expensive-than-spsc" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Latency
+        Why MPMC is more expensive than SPSC
       
     </span>
   </a>
@@ -1505,12 +1460,35 @@
     </nav>
   
 </li>
-        
-          <li class="md-nav__item">
-  <a href="#methodology-and-fairness-caveats" class="md-nav__link">
+      
+        <li class="md-nav__item">
+  <a href="#capacity-segments-and-rollover" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Methodology and fairness caveats
+        Capacity, segments, and rollover
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Capacity, segments, and rollover">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#bounded-ring-buffer-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bounded ring buffer model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unbounded-segment-list-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unbounded segment-list model
       
     </span>
   </a>
@@ -1542,229 +1520,226 @@
   
 
 
-<h1 id="benchmarks">Benchmarks<a class="headerlink" href="#benchmarks" title="Permanent link">¶</a></h1>
-<p>Performance benchmarks comparing lockfreequeues against alternative implementations.</p>
-<h2 id="how-to-read-these-numbers">How to read these numbers<a class="headerlink" href="#how-to-read-these-numbers" title="Permanent link">¶</a></h2>
-<p>The chart organises every measurement along three axes: the <strong>library</strong> (which
-queue implementation), the <strong>topology</strong> (who's allowed to push and pop), and
-the <strong>shape</strong> (how many of each are running concurrently). Each combination is
-one bar.</p>
-<p>Topology slugs name the producer/consumer cardinality: <strong>SPSC</strong> is single
-producer single consumer, <strong>SPMC</strong> is single producer with many consumers,
-<strong>MPSC</strong> is the inverse, and <strong>MPMC</strong> is many on both sides. Different
-topologies admit different algorithms — SPSC can be wait-free with no atomic
-RMW on the hot path, while MPMC needs a full Vyukov sequence-counter dance.
-See <a href="../guide/core-concepts/">Core Concepts</a> for the algorithmic background.</p>
-<p>Shapes use the <code>NpMc</code> form: <code>4p4c</code> means four producer threads and four
-consumer threads, all on one queue. Higher counts under the same topology
-crank up contention — <code>4p4c</code> MPMC is harder than <code>1p1c</code> MPMC because every
-slot is now contested by up to eight threads instead of two, and the
-<code>ubuntu-latest</code> runner only has 4 vCPU so <code>8p8c</code> measures scheduler
-oversubscription, not the queue itself.</p>
-<p>Bounded variants are ring buffers with compile-time capacity; unbounded
-variants are linked segments reclaimed via DEBRA. The bounded/unbounded
-choice changes the cost model — bounded amortises everything in a fixed
-allocation, unbounded pays a small reclamation overhead in exchange for never
-returning a "queue full" error. The trade-off is laid out in
-<a href="../guide/bounded-vs-unbounded/">Bounded vs Unbounded</a>.</p>
-<p>In the legend, an asterisk (<code>*</code>) and the <code>(blocking)</code> badge mark libraries
-whose adapter blocks on a full queue instead of returning a non-blocking
-"full" signal — Nim's <code>system/Channel</code> and <code>Threading.Channels</code> work that way.
-Their bars are also rendered with a dotted edge. The throughput numbers for
-those libraries reflect blocking semantics, not the <code>try_push</code> path the
-lockfreequeues bounded variants expose, so cross-comparisons need that
-asterisk in mind.</p>
-<h2 id="when-to-pick-lockfreequeues">When to pick lockfreequeues<a class="headerlink" href="#when-to-pick-lockfreequeues" title="Permanent link">¶</a></h2>
-<p>If your bottleneck is <strong>single-producer single-consumer with a known capacity</strong>
-— an audio callback handing buffers to a render thread, a GPU command queue,
-a network read loop feeding a worker — <code>Sipsic</code> is wait-free on both sides
-and clears around 7,600 ops/ms at <code>1p1c</code> on <code>ubuntu-latest</code>. There's no
-adapter for <code>system/Channel</code> at SPSC so the fixture has no head-to-head
-number, but the wait-free progress guarantee alone usually settles it.</p>
-<p>If your bottleneck is <strong>multi-producer multi-consumer at high contention</strong> —
-a job scheduler with dozens of producer goroutines, an event collector
-funneling from many sources — <code>Mupmuc</code> is the right call. At <code>4p4c</code> it
-sustains around 18,200 ops/ms in the fixture, against 1,720 ops/ms for
-<code>system/Channel</code> at the same shape — roughly 10.6x faster. The MPSC variant
-<code>Mupsic</code> shows a similar gap (about 3.7x at <code>4p1c</code>) when only the producer
-side fans out.</p>
-<p>When NOT to reach for lockfreequeues:</p>
+<h1 id="core-concepts">Core Concepts<a class="headerlink" href="#core-concepts" title="Permanent link">¶</a></h1>
+<p>The conceptual foundation for the rest of the guide: bounded vs unbounded
+queues, lock-free vs wait-free progress guarantees, the SPSC / SPMC / MPSC /
+MPMC quadrant, and how capacity and segments work under the hood.</p>
+<p>Read this once, then return to the topic-specific guides as needed.</p>
+<h2 id="bounded-vs-unbounded">Bounded vs Unbounded<a class="headerlink" href="#bounded-vs-unbounded" title="Permanent link">¶</a></h2>
+<h3 id="when-you-know-the-upper-bound">When you know the upper bound<a class="headerlink" href="#when-you-know-the-upper-bound" title="Permanent link">¶</a></h3>
+<p>A <em>bounded</em> queue has a fixed compile-time capacity <code>N</code>. The queue allocates
+its storage once, never grows, and rejects further pushes when full (<code>push</code>
+returns <code>false</code>). This is the right choice when your traffic has a known
+ceiling — an audio buffer at 64 samples, an HTTP worker pool with 256
+in-flight requests, a sensor pipeline at 1 kHz with a 100 ms tolerance.</p>
+<p>Bounded queues are wait-free for SPSC and lock-free for the contended
+multi-thread variants. No allocation happens during operation. Memory cost
+is exactly <code>N * sizeof(T)</code> plus a few cache-line-aligned counters.</p>
+<h3 id="when-you-dont">When you don't<a class="headerlink" href="#when-you-dont" title="Permanent link">¶</a></h3>
+<p>An <em>unbounded</em> queue grows segment by segment. Push always succeeds (until
+the allocator runs out). The cost is per-segment allocation when the
+current segment fills, and — for the multi-thread unbounded variants —
+DEBRA epoch-based reclamation to free retired segments safely under
+contention.</p>
+<p>Pick unbounded when bursts can dwarf the steady-state rate (log
+aggregation across hundreds of producers, event collection during a load
+test, work scheduling where you would rather grow memory than drop work).</p>
+<h3 id="backpressure-semantics">Backpressure semantics<a class="headerlink" href="#backpressure-semantics" title="Permanent link">¶</a></h3>
+<p>A bounded queue full means <code>push</code> returns <code>false</code>. Whether you retry,
+sleep, or drop is application policy. An unbounded queue has no
+"full" — backpressure has to come from somewhere else (rate limiting at
+the producer, monitoring on segment count, OOM as a last resort).</p>
+<p>For the full decision guide, see
+<a href="../bounded-vs-unbounded/">Bounded vs Unbounded</a>.</p>
+<h2 id="lock-free-vs-wait-free">Lock-Free vs Wait-Free<a class="headerlink" href="#lock-free-vs-wait-free" title="Permanent link">¶</a></h2>
+<h3 id="per-operation-guarantees">Per-operation guarantees<a class="headerlink" href="#per-operation-guarantees" title="Permanent link">¶</a></h3>
+<p>Two progress guarantees, in increasing strength:</p>
 <ul>
-<li><strong>You actually want blocking semantics.</strong> If "queue full" should park the
-  producer until the consumer drains a slot, <code>system/Channel</code> and
-  <code>Threading.Channels</code> give that for free. The lockfreequeues bounded
-  variants return a non-blocking signal instead, and you'd need to layer a
-  semaphore or condvar on top.</li>
-<li><strong>Your runtime forbids ARC/ORC.</strong> The library rejects <code>ref T</code> items under
-  ARC, ORC, or atomicArc by design — the slot copy semantics aren't safe
-  with shared <code>ref</code> payloads. <code>refc</code> works, but defeats the purpose. Use
-  value types or <code>ptr T</code>.</li>
-<li><strong>DEBRA reclamation overhead matters more than throughput.</strong> The unbounded
-  variants pay a small per-pop bookkeeping cost for epoch advancement; on
-  workloads dominated by tiny payloads at very high pop rates the bounded
-  variants will measure higher. The fixture shows unbounded <code>Mupmuc</code> at
-  about 9,860 ops/ms at <code>1p1c</code> versus bounded <code>Mupmuc</code> at about 24,070
-  ops/ms — a real gap, and the cost of "never blocks on full".</li>
+<li><strong>Lock-free</strong>: at least one thread makes progress on every step of the
+  algorithm. Individual threads may retry their CAS loop indefinitely, but
+  the system as a whole never stalls. A preempted thread cannot stop
+  others.</li>
+<li><strong>Wait-free</strong>: every thread completes its operation in a bounded number
+  of steps, regardless of what other threads are doing. The strongest
+  progress guarantee available without locks.</li>
 </ul>
-<h2 id="methodology">Methodology<a class="headerlink" href="#methodology" title="Permanent link">¶</a></h2>
-<h3 id="throughput-benchmark">Throughput Benchmark<a class="headerlink" href="#throughput-benchmark" title="Permanent link">¶</a></h3>
+<p>Mutex-based code is neither. A holder that gets preempted while holding
+the lock blocks every other thread until it is rescheduled.</p>
+<h3 id="where-lockfreequeues-sits">Where lockfreequeues sits<a class="headerlink" href="#where-lockfreequeues-sits" title="Permanent link">¶</a></h3>
+<table>
+<thead>
+<tr>
+<th>Variant family</th>
+<th>push</th>
+<th>pop</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Sipsic</code> (bounded SPSC)</td>
+<td>wait-free</td>
+<td>wait-free</td>
+</tr>
+<tr>
+<td><code>Sipmuc</code> (bounded SPMC)</td>
+<td>wait-free</td>
+<td>lock-free</td>
+</tr>
+<tr>
+<td><code>Mupsic</code> (bounded MPSC)</td>
+<td>lock-free</td>
+<td>wait-free</td>
+</tr>
+<tr>
+<td><code>Mupmuc</code> (bounded MPMC)</td>
+<td>lock-free</td>
+<td>lock-free</td>
+</tr>
+<tr>
+<td><code>UnboundedSipsic</code></td>
+<td>wait-free</td>
+<td>wait-free</td>
+</tr>
+<tr>
+<td><code>UnboundedSipmuc</code> (unbounded SPMC)</td>
+<td>wait-free</td>
+<td>lock-free</td>
+</tr>
+<tr>
+<td><code>UnboundedMupsic</code> (unbounded MPSC)</td>
+<td>lock-free</td>
+<td>wait-free</td>
+</tr>
+<tr>
+<td><code>UnboundedMupmuc</code> (unbounded MPMC)</td>
+<td>lock-free</td>
+<td>lock-free</td>
+</tr>
+</tbody>
+</table>
+<p>The single-side-of-each-pair operations (the <code>Sip*</code> and <code>*Sic</code> ends) are
+wait-free because there is no CAS contention — only one thread races for
+that cursor. The contended sides use a CAS loop and are lock-free.</p>
+<p>For the slot-level state machine that backs push and pop, see
+<a href="../slot-ownership-typestates/">Slot Ownership Typestates</a>. For the broader
+thread-safety contract, see <a href="../safety-model/">Safety Model</a>.</p>
+<h2 id="spsc-spmc-mpsc-mpmc-quadrant">SPSC / SPMC / MPSC / MPMC quadrant<a class="headerlink" href="#spsc-spmc-mpsc-mpmc-quadrant" title="Permanent link">¶</a></h2>
+<p>The four producer/consumer patterns and the queue type that implements each.</p>
+<h3 id="one-table-summary">One-table summary<a class="headerlink" href="#one-table-summary" title="Permanent link">¶</a></h3>
+<table>
+<thead>
+<tr>
+<th>Producers</th>
+<th>Consumers</th>
+<th>Bounded type</th>
+<th>Unbounded type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>1</td>
+<td><code>Sipsic</code></td>
+<td><code>UnboundedSipsic</code></td>
+</tr>
+<tr>
+<td>1</td>
+<td>many</td>
+<td><code>Sipmuc</code></td>
+<td><code>UnboundedSipmuc</code></td>
+</tr>
+<tr>
+<td>many</td>
+<td>1</td>
+<td><code>Mupsic</code></td>
+<td><code>UnboundedMupsic</code></td>
+</tr>
+<tr>
+<td>many</td>
+<td>many</td>
+<td><code>Mupmuc</code></td>
+<td><code>UnboundedMupmuc</code></td>
+</tr>
+</tbody>
+</table>
+<p>The naming is mnemonic: <strong>Si</strong>ngle vs <strong>Mu</strong>ltiple, <strong>p</strong>roducer, <strong>s</strong>ingle
+vs multiple, <strong>c</strong>onsumer. <code>Sipsic</code> = Single-producer / Single-consumer.
+<code>Mupmuc</code> = Multi-producer / Multi-consumer.</p>
+<p>For per-type API reference, see the API pages: <code>Sipsic</code>, <code>Sipmuc</code>, <code>Mupsic</code>,
+<code>Mupmuc</code> (and the <code>Unbounded*</code> variants).</p>
+<h3 id="when-to-pick-which">When to pick which<a class="headerlink" href="#when-to-pick-which" title="Permanent link">¶</a></h3>
+<p>The choice is made by counting threads, not by guessing which queue is
+"fastest". A queue used incorrectly — say, two producer threads sharing a
+<code>Sipsic</code> — has undefined behaviour.</p>
 <ul>
-<li>N producer threads and N consumer threads share one queue</li>
-<li>Each thread sends/receives 1,000,000 / N messages</li>
-<li>Measures end-to-end time, reports ops/ms</li>
-<li>33 runs with warmup for stable statistics</li>
+<li>One producer, one consumer: use <code>Sipsic</code>. Wait-free both sides; lowest
+  per-op cost in the library.</li>
+<li>One producer, many consumers (fan-out): use <code>Sipmuc</code>. The producer side
+  stays wait-free; consumers race a CAS to claim a slot.</li>
+<li>Many producers, one consumer (fan-in, the most common server pattern):
+  use <code>Mupsic</code>. Producers race; consumer is wait-free.</li>
+<li>Many on both sides: use <code>Mupmuc</code>. Both sides race.</li>
 </ul>
-<h3 id="latency-benchmark">Latency Benchmark<a class="headerlink" href="#latency-benchmark" title="Permanent link">¶</a></h3>
-<ul>
-<li>Ping-pong between 2 threads using 2 queues</li>
-<li>Measures round-trip time (RTT) in nanoseconds</li>
-<li>100,000 iterations per run</li>
-<li>Reports percentiles: p50, p95, p99, p999</li>
-</ul>
-<h2 id="running-benchmarks">Running Benchmarks<a class="headerlink" href="#running-benchmarks" title="Permanent link">¶</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Quick run (10 iterations)</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>nimble<span class="w"> </span>benchmarks
+<p>If your producer or consumer count is "1 most of the time but occasionally
+2", you still need the multi-side variant. The library cannot detect at
+runtime that you are temporarily violating the contract.</p>
+<h3 id="why-mpmc-is-more-expensive-than-spsc">Why MPMC is more expensive than SPSC<a class="headerlink" href="#why-mpmc-is-more-expensive-than-spsc" title="Permanent link">¶</a></h3>
+<p>Every additional contended side adds a CAS loop and a per-slot sequence
+counter. <code>Sipsic</code> writes the item, then advances a single tail cursor with
+a release store — no CAS. <code>Mupmuc</code> has to publish the item with a release
+store, advance the tail with a CAS that may lose to other producers, and
+do the same dance on the consumer side. Under contention, retries
+multiply.</p>
+<p>The published <a href="../../benchmarks/">Benchmarks</a> page shows the empirical gap;
+expect ~3-5× difference between SPSC and uncontended MPMC, growing with
+producer count.</p>
+<h2 id="capacity-segments-and-rollover">Capacity, segments, and rollover<a class="headerlink" href="#capacity-segments-and-rollover" title="Permanent link">¶</a></h2>
+<h3 id="bounded-ring-buffer-model">Bounded ring buffer model<a class="headerlink" href="#bounded-ring-buffer-model" title="Permanent link">¶</a></h3>
+<p>A bounded queue is a flat array of <code>N</code> slots plus head and tail cursors.
+Producers advance the tail, consumers advance the head, and both wrap
+modulo <code>N</code> (or <code>N + 1</code> for <code>Sipsic</code>, which uses one extra slot to
+distinguish full from empty without a separate count field).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="n">options</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Full benchmark suite</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>python<span class="w"> </span>benchmarks/runner.py<span class="w"> </span>run<span class="w"> </span>--runs<span class="o">=</span><span class="m">33</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c"># Capacity 8: 8 slots usable, plus 1 sentinel for SPSC.</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="kd">var</span><span class="w"> </span><span class="n">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initSipsic</span><span class="o">[</span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="o">]</span><span class="p">()</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="k">discard</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="k">discard</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">echo</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">capacity</span><span class="p">()</span><span class="w">  </span><span class="c"># 8</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">echo</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">()</span><span class="w">       </span><span class="c"># Some(1)</span>
 </code></pre></div>
-<h2 id="queue-types-compared">Queue Types Compared<a class="headerlink" href="#queue-types-compared" title="Permanent link">¶</a></h2>
-<h3 id="bounded-queues">Bounded Queues<a class="headerlink" href="#bounded-queues" title="Permanent link">¶</a></h3>
-<table>
-<thead>
-<tr>
-<th>Queue</th>
-<th>Type</th>
-<th>Implementation</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Sipsic</td>
-<td>SPSC</td>
-<td>lockfreequeues</td>
-</tr>
-<tr>
-<td>Sipmuc</td>
-<td>SPMC</td>
-<td>lockfreequeues</td>
-</tr>
-<tr>
-<td>Mupsic</td>
-<td>MPSC</td>
-<td>lockfreequeues</td>
-</tr>
-<tr>
-<td>Mupmuc</td>
-<td>MPMC</td>
-<td>lockfreequeues</td>
-</tr>
-<tr>
-<td>channels</td>
-<td>MPMC</td>
-<td>Nim stdlib</td>
-</tr>
-</tbody>
-</table>
-<h3 id="unbounded-queues">Unbounded Queues<a class="headerlink" href="#unbounded-queues" title="Permanent link">¶</a></h3>
-<table>
-<thead>
-<tr>
-<th>Queue</th>
-<th>Type</th>
-<th>Implementation</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>UnboundedSipsic</td>
-<td>SPSC</td>
-<td>lockfreequeues</td>
-</tr>
-<tr>
-<td>UnboundedMupmuc</td>
-<td>MPMC</td>
-<td>lockfreequeues</td>
-</tr>
-<tr>
-<td>LoonyQueue</td>
-<td>MPMC</td>
-<td>loony</td>
-</tr>
-</tbody>
-</table>
-<h2 id="results">Results<a class="headerlink" href="#results" title="Permanent link">¶</a></h2>
-<p>Results are generated per-platform. See the <code>benchmarks/results/</code> directory for JSON output.</p>
-<h3 id="live-charts">Live charts<a class="headerlink" href="#live-charts" title="Permanent link">¶</a></h3>
-<p>The charts below pull from a snapshot published by the <code>bench</code> CI workflow on
-every push to <code>devel</code> (see <code>.github/workflows/bench.yml</code>). The hero panel
-shows lockfreequeues vs alternatives at a single representative bounded
-shape; the per-topology panels below trace each library across the
-producer/consumer shape grid (and pair bounded with unbounded variants where
-the topology supports both). Each panel's legend toggles libraries on and
-off; the Y axis defaults to log scale and is per-panel switchable to linear.
-Hovering a shape shows mean ± stddev when the underlying measure carries
-one, plus the topology context. Dotted bars and a <code>(blocking)</code> badge in the
-legend mark libraries with blocking-on-full semantics — see the methodology
-section below.</p>
-<h4 id="headline-lockfreequeues-vs-alternatives">Headline: lockfreequeues vs alternatives<a class="headerlink" href="#headline-lockfreequeues-vs-alternatives" title="Permanent link">¶</a></h4>
-<div markdown="0">
-  <div id="bench-status" class="bench-status" hidden=""></div>
-
-  <div id="bench-hero" class="bench-panel bench-panel-hero">
-    <noscript>
-      Charts require JavaScript. The raw data is published at
-      <code>../assets/bench-results/latest.json</code>; download the JSON
-      snapshot if you need to consume it programmatically.
-    </noscript>
-  </div>
-</div>
-
-<h4 id="throughput-by-topology">Throughput by topology<a class="headerlink" href="#throughput-by-topology" title="Permanent link">¶</a></h4>
-<div markdown="0">
-  <div id="bench-throughput-spsc" class="bench-panel"></div>
-  <div id="bench-throughput-mpsc" class="bench-panel"></div>
-  <div id="bench-throughput-mpmc-bounded" class="bench-panel"></div>
-  <div id="bench-throughput-mpmc-unbounded" class="bench-panel"></div>
-</div>
-
-<h4 id="latency">Latency<a class="headerlink" href="#latency" title="Permanent link">¶</a></h4>
-<div markdown="0">
-  <div id="bench-latency" class="bench-panel"></div>
-
-  <script src="../assets/uplot-1.6.27.iife.min.js"></script>
-  <script src="../assets/bench-charts.js"></script>
-</div>
-
-<h3 id="methodology-and-fairness-caveats">Methodology and fairness caveats<a class="headerlink" href="#methodology-and-fairness-caveats" title="Permanent link">¶</a></h3>
-<p>All numbers below are produced on GitHub-hosted <code>ubuntu-latest</code> runners (4 vCPU
-implicit, x86_64). Do not infer absolute latency or throughput suitability for
-production hardware from these numbers — use them only for relative comparison
-between queue implementations under identical conditions.</p>
-<p>Specific caveats:</p>
-<ul>
-<li><strong>Cache-line padding asymmetry.</strong> Some libraries (lockfreequeues, MoodyCamel,
-  Boost.LockFree) pad their head/tail/sequence fields to 64 bytes; others may
-  not. The lockfreequeues MPMC types were padding-audited as part of PR 3 (see
-  audit checklist).</li>
-<li><strong>Memory ordering.</strong> lockfreequeues uses <code>acquire</code>/<code>release</code> ordering on its
-  hot paths; some external libraries default to <code>seq_cst</code>, which is stricter
-  and may show as higher latency.</li>
-<li><strong>NUMA pinning.</strong> None on <code>ubuntu-latest</code>. NUMA-aware comparison would
-  require self-hosted high-core runners (radar item).</li>
-<li><strong>Message size and capacity.</strong> All benchmarks transfer 8-byte <code>uint64_t</code>
-  payloads. Bounded queues use a compile-time capacity matched across libraries.</li>
-<li><strong>Blocking vs non-blocking semantics.</strong> Nim's <code>system/Channel</code> and
-  <code>Threading.Channels</code> block on full instead of returning a "queue full"
-  signal. Their throughput numbers reflect blocking semantics, not the
-  non-blocking <code>try_push</code> path that the lockfree queues use. These are
-  rendered with a dotted bar/line and carry an asterisk on the throughput-
-  panel legends and a <code>(blocking)</code> badge on the hero legend.</li>
-<li><strong>Producer/consumer thread placement.</strong> No explicit pinning. The runner's
-  scheduler is the ground truth for thread placement.</li>
-<li><strong>CPU oversubscription.</strong> <code>ubuntu-latest</code> has 4 vCPU. MPMC variants beyond
-  4P + 4C measure scheduler oversubscription, not lock-free contention.</li>
-</ul>
+<p>When the tail catches the head (queue full) <code>push</code> returns <code>false</code>. When
+the head catches the tail (queue empty) <code>pop</code> returns <code>none</code>. Generation
+rollover for the multi-producer / multi-consumer bounded variants is
+handled by Vyukov per-slot sequence counters — see
+<a href="../slot-ownership-typestates/#publication-protocol-bounded-vs-unbounded">Slot Ownership Typestates → Publication Protocol</a>
+for the protocol that makes wraparound races structurally impossible.</p>
+<h3 id="unbounded-segment-list-model">Unbounded segment-list model<a class="headerlink" href="#unbounded-segment-list-model" title="Permanent link">¶</a></h3>
+<p>An unbounded queue is a singly-linked list of segments, where each
+segment is a fixed-size array of <code>S</code> slots. Producers fill the current
+tail segment until it is exhausted, then atomically link a freshly
+allocated segment and continue. Consumers drain the head segment until
+it is empty, then advance to the next segment and (for the multi-thread
+variants) hand the retired segment to DEBRA for safe reclamation.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="n">options</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c"># Segment size 64 — each segment holds 64 ints. The queue grows</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="c"># segment-by-segment as load demands.</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="kd">var</span><span class="w"> </span><span class="n">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">newUnboundedSipsic</span><span class="o">[</span><span class="mi">64</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="o">]</span><span class="p">()</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">echo</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">segmentCount</span><span class="p">()</span><span class="w">  </span><span class="c"># 1 (no overflow yet)</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">echo</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">()</span><span class="w">           </span><span class="c"># Some(1)</span>
+</code></pre></div>
+<p>Segment size <code>S</code> is the granularity of allocation: small <code>S</code> means more
+allocations under sustained load, large <code>S</code> means more wasted memory at
+low load. See
+<a href="../bounded-vs-unbounded/#segment-size-selection-unbounded">Bounded vs Unbounded → Segment size selection</a>
+for the trade-off.</p>
 
 
 
@@ -1797,7 +1772,7 @@ between queue implementations under identical conditions.</p>
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"></path></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="April 28, 2026 02:43:49 UTC"><span class="timeago" datetime="2026-04-28T02:43:49+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="April 28, 2026 02:43:49 UTC">2026-04-28</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="May 6, 2026 04:28:51 UTC"><span class="timeago" datetime="2026-05-06T04:28:51+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="May 6, 2026 04:28:51 UTC">2026-05-06</span>
   </span>
 
     
@@ -1862,14 +1837,14 @@ between queue implementations under identical conditions.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.copy", "content.code.annotate", "navigation.instant", "navigation.sections", "navigation.expand", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.copy", "content.code.annotate", "navigation.instant", "navigation.sections", "navigation.expand", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
-        <script src="../js/timeago.min.js"></script>
+        <script src="../../js/timeago.min.js"></script>
       
-        <script src="../js/timeago_mkdocs_material.js"></script>
+        <script src="../../js/timeago_mkdocs_material.js"></script>
       
     
   

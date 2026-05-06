@@ -1,0 +1,2054 @@
+<!DOCTYPE html><html lang="en" class="no-js"><head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Lock-free queues for Nim, implemented as ring buffers">
+      
+      
+      
+        <link rel="canonical" href="https://elijahr.github.io/lockfreequeues/latest/guide/bounded-vs-unbounded/">
+      
+      
+        <link rel="prev" href="../core-concepts/">
+      
+      
+        <link rel="next" href="../slot-ownership-typestates/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Bounded vs Unbounded - lockfreequeues</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../css/timeago.css">
+    
+      <link rel="stylesheet" href="../../css/custom.css">
+    
+      <link rel="stylesheet" href="../../assets/bench-charts.css">
+    
+      <link rel="stylesheet" href="../../assets/uplot-1.6.27.min.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  <link href="../../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
+            html.glightbox-open { overflow: initial; height: 100%; }
+            .gslide-title { margin-top: 0px; user-select: text; }
+            .gslide-desc { color: #666; user-select: text; }
+            .gslide-image img { background: white; }
+            .gscrollbar-fixer { padding-right: 15px; }
+            .gdesc-inner { font-size: 0.75rem; }
+            body[data-md-color-scheme="slate"] .gdesc-inner { background: var(--md-default-bg-color); }
+            body[data-md-color-scheme="slate"] .gslide-title { color: var(--md-default-fg-color); }
+            body[data-md-color-scheme="slate"] .gslide-desc { color: var(--md-default-fg-color); }
+        </style></head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="cyan">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#bounded-vs-unbounded" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden="">
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="lockfreequeues" class="md-header__button md-logo" aria-label="lockfreequeues" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"></path></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            lockfreequeues
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Bounded vs Unbounded
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="cyan" aria-label="Switch to light mode" type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden="">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"></path></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="cyan" aria-label="Switch to dark mode" type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden="">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"></path></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required="">
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"></path></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix="">
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/elijahr/lockfreequeues" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"></path></svg>
+  </div>
+  <div class="md-source__repository">
+    elijahr/lockfreequeues
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="lockfreequeues" class="md-nav__button md-logo" aria-label="lockfreequeues" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
+
+    </a>
+    lockfreequeues
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/elijahr/lockfreequeues" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"></path></svg>
+  </div>
+  <div class="md-source__repository">
+    elijahr/lockfreequeues
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix="">
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked="">
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../core-concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bounded vs Unbounded
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bounded vs Unbounded
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
+      
+        <li class="md-nav__item">
+  <a href="#when-to-choose-bounded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to choose bounded
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="When to choose bounded">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#backpressure-as-a-feature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backpressure as a feature
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-upper-bound-is-a-hard-requirement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory upper bound is a hard requirement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ci-friendly-determinism" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CI-friendly determinism
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-choose-unbounded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to choose unbounded
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="When to choose unbounded">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-push-must-always-succeed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When push must always succeed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cost-segment-allocation-on-overflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cost: segment allocation on overflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deallocation-timing-under-debra" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deallocation timing under DEBRA
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capacity-selection-bounded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Capacity selection (bounded)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Capacity selection (bounded)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#power-of-2-sizing-rationale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Power-of-2 sizing rationale
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#choosing-n-throughput-vs-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choosing N: throughput vs memory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiple-producers-contention-scaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiple producers: contention scaling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#segment-size-selection-unbounded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Segment size selection (unbounded)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Segment size selection (unbounded)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#default-segment-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default segment size
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-override" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to override
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backpressure-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backpressure patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Backpressure patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#spin-and-retry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spin-and-retry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fail-fast-option-bool-returns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fail-fast (Option / bool returns)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sleep-then-retry-with-backoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sleep-then-retry with backoff
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#trade-offs-at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trade-offs at a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../slot-ownership-typestates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Slot Ownership Typestates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../safety-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Safety Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory-management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance-tuning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance Tuning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3">
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_2">
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bounded Queues
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Bounded Queues
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/sipsic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sipsic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/sipmuc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sipmuc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/mupsic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mupsic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/mupmuc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mupmuc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3">
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unbounded Queues
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Unbounded Queues
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/unbounded_sipsic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UnboundedSipsic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/unbounded_sipmuc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UnboundedSipmuc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/unbounded_mupsic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UnboundedMupsic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/unbounded_mupmuc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UnboundedMupmuc
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
+      
+        <li class="md-nav__item">
+  <a href="#when-to-choose-bounded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to choose bounded
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="When to choose bounded">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#backpressure-as-a-feature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backpressure as a feature
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-upper-bound-is-a-hard-requirement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory upper bound is a hard requirement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ci-friendly-determinism" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CI-friendly determinism
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-choose-unbounded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to choose unbounded
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="When to choose unbounded">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-push-must-always-succeed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When push must always succeed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cost-segment-allocation-on-overflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cost: segment allocation on overflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deallocation-timing-under-debra" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deallocation timing under DEBRA
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capacity-selection-bounded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Capacity selection (bounded)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Capacity selection (bounded)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#power-of-2-sizing-rationale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Power-of-2 sizing rationale
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#choosing-n-throughput-vs-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choosing N: throughput vs memory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiple-producers-contention-scaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiple producers: contention scaling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#segment-size-selection-unbounded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Segment size selection (unbounded)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Segment size selection (unbounded)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#default-segment-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default segment size
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-override" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to override
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backpressure-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backpressure patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Backpressure patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#spin-and-retry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spin-and-retry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fail-fast-option-bool-returns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fail-fast (Option / bool returns)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sleep-then-retry-with-backoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sleep-then-retry with backoff
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#trade-offs-at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trade-offs at a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="bounded-vs-unbounded">Bounded vs Unbounded<a class="headerlink" href="#bounded-vs-unbounded" title="Permanent link">¶</a></h1>
+<p>A decision guide for picking between the bounded ring-buffer queues
+(<code>Sipsic</code>, <code>Sipmuc</code>, <code>Mupsic</code>, <code>Mupmuc</code>) and the unbounded segment-linked
+variants (<code>UnboundedSipsic</code>, <code>UnboundedSipmuc</code>, <code>UnboundedMupsic</code>,
+<code>UnboundedMupmuc</code>).</p>
+<p>If you have not yet read the conceptual overview, start with
+<a href="../core-concepts/">Core Concepts</a>. The high-level "bounded means fixed
+capacity, unbounded grows as needed" framing is covered there; this page
+is the deeper decision-helper for cases where the choice is non-obvious.</p>
+<h2 id="when-to-choose-bounded">When to choose bounded<a class="headerlink" href="#when-to-choose-bounded" title="Permanent link">¶</a></h2>
+<h3 id="backpressure-as-a-feature">Backpressure as a feature<a class="headerlink" href="#backpressure-as-a-feature" title="Permanent link">¶</a></h3>
+<p>A bounded queue rejects pushes when full, and that rejection is often the
+correct behaviour. Real-time audio is the canonical example: if the
+producer thread cannot get its sample buffer onto the queue within one
+frame, the right answer is usually to drop the frame, not to grow memory
+until the consumer eventually catches up. A 64-sample buffer at 44.1 kHz
+gives the producer 1.45 ms to publish; if it misses, the audio system
+absorbs a glitch and moves on.</p>
+<p><code>Sipsic</code> returns <code>false</code> from <code>push</code> exactly to enable that policy:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kd">var</span><span class="w"> </span><span class="n">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initSipsic</span><span class="o">[</span><span class="mi">64</span><span class="p">,</span><span class="w"> </span><span class="nb">float32</span><span class="o">]</span><span class="p">()</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kd">var</span><span class="w"> </span><span class="n">sample</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5'f32</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="k">if</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">sample</span><span class="p">):</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="c"># Frame dropped — increment a counter, log to a non-blocking ring,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="c"># whatever your domain wants. Do NOT block the audio thread.</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="k">discard</span>
+</code></pre></div>
+<p>The bounded queue forces you to confront the question. An unbounded queue
+silently accepts the work, which is either fine (event aggregation) or a
+production incident waiting to happen (a slow consumer turning into a
+runaway memory leak).</p>
+<h3 id="memory-upper-bound-is-a-hard-requirement">Memory upper bound is a hard requirement<a class="headerlink" href="#memory-upper-bound-is-a-hard-requirement" title="Permanent link">¶</a></h3>
+<p>Embedded targets, kernel-adjacent code, and any deployment with a hard
+memory ceiling cannot tolerate "the queue might allocate". A bounded queue
+allocates exactly once at construction — <code>N * sizeof(T)</code> plus a few
+cache-line-aligned counters — and never again.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c"># Total queue memory: ~(256 * 8) + 2 * 64 = 2176 bytes for an int64 queue.</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c"># Predictable enough to fit in an L2 cache budget.</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="kd">var</span><span class="w"> </span><span class="n">q</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initSipsic</span><span class="o">[</span><span class="mi">256</span><span class="p">,</span><span class="w"> </span><span class="nb">int64</span><span class="o">]</span><span class="p">()</span>
+</code></pre></div>
+<p>The number is exact, knowable at compile time, and visible in
+<code>sizeof(q)</code>. No segment list is ever linked, no allocator is ever called
+during <code>push</code> or <code>pop</code>.</p>
+<h3 id="ci-friendly-determinism">CI-friendly determinism<a class="headerlink" href="#ci-friendly-determinism" title="Permanent link">¶</a></h3>
+<p>Bounded queues run identically on every machine. There is no allocator
+to tune, no GC to interact with the segment linking, no platform-specific
+malloc behaviour to absorb. A test that fills a <code>Mupmuc[1024, 4, 4, int]</code>
+to capacity and asserts <code>push</code> starts returning <code>false</code> exhibits the
+same behaviour on a CI runner with 2 GB of RAM as on a developer laptop
+with 64 GB.</p>
+<h2 id="when-to-choose-unbounded">When to choose unbounded<a class="headerlink" href="#when-to-choose-unbounded" title="Permanent link">¶</a></h2>
+<h3 id="when-push-must-always-succeed">When push must always succeed<a class="headerlink" href="#when-push-must-always-succeed" title="Permanent link">¶</a></h3>
+<p>Some workloads cannot drop. Log aggregation across hundreds of producers,
+event collection during a load test, work scheduling where the producer
+already paid for the work and dropping means losing it. For these, the
+unbounded variants offer a <code>push</code> that does not return a "rejected"
+signal:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="n">options</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kd">var</span><span class="w"> </span><span class="n">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">newUnboundedMupsic</span><span class="o">[</span><span class="mi">64</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="o">]</span><span class="p">()</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="kd">var</span><span class="w"> </span><span class="n">producer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">getProducer</span><span class="p">()</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">producer</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span><span class="w">  </span><span class="c"># Always succeeds (until allocator fails).</span>
+</code></pre></div>
+<p>Note the absence of a return value. The unbounded <code>push</code> either succeeds
+or raises (an <code>OutOfMem</code> from the system allocator); there is no
+<code>false</code> to ignore.</p>
+<h3 id="cost-segment-allocation-on-overflow">Cost: segment allocation on overflow<a class="headerlink" href="#cost-segment-allocation-on-overflow" title="Permanent link">¶</a></h3>
+<p>When the current tail segment fills, the producer allocates a fresh
+segment and links it. Allocation cost is one <code>aligned_alloc</code> plus a few
+atomic stores to publish the new segment. On a typical Linux x86_64
+machine that is in the low single-digit microseconds — orders of
+magnitude more than a <code>push</code> into an already-warm bounded slot, but
+only paid once per <code>S</code> items. Pick <code>S</code> such that the amortized cost
+disappears: for an MPSC queue ingesting 10k events/s with <code>S = 256</code>,
+you allocate roughly 39 segments per second, which is invisible.</p>
+<p>The segments are aligned to a cache-line boundary so the per-segment
+metadata (the <code>next</code>, <code>head</code>, and <code>tail</code> atomics) does not false-share
+with adjacent segments — see
+<a href="../memory-management/#cache-line-padding">Memory Management → Cache-line padding</a>
+for why this matters.</p>
+<h3 id="deallocation-timing-under-debra">Deallocation timing under DEBRA<a class="headerlink" href="#deallocation-timing-under-debra" title="Permanent link">¶</a></h3>
+<p>Retired segments cannot be freed immediately. A consumer thread that
+has just advanced past a segment may still be holding a pointer into
+its data; freeing the segment under it would be a use-after-free. The
+multi-thread unbounded variants hand retired segments to DEBRA, which
+defers the actual <code>free</code> until every active thread has crossed an epoch
+boundary. The mechanism is invisible at the API level: producers and
+consumers do their thing, and reclamation happens in the background.</p>
+<p>See <a href="../memory-management/#debra-integration">Memory Management → DEBRA integration</a>
+for the hook points (<code>registerThread</code>, <code>tryReclaim</code>, the <code>Manual</code> vs
+<code>Eager</code> strategy switch).</p>
+<h2 id="capacity-selection-bounded">Capacity selection (bounded)<a class="headerlink" href="#capacity-selection-bounded" title="Permanent link">¶</a></h2>
+<h3 id="power-of-2-sizing-rationale">Power-of-2 sizing rationale<a class="headerlink" href="#power-of-2-sizing-rationale" title="Permanent link">¶</a></h3>
+<p>There is a folk rule in lock-free queue lore: "always pick a power of
+two for the capacity, so the modulo wrap reduces to a bitmask".
+<code>lockfreequeues</code> does not require this — any positive <code>N</code> compiles, and
+the wrap is implemented with arithmetic that handles arbitrary <code>N</code>. But
+on hot paths the compiler can sometimes lower <code>idx mod N</code> to
+<code>idx and (N-1)</code> when <code>N</code> is a power of two, which is a single AND
+instruction instead of an integer divide.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c"># Power-of-2: bitmask wrap is plausible.</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="kd">var</span><span class="w"> </span><span class="n">q1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initSipsic</span><span class="o">[</span><span class="mi">1024</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="o">]</span><span class="p">()</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c"># Arbitrary: modulo wrap, slightly more work per push/pop.</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="kd">var</span><span class="w"> </span><span class="n">q2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initSipsic</span><span class="o">[</span><span class="mi">1000</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="o">]</span><span class="p">()</span>
+</code></pre></div>
+<p>If you are at the throughput edge — millions of ops/s, every cycle
+counts — pick a power of two. For everyday use, pick the capacity that
+matches your domain: <code>64</code> for an audio frame, <code>256</code> for an HTTP worker
+pool, whatever number falls out of the requirement.</p>
+<h3 id="choosing-n-throughput-vs-memory">Choosing N: throughput vs memory<a class="headerlink" href="#choosing-n-throughput-vs-memory" title="Permanent link">¶</a></h3>
+<p>The capacity question is really a question about burst absorption.
+Steady-state throughput is rarely the bottleneck for a bounded queue —
+if the producer's average rate exceeds the consumer's, no finite buffer
+saves you. What <code>N</code> buys is tolerance for momentary mismatches: the
+producer briefly exceeds the consumer's drain rate, the queue fills, the
+consumer catches up, the queue drains.</p>
+<p>Rule of thumb: pick <code>N</code> such that the 99th-percentile burst fits, plus
+a safety margin. To measure the 99th-percentile burst empirically:
+instrument the queue's <code>len()</code> (or, for queues without <code>len</code>, count
+push attempts vs successful pushes over a window) for a representative
+workload, take the 99th percentile of the high-water mark, and add 25-50%
+slack.</p>
+<p>For empirical numbers and the throughput-vs-capacity curve, see
+<a href="../../benchmarks/">Benchmarks</a> and
+<a href="../performance-tuning/#capacity-segment-sizing">Performance Tuning</a>.</p>
+<h3 id="multiple-producers-contention-scaling">Multiple producers: contention scaling<a class="headerlink" href="#multiple-producers-contention-scaling" title="Permanent link">¶</a></h3>
+<p><code>Mupsic</code> and <code>Mupmuc</code> add a CAS loop on the producer side. Under high
+contention — say 16 producer threads on a 16-core machine all hammering
+the same queue — retries multiply, throughput per thread drops, and
+you reach a regime where adding producers does not add throughput. The
+mitigation is partitioning: instead of one <code>Mupmuc[1024, 16, 16, int]</code>,
+use four <code>Mupmuc[1024, 4, 4, int]</code> queues with producer-side hashing.
+The trade-off is a more complex consumer that drains all four.</p>
+<h2 id="segment-size-selection-unbounded">Segment size selection (unbounded)<a class="headerlink" href="#segment-size-selection-unbounded" title="Permanent link">¶</a></h2>
+<h3 id="default-segment-size">Default segment size<a class="headerlink" href="#default-segment-size" title="Permanent link">¶</a></h3>
+<p><code>S</code> is required and not defaulted — the unbounded constructors take it
+as a generic parameter exactly like <code>N</code> for bounded queues. There is no
+"default" that the library picks for you, because the right value is
+domain-dependent. For most workloads, a value in the range 64-512 is a
+reasonable starting point.</p>
+<h3 id="when-to-override">When to override<a class="headerlink" href="#when-to-override" title="Permanent link">¶</a></h3>
+<p>Two regimes pull <code>S</code> in opposite directions:</p>
+<ul>
+<li><strong>Sustained high throughput</strong> wants larger <code>S</code>. Each segment
+  allocation is a microsecond-scale operation; if the workload is
+  10 M items/s, you want to amortize that allocation over more items,
+  so <code>S = 1024</code> or <code>S = 4096</code> reduces the allocation rate to something
+  the system never notices.</li>
+<li><strong>Bursty, low average rate</strong> wants smaller <code>S</code>. A one-off burst of
+  100 items into a segment with <code>S = 4096</code> wastes ~3990 slots of
+  allocation — fine if memory is plentiful, painful if not. <code>S = 64</code>
+  keeps the per-segment overhead small and lets DEBRA reclaim sooner.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c"># Sustained ingest, 1 MHz event rate: minimize allocation churn.</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="kd">var</span><span class="w"> </span><span class="n">ingest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">newUnboundedMupsic</span><span class="o">[</span><span class="mi">1024</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="o">]</span><span class="p">()</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c"># Sporadic bursts of &lt;100 events from each of 4 sources: smaller S</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c"># keeps the working set cache-friendly.</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="kd">var</span><span class="w"> </span><span class="n">sporadic</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">newUnboundedMupsic</span><span class="o">[</span><span class="mi">64</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="o">]</span><span class="p">()</span>
+</code></pre></div>
+<p>If you are unsure, start at <code>256</code> and tune from measurement.</p>
+<h2 id="backpressure-patterns">Backpressure patterns<a class="headerlink" href="#backpressure-patterns" title="Permanent link">¶</a></h2>
+<h3 id="spin-and-retry">Spin-and-retry<a class="headerlink" href="#spin-and-retry" title="Permanent link">¶</a></h3>
+<p>The simplest pattern. The producer loops on <code>push</code> until the queue
+accepts the item, yielding to the scheduler between attempts so it does
+not starve the consumer:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">import</span><span class="w"> </span><span class="n">os</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="kd">var</span><span class="w"> </span><span class="n">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initSipsic</span><span class="o">[</span><span class="mi">16</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="o">]</span><span class="p">()</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="k">proc</span><span class="w"> </span><span class="nf">producePersistent</span><span class="p">(</span><span class="n">item</span><span class="p">:</span><span class="w"> </span><span class="nb">int</span><span class="p">)</span><span class="w"> </span><span class="o">=</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span><span class="k">while</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">item</span><span class="p">):</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span><span class="n">sleep</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w">  </span><span class="c"># Yield; do NOT busy-spin without a yield.</span>
+</code></pre></div>
+<p>This is appropriate when you genuinely cannot drop and the producer can
+afford to wait. It is inappropriate on a real-time audio thread, on a
+GC thread, or anywhere with a deadline.</p>
+<h3 id="fail-fast-option-bool-returns">Fail-fast (<code>Option</code> / <code>bool</code> returns)<a class="headerlink" href="#fail-fast-option-bool-returns" title="Permanent link">¶</a></h3>
+<p>The bounded queues' <code>push</code> returns <code>bool</code>; their <code>pop</code> returns
+<code>Option[T]</code>. Use those returns directly — let the caller decide:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="n">options</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="kd">var</span><span class="w"> </span><span class="n">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initSipsic</span><span class="o">[</span><span class="mi">16</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="o">]</span><span class="p">()</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="k">if</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="mi">42</span><span class="p">):</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"accepted"</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"queue full — dropping"</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="k">let</span><span class="w"> </span><span class="n">item</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">()</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="k">if</span><span class="w"> </span><span class="n">item</span><span class="p">.</span><span class="n">isSome</span><span class="p">:</span>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"got "</span><span class="p">,</span><span class="w"> </span><span class="n">item</span><span class="p">.</span><span class="n">get</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">  </span><span class="n">echo</span><span class="w"> </span><span class="s">"queue empty"</span>
+</code></pre></div>
+<p>This is the pattern for real-time code, soft-real-time servers, and
+anywhere a backed-up consumer should not stall the producer.</p>
+<h3 id="sleep-then-retry-with-backoff">Sleep-then-retry with backoff<a class="headerlink" href="#sleep-then-retry-with-backoff" title="Permanent link">¶</a></h3>
+<p>Between pure spin and pure fail-fast: retry with an increasing sleep,
+so transient contention resolves quickly but a sustained mismatch does
+not burn CPU:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span><span class="w"> </span><span class="n">os</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="kd">var</span><span class="w"> </span><span class="n">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initSipsic</span><span class="o">[</span><span class="mi">64</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="o">]</span><span class="p">()</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="k">proc</span><span class="w"> </span><span class="nf">pushWithBackoff</span><span class="p">(</span><span class="n">item</span><span class="p">:</span><span class="w"> </span><span class="nb">int</span><span class="p">):</span><span class="w"> </span><span class="nb">bool</span><span class="w"> </span><span class="o">=</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span><span class="kd">var</span><span class="w"> </span><span class="n">delayMs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="n">attempt</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">..</span><span class="w"> </span><span class="mi">9</span><span class="p">:</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">item</span><span class="p">):</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="kp">true</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">    </span><span class="n">sleep</span><span class="p">(</span><span class="n">delayMs</span><span class="p">)</span>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">    </span><span class="n">delayMs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">min</span><span class="p">(</span><span class="n">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">delayMs</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="mi">32</span><span class="p">)</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="kp">false</span><span class="w">  </span><span class="c"># Give up after 10 attempts.</span>
+</code></pre></div>
+<p>The numbers (10 attempts, cap at 32 ms) are illustrative — pick values
+that match your latency budget. If the queue routinely fills for 200 ms
+at a time, 10 short retries are not enough; if you need &lt;1 ms response,
+do not sleep at all.</p>
+<h2 id="trade-offs-at-a-glance">Trade-offs at a glance<a class="headerlink" href="#trade-offs-at-a-glance" title="Permanent link">¶</a></h2>
+<table>
+<thead>
+<tr>
+<th>Dimension</th>
+<th>Bounded</th>
+<th>Unbounded</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Memory predictability</td>
+<td>Exact: <code>N * sizeof(T)</code> + counters</td>
+<td>Grows in <code>S</code>-sized chunks until allocator fails</td>
+</tr>
+<tr>
+<td>Latency tail</td>
+<td>No allocation in <code>push</code>/<code>pop</code>; tail is the CAS loop only</td>
+<td>Allocation on segment overflow adds a microsecond-scale spike</td>
+</tr>
+<tr>
+<td>Throughput peak</td>
+<td>Higher when capacity fits the burst; near-zero per-op overhead</td>
+<td>Slightly lower per-op due to segment indirection</td>
+</tr>
+<tr>
+<td>Backpressure</td>
+<td>Built in: <code>push</code> returns <code>false</code> when full</td>
+<td>None: producer must self-rate-limit</td>
+</tr>
+<tr>
+<td>GC interaction</td>
+<td>None at runtime</td>
+<td>Multi-thread variants use DEBRA; segments aligned-alloc'd via libc, not the Nim heap</td>
+</tr>
+<tr>
+<td>Complexity</td>
+<td>Simplest possible: one array + two cursors</td>
+<td>Linked list + epoch reclamation under contention</td>
+</tr>
+</tbody>
+</table>
+<p>A reasonable default: start bounded, with <code>N</code> sized to the 99th-percentile
+burst plus 25% slack. Move to unbounded only when you have measured a
+specific workload that the bounded variant cannot serve, or when "drop"
+is not an acceptable behaviour for any reason.</p>
+
+
+
+
+
+
+
+  
+    
+  
+  
+    
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"></path></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="May 6, 2026 04:28:51 UTC"><span class="timeago" datetime="2026-05-06T04:28:51+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="May 6, 2026 04:28:51 UTC">2026-05-06</span>
+  </span>
+
+    
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Created">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"></path></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="May 6, 2026 04:28:51 UTC"><span class="timeago" datetime="2026-05-06T04:28:51+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="May 6, 2026 04:28:51 UTC">2026-05-06</span>
+  </span>
+
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/elijahr/lockfreequeues" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"></path></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.copy", "content.code.annotate", "navigation.instant", "navigation.sections", "navigation.expand", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../js/timeago.min.js"></script>
+      
+        <script src="../../js/timeago_mkdocs_material.js"></script>
+      
+    
+  
+<script id="init-glightbox">const lightbox = GLightbox({"touchNavigation": true, "loop": false, "zoomable": true, "draggable": true, "openEffect": "zoom", "closeEffect": "zoom", "slideEffect": "slide"});
+document$.subscribe(()=>{ lightbox.reload(); });
+</script></body></html>

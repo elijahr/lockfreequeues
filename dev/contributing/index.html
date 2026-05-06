@@ -7,13 +7,11 @@
       
       
       
-        <link rel="canonical" href="https://elijahr.github.io/lockfreequeues/latest/benchmarks/">
+        <link rel="canonical" href="https://elijahr.github.io/lockfreequeues/latest/contributing/">
       
       
-        <link rel="prev" href="../api/unbounded_mupmuc/">
+        <link rel="prev" href="../benchmarks/">
       
-      
-        <link rel="next" href="../contributing/">
       
       
         
@@ -24,7 +22,7 @@
     
     
       
-        <title>Benchmarks - lockfreequeues</title>
+        <title>Contributing - lockfreequeues</title>
       
     
     
@@ -95,7 +93,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#benchmarks" class="md-skip">
+        <a href="#contributing" class="md-skip">
           Skip to content
         </a>
       
@@ -135,7 +133,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Benchmarks
+              Contributing
             
           </span>
         </div>
@@ -1021,6 +1019,33 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -1040,7 +1065,7 @@
   <span class="md-ellipsis">
     
   
-    Benchmarks
+    Contributing
   
 
     
@@ -1058,7 +1083,7 @@
   <span class="md-ellipsis">
     
   
-    Benchmarks
+    Contributing
   
 
     
@@ -1084,44 +1109,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
       
         <li class="md-nav__item">
-  <a href="#how-to-read-these-numbers" class="md-nav__link">
+  <a href="#repository-orientation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How to read these numbers
+        Repository orientation
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-to-pick-lockfreequeues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When to pick lockfreequeues
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#methodology" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Methodology
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Methodology">
+    <nav class="md-nav" aria-label="Repository orientation">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#throughput-benchmark" class="md-nav__link">
+  <a href="#top-level-layout" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Throughput Benchmark
+        Top-level layout
       
     </span>
   </a>
@@ -1129,10 +1132,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#latency-benchmark" class="md-nav__link">
+  <a href="#srclockfreequeues-the-public-api" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Latency Benchmark
+        src/lockfreequeues/ — the public API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#benchmarks-bench-harness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        benchmarks/ — bench harness
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tests-test-runner-the-testnim-aggregator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tests/ — test runner + the test.nim aggregator
       
     </span>
   </a>
@@ -1145,33 +1170,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#running-benchmarks" class="md-nav__link">
+  <a href="#testing-workflow" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Running Benchmarks
+        Testing workflow
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#queue-types-compared" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Queue Types Compared
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Queue Types Compared">
+    <nav class="md-nav" aria-label="Testing workflow">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#bounded-queues" class="md-nav__link">
+  <a href="#nimble-test-the-8-combo-mm-sanitiser-matrix" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Bounded Queues
+        nimble test — the 8-combo MM × sanitiser matrix
       
     </span>
   </a>
@@ -1179,10 +1193,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#unbounded-queues" class="md-nav__link">
+  <a href="#nimble-benchtests-bench-harness-unit-tests" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Unbounded Queues
+        nimble benchtests — bench harness unit tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#running-a-single-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running a single test
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adding-a-new-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a new test
       
     </span>
   </a>
@@ -1195,34 +1231,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#results" class="md-nav__link">
+  <a href="#documentation-workflow" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Results
+        Documentation workflow
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Results">
+    <nav class="md-nav" aria-label="Documentation workflow">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#live-charts" class="md-nav__link">
+  <a href="#mkdocs-serve-local-preview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Live charts
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Live charts">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#headline-lockfreequeues-vs-alternatives" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Headline: lockfreequeues vs alternatives
+        mkdocs serve — local preview
       
     </span>
   </a>
@@ -1230,10 +1254,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#throughput-by-topology" class="md-nav__link">
+  <a href="#adding-a-new-guide-page" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Throughput by topology
+        Adding a new guide page
       
     </span>
   </a>
@@ -1241,10 +1265,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#latency" class="md-nav__link">
+  <a href="#editing-api-docs-nim-docstring-mkdocstrings-nim" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Latency
+        Editing API docs (Nim docstring → mkdocstrings-nim)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#building-locally" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building locally
       
     </span>
   </a>
@@ -1255,12 +1290,79 @@
     </nav>
   
 </li>
-        
-          <li class="md-nav__item">
-  <a href="#methodology-and-fairness-caveats" class="md-nav__link">
+      
+        <li class="md-nav__item">
+  <a href="#code-style" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Methodology and fairness caveats
+        Code style
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pr-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PR process
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#release-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Release process
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Release process">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#branch-version-bumps-changelog-cuts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Branch / version bumps / CHANGELOG cuts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#release-prep-pr-pattern-post-merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Release-prep PR pattern (post-merge)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tagging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tagging
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mike-alias-materialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mike alias materialization
       
     </span>
   </a>
@@ -1269,6 +1371,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#license" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        License
+      
+    </span>
+  </a>
   
 </li>
       
@@ -1276,33 +1389,6 @@
   
 </nav>
       
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../contributing/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Contributing
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -1334,44 +1420,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
       
         <li class="md-nav__item">
-  <a href="#how-to-read-these-numbers" class="md-nav__link">
+  <a href="#repository-orientation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How to read these numbers
+        Repository orientation
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-to-pick-lockfreequeues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When to pick lockfreequeues
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#methodology" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Methodology
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Methodology">
+    <nav class="md-nav" aria-label="Repository orientation">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#throughput-benchmark" class="md-nav__link">
+  <a href="#top-level-layout" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Throughput Benchmark
+        Top-level layout
       
     </span>
   </a>
@@ -1379,10 +1443,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#latency-benchmark" class="md-nav__link">
+  <a href="#srclockfreequeues-the-public-api" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Latency Benchmark
+        src/lockfreequeues/ — the public API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#benchmarks-bench-harness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        benchmarks/ — bench harness
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tests-test-runner-the-testnim-aggregator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tests/ — test runner + the test.nim aggregator
       
     </span>
   </a>
@@ -1395,33 +1481,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#running-benchmarks" class="md-nav__link">
+  <a href="#testing-workflow" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Running Benchmarks
+        Testing workflow
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#queue-types-compared" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Queue Types Compared
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Queue Types Compared">
+    <nav class="md-nav" aria-label="Testing workflow">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#bounded-queues" class="md-nav__link">
+  <a href="#nimble-test-the-8-combo-mm-sanitiser-matrix" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Bounded Queues
+        nimble test — the 8-combo MM × sanitiser matrix
       
     </span>
   </a>
@@ -1429,10 +1504,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#unbounded-queues" class="md-nav__link">
+  <a href="#nimble-benchtests-bench-harness-unit-tests" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Unbounded Queues
+        nimble benchtests — bench harness unit tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#running-a-single-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running a single test
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adding-a-new-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a new test
       
     </span>
   </a>
@@ -1445,34 +1542,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#results" class="md-nav__link">
+  <a href="#documentation-workflow" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Results
+        Documentation workflow
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Results">
+    <nav class="md-nav" aria-label="Documentation workflow">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#live-charts" class="md-nav__link">
+  <a href="#mkdocs-serve-local-preview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Live charts
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Live charts">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#headline-lockfreequeues-vs-alternatives" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Headline: lockfreequeues vs alternatives
+        mkdocs serve — local preview
       
     </span>
   </a>
@@ -1480,10 +1565,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#throughput-by-topology" class="md-nav__link">
+  <a href="#adding-a-new-guide-page" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Throughput by topology
+        Adding a new guide page
       
     </span>
   </a>
@@ -1491,10 +1576,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#latency" class="md-nav__link">
+  <a href="#editing-api-docs-nim-docstring-mkdocstrings-nim" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Latency
+        Editing API docs (Nim docstring → mkdocstrings-nim)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#building-locally" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building locally
       
     </span>
   </a>
@@ -1505,12 +1601,79 @@
     </nav>
   
 </li>
-        
-          <li class="md-nav__item">
-  <a href="#methodology-and-fairness-caveats" class="md-nav__link">
+      
+        <li class="md-nav__item">
+  <a href="#code-style" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Methodology and fairness caveats
+        Code style
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pr-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PR process
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#release-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Release process
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Release process">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#branch-version-bumps-changelog-cuts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Branch / version bumps / CHANGELOG cuts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#release-prep-pr-pattern-post-merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Release-prep PR pattern (post-merge)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tagging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tagging
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mike-alias-materialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mike alias materialization
       
     </span>
   </a>
@@ -1519,6 +1682,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#license" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        License
+      
+    </span>
+  </a>
   
 </li>
       
@@ -1542,229 +1716,212 @@
   
 
 
-<h1 id="benchmarks">Benchmarks<a class="headerlink" href="#benchmarks" title="Permanent link">¶</a></h1>
-<p>Performance benchmarks comparing lockfreequeues against alternative implementations.</p>
-<h2 id="how-to-read-these-numbers">How to read these numbers<a class="headerlink" href="#how-to-read-these-numbers" title="Permanent link">¶</a></h2>
-<p>The chart organises every measurement along three axes: the <strong>library</strong> (which
-queue implementation), the <strong>topology</strong> (who's allowed to push and pop), and
-the <strong>shape</strong> (how many of each are running concurrently). Each combination is
-one bar.</p>
-<p>Topology slugs name the producer/consumer cardinality: <strong>SPSC</strong> is single
-producer single consumer, <strong>SPMC</strong> is single producer with many consumers,
-<strong>MPSC</strong> is the inverse, and <strong>MPMC</strong> is many on both sides. Different
-topologies admit different algorithms — SPSC can be wait-free with no atomic
-RMW on the hot path, while MPMC needs a full Vyukov sequence-counter dance.
-See <a href="../guide/core-concepts/">Core Concepts</a> for the algorithmic background.</p>
-<p>Shapes use the <code>NpMc</code> form: <code>4p4c</code> means four producer threads and four
-consumer threads, all on one queue. Higher counts under the same topology
-crank up contention — <code>4p4c</code> MPMC is harder than <code>1p1c</code> MPMC because every
-slot is now contested by up to eight threads instead of two, and the
-<code>ubuntu-latest</code> runner only has 4 vCPU so <code>8p8c</code> measures scheduler
-oversubscription, not the queue itself.</p>
-<p>Bounded variants are ring buffers with compile-time capacity; unbounded
-variants are linked segments reclaimed via DEBRA. The bounded/unbounded
-choice changes the cost model — bounded amortises everything in a fixed
-allocation, unbounded pays a small reclamation overhead in exchange for never
-returning a "queue full" error. The trade-off is laid out in
-<a href="../guide/bounded-vs-unbounded/">Bounded vs Unbounded</a>.</p>
-<p>In the legend, an asterisk (<code>*</code>) and the <code>(blocking)</code> badge mark libraries
-whose adapter blocks on a full queue instead of returning a non-blocking
-"full" signal — Nim's <code>system/Channel</code> and <code>Threading.Channels</code> work that way.
-Their bars are also rendered with a dotted edge. The throughput numbers for
-those libraries reflect blocking semantics, not the <code>try_push</code> path the
-lockfreequeues bounded variants expose, so cross-comparisons need that
-asterisk in mind.</p>
-<h2 id="when-to-pick-lockfreequeues">When to pick lockfreequeues<a class="headerlink" href="#when-to-pick-lockfreequeues" title="Permanent link">¶</a></h2>
-<p>If your bottleneck is <strong>single-producer single-consumer with a known capacity</strong>
-— an audio callback handing buffers to a render thread, a GPU command queue,
-a network read loop feeding a worker — <code>Sipsic</code> is wait-free on both sides
-and clears around 7,600 ops/ms at <code>1p1c</code> on <code>ubuntu-latest</code>. There's no
-adapter for <code>system/Channel</code> at SPSC so the fixture has no head-to-head
-number, but the wait-free progress guarantee alone usually settles it.</p>
-<p>If your bottleneck is <strong>multi-producer multi-consumer at high contention</strong> —
-a job scheduler with dozens of producer goroutines, an event collector
-funneling from many sources — <code>Mupmuc</code> is the right call. At <code>4p4c</code> it
-sustains around 18,200 ops/ms in the fixture, against 1,720 ops/ms for
-<code>system/Channel</code> at the same shape — roughly 10.6x faster. The MPSC variant
-<code>Mupsic</code> shows a similar gap (about 3.7x at <code>4p1c</code>) when only the producer
-side fans out.</p>
-<p>When NOT to reach for lockfreequeues:</p>
-<ul>
-<li><strong>You actually want blocking semantics.</strong> If "queue full" should park the
-  producer until the consumer drains a slot, <code>system/Channel</code> and
-  <code>Threading.Channels</code> give that for free. The lockfreequeues bounded
-  variants return a non-blocking signal instead, and you'd need to layer a
-  semaphore or condvar on top.</li>
-<li><strong>Your runtime forbids ARC/ORC.</strong> The library rejects <code>ref T</code> items under
-  ARC, ORC, or atomicArc by design — the slot copy semantics aren't safe
-  with shared <code>ref</code> payloads. <code>refc</code> works, but defeats the purpose. Use
-  value types or <code>ptr T</code>.</li>
-<li><strong>DEBRA reclamation overhead matters more than throughput.</strong> The unbounded
-  variants pay a small per-pop bookkeeping cost for epoch advancement; on
-  workloads dominated by tiny payloads at very high pop rates the bounded
-  variants will measure higher. The fixture shows unbounded <code>Mupmuc</code> at
-  about 9,860 ops/ms at <code>1p1c</code> versus bounded <code>Mupmuc</code> at about 24,070
-  ops/ms — a real gap, and the cost of "never blocks on full".</li>
-</ul>
-<h2 id="methodology">Methodology<a class="headerlink" href="#methodology" title="Permanent link">¶</a></h2>
-<h3 id="throughput-benchmark">Throughput Benchmark<a class="headerlink" href="#throughput-benchmark" title="Permanent link">¶</a></h3>
-<ul>
-<li>N producer threads and N consumer threads share one queue</li>
-<li>Each thread sends/receives 1,000,000 / N messages</li>
-<li>Measures end-to-end time, reports ops/ms</li>
-<li>33 runs with warmup for stable statistics</li>
-</ul>
-<h3 id="latency-benchmark">Latency Benchmark<a class="headerlink" href="#latency-benchmark" title="Permanent link">¶</a></h3>
-<ul>
-<li>Ping-pong between 2 threads using 2 queues</li>
-<li>Measures round-trip time (RTT) in nanoseconds</li>
-<li>100,000 iterations per run</li>
-<li>Reports percentiles: p50, p95, p99, p999</li>
-</ul>
-<h2 id="running-benchmarks">Running Benchmarks<a class="headerlink" href="#running-benchmarks" title="Permanent link">¶</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Quick run (10 iterations)</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>nimble<span class="w"> </span>benchmarks
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Full benchmark suite</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>python<span class="w"> </span>benchmarks/runner.py<span class="w"> </span>run<span class="w"> </span>--runs<span class="o">=</span><span class="m">33</span>
+<h1 id="contributing">Contributing<a class="headerlink" href="#contributing" title="Permanent link">¶</a></h1>
+<p>How to set up a development environment for <code>lockfreequeues</code>, run the test
+matrix, build the docs locally, and ship a release. This page supersedes
+the short top-level <code>CONTRIBUTING.md</code> at the repo root; the root file
+remains as a 9-line tooling stub for tools that expect it (GitHub's
+contributor banner, OSS scanners).</p>
+<p>If you are filing a bug or feature request, the project's
+<a href="https://github.com/elijahr/lockfreequeues/issues">issue tracker</a> is the
+right starting point.</p>
+<h2 id="repository-orientation">Repository orientation<a class="headerlink" href="#repository-orientation" title="Permanent link">¶</a></h2>
+<h3 id="top-level-layout">Top-level layout<a class="headerlink" href="#top-level-layout" title="Permanent link">¶</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>lockfreequeues/
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── src/lockfreequeues/      # public API + internal helpers
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├── tests/                   # unittest2 suites + the `test.nim` aggregator
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>├── examples/                # runnable examples (driven by `nimble examples`)
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>├── benchmarks/              # bench harness (Nim binaries + Python merge)
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>├── stress-tests/            # long-running multi-thread shakedown
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>├── docs/                    # mkdocs source (this site)
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>├── .github/workflows/       # CI: build, docs, bench, release
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>├── lockfreequeues.nimble    # package manifest + tasks
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>├── nim.cfg                  # default compile flags
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>└── config.nims              # nimble script hooks
 </code></pre></div>
-<h2 id="queue-types-compared">Queue Types Compared<a class="headerlink" href="#queue-types-compared" title="Permanent link">¶</a></h2>
-<h3 id="bounded-queues">Bounded Queues<a class="headerlink" href="#bounded-queues" title="Permanent link">¶</a></h3>
-<table>
-<thead>
-<tr>
-<th>Queue</th>
-<th>Type</th>
-<th>Implementation</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Sipsic</td>
-<td>SPSC</td>
-<td>lockfreequeues</td>
-</tr>
-<tr>
-<td>Sipmuc</td>
-<td>SPMC</td>
-<td>lockfreequeues</td>
-</tr>
-<tr>
-<td>Mupsic</td>
-<td>MPSC</td>
-<td>lockfreequeues</td>
-</tr>
-<tr>
-<td>Mupmuc</td>
-<td>MPMC</td>
-<td>lockfreequeues</td>
-</tr>
-<tr>
-<td>channels</td>
-<td>MPMC</td>
-<td>Nim stdlib</td>
-</tr>
-</tbody>
-</table>
-<h3 id="unbounded-queues">Unbounded Queues<a class="headerlink" href="#unbounded-queues" title="Permanent link">¶</a></h3>
-<table>
-<thead>
-<tr>
-<th>Queue</th>
-<th>Type</th>
-<th>Implementation</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>UnboundedSipsic</td>
-<td>SPSC</td>
-<td>lockfreequeues</td>
-</tr>
-<tr>
-<td>UnboundedMupmuc</td>
-<td>MPMC</td>
-<td>lockfreequeues</td>
-</tr>
-<tr>
-<td>LoonyQueue</td>
-<td>MPMC</td>
-<td>loony</td>
-</tr>
-</tbody>
-</table>
-<h2 id="results">Results<a class="headerlink" href="#results" title="Permanent link">¶</a></h2>
-<p>Results are generated per-platform. See the <code>benchmarks/results/</code> directory for JSON output.</p>
-<h3 id="live-charts">Live charts<a class="headerlink" href="#live-charts" title="Permanent link">¶</a></h3>
-<p>The charts below pull from a snapshot published by the <code>bench</code> CI workflow on
-every push to <code>devel</code> (see <code>.github/workflows/bench.yml</code>). The hero panel
-shows lockfreequeues vs alternatives at a single representative bounded
-shape; the per-topology panels below trace each library across the
-producer/consumer shape grid (and pair bounded with unbounded variants where
-the topology supports both). Each panel's legend toggles libraries on and
-off; the Y axis defaults to log scale and is per-panel switchable to linear.
-Hovering a shape shows mean ± stddev when the underlying measure carries
-one, plus the topology context. Dotted bars and a <code>(blocking)</code> badge in the
-legend mark libraries with blocking-on-full semantics — see the methodology
-section below.</p>
-<h4 id="headline-lockfreequeues-vs-alternatives">Headline: lockfreequeues vs alternatives<a class="headerlink" href="#headline-lockfreequeues-vs-alternatives" title="Permanent link">¶</a></h4>
-<div markdown="0">
-  <div id="bench-status" class="bench-status" hidden=""></div>
-
-  <div id="bench-hero" class="bench-panel bench-panel-hero">
-    <noscript>
-      Charts require JavaScript. The raw data is published at
-      <code>../assets/bench-results/latest.json</code>; download the JSON
-      snapshot if you need to consume it programmatically.
-    </noscript>
-  </div>
-</div>
-
-<h4 id="throughput-by-topology">Throughput by topology<a class="headerlink" href="#throughput-by-topology" title="Permanent link">¶</a></h4>
-<div markdown="0">
-  <div id="bench-throughput-spsc" class="bench-panel"></div>
-  <div id="bench-throughput-mpsc" class="bench-panel"></div>
-  <div id="bench-throughput-mpmc-bounded" class="bench-panel"></div>
-  <div id="bench-throughput-mpmc-unbounded" class="bench-panel"></div>
-</div>
-
-<h4 id="latency">Latency<a class="headerlink" href="#latency" title="Permanent link">¶</a></h4>
-<div markdown="0">
-  <div id="bench-latency" class="bench-panel"></div>
-
-  <script src="../assets/uplot-1.6.27.iife.min.js"></script>
-  <script src="../assets/bench-charts.js"></script>
-</div>
-
-<h3 id="methodology-and-fairness-caveats">Methodology and fairness caveats<a class="headerlink" href="#methodology-and-fairness-caveats" title="Permanent link">¶</a></h3>
-<p>All numbers below are produced on GitHub-hosted <code>ubuntu-latest</code> runners (4 vCPU
-implicit, x86_64). Do not infer absolute latency or throughput suitability for
-production hardware from these numbers — use them only for relative comparison
-between queue implementations under identical conditions.</p>
-<p>Specific caveats:</p>
+<h3 id="srclockfreequeues-the-public-api"><code>src/lockfreequeues/</code> — the public API<a class="headerlink" href="#srclockfreequeues-the-public-api" title="Permanent link">¶</a></h3>
+<p>The four bounded queue types (<code>Sipsic</code>, <code>Sipmuc</code>, <code>Mupsic</code>, <code>Mupmuc</code>)
+each live in a single file. Their unbounded counterparts are in
+<code>unbounded_sipsic.nim</code> etc. Supporting modules:</p>
 <ul>
-<li><strong>Cache-line padding asymmetry.</strong> Some libraries (lockfreequeues, MoodyCamel,
-  Boost.LockFree) pad their head/tail/sequence fields to 64 bytes; others may
-  not. The lockfreequeues MPMC types were padding-audited as part of PR 3 (see
-  audit checklist).</li>
-<li><strong>Memory ordering.</strong> lockfreequeues uses <code>acquire</code>/<code>release</code> ordering on its
-  hot paths; some external libraries default to <code>seq_cst</code>, which is stricter
-  and may show as higher latency.</li>
-<li><strong>NUMA pinning.</strong> None on <code>ubuntu-latest</code>. NUMA-aware comparison would
-  require self-hosted high-core runners (radar item).</li>
-<li><strong>Message size and capacity.</strong> All benchmarks transfer 8-byte <code>uint64_t</code>
-  payloads. Bounded queues use a compile-time capacity matched across libraries.</li>
-<li><strong>Blocking vs non-blocking semantics.</strong> Nim's <code>system/Channel</code> and
-  <code>Threading.Channels</code> block on full instead of returning a "queue full"
-  signal. Their throughput numbers reflect blocking semantics, not the
-  non-blocking <code>try_push</code> path that the lockfree queues use. These are
-  rendered with a dotted bar/line and carry an asterisk on the throughput-
-  panel legends and a <code>(blocking)</code> badge on the hero legend.</li>
-<li><strong>Producer/consumer thread placement.</strong> No explicit pinning. The runner's
-  scheduler is the ground truth for thread placement.</li>
-<li><strong>CPU oversubscription.</strong> <code>ubuntu-latest</code> has 4 vCPU. MPMC variants beyond
-  4P + 4C measure scheduler oversubscription, not lock-free contention.</li>
+<li><code>atomic_dsl.nim</code> — re-exports <code>debra/atomics</code> and the load / store
+  acquire / release DSL.</li>
+<li><code>backoff.nim</code> — exponential-backoff helper used by the multi-producer
+  CAS loops.</li>
+<li><code>typestates.nim</code> plus <code>typestates/*.nim</code> — the per-slot state machine
+  that governs publish / claim / drain transitions. See
+  <a href="../guide/slot-ownership-typestates/">Slot Ownership Typestates</a> for
+  the conceptual treatment.</li>
+<li><code>internal/aligned_alloc.nim</code> — segment allocator for the unbounded
+  variants, lining up segment storage on <code>CacheLineBytes</code> boundaries.</li>
 </ul>
+<p>When in doubt, the public proc signatures in the four
+queue-type files are the authoritative API surface. The <code>*Base</code> types
+in <code>typestates/*.nim</code> are an implementation detail and may change
+between minor versions.</p>
+<h3 id="benchmarks-bench-harness"><code>benchmarks/</code> — bench harness<a class="headerlink" href="#benchmarks-bench-harness" title="Permanent link">¶</a></h3>
+<p>See <a href="../benchmarks/">Benchmarks</a> for the published numbers and the
+methodology used to produce them. The harness lives outside <code>srcDir</code> so
+its threading dependencies do not leak into the regular test suite;
+<code>nimble benchtests</code> runs the harness's own unit tests.</p>
+<h3 id="tests-test-runner-the-testnim-aggregator"><code>tests/</code> — test runner + the <code>test.nim</code> aggregator<a class="headerlink" href="#tests-test-runner-the-testnim-aggregator" title="Permanent link">¶</a></h3>
+<p><code>tests/test.nim</code> imports every individual test module and is the entry
+point for <code>nimble test</code>. The convention: one module per logical surface
+(<code>t_sipsic.nim</code>, <code>t_mupsic.nim</code>, <code>t_unbounded_mupmuc.nim</code>, etc.), with
+threaded variants in <code>*_threaded.nim</code> files. Tests use <code>unittest2</code>.</p>
+<h2 id="testing-workflow">Testing workflow<a class="headerlink" href="#testing-workflow" title="Permanent link">¶</a></h2>
+<h3 id="nimble-test-the-8-combo-mm-sanitiser-matrix"><code>nimble test</code> — the 8-combo MM × sanitiser matrix<a class="headerlink" href="#nimble-test-the-8-combo-mm-sanitiser-matrix" title="Permanent link">¶</a></h3>
+<p>The <code>test</code> task in <code>lockfreequeues.nimble</code> runs the suite under every
+relevant combination:</p>
+<ul>
+<li>C backend with default MM (<code>orc</code>) and explicit <code>arc</code>, <code>refc</code>.</li>
+<li>C++ backend with default MM.</li>
+<li>Two <code>-d:nimEnforceLockFreeAtomics</code> lanes (on <code>arc</code> and <code>orc</code>) that
+  reject any spinlock fallback at compile time.</li>
+<li>ThreadSanitizer on <code>clang</code> + <code>atomicArc</code> (gated by
+  <code>SANITIZE_THREADS=no</code> to skip on machines without a working clang
+  TSAN).</li>
+<li>AddressSanitizer on <code>clang</code> (gated by <code>SANITIZE_ADDRESS=no</code>).</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Full matrix.</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>nimble<span class="w"> </span><span class="nb">test</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Skip the sanitiser lanes (faster local iteration).</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="nv">SANITIZE_THREADS</span><span class="o">=</span>no<span class="w"> </span><span class="nv">SANITIZE_ADDRESS</span><span class="o">=</span>no<span class="w"> </span>nimble<span class="w"> </span><span class="nb">test</span>
+</code></pre></div>
+<p>For the matrix CI exercises, see
+<a href="../guide/safety-model/#test-matrix">Safety Model → Test matrix</a>.</p>
+<h3 id="nimble-benchtests-bench-harness-unit-tests"><code>nimble benchtests</code> — bench harness unit tests<a class="headerlink" href="#nimble-benchtests-bench-harness-unit-tests" title="Permanent link">¶</a></h3>
+<p>The bench harness has its own test suite (<code>t_bench_common.nim</code>,
+<code>t_bench_latency.nim</code>, <code>t_bench_adapters.nim</code>) that validates
+HistogramTopK sizing, latency CLI assertions, and adapter round-trips.
+The harness lives outside <code>srcDir</code>, so these tests run via a separate
+task:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>nimble<span class="w"> </span>benchtests
+</code></pre></div>
+<p>A heavier <code>benchteststress</code> variant exercises a 3.3 M-sample p999 path
+and is opt-in (~10-15 s release).</p>
+<h3 id="running-a-single-test">Running a single test<a class="headerlink" href="#running-a-single-test" title="Permanent link">¶</a></h3>
+<p>For tight iteration, point Nim straight at one file:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>nim<span class="w"> </span>c<span class="w"> </span>--threads:on<span class="w"> </span>-r<span class="w"> </span>tests/t_sipsic.nim
+</code></pre></div>
+<p>Add flags as needed: <code>-d:release</code> for speed,
+<code>--mm:arc -d:nimEnforceLockFreeAtomics</code> to reproduce a CI lane,
+<code>--cc:clang --passC:"-fsanitize=thread" --passL:"-fsanitize=thread"</code> to
+debug a TSAN report.</p>
+<h3 id="adding-a-new-test">Adding a new test<a class="headerlink" href="#adding-a-new-test" title="Permanent link">¶</a></h3>
+<p>New behaviour goes in a focused <code>t_&lt;feature&gt;.nim</code> and gets imported
+from <code>tests/test.nim</code>. Keep tests deterministic: the multi-threaded
+suites use bounded loops with timeouts rather than "wait for it to
+settle". Follow the pattern in <code>t_mupsic_threaded.nim</code> for the
+producer / consumer thread plumbing.</p>
+<h2 id="documentation-workflow">Documentation workflow<a class="headerlink" href="#documentation-workflow" title="Permanent link">¶</a></h2>
+<h3 id="mkdocs-serve-local-preview"><code>mkdocs serve</code> — local preview<a class="headerlink" href="#mkdocs-serve-local-preview" title="Permanent link">¶</a></h3>
+<p>Documentation uses MkDocs with the Material theme plus
+<code>mkdocstrings-nim</code> for the API reference. Set up a virtualenv once:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>python3<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>.venv
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nb">source</span><span class="w"> </span>.venv/bin/activate
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>docs-requirements.txt
+</code></pre></div>
+<p>Then serve locally with auto-reload:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>mkdocs<span class="w"> </span>serve
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># Open http://127.0.0.1:8000</span>
+</code></pre></div>
+<p>The <code>watch:</code> block in <code>mkdocs.yml</code> includes <code>src/</code>, so editing a
+docstring in a Nim source file rebuilds the API page that depends on it.</p>
+<h3 id="adding-a-new-guide-page">Adding a new guide page<a class="headerlink" href="#adding-a-new-guide-page" title="Permanent link">¶</a></h3>
+<p>Create the markdown file under <code>docs/guide/</code>, then add an entry to the
+<code>nav:</code> block in <code>mkdocs.yml</code>. Cross-link from existing pages where it
+fits — the navigation list and the prose links are independent, and
+both matter for discoverability.</p>
+<p>Voice guidance for prose pages: prefer specifics (real numbers, real
+scenarios) over generalities, keep sentence rhythm irregular (long
+sentences next to short ones), and run <code>mkdocs build --strict</code> before
+committing — <code>--strict</code> upgrades broken internal links from warnings
+to errors.</p>
+<h3 id="editing-api-docs-nim-docstring-mkdocstrings-nim">Editing API docs (Nim docstring → mkdocstrings-nim)<a class="headerlink" href="#editing-api-docs-nim-docstring-mkdocstrings-nim" title="Permanent link">¶</a></h3>
+<p>API pages under <code>docs/api/</code> use <code>mkdocstrings-nim</code> to render Nim
+docstrings into HTML. To document a new proc, add a <code>##</code> doc-comment
+on the proc itself (RST style — that is what <code>mkdocs.yml</code> configures
+via <code>docstring_style: rst</code>). Build with <code>--strict</code> to catch missing
+references.</p>
+<p>The <code>source_url</code> and <code>source_ref</code> config in <code>mkdocs.yml</code> stamp a
+clickable "source" link on every rendered symbol. Locally those links
+point at the <code>devel</code> branch on GitHub; CI overrides <code>DOCS_SOURCE_REF</code>
+per trigger so PR previews link back to the PR's head.</p>
+<h3 id="building-locally">Building locally<a class="headerlink" href="#building-locally" title="Permanent link">¶</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>mkdocs<span class="w"> </span>build<span class="w"> </span>--strict
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># Output lands in site/</span>
+</code></pre></div>
+<p><code>--strict</code> fails the build on any missing internal link or unrecognised
+reference. CI runs <code>mkdocs build --strict</code> on every push, so a clean
+local build is the prerequisite for a green PR.</p>
+<h2 id="code-style">Code style<a class="headerlink" href="#code-style" title="Permanent link">¶</a></h2>
+<p>The repo's <code>.editorconfig</code> is the canonical formatter contract: 2-space
+indent, LF line endings, UTF-8, trailing newline. Beyond that, the
+conventions visible in <code>src/lockfreequeues/</code>:</p>
+<ul>
+<li>One queue type per file; the file name matches the type
+  (<code>sipsic.nim</code> for <code>Sipsic</code>, etc.).</li>
+<li>Module-level docstring at the top using <code>##</code> for public headers and
+  RST-style fields (<code>* parameter description</code>) for arguments.</li>
+<li><code>{.align: CacheLineBytes.}</code> on every shared atomic that lives next to
+  another shared atomic; do not skip the pragma "to save bytes".</li>
+<li>Generic parameters are <code>static int</code> for sizes (capacity, segment
+  size, producer / consumer count) and bare for value types.</li>
+<li>Keep public proc signatures stable across patches; new procs are
+  fine, signature changes ride a minor-version bump.</li>
+</ul>
+<h2 id="pr-process">PR process<a class="headerlink" href="#pr-process" title="Permanent link">¶</a></h2>
+<p>The repo's default branch is <code>devel</code>. Branch from there, name the
+branch descriptively (<code>feat/</code>, <code>fix/</code>, <code>docs/</code>, <code>chore/</code> prefixes), and
+open the PR against <code>devel</code>. CI exercises the full
+build × docs × bench × sanitiser matrix; expect 5-10 minutes of
+runtime per PR.</p>
+<p>Two repository-specific norms worth knowing before your first PR:</p>
+<ul>
+<li><strong>No AI attribution in commits or PR bodies.</strong> Do not add
+  <code>Co-Authored-By: Claude / GitHub Copilot / ...</code> trailers, "Generated
+  with ..." footers, or bot signatures. The git history stays human.</li>
+<li><strong>No GitHub issue numbers in commit messages or PR titles.</strong> GitHub
+  auto-links and notifies on <code>#123</code> references; the project's
+  convention is to keep that linkage in the PR body only, and only
+  when explicitly requested.</li>
+</ul>
+<p>Recent commit history is the right reference for the desired tone: short
+imperative subjects ("typestates 0.7 uplift", "bench-rollup: shared
+harness + comparison adapters"), a paragraph or two of body if the
+change is non-trivial.</p>
+<h2 id="release-process">Release process<a class="headerlink" href="#release-process" title="Permanent link">¶</a></h2>
+<h3 id="branch-version-bumps-changelog-cuts">Branch / version bumps / CHANGELOG cuts<a class="headerlink" href="#branch-version-bumps-changelog-cuts" title="Permanent link">¶</a></h3>
+<p>Releases are cut from <code>devel</code>. The flow:</p>
+<ol>
+<li>On <code>devel</code>, bump <code>version</code> in <code>lockfreequeues.nimble</code> and add the
+   release section to <code>CHANGELOG.md</code>.</li>
+<li>Open a release-prep PR. CI must be green.</li>
+<li>Merge to <code>devel</code>, tag the merge commit <code>vX.Y.Z</code>.</li>
+</ol>
+<h3 id="release-prep-pr-pattern-post-merge">Release-prep PR pattern (post-merge)<a class="headerlink" href="#release-prep-pr-pattern-post-merge" title="Permanent link">¶</a></h3>
+<p>Some release work — re-pinning an upstream dependency, regenerating
+benchmark snapshots, refreshing docs that reference the new version —
+fits better in a follow-up PR after the version bump. Convention is
+"release-prep: vX.Y.Z follow-ups" with a checklist body.</p>
+<h3 id="tagging">Tagging<a class="headerlink" href="#tagging" title="Permanent link">¶</a></h3>
+<p>Tag the version-bump commit and push:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>git<span class="w"> </span>tag<span class="w"> </span>vX.Y.Z
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>vX.Y.Z
+</code></pre></div>
+<p>The tag triggers the release workflow in <code>.github/workflows/release.yml</code>,
+which publishes to nimble and rebuilds the docs site.</p>
+<h3 id="mike-alias-materialization">Mike alias materialization<a class="headerlink" href="#mike-alias-materialization" title="Permanent link">¶</a></h3>
+<p>The docs site uses <a href="https://github.com/jimporter/mike">mike</a> to publish
+versioned documentation. The <code>latest</code> alias points to the most recent
+tagged release; per-version snapshots are kept indefinitely. The release
+workflow handles alias updates automatically — manual intervention is
+only needed when retiring an older series.</p>
+<h2 id="license">License<a class="headerlink" href="#license" title="Permanent link">¶</a></h2>
+<p><code>lockfreequeues</code> is released under the <a href="https://github.com/elijahr/lockfreequeues/blob/devel/LICENSE">MIT License</a>.
+Add yourself to <code>AUTHORS</code> in your first PR if you would like attribution.</p>
 
 
 
@@ -1797,7 +1954,7 @@ between queue implementations under identical conditions.</p>
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"></path></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="April 28, 2026 02:43:49 UTC"><span class="timeago" datetime="2026-04-28T02:43:49+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="April 28, 2026 02:43:49 UTC">2026-04-28</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="May 6, 2026 04:28:51 UTC"><span class="timeago" datetime="2026-05-06T04:28:51+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="May 6, 2026 04:28:51 UTC">2026-05-06</span>
   </span>
 
     

@@ -1,21 +1,48 @@
 /* lockfreequeues bench chart styling — sits inside docs/benchmarks.md.
- * The chart is built imperatively by bench-charts.js; these rules only
- * cover layout, the legend, the controls bar, and the hover tooltip.
- * uPlot's own stylesheet is not vendored — uPlot ships sane defaults
- * and we override the bits the docs theme conflicts with.
+ * The charts are built imperatively by bench-charts.js; these rules
+ * cover layout, the legend, the controls bar, the hover tooltip, the
+ * hand-rendered hero panel, the per-topology uPlot panels, and the
+ * status banner. uPlot's own stylesheet is vendored separately
+ * (uplot-1.6.27.min.css).
  */
 
-#bench-chart {
+/* ── panel layout ─────────────────────────────────────────────────── */
+.bench-panel {
   width: 100%;
+  max-width: 100%;
   margin: 1.5em 0;
 }
 
+.bench-panel-title {
+  margin: 0 0 0.5em 0;
+  font-size: 1em;
+  font-weight: 600;
+}
+
+/* Backwards-compat: the old single-chart container still renders an
+ * empty-state if the page somehow includes #bench-chart instead of
+ * the new multi-panel layout.
+ */
+#bench-chart,
+#bench-hero,
+#bench-throughput-spsc,
+#bench-throughput-mpsc,
+#bench-throughput-mpmc-bounded,
+#bench-throughput-mpmc-unbounded,
+#bench-latency {
+  width: 100%;
+  max-width: 100%;
+  margin: 1.5em 0;
+}
+
+/* ── controls / legend / tooltip (shared by every uPlot panel) ────── */
 .bench-chart-controls {
   display: flex;
   gap: 1em;
   align-items: center;
   margin-bottom: 0.5em;
   font-size: 0.9em;
+  flex-wrap: wrap;
 }
 
 .bench-chart-controls label {
@@ -27,7 +54,8 @@
 .bench-chart-plot {
   position: relative;
   width: 100%;
-  min-height: 420px;
+  max-width: 100%;
+  min-height: 360px;
 }
 
 .bench-chart-legend {
@@ -62,6 +90,12 @@
   vertical-align: middle;
 }
 
+.bench-chart-swatch-blocking {
+  background: transparent !important;
+  border: 2px dotted currentColor;
+  border-radius: 2px;
+}
+
 .bench-chart-tooltip {
   position: absolute;
   pointer-events: none;
@@ -84,4 +118,166 @@
   color: var(--md-default-fg-color--light, #aaa);
   font-style: italic;
   text-align: center;
+}
+
+.bench-chart-empty {
+  padding: 1em;
+  color: var(--md-default-fg-color--light, #aaa);
+  font-style: italic;
+  text-align: center;
+}
+
+/* ── hero panel (hand-rendered DOM bars) ──────────────────────────── */
+.bench-panel-hero {
+  background: var(--md-code-bg-color, rgba(0, 0, 0, 0.05));
+  padding: 1em;
+  border-radius: 8px;
+}
+
+.bench-hero-shape {
+  margin: 0 0 0.75em 0;
+  font-family: var(--md-code-font, monospace);
+  font-size: 0.9em;
+  color: var(--md-default-fg-color--light, #888);
+}
+
+.bench-hero-heading {
+  margin: 0 0 0.75em 0;
+  font-size: 1.05em;
+  font-weight: 600;
+}
+
+.bench-hero-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bench-hero-row {
+  display: grid;
+  grid-template-columns: 200px 1fr 100px;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.25em 0;
+}
+
+.bench-hero-label {
+  font-family: var(--md-code-font, monospace);
+  font-size: 0.85em;
+}
+
+.bench-hero-bar {
+  height: 1.2em;
+  border-radius: 2px;
+  min-width: 2px;
+}
+
+.bench-hero-bar-blocking {
+  background: transparent !important;
+  border: 2px dotted currentColor;
+  box-sizing: border-box;
+}
+
+.bench-hero-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+}
+
+.bench-hero-footnote {
+  font-size: 0.8em;
+  color: var(--md-default-fg-color--light, #aaa);
+  margin-top: 0.5em;
+}
+
+/* Sub-axis caption under the hero bars; matches the Y-axis label on
+ * the throughput panels so the hero and panels speak the same units. */
+.bench-hero-axis-caption {
+  margin: 0.4em 0 0.6em 0;
+  font-size: 0.8em;
+  color: var(--md-default-fg-color--light, #aaa);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hero legend: stable structure even when no library is blocking, so
+ * the layout doesn't shift as data changes. Mirrors .bench-chart-legend
+ * but without the per-row checkbox affordance (hero rows aren't
+ * toggleable; the visualization is a static bar comparison). */
+.bench-hero-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em 1em;
+  margin-top: 0.75em;
+  padding: 0.5em 0 0 0;
+  border-top: 1px solid var(--md-default-fg-color--lightest, #ccc);
+  font-size: 0.85em;
+}
+
+.bench-hero-legend .bench-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.bench-hero-blocking-badge {
+  font-size: 0.85em;
+  color: var(--md-default-fg-color--light, #aaa);
+  font-style: italic;
+}
+
+.bench-hero-legend-note {
+  flex: 1 0 100%;
+  margin: 0.4em 0 0 0;
+  font-size: 0.8em;
+  color: var(--md-default-fg-color--light, #aaa);
+}
+
+.bench-hero-empty {
+  padding: 1em 0;
+  color: var(--md-default-fg-color--light, #aaa);
+  font-style: italic;
+}
+
+/* ── status banner ────────────────────────────────────────────────── */
+.bench-status {
+  margin-bottom: 1em;
+  padding: 0.75em 1em;
+  font-style: italic;
+  border-left: 4px solid var(--md-default-fg-color--lightest, #888);
+}
+
+.bench-status[data-status="fixture"] {
+  border-left-color: #fbc02d;
+  background: rgba(251, 192, 45, 0.08);
+}
+
+.bench-status[data-status="error"] {
+  border-left-color: #e53935;
+  background: rgba(229, 57, 53, 0.08);
+}
+
+.bench-status p {
+  margin: 0;
+}
+
+/* ── responsive breakpoints ───────────────────────────────────────── */
+@media (max-width: 767px) {
+  .bench-panel { font-size: 0.875em; }
+  .bench-chart-plot { min-height: 320px; }
+  .bench-chart-legend { font-size: 0.8em; gap: 0.3em 0.6em; }
+  .bench-hero-row {
+    grid-template-columns: 1fr;
+    gap: 0.1em;
+  }
+  .bench-hero-value { text-align: left; }
+}
+
+@media (max-width: 374px) {
+  /* iPhone SE — let the X axis scroll horizontally rather than
+   * squeeze unreadably. */
+  .bench-chart-plot {
+    overflow-x: auto;
+    min-width: 320px;
+  }
 }
