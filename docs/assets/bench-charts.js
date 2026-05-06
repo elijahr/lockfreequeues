@@ -1019,6 +1019,8 @@
     const heroHost = document.getElementById('bench-hero');
     if (heroHost) {
       heroHost.innerHTML = '';
+      heroHost.appendChild(el('h3', { class: 'bench-hero-heading' },
+        'Throughput at a glance'));
       heroHost.appendChild(el('p', { class: 'bench-hero-empty' },
         'Bench snapshot pending — ' + reason));
     }
