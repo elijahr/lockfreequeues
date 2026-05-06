@@ -569,9 +569,12 @@ proc runVariant(variant: string, em: var BMFEmitter) =
     # ordering in unbounded_sipmuc/mupmuc forces strict per-shape
     # turn-taking, so a single descheduled consumer blocks every
     # other consumer. `-d:BenchSkipOversubscribed` (set in PR CI)
-    # drops the offending shapes; the full grid still runs in
-    # `bench-comparison.yml` nightly cron / on workflow_dispatch
-    # where a beefier runner is available.
+    # drops the offending shapes; the full grid runs locally on
+    # workstations or on `workflow_dispatch` runs of `bench.yml`
+    # where a beefier runner / no `BenchSkipOversubscribed` flag is
+    # in play (the historical separate comparison cron workflow was
+    # retired in v4.2.0 Stage 1 when crossbeam consolidated into
+    # `bench.yml`).
     runUMupmucShape[1, 1](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
       UnboundedMupmucMessageCount)
     runUMupmucShape[1, 2](em, UnboundedMupmucRuns, BenchUnboundedWarmup,

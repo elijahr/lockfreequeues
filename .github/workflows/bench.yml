@@ -470,10 +470,12 @@ jobs:
 
       # ---------- v4.2.0 Stage 1: Crossbeam adapters consolidation ----------
       #
-      # Crossbeam (Rust) was historically split into bench-comparison.yml
-      # to keep the Rust toolchain off the bench.yml critical path. v4.2.0
-      # Stage 1 retires that workflow split (next commit) and folds the
-      # adapters into the regular bench matrix. Five steps mirror the
+      # Crossbeam (Rust) was historically split into a separate
+      # comparison workflow (retired in v4.2.0 Stage 1) to keep the
+      # Rust toolchain off the bench.yml critical path. Stage 1 folded
+      # the adapters into the regular bench matrix here, gated on the
+      # smoke step's outcome so legs that don't exercise crossbeam pay
+      # nothing for the toolchain install. Five steps mirror the
       # loony pattern: install (Rust toolchain + cdylib build) -> smoke
       # -> set-env-on-success -> annotate-skip. Only bench_mpmc (uses
       # crossbeam_array_queue) and bench_unbounded (uses crossbeam_seg_queue)
@@ -496,9 +498,9 @@ jobs:
         continue-on-error: true
         uses: Swatinem/rust-cache@v2
         with:
-          # Mirrors the cache key shape from the retiring
-          # bench-comparison.yml so any pre-existing cache hits
-          # carry over after consolidation. The manifest path is the
+          # Mirrors the cache key shape that the retired comparison
+          # workflow used so any pre-existing cache hits carry over
+          # after the consolidation. The manifest path is the
           # current pre-Commit-5.2 location; Commit 5.2 will rename
           # benchmarks/rust/bench-ffi-crossbeam/ -> .../comparison/
           # and update both this workspace key and the manifest-path

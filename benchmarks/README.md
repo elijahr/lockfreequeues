@@ -197,19 +197,18 @@ compiler). Per-library obligations are tracked in
 
 ### CI integration
 
-- **`bench.yml`** runs every adapter on every PR using the soft-skip
-  pattern (design §2.6): each library has install → smoke → set-flag
-  stages with `continue-on-error: true`; if install or smoke fails
-  the binary compiles without that adapter and the workflow emits a
-  `::warning title=Adapter skipped::...` annotation. The
-  `workflow_dispatch` event accepts `force_skip_boost` /
+- **`bench.yml`** runs every adapter (including Crossbeam, the only
+  adapter with a Rust toolchain dependency — folded in from the
+  retired comparison workflow in v4.2.0 Stage 1) on every PR using
+  the soft-skip pattern (design §2.6): each library has install →
+  smoke → set-flag stages with `continue-on-error: true`; if install
+  or smoke fails the binary compiles without that adapter and the
+  workflow emits a `::warning title=Adapter skipped::...` annotation.
+  The `workflow_dispatch` event accepts `force_skip_boost` /
   `force_skip_loony` / `force_skip_moodycamel` /
-  `force_skip_threading_channels` / `force_skip_nim_channel`
-  boolean inputs to exercise the skip path manually.
-- **`bench-comparison.yml`** runs Crossbeam (the only adapter with a
-  Rust toolchain dependency) on a nightly cron + `workflow_dispatch`
-  + targeted path pushes to `devel`. It produces a separate Bencher
-  Report dedicated to crossbeam slugs.
+  `force_skip_threading_channels` / `force_skip_nim_channel` /
+  `force_skip_crossbeam` boolean inputs to exercise the skip path
+  manually.
 
 ### Running comparison adapters locally
 
@@ -299,13 +298,16 @@ policy). To regenerate:
    `docs/assets/bench-results/example.json` and commit with a message
    that records the source workflow run id, head sha, and run date.
 
-Bench-comparison adapters (Crossbeam, Loony, Boost, MoodyCamel,
-threading.Chan, Nim system.Channel) only run on
-`bench-comparison.yml` (nightly cron); if their slugs are absent from
-the chosen `bench.yml` run, the fixture will not include them and the
-chart will render only the in-house lockfreequeues + nim_channels
-slugs. That is acceptable for the fallback rendering — the live
-`latest.json` carries the full set once snapshots resume.
+Comparison adapters (Crossbeam, Loony, Boost, MoodyCamel,
+threading.Chan, Nim system.Channel) all run on `bench.yml` since
+v4.2.0 Stage 1 consolidated the historical separate crossbeam
+comparison workflow into the regular bench matrix. If any of their
+slugs are absent from the chosen `bench.yml` run (because the
+adapter's install or smoke step soft-skipped), the fixture will not
+include them and the chart will render only the in-house
+lockfreequeues + nim_channels slugs. That is acceptable for the
+fallback rendering — the live `latest.json` carries the full set
+once snapshots resume.
 
 ## Updating the README summary
 
