@@ -14,7 +14,7 @@
 ## Emitted measure per slug: `throughput_ops_ms` (mean, lower=mean-1σ,
 ## upper=mean+1σ). Slug shape: `lockfreequeues_sipsic/spsc/1p1c`.
 
-import std/[options, os, parseopt, sets, strformat, syncio]
+import std/[options, os, parseopt, strformat, syncio]
 import ./bench_common
 import ./adapters/lockfreequeues_sipsic_adapter
 
@@ -57,14 +57,11 @@ when defined(adapter_boost_lockfree_spsc_available):
   proc initBoostSpscQ(capacity: int): BoostLockfreeSpscAdapter[uint64] =
     makeBoostLockfreeSpscAdapter[uint64](capacity)
 
-# MVP variants are added to SupportedVariants only when the matching
-# adapter symbol is in scope (i.e. its compile-time gate is set).
-proc supportedVariantsList(): seq[string] {.compileTime.} =
-  result = @["sipsic"]
-  when declared(initBoostSpscQ):
-    result.add("boost_lockfree_spsc")
-
-const SupportedVariants = supportedVariantsList()
+# ---------- Adapter procs (topology-based dispatch) ----------
+#
+# Each adapter proc emits its hardcoded slug grid. The `topology` arg is
+# informational metadata; slug emission is invariant across topology
+# inputs (sipsic always emits `lockfreequeues_sipsic/spsc/1p1c`).
 
 proc runMvpVariant[A](
     em: var BMFEmitter,
@@ -96,41 +93,57 @@ proc runMvpVariant[A](
     metrics.ops_ms_mean + metrics.ops_ms_stddev,
   )
 
-proc runVariant(variant: string, em: var BMFEmitter) =
-  case variant
-  of "sipsic":
-    let slug = "lockfreequeues_sipsic/spsc/1p1c"
-    echo fmt"{variant} ({slug}):"
-    let metrics = runThroughputHarness[SipsicAdapter[SpscCapacity, uint64]](
-      queueInit = initSipsicQ,
+proc runSipsic(em: var BMFEmitter, topology: Topology) {.nimcall.} =
+  discard topology  # informational only; slug hardcoded below
+  let slug = "lockfreequeues_sipsic/spsc/1p1c"
+  echo fmt"sipsic ({slug}):"
+  let metrics = runThroughputHarness[SipsicAdapter[SpscCapacity, uint64]](
+    queueInit = initSipsicQ,
+    capacity = SpscCapacity,
+    numProducers = 1,
+    numConsumers = 1,
+    messageCount = BenchSpscMessageCount,
+    runCount = BenchSpscRuns,
+    warmupCount = BenchSpscWarmup,
+  )
+  echo fmt"  mean: {metrics.ops_ms_mean:.1f} ops/ms"
+  echo fmt"  stddev: {metrics.ops_ms_stddev:.1f}"
+  echo fmt"  runs: {metrics.runs}"
+  echo ""
+  em.addMeasure(
+    slug, "throughput_ops_ms",
+    metrics.ops_ms_mean,
+    metrics.ops_ms_mean - metrics.ops_ms_stddev,
+    metrics.ops_ms_mean + metrics.ops_ms_stddev,
+  )
+
+when declared(initBoostSpscQ):
+  proc runBoostLockfreeSpsc(em: var BMFEmitter,
+                            topology: Topology) {.nimcall.} =
+    discard topology
+    runMvpVariant[BoostLockfreeSpscAdapter[uint64]](
+      em,
+      slug = "boost_lockfree_queue/spsc/1p1c",
+      queueInit = initBoostSpscQ,
       capacity = SpscCapacity,
-      numProducers = 1,
-      numConsumers = 1,
-      messageCount = BenchSpscMessageCount,
-      runCount = BenchSpscRuns,
-      warmupCount = BenchSpscWarmup,
     )
-    echo fmt"  mean: {metrics.ops_ms_mean:.1f} ops/ms"
-    echo fmt"  stddev: {metrics.ops_ms_stddev:.1f}"
-    echo fmt"  runs: {metrics.runs}"
-    echo ""
-    em.addMeasure(
-      slug, "throughput_ops_ms",
-      metrics.ops_ms_mean,
-      metrics.ops_ms_mean - metrics.ops_ms_stddev,
-      metrics.ops_ms_mean + metrics.ops_ms_stddev,
-    )
-  else:
-    when declared(initBoostSpscQ):
-      if variant == "boost_lockfree_spsc":
-        runMvpVariant[BoostLockfreeSpscAdapter[uint64]](
-          em,
-          slug = "boost_lockfree_queue/spsc/1p1c",
-          queueInit = initBoostSpscQ,
-          capacity = SpscCapacity,
-        )
-        return
-    raise newException(ValueError, "unknown variant: " & variant)
+
+# ---------- Adapter registry ----------
+
+proc buildAdapters(): seq[Adapter] =
+  result.add(Adapter(
+    name: "sipsic",
+    topologiesSupported: {tSpsc},
+    run: runSipsic,
+  ))
+  when declared(initBoostSpscQ):
+    result.add(Adapter(
+      name: "boost_lockfree_spsc",
+      topologiesSupported: {tSpsc},
+      run: runBoostLockfreeSpsc,
+    ))
+
+let adapters: seq[Adapter] = buildAdapters()
 
 when isMainModule:
   # Unbuffer stdout so progress is visible under file redirects (mirrors
@@ -159,28 +172,34 @@ when isMainModule:
       of cmdArgument:
         positional.add(p.key)
 
-  let supported = SupportedVariants.toHashSet
-  let runVariants =
-    if positional.len == 0:
-      supported
-    else:
-      var groups = initHashSet[string]()
-      for arg in positional:
-        if arg notin supported:
-          echo "Unknown variant: ", arg
-          echo "Supported: ", SupportedVariants
-          quit 1
-        groups.incl arg
-      groups
+  # Topology filter: zero positionals = run every adapter (preserves the
+  # legacy "give me the whole binary" semantics that t_topology_split
+  # and the snapshot fixture rely on). One positional = topology slug;
+  # only adapters whose `topologiesSupported` set contains that topology
+  # run. Additional positionals (e.g. `<shape>` from the design example)
+  # are accepted and ignored — slug emission is hardcoded inside each
+  # adapter proc per the topology-based dispatch convention.
+  var topologyFilter: Option[Topology] = none(Topology)
+  if positional.len >= 1:
+    try:
+      topologyFilter = some(parseTopology(positional[0]))
+    except ValueError as e:
+      echo "Unknown topology: ", positional[0]
+      echo "Reason: ", e.msg
+      quit 1
 
   echo "SPSC Throughput Benchmark"
   echo "========================="
   echo ""
 
   var emitter = initBMFEmitter()
-  for v in SupportedVariants:
-    if v in runVariants:
-      runVariant(v, emitter)
+  for adapter in adapters:
+    if topologyFilter.isNone:
+      # Run every adapter at every topology it supports.
+      for t in adapter.topologiesSupported:
+        adapter.run(emitter, t)
+    elif topologyFilter.get in adapter.topologiesSupported:
+      adapter.run(emitter, topologyFilter.get)
 
   if bmfOutPath.len > 0:
     emitter.emit(bmfOutPath)

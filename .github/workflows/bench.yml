@@ -741,10 +741,65 @@ jobs:
         # message, missed wakeup, livelock regression) would otherwise
         # spin until the job-level 18-min budget expired. Fail fast at
         # 10 min so the upload step still records the partial result.
+        #
+        # Topology-based dispatch (Commit 2.0): each binary's first
+        # positional arg is now a `Topology` slug ("spsc", "mpsc",
+        # "mpmc", "spsc_unbounded", "mpsc_unbounded", "mpmc_unbounded")
+        # rather than a variant name. The dispatcher inside each binary
+        # walks its `seq[Adapter]` registry and runs every adapter whose
+        # `topologiesSupported` set contains the requested topology.
+        # For binaries that span multiple topologies (bench_unbounded),
+        # we invoke once per topology with separate per-topology JSON
+        # outputs and union them into the binary's upload artifact via
+        # `merge_bmf.py`. bench_latency is exempt — PR 1's CLI is
+        # unaffected by this commit.
         timeout-minutes: 10
         run: |
-          ./.tmp/${{ matrix.binary }} --bmf-out=${{ matrix.binary }}.json \
-            | tee ${{ matrix.binary }}_output.txt
+          set -eu
+          case "${{ matrix.binary }}" in
+            bench_spsc)
+              ./.tmp/bench_spsc spsc \
+                --bmf-out=bench_spsc.json | tee bench_spsc_output.txt
+              ;;
+            bench_mpsc)
+              ./.tmp/bench_mpsc mpsc \
+                --bmf-out=bench_mpsc.json | tee bench_mpsc_output.txt
+              ;;
+            bench_mpmc)
+              # Sipmuc adapters remain on tMpmc here; promotion to
+              # tSpmc lands in Commit 2.1.
+              ./.tmp/bench_mpmc mpmc \
+                --bmf-out=bench_mpmc.json | tee bench_mpmc_output.txt
+              ;;
+            bench_unbounded)
+              # Three topology invocations, one per axis. Each writes a
+              # per-topology JSON; merge_bmf.py unions them into the
+              # final bench_unbounded.json artifact uploaded below.
+              # The output log is the concatenation of the three runs
+              # so the matrix-leg's stdout view stays single-pane.
+              ./.tmp/bench_unbounded spsc_unbounded \
+                --bmf-out=bench_unbounded_spsc.json \
+                | tee  bench_unbounded_output.txt
+              ./.tmp/bench_unbounded mpsc_unbounded \
+                --bmf-out=bench_unbounded_mpsc.json \
+                | tee -a bench_unbounded_output.txt
+              ./.tmp/bench_unbounded mpmc_unbounded \
+                --bmf-out=bench_unbounded_mpmc.json \
+                | tee -a bench_unbounded_output.txt
+              python3 benchmarks/merge_bmf.py bench_unbounded.json \
+                bench_unbounded_spsc.json \
+                bench_unbounded_mpsc.json \
+                bench_unbounded_mpmc.json
+              ;;
+            bench_latency)
+              ./.tmp/bench_latency \
+                --bmf-out=bench_latency.json | tee bench_latency_output.txt
+              ;;
+            *)
+              echo "::error::unknown binary: ${{ matrix.binary }}"
+              exit 1
+              ;;
+          esac
 
       - name: Upload ${{ matrix.binary }} BMF artifact
         # `if: always()` so a step-level timeout in `Run ${{ matrix.binary }}`

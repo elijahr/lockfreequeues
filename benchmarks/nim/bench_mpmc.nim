@@ -24,7 +24,7 @@
 ## legacy Mupmuc path); channels exposes a uniform push/pop and uses
 ## bench_common.runThroughputHarness.
 
-import std/[monotimes, options, os, parseopt, sets, strformat, syncio, times]
+import std/[monotimes, options, os, parseopt, strformat, syncio, times]
 import ./bench_common
 import ./adapters/channels_adapter
 import lockfreequeues/mupmuc
@@ -327,87 +327,124 @@ proc runMvpMpmcShape[A](
     metrics.ops_ms_mean + metrics.ops_ms_stddev,
   )
 
-# ---------- Variant dispatch ----------
+# ---------- Adapter procs (topology-based dispatch) ----------
 
-proc supportedVariantsList(): seq[string] {.compileTime.} =
-  result = @["mupmuc", "sipmuc", "channels"]
-  when declared(initBoostMpmcQ):
-    result.add("boost_lockfree_queue")
-  when declared(initCrossbeamArrayQ):
-    result.add("crossbeam_array_queue")
-  when declared(initThreadingChannelsQ):
-    result.add("threading_channels")
+proc runMupmuc(em: var BMFEmitter, topology: Topology) {.nimcall.} =
+  discard topology  # informational only; slug grid hardcoded below
+  # Full {1,2,4} x {1,2,4} grid (9 shapes) — design 2.4 / impl plan 2.5.
+  runMupmucShape[MpmcCapacity, 1, 1, uint64](
+    em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+  runMupmucShape[MpmcCapacity, 1, 2, uint64](
+    em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+  runMupmucShape[MpmcCapacity, 1, 4, uint64](
+    em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+  runMupmucShape[MpmcCapacity, 2, 1, uint64](
+    em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+  runMupmucShape[MpmcCapacity, 2, 2, uint64](
+    em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+  runMupmucShape[MpmcCapacity, 2, 4, uint64](
+    em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+  runMupmucShape[MpmcCapacity, 4, 1, uint64](
+    em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+  runMupmucShape[MpmcCapacity, 4, 2, uint64](
+    em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+  runMupmucShape[MpmcCapacity, 4, 4, uint64](
+    em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+  # 8p8c: explicit oversubscription regression case for issue #15
+  # (CAS-retry livelock fix). Preserved from pre-split bench_throughput.
+  runMupmucShape[MpmcCapacity, 8, 8, uint64](
+    em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
 
-const SupportedVariants = supportedVariantsList()
+proc runSipmuc(em: var BMFEmitter, topology: Topology) {.nimcall.} =
+  discard topology
+  # Single producer x {1,2,4} consumers — design 2.4. Sipmuc remains on
+  # tMpmc here; promotion to tSpmc lands in Commit 2.1 alongside the
+  # SPMC topology axis schema change.
+  runSipmucShape[MpmcCapacity, 1, uint64](
+    em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+  runSipmucShape[MpmcCapacity, 2, uint64](
+    em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+  runSipmucShape[MpmcCapacity, 4, uint64](
+    em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
 
-proc runVariant(variant: string, em: var BMFEmitter) =
-  case variant
-  of "mupmuc":
-    # Full {1,2,4} x {1,2,4} grid (9 shapes) — design 2.4 / impl plan 2.5.
-    runMupmucShape[MpmcCapacity, 1, 1, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-    runMupmucShape[MpmcCapacity, 1, 2, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-    runMupmucShape[MpmcCapacity, 1, 4, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-    runMupmucShape[MpmcCapacity, 2, 1, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-    runMupmucShape[MpmcCapacity, 2, 2, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-    runMupmucShape[MpmcCapacity, 2, 4, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-    runMupmucShape[MpmcCapacity, 4, 1, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-    runMupmucShape[MpmcCapacity, 4, 2, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-    runMupmucShape[MpmcCapacity, 4, 4, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-    # 8p8c: explicit oversubscription regression case for issue #15
-    # (CAS-retry livelock fix). Preserved from pre-split bench_throughput.
-    runMupmucShape[MpmcCapacity, 8, 8, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-  of "sipmuc":
-    # Single producer x {1,2,4} consumers — design 2.4.
-    runSipmucShape[MpmcCapacity, 1, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-    runSipmucShape[MpmcCapacity, 2, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-    runSipmucShape[MpmcCapacity, 4, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-  of "channels":
+proc runChannels(em: var BMFEmitter, topology: Topology) {.nimcall.} =
+  discard topology
+  for p in [1, 2, 4]:
+    for c in [1, 2, 4]:
+      runChannelsShape(em, p, c, BenchMpmcRuns, BenchMpmcWarmup,
+                       BenchMpmcMessageCount)
+
+when declared(initBoostMpmcQ):
+  proc runBoostLockfreeQueue(em: var BMFEmitter,
+                             topology: Topology) {.nimcall.} =
+    discard topology
     for p in [1, 2, 4]:
       for c in [1, 2, 4]:
-        runChannelsShape(em, p, c, BenchMpmcRuns, BenchMpmcWarmup,
-                         BenchMpmcMessageCount)
-  else:
-    when declared(initBoostMpmcQ):
-      if variant == "boost_lockfree_queue":
-        for p in [1, 2, 4]:
-          for c in [1, 2, 4]:
-            runMvpMpmcShape[BoostLockfreeQueueAdapter[uint64]](
-              em, "boost_lockfree_queue", initBoostMpmcQ,
-              p, c, BenchMpmcRuns, BenchMpmcWarmup,
-              BenchMpmcMessageCount, MpmcCapacity)
-        return
-    when declared(initCrossbeamArrayQ):
-      if variant == "crossbeam_array_queue":
-        for p in [1, 2, 4]:
-          for c in [1, 2, 4]:
-            runMvpMpmcShape[CrossbeamArrayQueueAdapter[uint64]](
-              em, "crossbeam_array_queue", initCrossbeamArrayQ,
-              p, c, BenchMpmcRuns, BenchMpmcWarmup,
-              BenchMpmcMessageCount, MpmcCapacity)
-        return
-    when declared(initThreadingChannelsQ):
-      if variant == "threading_channels":
-        for p in [1, 2, 4]:
-          for c in [1, 2, 4]:
-            runMvpMpmcShape[ThreadingChannelsAdapter[uint64]](
-              em, "threading_channels", initThreadingChannelsQ,
-              p, c, BenchMpmcRuns, BenchMpmcWarmup,
-              BenchMpmcMessageCount, MpmcCapacity)
-        return
-    raise newException(ValueError, "unknown variant: " & variant)
+        runMvpMpmcShape[BoostLockfreeQueueAdapter[uint64]](
+          em, "boost_lockfree_queue", initBoostMpmcQ,
+          p, c, BenchMpmcRuns, BenchMpmcWarmup,
+          BenchMpmcMessageCount, MpmcCapacity)
+
+when declared(initCrossbeamArrayQ):
+  proc runCrossbeamArrayQueue(em: var BMFEmitter,
+                              topology: Topology) {.nimcall.} =
+    discard topology
+    for p in [1, 2, 4]:
+      for c in [1, 2, 4]:
+        runMvpMpmcShape[CrossbeamArrayQueueAdapter[uint64]](
+          em, "crossbeam_array_queue", initCrossbeamArrayQ,
+          p, c, BenchMpmcRuns, BenchMpmcWarmup,
+          BenchMpmcMessageCount, MpmcCapacity)
+
+when declared(initThreadingChannelsQ):
+  proc runThreadingChannels(em: var BMFEmitter,
+                            topology: Topology) {.nimcall.} =
+    discard topology
+    for p in [1, 2, 4]:
+      for c in [1, 2, 4]:
+        runMvpMpmcShape[ThreadingChannelsAdapter[uint64]](
+          em, "threading_channels", initThreadingChannelsQ,
+          p, c, BenchMpmcRuns, BenchMpmcWarmup,
+          BenchMpmcMessageCount, MpmcCapacity)
+
+# ---------- Adapter registry ----------
+
+proc buildAdapters(): seq[Adapter] =
+  result.add(Adapter(
+    name: "mupmuc",
+    topologiesSupported: {tMpmc},
+    run: runMupmuc,
+  ))
+  result.add(Adapter(
+    name: "sipmuc",
+    topologiesSupported: {tMpmc},  # promoted to tSpmc in Commit 2.1
+    run: runSipmuc,
+  ))
+  result.add(Adapter(
+    name: "channels",
+    topologiesSupported: {tMpmc},
+    run: runChannels,
+  ))
+  when declared(initBoostMpmcQ):
+    result.add(Adapter(
+      name: "boost_lockfree_queue",
+      topologiesSupported: {tMpmc},
+      run: runBoostLockfreeQueue,
+    ))
+  when declared(initCrossbeamArrayQ):
+    result.add(Adapter(
+      name: "crossbeam_array_queue",
+      topologiesSupported: {tMpmc},
+      run: runCrossbeamArrayQueue,
+    ))
+  when declared(initThreadingChannelsQ):
+    result.add(Adapter(
+      name: "threading_channels",
+      topologiesSupported: {tMpmc},
+      run: runThreadingChannels,
+    ))
+
+let adapters: seq[Adapter] = buildAdapters()
 
 when isMainModule:
   setStdIoUnbuffered()
@@ -433,28 +470,27 @@ when isMainModule:
       of cmdArgument:
         positional.add(p.key)
 
-  let supported = SupportedVariants.toHashSet
-  let runVariants =
-    if positional.len == 0:
-      supported
-    else:
-      var groups = initHashSet[string]()
-      for arg in positional:
-        if arg notin supported:
-          echo "Unknown variant: ", arg
-          echo "Supported: ", SupportedVariants
-          quit 1
-        groups.incl arg
-      groups
+  # Topology filter: see bench_spsc.nim for the rationale.
+  var topologyFilter: Option[Topology] = none(Topology)
+  if positional.len >= 1:
+    try:
+      topologyFilter = some(parseTopology(positional[0]))
+    except ValueError as e:
+      echo "Unknown topology: ", positional[0]
+      echo "Reason: ", e.msg
+      quit 1
 
   echo "MPMC Throughput Benchmark"
   echo "========================="
   echo ""
 
   var emitter = initBMFEmitter()
-  for v in SupportedVariants:
-    if v in runVariants:
-      runVariant(v, emitter)
+  for adapter in adapters:
+    if topologyFilter.isNone:
+      for t in adapter.topologiesSupported:
+        adapter.run(emitter, t)
+    elif topologyFilter.get in adapter.topologiesSupported:
+      adapter.run(emitter, topologyFilter.get)
 
   if bmfOutPath.len > 0:
     emitter.emit(bmfOutPath)

@@ -33,6 +33,22 @@ type
     tMpscUnbounded
     tMpmcUnbounded
 
+proc parseTopology*(s: string): Topology =
+  ## Parse a topology slug (e.g. "spsc", "mpmc_unbounded") into a
+  ## `Topology` enum value. Used by the per-binary topology dispatcher
+  ## introduced with the topology-based `Adapter` registry.
+  ##
+  ## Raises `ValueError` on an unrecognized slug — callers (typically a
+  ## bench binary's `main`) decide whether to exit nonzero or propagate.
+  case s
+  of "spsc": tSpsc
+  of "mpsc": tMpsc
+  of "mpmc": tMpmc
+  of "spsc_unbounded": tSpscUnbounded
+  of "mpsc_unbounded": tMpscUnbounded
+  of "mpmc_unbounded": tMpmcUnbounded
+  else: raise newException(ValueError, "unknown topology: " & s)
+
 # ---------- Adapter primitives ----------
 
 type
@@ -99,6 +115,24 @@ proc addMeasure*(
     lower: toBound(lower),
     upper: toBound(upper),
   )
+
+# ---------- Adapter registry (topology-based dispatch) ----------
+#
+# Each bench binary owns a `seq[Adapter]` registry. The dispatcher loops
+# over the registry and invokes every adapter whose `topologiesSupported`
+# set contains the requested topology. Adapter procs hardcode their slug
+# emission (queue family + topology + shape grid) — the `topology`
+# argument passed to `Adapter.run` is informational metadata, not a
+# branch input. Slug emission inside an adapter is invariant across
+# `Topology` arguments; the registry's `topologiesSupported` declares
+# which topologies the adapter expects to be invoked under.
+
+type
+  AdapterRunProc* = proc(em: var BMFEmitter, topology: Topology) {.nimcall.}
+  Adapter* = object
+    name*: string
+    topologiesSupported*: set[Topology]
+    run*: AdapterRunProc
 
 proc emit*(em: BMFEmitter, path: string) =
   ## Write the accumulated BMF data to `path`. Slugs alpha-sorted; within
