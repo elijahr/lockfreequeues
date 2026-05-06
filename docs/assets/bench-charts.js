@@ -173,6 +173,64 @@
     return library + (isBlocking(library) ? ' *' : '');
   }
 
+  // ── module: theme helpers ───────────────────────────────────────────
+
+  // Read the live computed text color from the Material content area.
+  // Material's theme picker swaps the `data-md-color-scheme` attribute
+  // on `<html>`, which cascades into the content area's CSS custom
+  // properties; reading via `getComputedStyle` therefore picks up the
+  // current scheme automatically. The fallback `'#000'` covers test
+  // environments where `getComputedStyle` returns an empty color.
+  function themeStroke() {
+    const probe = document.querySelector('.md-content') || document.body;
+    if (!probe) return '#000';
+    const c = getComputedStyle(probe).color;
+    return c || '#000';
+  }
+
+  function themeFont() {
+    const probe = document.querySelector('.md-content') || document.body;
+    if (!probe) return 'system-ui, sans-serif';
+    const f = getComputedStyle(probe).fontFamily;
+    return f || 'system-ui, sans-serif';
+  }
+
+  // Theme-aware axis config injected into every uPlot axis. Grid stroke
+  // is a neutral mid-gray that reads in both light and dark schemes;
+  // axis stroke + font follow Material's content typography.
+  function themedAxisDefaults() {
+    return {
+      stroke: themeStroke(),
+      font: themeFont(),
+      grid: { stroke: 'rgba(127,127,127,0.15)' },
+    };
+  }
+
+  // Module-scoped registry of panel rebuilders. Each `render*Panel`
+  // function pushes its `rebuild` closure here so the theme observer
+  // can rebuild every active uPlot canvas in response to a Material
+  // theme toggle. Reset at the top of `render()` to avoid stacking
+  // stale closures across re-renders.
+  let panelRebuilds = [];
+
+  let __themeObserverInstalled = false;
+  function installThemeObserver(rebuildAll) {
+    if (__themeObserverInstalled) return;
+    if (typeof MutationObserver === 'undefined') return;
+    __themeObserverInstalled = true;
+    const obs = new MutationObserver(() => rebuildAll());
+    obs.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-md-color-scheme', 'data-md-color-primary'],
+    });
+  }
+
+  function rebuildAllPanels() {
+    for (const fn of panelRebuilds) {
+      try { fn(); } catch (_) { /* swallow per-panel errors */ }
+    }
+  }
+
   // ── module: helpers ─────────────────────────────────────────────────
 
   function el(tag, attrs, ...children) {
@@ -525,27 +583,27 @@
     );
     const data = [xs, ...seriesData];
 
-    const bars = barsPath({ size: [0.85, 60, 1], gap: 4 });
-    const series = [{ label: 'library' }].concat(
-      rows.map((r) => {
-        const blocking = isBlocking(r.library);
-        const stroke = getColor(r.library);
-        const opt = {
-          label: displayLabel(r.library),
-          stroke,
-          width: 2,
-          points: { show: false },
-          spanGaps: false,
-          fill: blocking ? 'transparent' : stroke,
-        };
-        if (bars) opt.paths = bars;
-        if (blocking) opt.dash = [6, 4];
-        return opt;
-      })
-    );
-
-    const plot = new window.uPlot(
-      {
+    let plot;
+    const buildOpts = () => {
+      const bars = barsPath({ size: [0.85, 60, 1], gap: 4 });
+      const series = [{ label: 'library' }].concat(
+        rows.map((r) => {
+          const blocking = isBlocking(r.library);
+          const stroke = getColor(r.library);
+          const opt = {
+            label: displayLabel(r.library),
+            stroke,
+            width: 2,
+            points: { show: false },
+            spanGaps: false,
+            fill: blocking ? 'transparent' : stroke,
+          };
+          if (bars) opt.paths = bars;
+          if (blocking) opt.dash = [6, 4];
+          return opt;
+        })
+      );
+      return {
         width: plotMount.clientWidth || (host.clientWidth || 800),
         height: 320,
         series,
@@ -554,33 +612,44 @@
           y: { distr: 1 },
         },
         axes: [
-          {
+          Object.assign({}, themedAxisDefaults(), {
             values: (_, ticks) => ticks.map((t) => xLabels[t - 1] || ''),
             label: 'library',
-          },
-          {
+          }),
+          Object.assign({}, themedAxisDefaults(), {
             label: 'throughput (ops/ms)',
             values: (_, ticks) =>
               ticks.map((v) => (v >= 1000 ? v.toExponential(1) : '' + v)),
-          },
+          }),
         ],
         cursor: { drag: { x: false, y: false } },
         legend: { show: false },
         plugins: [heroTooltipPlugin(rows, pick)],
-      },
-      data,
-      plotMount
-    );
+      };
+    };
+
+    const rebuild = () => {
+      if (plot) plot.destroy();
+      plotMount.innerHTML = '';
+      plot = new window.uPlot(buildOpts(), data, plotMount);
+    };
+    rebuild();
 
     if (typeof ResizeObserver !== 'undefined') {
       const ro = new ResizeObserver(() => {
-        plot.setSize({
-          width: plotMount.clientWidth || (host.clientWidth || 800),
-          height: 320,
-        });
+        if (plot) {
+          plot.setSize({
+            width: plotMount.clientWidth || (host.clientWidth || 800),
+            height: 320,
+          });
+        }
       });
       ro.observe(plotMount);
     }
+
+    // Register hero rebuild with the module-scoped panel registry so
+    // the theme observer can refresh axis stroke/font on theme toggle.
+    panelRebuilds.push(rebuild);
   }
 
   function buildHeroLegend(rows, sawBlocking) {
@@ -764,11 +833,11 @@
         y: { distr: logScale ? 3 : 1 },
       },
       axes: [
-        {
+        Object.assign({}, themedAxisDefaults(), {
           values: (_, ticks) => ticks.map((t) => xLabels[t - 1] || ''),
           label: 'producer/consumer shape (P×C)',
-        },
-        {
+        }),
+        Object.assign({}, themedAxisDefaults(), {
           label: 'throughput (ops/ms)' + (logScale ? ' — log scale' : ''),
           // On log-scale axes, only major (power-of-10) tick labels
           // render. Null/non-finite values and minor ticks (e.g.
@@ -781,7 +850,7 @@
               if (Math.abs(log - Math.round(log)) > 1e-9) return '';
               return v >= 1000 ? v.toExponential(1) : '' + v;
             }),
-        },
+        }),
       ],
       cursor: { drag: { x: false, y: false } },
       legend: { show: false },
@@ -885,6 +954,10 @@
     host.appendChild(legend);
     rebuild();
     attachResizeObserver(plotMount, () => plot);
+    // Register the rebuild closure with the module-scoped panel
+    // registry so the theme observer can reflow this panel when the
+    // user toggles Material's color scheme.
+    panelRebuilds.push(rebuild);
   }
 
   // ── module: latency panel (uPlot stepped ladder) ────────────────────
@@ -1024,11 +1097,11 @@
         y: { distr: 3 },
       },
       axes: [
-        {
+        Object.assign({}, themedAxisDefaults(), {
           values: (_, ticks) => ticks.map((t) => xLabels[t - 1] || ''),
           label: 'percentile',
-        },
-        {
+        }),
+        Object.assign({}, themedAxisDefaults(), {
           label: 'latency (ns) [log]',
           // On log-scale axes, only major (power-of-10) tick labels
           // render. See `makeThroughputOpts` for the same suppression
@@ -1040,7 +1113,7 @@
               if (Math.abs(log - Math.round(log)) > 1e-9) return '';
               return v >= 1000 ? v.toExponential(1) : '' + v;
             }),
-        },
+        }),
       ],
       cursor: { drag: { x: false, y: false } },
       legend: { show: false },
@@ -1143,6 +1216,10 @@
 
     rebuild();
     attachResizeObserver(plotMount, () => plot);
+    // Register the rebuild closure with the module-scoped panel
+    // registry so the theme observer can reflow this panel when the
+    // user toggles Material's color scheme.
+    panelRebuilds.push(rebuild);
   }
 
   // ── module: fallback chain ──────────────────────────────────────────
@@ -1243,6 +1320,10 @@
       document.getElementById('bench-latency');
     if (!hasAnyHost) return;
 
+    // Reset the panel registry on every render so re-renders don't
+    // accumulate stale closures pointing at destroyed plots.
+    panelRebuilds = [];
+
     // Pre-paint the latency panel with the empty-state message so the
     // section isn't blank during fetch (or if fetch fails entirely).
     renderLatencyPanel(document.getElementById('bench-latency'), null);
@@ -1283,6 +1364,11 @@
       document.getElementById('bench-latency'),
       result.data || null
     );
+
+    // Wire the Material theme observer once the panels are mounted
+    // and their rebuild closures are registered. Idempotent — guarded
+    // by a module-scoped flag so re-renders don't multiply observers.
+    installThemeObserver(rebuildAllPanels);
 
     // Hash routing: native scroll-to-id is enough because the IDs match
     // the URL fragments. We just nudge the browser to re-evaluate the
