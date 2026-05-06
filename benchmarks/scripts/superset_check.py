@@ -31,6 +31,20 @@ DESIGN NOTE
     `set(pre) <= set(post)` for non-empty pre; we keep the
     `set.issubset` check explicit so the failure mode (which slugs
     are missing) can be enumerated for the operator.
+
+SIPMUC RENAME (v4.2.0 SPMC topology axis)
+    The v4.2.0 schema change reroutes lockfreequeues sipmuc adapters
+    from the MPMC panel onto the new first-class SPMC topology axis.
+    Bounded sipmuc slugs move from `lockfreequeues_sipmuc/mpmc/1pNc`
+    to `lockfreequeues_sipmuc/spmc/1pNc`; unbounded sipmuc slugs move
+    from `lockfreequeues_unbounded_sipmuc/mpmc_unbounded/1pNc` to
+    `lockfreequeues_unbounded_sipmuc/spmc_unbounded/1pNc`. Constraint
+    #9 (sipmuc-on-MPMC slug parity with the pre-split fixture) is
+    retired by this change. The deletion-safety check is unaffected:
+    the pre-split BMF captured by Task 2.1 of the topology split has
+    zero sipmuc slugs (the legacy `bench_throughput` binary did not
+    emit sipmuc rows), so the rename does not produce false-positive
+    deletion alerts here.
 """
 
 from __future__ import annotations

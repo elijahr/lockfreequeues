@@ -232,7 +232,7 @@ proc runSipmucShape[N, C: static int; T](
     em: var BMFEmitter,
     runs, warmup, messageCount: int,
 ) =
-  let slug = "lockfreequeues_sipmuc/mpmc/1p" & $C & "c"
+  let slug = "lockfreequeues_sipmuc/spmc/1p" & $C & "c"
   echo fmt"Sipmuc 1p{C}c ({slug}):"
   for _ in 0 ..< warmup:
     var q = initSipmuc[N, C, T]()
@@ -357,9 +357,10 @@ proc runMupmuc(em: var BMFEmitter, topology: Topology) {.nimcall.} =
 
 proc runSipmuc(em: var BMFEmitter, topology: Topology) {.nimcall.} =
   discard topology
-  # Single producer x {1,2,4} consumers — design 2.4. Sipmuc remains on
-  # tMpmc here; promotion to tSpmc lands in Commit 2.1 alongside the
-  # SPMC topology axis schema change.
+  # Single producer x {1,2,4} consumers — design 2.4. Sipmuc lives on
+  # the first-class SPMC topology axis (tSpmc) introduced by the
+  # v4.2.0 schema change; slug emission uses `lockfreequeues_sipmuc/
+  # spmc/1pNc` so the chart routes these series to the SPMC panel.
   runSipmucShape[MpmcCapacity, 1, uint64](
     em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
   runSipmucShape[MpmcCapacity, 2, uint64](
@@ -417,7 +418,7 @@ proc buildAdapters(): seq[Adapter] =
   ))
   result.add(Adapter(
     name: "sipmuc",
-    topologiesSupported: {tMpmc},  # promoted to tSpmc in Commit 2.1
+    topologiesSupported: {tSpmc},
     run: runSipmuc,
   ))
   result.add(Adapter(

@@ -766,22 +766,40 @@ jobs:
                 --bmf-out=bench_mpsc.json | tee bench_mpsc_output.txt
               ;;
             bench_mpmc)
-              # Sipmuc adapters remain on tMpmc here; promotion to
-              # tSpmc lands in Commit 2.1.
+              # bench_mpmc spans MPMC and SPMC topologies after the
+              # v4.2.0 SPMC axis schema change: mupmuc / channels / boost
+              # / crossbeam_array_queue / threading_channels stay on
+              # tMpmc, while sipmuc (single-producer multi-consumer) is
+              # promoted to the first-class tSpmc axis. Two invocations
+              # (one per topology) produce per-topology JSON; merge_bmf.py
+              # unions them into the final bench_mpmc.json artifact.
               ./.tmp/bench_mpmc mpmc \
-                --bmf-out=bench_mpmc.json | tee bench_mpmc_output.txt
+                --bmf-out=bench_mpmc_mpmc.json \
+                | tee bench_mpmc_output.txt
+              ./.tmp/bench_mpmc spmc \
+                --bmf-out=bench_mpmc_spmc.json \
+                | tee -a bench_mpmc_output.txt
+              python3 benchmarks/merge_bmf.py bench_mpmc.json \
+                bench_mpmc_mpmc.json \
+                bench_mpmc_spmc.json
               ;;
             bench_unbounded)
-              # Three topology invocations, one per axis. Each writes a
+              # Four topology invocations, one per axis. Each writes a
               # per-topology JSON; merge_bmf.py unions them into the
               # final bench_unbounded.json artifact uploaded below.
-              # The output log is the concatenation of the three runs
+              # The output log is the concatenation of the four runs
               # so the matrix-leg's stdout view stays single-pane.
+              # spmc_unbounded carries lockfreequeues_unbounded_sipmuc
+              # after the v4.2.0 SPMC axis schema change (was previously
+              # routed under mpmc_unbounded).
               ./.tmp/bench_unbounded spsc_unbounded \
                 --bmf-out=bench_unbounded_spsc.json \
                 | tee  bench_unbounded_output.txt
               ./.tmp/bench_unbounded mpsc_unbounded \
                 --bmf-out=bench_unbounded_mpsc.json \
+                | tee -a bench_unbounded_output.txt
+              ./.tmp/bench_unbounded spmc_unbounded \
+                --bmf-out=bench_unbounded_spmc.json \
                 | tee -a bench_unbounded_output.txt
               ./.tmp/bench_unbounded mpmc_unbounded \
                 --bmf-out=bench_unbounded_mpmc.json \
@@ -789,6 +807,7 @@ jobs:
               python3 benchmarks/merge_bmf.py bench_unbounded.json \
                 bench_unbounded_spsc.json \
                 bench_unbounded_mpsc.json \
+                bench_unbounded_spmc.json \
                 bench_unbounded_mpmc.json
               ;;
             bench_latency)

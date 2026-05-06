@@ -5,7 +5,7 @@
 ## variants at their natural shapes:
 ##
 ##   - UnboundedSipsic (spsc_unbounded): 1p1c only.
-##   - UnboundedSipmuc (mpmc_unbounded, single producer + N consumers):
+##   - UnboundedSipmuc (spmc_unbounded, single producer + N consumers):
 ##     1p{1,2,4}c.
 ##   - UnboundedMupsic (mpsc_unbounded, N producers + 1 consumer):
 ##     {1,2,4}p1c.
@@ -29,7 +29,7 @@
 ##
 ## Slug shapes:
 ##   lockfreequeues_unbounded_sipsic/spsc_unbounded/1p1c
-##   lockfreequeues_unbounded_sipmuc/mpmc_unbounded/1p{1,2,4}c
+##   lockfreequeues_unbounded_sipmuc/spmc_unbounded/1p{1,2,4}c
 ##   lockfreequeues_unbounded_mupsic/mpsc_unbounded/{1,2,4}p1c
 ##   lockfreequeues_unbounded_mupmuc/mpmc_unbounded/{1,2,4}p{1,2,4}c
 
@@ -219,7 +219,7 @@ proc runUSipmucShape[C: static int](
     em: var BMFEmitter,
     runs, warmup, messageCount: int,
 ) =
-  let slug = "lockfreequeues_unbounded_sipmuc/mpmc_unbounded/1p" & $C & "c"
+  let slug = "lockfreequeues_unbounded_sipmuc/spmc_unbounded/1p" & $C & "c"
   echo fmt"UnboundedSipmuc 1p{C}c ({slug}):"
   # Per-iteration teardown order (applies to both warmup and timed loops):
   #
@@ -634,9 +634,11 @@ proc buildAdapters(): seq[Adapter] =
   ))
   result.add(Adapter(
     name: "unbounded_sipmuc",
-    # Sipmuc unbounded stays on tMpmcUnbounded here; promotion to
-    # tSpmcUnbounded lands in Commit 2.1.
-    topologiesSupported: {tMpmcUnbounded},
+    # Sipmuc unbounded lives on the first-class SPMC topology axis
+    # (tSpmcUnbounded) introduced by the v4.2.0 schema change; slug
+    # emission uses `lockfreequeues_unbounded_sipmuc/spmc_unbounded/
+    # 1pNc` so the chart routes these series to the SPMC panel.
+    topologiesSupported: {tSpmcUnbounded},
     run: runUnboundedSipmuc,
   ))
   result.add(Adapter(

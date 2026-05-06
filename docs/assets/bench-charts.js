@@ -99,8 +99,10 @@
     spsc: 'SPSC',
     mpsc: 'MPSC',
     mpmc: 'MPMC',
+    spmc: 'SPMC',
     spsc_unbounded: 'SPSC (unbounded)',
     mpsc_unbounded: 'MPSC (unbounded)',
+    spmc_unbounded: 'SPMC (unbounded)',
     mpmc_unbounded: 'MPMC (unbounded)',
   });
 
@@ -129,6 +131,9 @@
     { id: 'bench-throughput-mpsc',           label: 'MPSC',
       includes: (topology) => topology === 'mpsc'
                               || topology === 'mpsc_unbounded' },
+    { id: 'bench-throughput-spmc',           label: 'SPMC',
+      includes: (topology) => topology === 'spmc'
+                              || topology === 'spmc_unbounded' },
     { id: 'bench-throughput-mpmc-bounded',   label: 'MPMC (bounded)',
       includes: (topology) => topology === 'mpmc' },
     { id: 'bench-throughput-mpmc-unbounded', label: 'MPMC (unbounded)',

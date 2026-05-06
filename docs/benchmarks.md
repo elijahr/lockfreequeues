@@ -154,6 +154,7 @@ section below.
 <div markdown="0">
   <div id="bench-throughput-spsc"           class="bench-panel"></div>
   <div id="bench-throughput-mpsc"           class="bench-panel"></div>
+  <div id="bench-throughput-spmc"           class="bench-panel"></div>
   <div id="bench-throughput-mpmc-bounded"   class="bench-panel"></div>
   <div id="bench-throughput-mpmc-unbounded" class="bench-panel"></div>
 </div>

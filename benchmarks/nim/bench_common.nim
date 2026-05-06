@@ -29,8 +29,10 @@ type
     tSpsc
     tMpsc
     tMpmc
+    tSpmc
     tSpscUnbounded
     tMpscUnbounded
+    tSpmcUnbounded
     tMpmcUnbounded
 
 proc parseTopology*(s: string): Topology =
@@ -44,8 +46,10 @@ proc parseTopology*(s: string): Topology =
   of "spsc": tSpsc
   of "mpsc": tMpsc
   of "mpmc": tMpmc
+  of "spmc": tSpmc
   of "spsc_unbounded": tSpscUnbounded
   of "mpsc_unbounded": tMpscUnbounded
+  of "spmc_unbounded": tSpmcUnbounded
   of "mpmc_unbounded": tMpmcUnbounded
   else: raise newException(ValueError, "unknown topology: " & s)
 
