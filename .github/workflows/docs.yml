@@ -16,6 +16,11 @@ on:
       - '.github/workflows/docs.yml'
       - 'src/**'
   workflow_dispatch:
+  schedule:
+    - cron: '17 5 * * *'   # daily at 05:17 UTC; redeploys docs to pick up
+                           # snapshot pushes that carried [skip ci] (per
+                           # bench.yml Patch A) so the chart is at most
+                           # ~24h stale even if devel is quiet.
 
 permissions:
   contents: write
@@ -39,35 +44,40 @@ jobs:
       - name: Setup Nim
         uses: jiro4989/setup-nim-action@v2
         with:
-          nim-version: 'stable'
+          nim-version: '2.2.8'
 
-      - name: Expose Nim compiler API for mkdocstrings-nim
+      - name: Cache Nimble packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nimble
+          key: ${{ runner.os }}-nimble-docs-${{ hashFiles('*.nimble') }}
+          restore-keys: |
+            ${{ runner.os }}-nimble-docs-
+
+      - name: Install Nim compiler API package (for mkdocstrings-nim)
         # mkdocstrings-nim's extractor.nim does `import compiler/[ast, parser, ...]`,
-        # which expects Nim's compiler/ source tree to be on the search path.
-        # The bundled Nim distribution includes compiler/ on disk but does not
-        # add it to the path; jiro4989/setup-nim-action does not install the
-        # compiler-as-Nimble-package either. Append `path="$lib/.."` to the
-        # bundled config/nim.cfg so `import compiler/<X>` resolves to
-        # `<nim-install-root>/compiler/<X>.nim`. Done after Setup Nim and
-        # before pip install so the mkdocstrings-nim extractor can compile
-        # on first invocation.
-        run: |
-          set -euo pipefail
-          nim_root="$(dirname "$(dirname "$(readlink -f "$(which nim)")")")"
-          if [ ! -d "$nim_root/compiler" ] || [ ! -f "$nim_root/config/nim.cfg" ]; then
-            echo "::error::expected $nim_root to contain compiler/ and config/nim.cfg"
-            exit 1
-          fi
-          # `$lib` here is a Nim config-file variable resolved by Nim, not a
-          # bash variable — heredoc with quoted delimiter writes it literal.
-          cat >> "$nim_root/config/nim.cfg" <<'NIMCFG'
-          path="$lib/.."
-          NIMCFG
-          echo "Appended compiler-API path to $nim_root/config/nim.cfg"
+        # which expects Nim's compiler/ source tree to be importable. Installing
+        # the `nim` Nimble package places the compiler source on the Nimble path
+        # so `import compiler/<X>` resolves cleanly. This matches the typestates
+        # repo's docs.yml pattern and replaces the previous in-place nim.cfg
+        # patching (preserved as a ROLLBACK comment at bottom of file).
+        run: nimble install nim -y
+
+      - name: Create watch directories
+        run: mkdir -p docs/overrides
 
       - name: Install dependencies
         run: |
           pip install -r docs-requirements.txt
+
+      - name: JS syntax check (bench-charts.js)
+        # Catches typos that mkdocs --strict treats as opaque static
+        # assets. See Phase 4.6.3 green mirage audit; cheap defense
+        # against ships-to-prod browser-console errors. Node is
+        # preinstalled on GitHub-hosted ubuntu runners so no
+        # actions/setup-node step is required.
+        run: |
+          node --check docs/assets/bench-charts.js
 
       - name: Resolve docs source ref
         # mkdocs.yml reads source_ref from $DOCS_SOURCE_REF (with default
@@ -171,3 +181,32 @@ jobs:
           fi
           python3 -c "import json; json.load(open('/tmp/latest.json'))"
           echo "::notice::mike asset endpoint OK: $URL"
+          # Phase 4.6.3 green mirage audit: HTTP 200 + valid JSON is not
+          # enough — bench.yml's defensive fallback step (thread D1)
+          # writes a placeholder `{"_status": "fallback", ...}` when the
+          # bench pipeline breaks, and that placeholder satisfies both
+          # checks above. Without this freshness alert a silently-broken
+          # bench would render an explicit "no data" chart but the docs
+          # build would stay green indefinitely. Strategy:
+          #   - Always emit `::warning::` when _status == "fallback" so
+          #     the Actions tab shows yellow on every run.
+          #   - Fail (`::error::`) only on the daily `schedule` cron, so
+          #     unrelated docs PRs are not blocked while the bench is
+          #     broken — the maintainer still gets a daily nudge.
+          STATUS=$(jq -r '._status // "ok"' /tmp/latest.json)
+          if [ "$STATUS" = "fallback" ]; then
+            REASON=$(jq -r '._reason // "unknown"' /tmp/latest.json)
+            echo "::warning::Bench latest.json is in fallback mode (reason: ${REASON})"
+            if [ "${{ github.event_name }}" = "schedule" ]; then
+              echo "::error::Fallback persists across daily cron — bench pipeline is broken"
+              exit 1
+            fi
+          fi
+
+### ROLLBACK ###
+# If `nimble install nim -y` ever breaks (registry change, package rename,
+# layout regression), revert the "Install Nim compiler API package" step
+# to the previous in-place nim.cfg patch:
+#   - locate nim_root via `dirname (dirname (readlink -f $(which nim)))`
+#   - append `path="$lib/.."` to `$nim_root/config/nim.cfg`
+# Remove this rollback block after one release cycle (v4.3.0).

@@ -15,14 +15,17 @@ on:
     paths-ignore:
       - '*.md'
       - '.github/workflows/docs.yml'
-      # Loop-prevention layer 1 of 2 (design §5.X): the snapshot push
+      # Loop-prevention layer 1 of 3 (design §5.X): the snapshot push
       # writes BMF JSON under docs/assets/bench-results/. paths-ignore
       # makes the bench job skip any push consisting solely of these
       # snapshot files, so the snapshot commit cannot retrigger bench.
-      # The companion guard is the bot-actor `if:` on the matrix and
-      # bench-upload jobs below. The snapshot commit has NO `[skip ci]`
-      # marker because docs.yml has no paths-ignore and must run on
-      # snapshot pushes to deploy the fresh chart data to Pages.
+      # Companion guards are (2) the bot-actor `if:` on the matrix and
+      # bench-upload jobs below, and (3) `[skip ci]` in the snapshot
+      # and defensive-fallback commit messages (added v4.2.0 thread
+      # D1) to suppress recursive triggers under workflow_dispatch
+      # re-runs and any future paths-ignore loosening. docs.yml's
+      # chart deploy is acceptable to defer because the next non-bot
+      # push to devel rebuilds and redeploys the docs site.
       - 'docs/assets/bench-results/**'
   push:
     branches: [main, devel]
@@ -658,6 +661,7 @@ jobs:
           echo "Found $count valid BMF JSON fragment(s) to merge."
 
       - name: Merge BMF JSON
+        id: merge
         # `merge_bmf.py` unions per-slug measure dicts across N inputs
         # and exits 1 on (slug, measure) collisions. Pure stdlib (no
         # third-party deps), so no Python install step is needed beyond
@@ -758,8 +762,32 @@ jobs:
       # `--threshold-measure throughput`; the actual measure key emitted by
       # bench_{spsc,mpsc,mpmc,unbounded}.nim is `throughput_ops_ms`, so the
       # earlier threshold never matched any measure. Track 6 corrects this.
+      #
+      # NOTE on continue-on-error (v4.2.0): the Bencher CLI is currently
+      # rejecting the multi-measure threshold configuration with
+      # "Failed to validate the model for the throughput_ops_ms Measure
+      # Threshold: Invalid threshold model: Invalid model, no boundary
+      # provided" even though the invocation matches the documented
+      # bencher.dev pattern (see https://bencher.dev/docs/explanation/thresholds/
+      # "Two-Measure Example"). The failing step short-circuits the job
+      # before `Snapshot to docs assets` runs, leaving the chart on
+      # docs/benchmarks.md without fresh data. As a release-day band-aid
+      # we mark this step continue-on-error so the snapshot path keeps
+      # flowing; the threshold gating itself remains dormant until
+      # Task 6.4's 10-run soak completes anyway, so functionally nothing
+      # is lost in the short term.
+      #
+      # TODO(post-v4.2.0): diagnose the boundary-flag binding issue.
+      # Hypothesis: clap absorbs the trailing `--threshold-lower-boundary`
+      # into the first measure block (latency) instead of the second
+      # (throughput), so throughput's model has no boundary. Try giving
+      # each measure both boundaries explicitly, splitting into two
+      # `bencher run` invocations, or pinning the bencherdev/bencher
+      # action to a specific tag once Bencher confirms the bug/expected
+      # syntax.
       - name: Track base branch benchmarks with Bencher
         if: github.event_name == 'push' && env.BENCHER_API_TOKEN != ''
+        continue-on-error: true
         run: |
           bencher run \
             --project lockfreequeues \
@@ -795,22 +823,24 @@ jobs:
       # Track 5 PR 5 Task 5.5.b: snapshot the merged BMF into the docs
       # assets tree so the chart on `docs/benchmarks.md` always points
       # at the most recent devel run. Loop-prevention against bench.yml
-      # itself relies on two layers (no `[skip ci]` marker — see below):
+      # itself relies on three defensive layers:
       #   1. `paths-ignore: docs/assets/bench-results/**` on bench.yml
       #      — the snapshot push only changes files under that prefix,
       #      so bench.yml does not re-evaluate at all.
       #   2. `if: github.actor != 'github-actions[bot]'` on the parent
       #      bench / bench-upload jobs — defense-in-depth in case the
       #      paths-ignore is ever loosened.
-      #
-      # We deliberately do NOT include `[skip ci]` in the commit
-      # message: GitHub's native skip applies to ALL workflows on the
-      # commit, and docs.yml has no paths-ignore. Suppressing docs.yml
-      # would leave the freshly snapshotted JSON un-deployed on Pages,
-      # so the chart on the live docs site would lag the bench run
-      # that produced the snapshot. The two layers above already
-      # prevent bench.yml self-trigger; docs.yml does not trigger any
-      # bench work, so allowing it to run is the desired behavior.
+      #   3. `[skip ci]` in the snapshot commit message (added v4.2.0,
+      #      thread D1) — third defensive guard preventing recursive
+      #      bench → snapshot → bench loops in edge cases where the
+      #      paths-ignore evaluation order or workflow_dispatch
+      #      re-runs could otherwise re-trigger. GitHub's native
+      #      `[skip ci]` suppresses ALL workflows on the commit;
+      #      docs.yml's chart deploy is acceptable to defer because
+      #      the next non-bot push to devel will redeploy the JSON
+      #      via the normal docs build path. Symmetric with the
+      #      defensive fallback step's commit (which also carries
+      #      `[skip ci]`).
       # Only fires on `push` to `refs/heads/devel`; tag pushes,
       # workflow_dispatch, PR runs, and main pushes do nothing here.
       - name: Snapshot to docs assets (devel push only)
@@ -832,7 +862,7 @@ jobs:
             echo "::notice::Snapshot identical to current checked-in latest.json; skipping commit."
             exit 0
           fi
-          git commit -m "chore(bench): refresh snapshot"
+          git commit -m "chore(bench): refresh snapshot [skip ci]"
           # Long bench runs leave a wide window for `devel` to advance
           # before we push (a docs-only follow-up commit, an unrelated
           # merge, etc.); a plain `git push` would then be rejected
@@ -855,4 +885,72 @@ jobs:
             git rebase origin/devel
           done
           echo "::error::Snapshot push failed after 3 retries; aborting." >&2
+          exit 1
+
+      # v4.2.0 thread D1: defensive fallback snapshot.
+      #
+      # When `Merge BMF JSON` (id: merge) fails or is cancelled on a
+      # `devel` push or `workflow_dispatch`, the regular Snapshot step
+      # short-circuits the job and the chart on docs/benchmarks.md
+      # would silently 404 against the missing `latest.json`. This
+      # step writes a placeholder `latest.json` with `_status:
+      # "fallback"` so the chart page can render an explicit "no
+      # data — last attempt failed" state. Operators can pivot from
+      # the embedded `_workflow_run` URL to triage.
+      #
+      # Loop-safety: same three layers as the regular snapshot
+      # (paths-ignore + bot-actor guard + `[skip ci]` in the commit
+      # message). The fallback is positioned AFTER the cost-gate-
+      # guarded Bencher upload steps so a missing `bench` PR label
+      # still permits this gh-pages-side snapshot path; the fallback
+      # does not consume Bencher quota.
+      #
+      # `if:` scoping (IMP-5): only fires when `merge` outcome is
+      # `failure` or `cancelled`. We deliberately do NOT fire on
+      # `success` (the regular snapshot handles that) and do NOT
+      # fire on `skipped` (means the job never reached merge — no
+      # signal to publish).
+      #
+      # The placeholder JSON omits `_commit` (IMP-6); `_workflow_run`
+      # is sufficient for traceability and avoids the misleading
+      # impression that the placeholder corresponds to a measured
+      # bench at that SHA.
+      - name: Defensive snapshot fallback
+        if: |
+          always() && (
+            (github.event_name == 'push' && github.ref == 'refs/heads/devel') ||
+            (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/devel')
+          ) && (steps.merge.outcome == 'failure' || steps.merge.outcome == 'cancelled')
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          mkdir -p docs/assets/bench-results
+          cat > docs/assets/bench-results/latest.json <<'EOF'
+          {
+            "_status": "fallback",
+            "_reason": "merge_bmf step ${{ steps.merge.outcome }}",
+            "_merge_outcome": "${{ steps.merge.outcome }}",
+            "_timestamp": "${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}",
+            "_workflow_run": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          }
+          EOF
+          git add docs/assets/bench-results/latest.json
+          if git diff --cached --quiet; then
+            echo "::notice::Fallback latest.json identical to current checked-in copy; skipping commit."
+            exit 0
+          fi
+          git commit -m "bench: defensive fallback snapshot [skip ci]"
+          # Same retry pattern as the regular snapshot step: fetch +
+          # rebase + push up to 3 times to survive concurrent advances
+          # of devel during long bench runs.
+          for attempt in 1 2 3; do
+            if git push origin HEAD:devel; then
+              exit 0
+            fi
+            echo "::notice::fallback push attempt $attempt rejected; rebasing onto origin/devel and retrying."
+            git fetch origin devel
+            git rebase origin/devel
+          done
+          echo "::error::Fallback snapshot push failed after 3 retries; aborting." >&2
           exit 1

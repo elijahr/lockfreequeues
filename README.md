@@ -159,7 +159,7 @@ Slots are stored in a plain `array[S, T]` and shared across threads. When a prod
 
 Use a value type, a `ptr T`, or, if you accept the trade-off, compile with `-d:allowNonLockFreeQueueItems` to disable the check.
 
-The full safety model — slot-ownership typestates, why the queue itself is lock-free even when items are not, and the matrix of MM x sanitiser combinations under CI — lives in [`docs/safety-model.md`](docs/safety-model.md). The typestate transitions are documented in [`docs/slot-ownership-typestates.md`](docs/slot-ownership-typestates.md).
+The full safety model — slot-ownership typestates, why the queue itself is lock-free even when items are not, and the matrix of MM x sanitiser combinations under CI — lives in [`docs/guide/safety-model.md`](docs/guide/safety-model.md). The typestate transitions are documented in [`docs/guide/slot-ownership-typestates.md`](docs/guide/slot-ownership-typestates.md).
 
 ## Benchmarks
 
@@ -170,14 +170,21 @@ every devel push, and may lag the live data by up to one release
 cycle. The "always-fresh" view lives at the chart page below.
 
 <!-- BENCHMARKS:start -->
-| Queue   | Topology | Shape | Throughput (ops/ms) |
-|---------|----------|-------|---------------------|
-| Sipsic  | SPSC     | 1P/1C | _to be filled at next release_ |
-| Sipmuc  | SPMC     | 1P/2C | _to be filled at next release_ |
-| Mupsic  | MPSC     | 2P/1C | _to be filled at next release_ |
-| Mupmuc  | MPMC     | 2P/2C | _to be filled at next release_ |
+**Headline:** `Mupmuc` (MPMC, bounded) sustains **18,209 ops/ms at 4p4c** on
+`ubuntu-latest`, against **1,723 ops/ms** for Nim's stdlib `Channel` at the
+same shape — about **10.6x** faster under heavy multi-producer multi-consumer
+contention.
 
-[Live interactive chart →](https://elijahr.github.io/lockfreequeues/latest/benchmarks/)
+| Variant  | Topology | Shape | Throughput (ops/ms) | vs `system/Channel` (same shape) |
+|----------|----------|-------|--------------------:|----------------------------------|
+| `Sipsic` | SPSC     | 1p1c  |               7,592 | — (no SPSC `Channel` adapter)    |
+| `Sipmuc` | SPMC     | 1p2c  |              22,399 | — (no SPMC `Channel` adapter)    |
+| `Mupsic` | MPSC     | 4p1c  |              13,667 | 3.7x (3,667 ops/ms)              |
+| `Mupmuc` | MPMC     | 4p4c  |              18,209 | 10.6x (1,723 ops/ms)             |
+
+Numbers are pulled from `docs/assets/bench-results/example.json`, the
+checked-in `ubuntu-latest` snapshot used as the chart's offline fallback.
+Live updating chart: <https://elijahr.github.io/lockfreequeues/latest/benchmarks/>.
 <!-- BENCHMARKS:end -->
 
 See [`benchmarks/`](benchmarks/) for the full suite, methodology, the

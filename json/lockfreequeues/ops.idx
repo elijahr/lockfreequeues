@@ -1,9 +1,0 @@
-nimTitle	ops	lockfreequeues/ops.html	module src/lockfreequeues/ops		0
-nim	validateHeadOrTail	lockfreequeues/ops.html#validateHeadOrTail,int,int	proc validateHeadOrTail(value: int; capacity: int): bool		10
-nim	validateHeadAndTail	lockfreequeues/ops.html#validateHeadAndTail,int,int,int	proc validateHeadAndTail(head: int; tail: int; capacity: int): bool		19
-nim	used	lockfreequeues/ops.html#used,int,int,int	proc used(head: int; tail: int; capacity: int): int		47
-nim	available	lockfreequeues/ops.html#available,int,int,int	proc available(head: int; tail: int; capacity: int): int		74
-nim	index	lockfreequeues/ops.html#index,int,int	proc index(value: int; capacity: int): int		85
-nim	incOrReset	lockfreequeues/ops.html#incOrReset,int,int,int	proc incOrReset(original: int; amount: int; capacity: int): int		99
-nim	full	lockfreequeues/ops.html#full,int,int,int	proc full(head: int; tail: int; capacity: int): bool		115
-nim	empty	lockfreequeues/ops.html#empty,int,int,int	proc empty(head: int; tail: int; capacity: int): bool		125

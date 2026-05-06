@@ -1,8 +1,10 @@
 # MkDocs documentation dependencies
 mkdocs>=1.5
 mkdocs-material>=9.0
+click<8.3.0  # Pin to fix mkdocs serve file watching (https://github.com/squidfunk/mkdocs-material/issues/8478)
 mkdocstrings-nim>=0.2.1
 mike>=2.0
 mkdocs-git-revision-date-localized-plugin>=1.2
 mkdocs-glightbox>=0.3
 pymdown-extensions>=10.0
+mkdocs-include-markdown-plugin>=6.0
