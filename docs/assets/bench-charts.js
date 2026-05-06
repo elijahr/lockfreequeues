@@ -77,12 +77,35 @@
   ];
   const LFQ_FAMILY_SET = new Set(LOCKFREEQUEUES_FAMILY);
 
+  // Hero is "lockfreequeues vs alternatives at a canonical bounded
+  // shape." Bounded topologies only — the per-topology panels below
+  // already show bounded vs unbounded side-by-side; mixing them in the
+  // hero adds DEBRA-reclamation overhead noise that obscures the
+  // headline comparison.
   const HERO_SHAPE_PREFERENCE = [
     { topology: 'mpmc',           shape: '4p4c' },
     { topology: 'mpmc',           shape: '2p2c' },
     { topology: 'mpsc',           shape: '4p1c' },
     { topology: 'spsc',           shape: '1p1c' },
   ];
+
+  // Pretty labels for topology slugs used in headings and tooltips.
+  const TOPOLOGY_LABELS = Object.freeze({
+    spsc: 'SPSC',
+    mpsc: 'MPSC',
+    mpmc: 'MPMC',
+    spsc_unbounded: 'SPSC (unbounded)',
+    mpsc_unbounded: 'MPSC (unbounded)',
+    mpmc_unbounded: 'MPMC (unbounded)',
+  });
+
+  function topologyLabel(topology) {
+    return TOPOLOGY_LABELS[topology] || topology.toUpperCase();
+  }
+
+  function isBoundedTopology(topology) {
+    return !topology.endsWith('_unbounded');
+  }
 
   // Map a topology slug substring to its DOM panel id.
   // Topologies in BMF: spsc, mpsc, mpmc, mpmc_unbounded, spsc_unbounded.
@@ -257,6 +280,10 @@
     let best = null;
     let bestScore = 0;
     for (const [topology, libsByShape] of byTopology) {
+      // Hero is bounded-only (see HERO_SHAPE_PREFERENCE comment).
+      // Skip unbounded topologies even in the fallback search so the
+      // headline comparison never silently picks an unbounded shape.
+      if (!isBoundedTopology(topology)) continue;
       // Pivot to Map<shape, Map<library, MeasureValue>> for scoring.
       const byShape = new Map();
       for (const [library, shapeMap] of libsByShape) {
@@ -573,14 +600,254 @@
     attachResizeObserver(plotMount, () => plot);
   }
 
-  // ── module: latency placeholder (filled in A2) ──────────────────────
+  // ── module: latency panel (uPlot stepped ladder) ────────────────────
 
-  function renderLatencyPlaceholder(host) {
+  // Percentile axis — fixed order p50 → p95 → p99 → p999 → max. The
+  // categorical x-axis uses integer ticks 1..5 mapping to these labels.
+  const LATENCY_PERCENTILES = Object.freeze([
+    { key: 'latency_p50_ns',  label: 'p50'  },
+    { key: 'latency_p95_ns',  label: 'p95'  },
+    { key: 'latency_p99_ns',  label: 'p99'  },
+    { key: 'latency_p999_ns', label: 'p999' },
+    { key: 'latency_max_ns',  label: 'max'  },
+  ]);
+
+  /* Build the per-library latency series from a BMF snapshot.
+   * Returns { libraries, hadAny } where:
+   *   libraries: Array<{ library, slug, values: Array<number|null> }>
+   *              with values aligned to LATENCY_PERCENTILES order.
+   *   hadAny: true if at least one slug carried any latency_* measure.
+   *
+   * Filtering rules:
+   *   - Only slugs with at least one latency_* measure contribute.
+   *   - A library appears once even if multiple slugs match (rare —
+   *     latency is collected for bounded 1p1c only); the first slug
+   *     wins, deterministic by sort order.
+   *   - Missing percentiles within an otherwise-present series become
+   *     null gaps so uPlot's stepped path skips them gracefully.
+   */
+  function collectLatencySeries(bmf) {
+    const byLibrary = new Map();
+    let hadAny = false;
+    const slugs = Object.keys(bmf).filter((s) => !s.startsWith('_')).sort();
+    for (const slug of slugs) {
+      const measureMap = bmf[slug];
+      if (!measureMap || typeof measureMap !== 'object') continue;
+      const hasLatency = LATENCY_PERCENTILES.some((p) => {
+        const m = measureMap[p.key];
+        return m && typeof m.value === 'number' && Number.isFinite(m.value);
+      });
+      if (!hasLatency) continue;
+      hadAny = true;
+      const parsed = parseSlug(slug);
+      if (!parsed) continue;
+      if (byLibrary.has(parsed.library)) continue;
+      const values = LATENCY_PERCENTILES.map((p) => {
+        const m = measureMap[p.key];
+        if (!m || typeof m.value !== 'number' || !Number.isFinite(m.value)) {
+          return null;
+        }
+        if (m.value <= 0) return null;
+        return m.value;
+      });
+      byLibrary.set(parsed.library, {
+        library: parsed.library,
+        slug,
+        values,
+      });
+    }
+    const libraries = Array.from(byLibrary.values())
+      .sort((a, b) => a.library.localeCompare(b.library));
+    return { libraries, hadAny };
+  }
+
+  function latencyTooltipPlugin(libraries, xLabels) {
+    let tip;
+    return {
+      hooks: {
+        init: (u) => {
+          tip = el('div', { class: 'bench-chart-tooltip' });
+          tip.style.display = 'none';
+          u.over.appendChild(tip);
+        },
+        setCursor: (u) => {
+          const { idx, left, top } = u.cursor;
+          if (idx == null || left < 0 || top < 0) {
+            if (tip) tip.style.display = 'none';
+            return;
+          }
+          const label = xLabels[idx];
+          const lines = [];
+          for (let i = 0; i < libraries.length; i++) {
+            const s = u.series[i + 1];
+            if (!s.show) continue;
+            const lib = libraries[i];
+            const v = lib.values[idx];
+            if (v == null) continue;
+            lines.push(displayLabel(lib.library) + ': ' +
+              v.toFixed(0) + ' ns');
+          }
+          if (lines.length === 0) {
+            tip.style.display = 'none';
+            return;
+          }
+          tip.innerHTML =
+            '<strong>' + label + '</strong><br>' + lines.join('<br>');
+          tip.style.display = 'block';
+          tip.style.left = left + 12 + 'px';
+          tip.style.top = top + 12 + 'px';
+        },
+      },
+    };
+  }
+
+  function makeLatencyOpts(host, libraries, xLabels) {
+    // Prefer uPlot's stepped path when available (1.6.27 ships it on
+    // the global uPlot.paths). Fall back to default linear path if the
+    // helper is missing — the ladder shape is still readable.
+    const stepped =
+      (window.uPlot && window.uPlot.paths && window.uPlot.paths.stepped)
+        ? window.uPlot.paths.stepped({ align: 1 })
+        : null;
+    const series = [{ label: 'percentile' }].concat(
+      libraries.map((lib) => {
+        const opt = {
+          label: displayLabel(lib.library),
+          stroke: getColor(lib.library),
+          width: 2,
+          points: { show: true, size: 6 },
+          spanGaps: false,
+        };
+        if (stepped) opt.paths = stepped;
+        if (isBlocking(lib.library)) opt.dash = [6, 4];
+        return opt;
+      })
+    );
+
+    return {
+      width: host.clientWidth || 800,
+      height: 360,
+      series,
+      // Log-scale Y axis — latency tail dynamics span 3-4 decades, so
+      // a linear scale would compress p50/p95 against the noise floor
+      // and obscure the tail behavior that matters for production
+      // sizing. distr: 3 = log scale in uPlot.
+      scales: {
+        x: { time: false },
+        y: { distr: 3 },
+      },
+      axes: [
+        {
+          values: (_, ticks) => ticks.map((t) => xLabels[t - 1] || ''),
+          label: 'percentile',
+        },
+        {
+          label: 'latency (ns) [log]',
+          values: (_, ticks) =>
+            ticks.map((v) => (v >= 1000 ? v.toExponential(1) : '' + v)),
+        },
+      ],
+      cursor: { drag: { x: false, y: false } },
+      legend: { show: false },
+      plugins: [latencyTooltipPlugin(libraries, xLabels)],
+    };
+  }
+
+  // CONTRACT-TEST-PARSED-START LATENCY_EMPTY_MESSAGE
+  const LATENCY_EMPTY_MESSAGE =
+    'Latency measurements unavailable in this dataset. Latency data is ' +
+    'collected only for bounded 1p1c variants in the bench_latency ' +
+    'binary; rerun the bench to populate.';
+  // CONTRACT-TEST-PARSED-END LATENCY_EMPTY_MESSAGE
+
+  const LATENCY_PARTIAL_FOOTNOTE =
+    "Some libraries don't yet have latency measurements — adapter " +
+    'coverage is in progress.';
+
+  /* Render the latency panel. `bmf` is the raw snapshot object so the
+   * latency renderer can pick its own measure keys (different from the
+   * throughput pipeline's CHART_MEASURE).
+   *
+   * Empty-state triggers:
+   *   - bmf null/undefined or no slugs → "unavailable" message.
+   *   - no slug carries any latency_* measure → "unavailable" message.
+   * Partial-state trigger:
+   *   - latency present but fewer libraries than expected coverage —
+   *     we surface a soft footnote rather than blocking the render.
+   *     Threshold: lockfreequeues family alone (4 bounded 1p1c slugs)
+   *     → no footnote; if any non-lfq library carries latency we don't
+   *     warn either; the footnote fires only when at least one
+   *     lockfreequeues library is missing latency data while others
+   *     have it (i.e. coverage is incomplete inside the family).
+   */
+  function renderLatencyPanel(host, bmf) {
     if (!host) return;
     host.innerHTML = '';
     host.appendChild(el('h4', { class: 'bench-panel-title' }, 'Latency'));
-    host.appendChild(el('p', { class: 'bench-chart-empty' },
-      'Latency rendering coming in the next commit.'));
+
+    if (!bmf || typeof bmf !== 'object') {
+      host.appendChild(el('p', { class: 'bench-chart-empty' },
+        LATENCY_EMPTY_MESSAGE));
+      return;
+    }
+
+    const { libraries, hadAny } = collectLatencySeries(bmf);
+    if (!hadAny || libraries.length === 0) {
+      host.appendChild(el('p', { class: 'bench-chart-empty' },
+        LATENCY_EMPTY_MESSAGE));
+      return;
+    }
+    if (typeof window.uPlot !== 'function') {
+      host.appendChild(el('p', { class: 'bench-chart-error' },
+        'Chart unavailable: uPlot library failed to load.'));
+      return;
+    }
+
+    const xLabels = LATENCY_PERCENTILES.map((p) => p.label);
+    const xs = xLabels.map((_, i) => i + 1);
+    const seriesData = libraries.map((lib) => lib.values.slice());
+    const data = [xs, ...seriesData];
+
+    let plot;
+    const plotMount = el('div', { class: 'bench-chart-plot' });
+    const rebuild = () => {
+      if (plot) plot.destroy();
+      plotMount.innerHTML = '';
+      plot = new window.uPlot(
+        makeLatencyOpts(plotMount, libraries, xLabels),
+        data,
+        plotMount
+      );
+    };
+
+    // Decorate libraries with the panelId expected by buildLegend.
+    const legendLibs = libraries.map((lib) => ({
+      library: lib.library,
+      panelId: 'bench-latency',
+    }));
+    const legend = buildLegend(legendLibs, (i, show) => {
+      if (plot) plot.setSeries(i + 1, { show });
+    });
+
+    host.appendChild(plotMount);
+    host.appendChild(legend);
+
+    // Partial-coverage footnote: at least one lfq bounded variant
+    // carries latency, but not all four. This is the visible
+    // "adapter coverage in progress" cue.
+    const lfqBoundedExpected = [
+      'lockfreequeues_sipsic', 'lockfreequeues_sipmuc',
+      'lockfreequeues_mupsic', 'lockfreequeues_mupmuc',
+    ];
+    const present = new Set(libraries.map((l) => l.library));
+    const lfqHits = lfqBoundedExpected.filter((l) => present.has(l)).length;
+    if (lfqHits > 0 && lfqHits < lfqBoundedExpected.length) {
+      host.appendChild(el('p', { class: 'bench-hero-footnote' },
+        LATENCY_PARTIAL_FOOTNOTE));
+    }
+
+    rebuild();
+    attachResizeObserver(plotMount, () => plot);
   }
 
   // ── module: fallback chain ──────────────────────────────────────────
@@ -666,7 +933,7 @@
           'Awaiting next bench run.'));
       }
     }
-    renderLatencyPlaceholder(document.getElementById('bench-latency'));
+    renderLatencyPanel(document.getElementById('bench-latency'), null);
   }
 
   // ── module: bootstrap ───────────────────────────────────────────────
@@ -679,8 +946,9 @@
       document.getElementById('bench-latency');
     if (!hasAnyHost) return;
 
-    // Always render the latency placeholder so the section isn't empty.
-    renderLatencyPlaceholder(document.getElementById('bench-latency'));
+    // Pre-paint the latency panel with the empty-state message so the
+    // section isn't blank during fetch (or if fetch fails entirely).
+    renderLatencyPanel(document.getElementById('bench-latency'), null);
 
     const result = await loadBMF();
     if (result.status === 'error') {
@@ -711,6 +979,13 @@
       }
       renderThroughputPanel(host, panel, merged);
     }
+
+    // Latency panel — re-render with the loaded BMF (replaces the
+    // pre-paint empty state from the top of `render`).
+    renderLatencyPanel(
+      document.getElementById('bench-latency'),
+      result.data || null
+    );
 
     // Hash routing: native scroll-to-id is enough because the IDs match
     // the URL fragments. We just nudge the browser to re-evaluate the
