@@ -54,13 +54,17 @@ Results are generated per-platform. See the `benchmarks/results/` directory for 
 
 The charts below pull from a snapshot published by the `bench` CI workflow on
 every push to `devel` (see `.github/workflows/bench.yml`). The hero panel
-shows lockfreequeues vs alternatives at a single representative shape; the
-per-topology panels trace each library across the producer/consumer shape
-grid. Each panel's legend toggles libraries on and off; the Y axis defaults
-to log scale and is per-panel switchable to linear. Hovering a shape shows
-mean ± stddev when the underlying measure carries one. Dotted lines (and an
-asterisk in the legend) mark libraries with blocking-on-full semantics — see
-the methodology section below.
+shows lockfreequeues vs alternatives at a single representative bounded
+shape; the per-topology panels below trace each library across the
+producer/consumer shape grid (and pair bounded with unbounded variants where
+the topology supports both). Each panel's legend toggles libraries on and
+off; the Y axis defaults to log scale and is per-panel switchable to linear.
+Hovering a shape shows mean ± stddev when the underlying measure carries
+one, plus the topology context. Dotted bars and a `(blocking)` badge in the
+legend mark libraries with blocking-on-full semantics — see the methodology
+section below.
+
+#### Headline: lockfreequeues vs alternatives
 
 <div markdown="0">
   <div id="bench-status" class="bench-status" hidden></div>
@@ -115,8 +119,9 @@ Specific caveats:
 - **Blocking vs non-blocking semantics.** Nim's `system/Channel` and
   `Threading.Channels` block on full instead of returning a "queue full"
   signal. Their throughput numbers reflect blocking semantics, not the
-  non-blocking `try_push` path that the lockfree queues use. These are marked
-  with an asterisk in the chart legend.
+  non-blocking `try_push` path that the lockfree queues use. These are
+  rendered with a dotted bar/line and carry an asterisk on the throughput-
+  panel legends and a `(blocking)` badge on the hero legend.
 - **Producer/consumer thread placement.** No explicit pinning. The runner's
   scheduler is the ground truth for thread placement.
 - **CPU oversubscription.** `ubuntu-latest` has 4 vCPU. MPMC variants beyond

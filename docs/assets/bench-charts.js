@@ -313,13 +313,26 @@
 
   // ── module: hero panel (hand-rendered) ──────────────────────────────
 
+  // Build a hover-tooltip string for one library at the hero shape.
+  // Mirrors the uPlot tooltip format so the hero and panels speak the
+  // same language: "<library>: <value> ops/ms (±stddev) — <topology shape>".
+  function heroRowTitle(library, mv, topology, shape) {
+    let line = library + ': ' + mv.value.toFixed(1) + ' ops/ms';
+    if (mv.lower != null && mv.upper != null) {
+      const stddev = (mv.upper - mv.lower) / 2;
+      line += ' (±' + stddev.toFixed(1) + ')';
+    }
+    line += ' — ' + topologyLabel(topology) + ' ' + shape;
+    if (isBlocking(library)) line += ' (blocking)';
+    return line;
+  }
+
   function renderHero(host, byTopology) {
     host.innerHTML = '';
     const pick = pickHeroShape(byTopology);
-    const heading = el('h3', null,
-      'Throughput at a glance');
-    host.appendChild(heading);
     if (!pick) {
+      host.appendChild(el('h3', { class: 'bench-hero-heading' },
+        'Throughput at a glance'));
       host.appendChild(el('p', { class: 'bench-hero-empty' },
         'No comparable cross-library data at any shape — see throughput panels below.'));
       return;
@@ -329,18 +342,41 @@
     for (const [library, shapeMap] of inTopology.entries()) {
       const mv = shapeMap.get(pick.shape);
       if (!mv || typeof mv.value !== 'number') continue;
-      rows.push({ library, value: mv.value, slug: mv.slug });
+      rows.push({
+        library,
+        value: mv.value,
+        lower: mv.lower,
+        upper: mv.upper,
+        slug: mv.slug,
+      });
     }
+
+    // Heading: "MPMC 4p4c — lockfreequeues vs alternatives". When no
+    // alternative is present (lfq-only at this shape) the suffix
+    // collapses gracefully.
+    const hasAlt = rows.some((r) => !isLockfreequeues(r.library));
+    const headingText = topologyLabel(pick.topology) + ' ' + pick.shape +
+      (hasAlt ? ' — lockfreequeues vs alternatives'
+              : ' — lockfreequeues throughput');
+    host.appendChild(el('h3', { class: 'bench-hero-heading' }, headingText));
+
     if (rows.length === 0) {
       host.appendChild(el('p', { class: 'bench-hero-empty' },
         'No data at the chosen hero shape.'));
       return;
     }
-    rows.sort((a, b) => b.value - a.value);
-    const max = rows[0].value;
 
-    host.appendChild(el('p', { class: 'bench-hero-shape' },
-      pick.topology + ' / ' + pick.shape));
+    // Order: lockfreequeues bars first (descending value within the
+    // family), then alternatives sorted by descending value so the
+    // strongest non-lockfreequeues entry sits next to the lockfreequeues
+    // block for easy visual comparison.
+    rows.sort((a, b) => {
+      const aLfq = isLockfreequeues(a.library) ? 0 : 1;
+      const bLfq = isLockfreequeues(b.library) ? 0 : 1;
+      if (aLfq !== bLfq) return aLfq - bLfq;
+      return b.value - a.value;
+    });
+    const max = Math.max.apply(null, rows.map((r) => r.value));
 
     const list = el('ol', { class: 'bench-hero-bars' });
     let sawBlocking = false;
@@ -360,8 +396,9 @@
         class: 'bench-hero-row',
         'data-library': r.library,
         'data-slug': r.slug,
+        title: heroRowTitle(r.library, r, pick.topology, pick.shape),
       },
-        el('span', { class: 'bench-hero-label' }, displayLabel(r.library)),
+        el('span', { class: 'bench-hero-label' }, r.library),
         el('span', { class: barClass, style: barStyle }),
         el('span', { class: 'bench-hero-value' },
           r.value.toFixed(1) + ' ops/ms')
@@ -369,11 +406,45 @@
       list.appendChild(li);
     }
     host.appendChild(list);
-    if (sawBlocking) {
-      host.appendChild(el('p', { class: 'bench-hero-footnote' },
-        '* Dotted bars: libraries that block on full; throughput reflects ' +
-        'blocking semantics, not the non-blocking try_push path.'));
+
+    // Y-axis equivalent for a horizontal-bar layout: a small caption
+    // under the bars naming the unit. Matches the throughput panels'
+    // "throughput (ops/ms)" Y-axis label.
+    host.appendChild(el('p', { class: 'bench-hero-axis-caption' },
+      'throughput (ops/ms)'));
+
+    // Always emit the legend with a stable structure, regardless of
+    // whether a blocking library appears. Blocking rows carry a
+    // "(blocking)" badge; the legend itself documents what the dotted
+    // bar means, so there is no inline footnote.
+    host.appendChild(buildHeroLegend(rows, sawBlocking));
+  }
+
+  function buildHeroLegend(rows, sawBlocking) {
+    const wrap = el('div', { class: 'bench-hero-legend' });
+    for (const r of rows) {
+      const blocking = isBlocking(r.library);
+      const swatch = el('span', {
+        class: 'bench-chart-swatch' +
+          (blocking ? ' bench-chart-swatch-blocking' : ''),
+        style: blocking
+          ? 'color: ' + getColor(r.library) + ';'
+          : 'background: ' + getColor(r.library) + ';',
+      });
+      const children = [swatch, document.createTextNode(r.library)];
+      if (blocking) {
+        children.push(el('span', { class: 'bench-hero-blocking-badge' },
+          '(blocking)'));
+      }
+      wrap.appendChild(el('span', { class: 'bench-legend-item' },
+        ...children));
     }
+    if (sawBlocking) {
+      wrap.appendChild(el('p', { class: 'bench-hero-legend-note' },
+        'Dotted bars mark libraries that block on full; throughput ' +
+        'reflects blocking semantics, not the non-blocking try_push path.'));
+    }
+    return wrap;
   }
 
   // ── module: throughput panels (uPlot) ───────────────────────────────
@@ -414,7 +485,20 @@
     return wrap;
   }
 
-  function tooltipPlugin(libraries, xLabels) {
+  // Escape any HTML metacharacters so library names can be inlined in
+  // the tooltip's innerHTML without risk of injection. The values that
+  // reach this function are constrained by the slug grammar (`[a-z0-9_]+`)
+  // so no escape is strictly required today, but the helper future-proofs
+  // the path against fixture or BMF schema drift.
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function tooltipPlugin(libraries, xLabels, panelLabel) {
     let tip;
     return {
       hooks: {
@@ -440,20 +524,29 @@
             }
             const point = lib._shapeMap.get(shape);
             if (!point) continue;
-            let line = displayLabel(lib.library) + ': ' +
+            // Tooltip line: "<library>: <value> ops/ms (±stddev) (blocking)?".
+            // Stddev only when the BMF carried lower/upper bounds.
+            let line = escapeHtml(lib.library) + ': ' +
               point.value.toFixed(1) + ' ops/ms';
             if (point.lower != null && point.upper != null) {
               const stddev = (point.upper - point.lower) / 2;
               line += ' (±' + stddev.toFixed(1) + ')';
             }
+            if (isBlocking(lib.library)) line += ' (blocking)';
             lines.push(line);
           }
           if (lines.length === 0) {
             tip.style.display = 'none';
             return;
           }
+          // Header: "<panel label> <shape>" e.g. "MPMC (bounded) 4p4c",
+          // so the user always knows the topology context without
+          // looking at the panel title.
+          const header = panelLabel
+            ? escapeHtml(panelLabel) + ' ' + escapeHtml(shape)
+            : escapeHtml(shape);
           tip.innerHTML =
-            '<strong>' + shape + '</strong><br>' + lines.join('<br>');
+            '<strong>' + header + '</strong><br>' + lines.join('<br>');
           tip.style.display = 'block';
           tip.style.left = left + 12 + 'px';
           tip.style.top = top + 12 + 'px';
@@ -462,7 +555,7 @@
     };
   }
 
-  function makeThroughputOpts(host, libraries, xLabels, logScale) {
+  function makeThroughputOpts(host, libraries, xLabels, logScale, panelLabel) {
     const series = [{ label: 'shape' }].concat(
       libraries.map((lib) => {
         const opt = {
@@ -488,17 +581,17 @@
       axes: [
         {
           values: (_, ticks) => ticks.map((t) => xLabels[t - 1] || ''),
-          label: 'producer/consumer shape',
+          label: 'producer/consumer shape (P×C)',
         },
         {
-          label: 'throughput (ops/ms)' + (logScale ? ' [log]' : ''),
+          label: 'throughput (ops/ms)' + (logScale ? ' — log scale' : ''),
           values: (_, ticks) =>
             ticks.map((v) => (v >= 1000 ? v.toExponential(1) : '' + v)),
         },
       ],
       cursor: { drag: { x: false, y: false } },
       legend: { show: false },
-      plugins: [tooltipPlugin(libraries, xLabels)],
+      plugins: [tooltipPlugin(libraries, xLabels, panelLabel)],
     };
   }
 
@@ -579,7 +672,7 @@
       if (plot) plot.destroy();
       plotMount.innerHTML = '';
       plot = new window.uPlot(
-        makeThroughputOpts(plotMount, libraries, xLabels, logScale),
+        makeThroughputOpts(plotMount, libraries, xLabels, logScale, panel.label),
         data,
         plotMount
       );

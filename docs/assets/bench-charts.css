@@ -141,6 +141,12 @@
   color: var(--md-default-fg-color--light, #888);
 }
 
+.bench-hero-heading {
+  margin: 0 0 0.75em 0;
+  font-size: 1.05em;
+  font-weight: 600;
+}
+
 .bench-hero-bars {
   list-style: none;
   margin: 0;
@@ -182,6 +188,49 @@
   font-size: 0.8em;
   color: var(--md-default-fg-color--light, #aaa);
   margin-top: 0.5em;
+}
+
+/* Sub-axis caption under the hero bars; matches the Y-axis label on
+ * the throughput panels so the hero and panels speak the same units. */
+.bench-hero-axis-caption {
+  margin: 0.4em 0 0.6em 0;
+  font-size: 0.8em;
+  color: var(--md-default-fg-color--light, #aaa);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hero legend: stable structure even when no library is blocking, so
+ * the layout doesn't shift as data changes. Mirrors .bench-chart-legend
+ * but without the per-row checkbox affordance (hero rows aren't
+ * toggleable; the visualization is a static bar comparison). */
+.bench-hero-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em 1em;
+  margin-top: 0.75em;
+  padding: 0.5em 0 0 0;
+  border-top: 1px solid var(--md-default-fg-color--lightest, #ccc);
+  font-size: 0.85em;
+}
+
+.bench-hero-legend .bench-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.bench-hero-blocking-badge {
+  font-size: 0.85em;
+  color: var(--md-default-fg-color--light, #aaa);
+  font-style: italic;
+}
+
+.bench-hero-legend-note {
+  flex: 1 0 100%;
+  margin: 0.4em 0 0 0;
+  font-size: 0.8em;
+  color: var(--md-default-fg-color--light, #aaa);
 }
 
 .bench-hero-empty {
