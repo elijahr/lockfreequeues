@@ -770,8 +770,17 @@
         },
         {
           label: 'throughput (ops/ms)' + (logScale ? ' — log scale' : ''),
+          // On log-scale axes, only major (power-of-10) tick labels
+          // render. Null/non-finite values and minor ticks (e.g.
+          // 2e3, 5e3 between 1e3 and 1e4) collapse to empty strings
+          // so the axis stays clean and readable.
           values: (_, ticks) =>
-            ticks.map((v) => (v >= 1000 ? v.toExponential(1) : '' + v)),
+            ticks.map((v) => {
+              if (v == null || !Number.isFinite(v)) return '';
+              const log = Math.log10(v);
+              if (Math.abs(log - Math.round(log)) > 1e-9) return '';
+              return v >= 1000 ? v.toExponential(1) : '' + v;
+            }),
         },
       ],
       cursor: { drag: { x: false, y: false } },
@@ -1021,8 +1030,16 @@
         },
         {
           label: 'latency (ns) [log]',
+          // On log-scale axes, only major (power-of-10) tick labels
+          // render. See `makeThroughputOpts` for the same suppression
+          // logic — keeps the axis clean across both panel types.
           values: (_, ticks) =>
-            ticks.map((v) => (v >= 1000 ? v.toExponential(1) : '' + v)),
+            ticks.map((v) => {
+              if (v == null || !Number.isFinite(v)) return '';
+              const log = Math.log10(v);
+              if (Math.abs(log - Math.round(log)) > 1e-9) return '';
+              return v >= 1000 ? v.toExponential(1) : '' + v;
+            }),
         },
       ],
       cursor: { drag: { x: false, y: false } },
