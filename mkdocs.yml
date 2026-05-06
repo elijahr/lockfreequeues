@@ -83,6 +83,15 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Guide:
+    - Getting Started: guide/getting-started.md
+    - Core Concepts: guide/core-concepts.md
+    - Bounded vs Unbounded: guide/bounded-vs-unbounded.md
+    - Slot Ownership Typestates: guide/slot-ownership-typestates.md
+    - Safety Model: guide/safety-model.md
+    - Memory Management: guide/memory-management.md
+    - Performance Tuning: guide/performance-tuning.md
+    - Examples: guide/examples.md
   - API Reference:
     - Overview: api/index.md
     - Bounded Queues:
@@ -95,15 +104,13 @@ nav:
       - UnboundedSipmuc: api/unbounded_sipmuc.md
       - UnboundedMupsic: api/unbounded_mupsic.md
       - UnboundedMupmuc: api/unbounded_mupmuc.md
-  - Concepts:
-    - Safety Model: guide/safety-model.md
-    - Slot Ownership Typestates: guide/slot-ownership-typestates.md
   - Benchmarks: benchmarks.md
-  - Examples: guide/examples.md
+  - Contributing: contributing.md
 
 watch:
   - docs
   - docs/api
+  - docs/guide
   - src
   - src/lockfreequeues
 
