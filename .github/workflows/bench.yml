@@ -79,6 +79,10 @@ on:
         description: 'Force kanal soft-skip (v4.2.0 Stage 5.2)'
         type: boolean
         default: false
+      force_skip_liblfds:
+        description: 'Force liblfds soft-skip (v4.2.0 Stage 5.3)'
+        type: boolean
+        default: false
 # yamllint enable rule:truthy
 
 env:
@@ -101,6 +105,7 @@ env:
   FORCE_SKIP_RIGTORP_MPMC: ${{ inputs.force_skip_rigtorp_mpmc && '1' || '' }}
   FORCE_SKIP_FLUME: ${{ inputs.force_skip_flume && '1' || '' }}
   FORCE_SKIP_KANAL: ${{ inputs.force_skip_kanal && '1' || '' }}
+  FORCE_SKIP_LIBLFDS: ${{ inputs.force_skip_liblfds && '1' || '' }}
 
 jobs:
   bench-tests:
@@ -842,6 +847,77 @@ jobs:
         run: |
           echo "::warning title=Adapter skipped::rigtorp/MPMCQueue install or smoke failed; bench will omit rigtorp_mpmc slugs."
 
+      # ---------- v4.2.0 Stage 5.3: Tier 3 vendored liblfds (C library) ----------
+      #
+      # liblfds 7.1.1 is a portable C lock-free data structure library
+      # (public domain + permissive grant; license verified at vendoring
+      # time against the upstream homepage and the Repology project page,
+      # see THIRD_PARTY_LICENSES.md). Unlike the Tier 1 header-only
+      # libraries above, liblfds ships C source that requires a Make
+      # build to produce `liblfds711.a`. The install step runs that build
+      # in-place; the smoke step compiles and runs the smoke binary
+      # against the produced archive; the set-define step gates the
+      # bench compile on smoke success.
+      #
+      # Topology routing: liblfds adapter exposes both bounded SPSC
+      # (lfds711_queue_bss_*) and bounded MPMC (lfds711_queue_bmm_*),
+      # routed to bench_spsc and bench_mpmc respectively.
+
+      - name: Install liblfds (vendored Make build)
+        id: install-liblfds
+        if: |
+          env.FORCE_SKIP_LIBLFDS != '1' &&
+          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc')
+        continue-on-error: true
+        run: |
+          set -eu
+          test -f benchmarks/vendor/liblfds/liblfds_wrapper.c
+          test -f benchmarks/vendor/liblfds/liblfds711/build/gcc_gnumake/Makefile
+          # Build the static archive; CI runs on Linux so the porting
+          # abstraction layer's `__linux__` branch fires natively (no
+          # CFLAGS override needed, unlike local development on macOS).
+          make -C benchmarks/vendor/liblfds/liblfds711/build/gcc_gnumake ar_rel
+          test -f benchmarks/vendor/liblfds/liblfds711/bin/liblfds711.a
+
+      - name: Smoke liblfds adapter
+        id: smoke-liblfds
+        if: |
+          env.FORCE_SKIP_LIBLFDS != '1' &&
+          steps.install-liblfds.outcome == 'success' &&
+          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc')
+        continue-on-error: true
+        run: |
+          set -eu
+          # liblfds is C-only; the wrapper is C; no `nim cpp` needed.
+          # `--passL` points at the vendored archive produced above.
+          nim c -d:release -d:danger --threads:on \
+            -d:adapter_liblfds_available \
+            --passL:"-Lbenchmarks/vendor/liblfds/liblfds711/bin -llfds711" \
+            -o:.tmp/smoke_liblfds \
+            benchmarks/nim/smoke/smoke_liblfds.nim
+          ./.tmp/smoke_liblfds
+
+      - name: Set liblfds adapter define (success only)
+        if: |
+          env.FORCE_SKIP_LIBLFDS != '1' &&
+          steps.install-liblfds.outcome == 'success' &&
+          steps.smoke-liblfds.outcome == 'success'
+        run: |
+          echo "ADAPTER_LIBLFDS=1" >> "$GITHUB_ENV"
+          # Absolute path so the adapter's compile-time `-L` works
+          # regardless of `nim`'s working directory at the bench-compile
+          # step.
+          echo "LIBLFDS_LIB_DIR=${GITHUB_WORKSPACE}/benchmarks/vendor/liblfds/liblfds711/bin" >> "$GITHUB_ENV"
+
+      - name: Annotate liblfds skipped
+        if: |
+          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc') &&
+          (env.FORCE_SKIP_LIBLFDS == '1' ||
+           steps.install-liblfds.outcome != 'success' ||
+           steps.smoke-liblfds.outcome != 'success')
+        run: |
+          echo "::warning title=Adapter skipped::liblfds install or smoke failed for ${{ matrix.binary }}; bench will omit liblfds slugs."
+
       - name: Build adapter define flags
         # Aggregates the per-adapter env flags into two shell variables
         # consumed by the compile step:
@@ -934,6 +1010,16 @@ jobs:
           if [ "${ADAPTER_RIGTORP_MPMC:-}" = "1" ]; then
             flags="$flags -d:adapter_rigtorp_mpmc_available"
             mode="cpp"
+          fi
+          # v4.2.0 Stage 5.3 Tier 3 vendored adapter: liblfds (C-only).
+          # Does NOT force `mode=cpp` — the wrapper and upstream sources
+          # are plain C — but does need a `--passL` pointing at the
+          # vendored archive directory so the adapter's `-llfds711`
+          # resolves at link time. LIBLFDS_LIB_DIR was set by the
+          # "Set liblfds adapter define" step on smoke success.
+          if [ "${ADAPTER_LIBLFDS:-}" = "1" ]; then
+            flags="$flags -d:adapter_liblfds_available"
+            flags="$flags --passL:-L${LIBLFDS_LIB_DIR:?LIBLFDS_LIB_DIR unset but ADAPTER_LIBLFDS=1} --passL:-llfds711"
           fi
           {
             echo "flags=$flags"

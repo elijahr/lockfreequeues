@@ -224,3 +224,78 @@ build time and pins the resolved versions in `Cargo.lock`.
   to refresh `Cargo.lock`, re-run `smoke_comparison.nim` with
   `-d:adapter_kanal_available` to verify the four `kanal_*` /
   `kanal_unbounded_*` symbols still resolve.
+
+## Tier 3 vendored comparison library (v4.2.0 Stage 5.3)
+
+A full C source tree (rather than a header-only library) vendored
+under a license-verification gate. liblfds is widely used (per the
+upstream homepage, "Current users include AT&T, Red Hat and Xen") and
+covers a different design point — a pure-C ringbuffer / bounded queue
+family — than every other Tier 1 / Tier 2 / Tier 4 comparison adapter
+in the suite. The license declaration was cross-checked against three
+independent sources before the source was vendored; see the block below
+for the full audit trail.
+
+### liblfds
+
+- **Source (project home):** <https://liblfds.org/>
+- **Source (mirror used for vendoring):**
+  <https://github.com/darthcloud/liblfds7.1.1> (a content-identical
+  Git mirror of the upstream `liblfds7.1.1` release; the canonical
+  GitHub mirror at `https://github.com/liblfds/liblfds7.1.1` has been
+  replaced by a one-line README pointing at `liblfds.org` after the
+  project moved off GitHub. A second independent mirror —
+  `https://github.com/topecongiro/liblfds7.1.1` — was diff-checked
+  byte-for-byte at vendoring time and produced identical content.).
+- **Version:** release `7.1.1` (the upstream's bug-fix release that
+  supersedes 7.1.0).
+- **License:** **public domain** + permissive grant (MIT/BSD/Apache/
+  GPL/LGPL/Creative Commons), per the upstream homepage. The upstream
+  source tree itself ships **no LICENSE file**; the canonical license
+  declaration lives only on `liblfds.org`. The full declaration is
+  quoted verbatim below from
+  <https://www.liblfds.org/> (retrieved 2026-05-06):
+- **Vendored at:** `benchmarks/vendor/liblfds/`
+- **Upgrade procedure:** see
+  `benchmarks/vendor/liblfds/README.md`
+- **Cross-checks consulted at vendoring time:**
+  - Upstream homepage <https://www.liblfds.org/> — canonical license
+    declaration (quoted in full below).
+  - Repology project page
+    <https://repology.org/project/liblfds/information> — listed as
+    `custom:none`, consistent with the upstream's "no SPDX-recognised
+    license; everything is public domain" stance and not contradicting
+    the homepage declaration.
+  - GitHub mirror tree
+    <https://github.com/darthcloud/liblfds7.1.1> — diff-checked
+    against `https://github.com/topecongiro/liblfds7.1.1` for source
+    integrity. Neither mirror's `liblfds7.1.1/` subtree contains a
+    `LICENSE`, `COPYING`, or `UNLICENSE` file; this is consistent with
+    the upstream homepage's stance ("license-free, ... placed in the
+    public domain").
+  - All three sources agree (the homepage is authoritative; the other
+    two corroborate without contradiction). Public-domain dedication
+    + the explicit Apache-2.0 grant from the homepage list satisfies
+    `lockfreequeues`'s own Apache-2.0-licensed re-distribution path.
+
+#### Full upstream license declaration (verbatim)
+
+Quoted verbatim from <https://www.liblfds.org/>, retrieved 2026-05-06:
+
+> Welcome to liblfds, a portable, license-free, lock-free data
+> structure library written in C.
+>
+> license
+>
+> You are free to use this library in any way. Go forth and create
+> wealth!
+>
+> If for legal reasons a custom licence is required, the license of
+> your choice will be granted, and license is hereby granted up front
+> for a range of popular licenses : the MIT license, the BSD license,
+> the Apache license, the GPL and LPGL (all versions thereof) and the
+> Creative Commons licenses (all of them). Additionally, everything is
+> also placed in the public domain.
+
+The same text is preserved in `benchmarks/vendor/liblfds/LICENSE` so
+the audit trail is recoverable from the vendored tree alone.

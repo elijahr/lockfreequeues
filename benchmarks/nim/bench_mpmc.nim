@@ -60,6 +60,12 @@ when defined(adapter_flume_available):
 when defined(adapter_kanal_available):
   import ./adapters/kanal_adapter
 
+# v4.2.0 Stage 5.3 Tier 3 vendored adapter: liblfds 7.1.1 (C library,
+# license-verified). The adapter routes the MPMC topology to the
+# upstream `lfds711_queue_bmm_*` Vyukov-style bounded MPMC queue.
+when defined(adapter_liblfds_available):
+  import ./adapters/liblfds_adapter
+
 const
   BenchMpmcRuns* {.intdefine.} = 33
   BenchMpmcMessageCount* {.intdefine.} = 1_000_000
@@ -331,6 +337,12 @@ when defined(adapter_kanal_available):
   proc initKanalMpmcQ(capacity: int): KanalAdapter[uint64] =
     makeKanalAdapter[uint64](capacity)
 
+when defined(adapter_liblfds_available):
+  proc initLiblfdsMpmcQ(capacity: int): LiblfdsAdapter[uint64] =
+    # MPMC slot uses the bounded many-producer / many-consumer queue
+    # (`lfds711_queue_bmm_*`).
+    makeLiblfdsAdapter[uint64](kind = lkBmm, capacity = capacity)
+
 proc runMvpMpmcShape[A](
     em: var BMFEmitter,
     slugPrefix: string,
@@ -485,6 +497,19 @@ when declared(initKanalMpmcQ):
           p, c, BenchMpmcRuns, BenchMpmcWarmup,
           BenchMpmcMessageCount, MpmcCapacity)
 
+when declared(initLiblfdsMpmcQ):
+  proc runLiblfdsMpmc(em: var BMFEmitter,
+                      topology: Topology) {.nimcall.} =
+    discard topology
+    # Impl plan slug grid: liblfds/mpmc/{1,2,4}p{1,2,4}c (the same
+    # 9-shape grid every other MVP MPMC adapter emits).
+    for p in [1, 2, 4]:
+      for c in [1, 2, 4]:
+        runMvpMpmcShape[LiblfdsAdapter[uint64]](
+          em, "liblfds", initLiblfdsMpmcQ,
+          p, c, BenchMpmcRuns, BenchMpmcWarmup,
+          BenchMpmcMessageCount, MpmcCapacity)
+
 # ---------- Adapter registry ----------
 
 proc buildAdapters(): seq[Adapter] =
@@ -544,6 +569,12 @@ proc buildAdapters(): seq[Adapter] =
       name: "kanal",
       topologiesSupported: {tMpmc},
       run: runKanalMpmc,
+    ))
+  when declared(initLiblfdsMpmcQ):
+    result.add(Adapter(
+      name: "liblfds",
+      topologiesSupported: {tMpmc},
+      run: runLiblfdsMpmc,
     ))
 
 let adapters: seq[Adapter] = buildAdapters()

@@ -40,6 +40,13 @@ when defined(adapter_rigtorp_spsc_available):
 when defined(adapter_kanal_available):
   import ./adapters/kanal_adapter
 
+# v4.2.0 Stage 5.3 Tier 3 vendored adapter: liblfds 7.1.1 (C library,
+# license-verified public-domain + permissive grant). The adapter
+# routes the SPSC topology to the upstream `lfds711_queue_bss_*`
+# bounded single-producer / single-consumer queue.
+when defined(adapter_liblfds_available):
+  import ./adapters/liblfds_adapter
+
 const
   ## Per-binary intdefines for SPSC wall-time control. Override at compile
   ## time with `-d:BenchSpscRuns=N` etc. Defaults match design §2.5.
@@ -83,6 +90,13 @@ when defined(adapter_rigtorp_spsc_available):
 when defined(adapter_kanal_available):
   proc initKanalSpscQ(capacity: int): KanalAdapter[uint64] =
     makeKanalAdapter[uint64](capacity)
+
+when defined(adapter_liblfds_available):
+  proc initLiblfdsSpscQ(capacity: int): LiblfdsAdapter[uint64] =
+    # SPSC slot uses the bounded single-producer / single-consumer queue
+    # (`lfds711_queue_bss_*`); see the adapter doc-comment for the
+    # ringbuffer-vs-bounded-queue rationale.
+    makeLiblfdsAdapter[uint64](kind = lkBss, capacity = capacity)
 
 # ---------- Adapter procs (topology-based dispatch) ----------
 #
@@ -187,6 +201,16 @@ when declared(initKanalSpscQ):
       capacity = SpscCapacity,
     )
 
+when declared(initLiblfdsSpscQ):
+  proc runLiblfdsSpsc(em: var BMFEmitter, topology: Topology) {.nimcall.} =
+    discard topology
+    runMvpVariant[LiblfdsAdapter[uint64]](
+      em,
+      slug = "liblfds/spsc/1p1c",
+      queueInit = initLiblfdsSpscQ,
+      capacity = SpscCapacity,
+    )
+
 # ---------- Adapter registry ----------
 
 proc buildAdapters(): seq[Adapter] =
@@ -218,6 +242,12 @@ proc buildAdapters(): seq[Adapter] =
       name: "kanal",
       topologiesSupported: {tSpsc},
       run: runKanalSpsc,
+    ))
+  when declared(initLiblfdsSpscQ):
+    result.add(Adapter(
+      name: "liblfds",
+      topologiesSupported: {tSpsc},
+      run: runLiblfdsSpsc,
     ))
 
 let adapters: seq[Adapter] = buildAdapters()
