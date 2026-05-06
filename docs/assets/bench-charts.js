@@ -86,19 +86,25 @@
 
   // Map a topology slug substring to its DOM panel id.
   // Topologies in BMF: spsc, mpsc, mpmc, mpmc_unbounded, spsc_unbounded.
-  // The `unbounded` variants share a single panel each (mpmc_unbounded,
-  // spsc_unbounded folds into mpmc-unbounded for now since unbounded
-  // SPSC slugs are rare in our fixture; can split later if needed).
+  // Bounded + unbounded variants share a panel for each core topology
+  // (SPSC, MPSC) so unbounded data renders alongside its bounded peer.
+  // MPMC keeps two panels (bounded vs unbounded) because the MPMC
+  // bounded panel is already crowded with comparison libraries; mixing
+  // unbounded in there would muddle the comparison.
+  // Library color discipline (LIBRARY_COLORS) gives lockfreequeues
+  // bounded #3f51b5 and unbounded #5c6bc0, so co-located series stay
+  // visually distinguishable.
   const THROUGHPUT_PANELS = [
     { id: 'bench-throughput-spsc',           label: 'SPSC',
-      includes: (topology) => topology === 'spsc' },
+      includes: (topology) => topology === 'spsc'
+                              || topology === 'spsc_unbounded' },
     { id: 'bench-throughput-mpsc',           label: 'MPSC',
-      includes: (topology) => topology === 'mpsc' },
+      includes: (topology) => topology === 'mpsc'
+                              || topology === 'mpsc_unbounded' },
     { id: 'bench-throughput-mpmc-bounded',   label: 'MPMC (bounded)',
       includes: (topology) => topology === 'mpmc' },
     { id: 'bench-throughput-mpmc-unbounded', label: 'MPMC (unbounded)',
-      includes: (topology) => topology === 'mpmc_unbounded'
-                              || topology === 'spsc_unbounded' },
+      includes: (topology) => topology === 'mpmc_unbounded' },
   ];
 
   // Index-based fallback palette for libraries not in LIBRARY_COLORS.
@@ -692,7 +698,8 @@
       const host = document.getElementById(panel.id);
       if (!host) continue;
       // Collect every topology that this panel includes (e.g. the
-      // "MPMC unbounded" panel includes mpmc_unbounded + spsc_unbounded).
+      // SPSC panel includes both spsc and spsc_unbounded so bounded
+      // and unbounded SPSC libraries render side-by-side).
       const merged = new Map();
       for (const [topology, libsByShape] of byTopology) {
         if (!panel.includes(topology)) continue;

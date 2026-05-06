@@ -199,6 +199,100 @@ class ChartContractTests(unittest.TestCase):
         decoded = json.loads(s)
         self.assertEqual(decoded, SAMPLE_BMF)
 
+    def test_throughput_panel_routing(self) -> None:
+        """Every BMF topology must route to exactly one throughput
+        panel, and the routing must pair bounded with unbounded for
+        each core topology so unbounded slugs in the fixture render.
+
+        Parses the `THROUGHPUT_PANELS` block in `bench-charts.js` and
+        asserts the (panel-id -> {topologies}) mapping matches the
+        agreed routing. If this test fails after a JS change, either
+        the routing regressed or the contract here needs to follow
+        suit; bench-charts.js is the source of truth for shape, and
+        this test is the source of truth for routing intent.
+        """
+        js_path = REPO_ROOT / "docs" / "assets" / "bench-charts.js"
+        src = js_path.read_text()
+
+        # Extract the THROUGHPUT_PANELS array literal.
+        m = re.search(
+            r"const THROUGHPUT_PANELS\s*=\s*\[(.*?)\];",
+            src,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(
+            m, "THROUGHPUT_PANELS block not found in bench-charts.js"
+        )
+        block = m.group(1)
+
+        # Each entry: { id: '...', label: '...',
+        #               includes: (topology) => <expr> }
+        # Parse id + the expression body.
+        entry_re = re.compile(
+            r"\{\s*id:\s*'([^']+)'\s*,\s*"
+            r"label:\s*'[^']*'\s*,\s*"
+            r"includes:\s*\(topology\)\s*=>\s*(.+?)\s*\}",
+            re.DOTALL,
+        )
+        entries = entry_re.findall(block)
+        self.assertEqual(
+            len(entries), 4,
+            f"expected 4 throughput panels, got {len(entries)}: {entries}",
+        )
+
+        # For each panel, extract the set of topology string literals
+        # the predicate compares against. We accept `topology === 'X'`
+        # repeated with `||`, which is the only form the routing uses.
+        topo_lit_re = re.compile(r"topology\s*===\s*'([a-z_]+)'")
+        actual: dict[str, set[str]] = {}
+        for panel_id, expr in entries:
+            topos = set(topo_lit_re.findall(expr))
+            self.assertTrue(
+                topos,
+                f"panel {panel_id!r} predicate {expr!r} matched no topologies",
+            )
+            actual[panel_id] = topos
+
+        expected = {
+            "bench-throughput-spsc":           {"spsc", "spsc_unbounded"},
+            "bench-throughput-mpsc":           {"mpsc", "mpsc_unbounded"},
+            "bench-throughput-mpmc-bounded":   {"mpmc"},
+            "bench-throughput-mpmc-unbounded": {"mpmc_unbounded"},
+        }
+        self.assertEqual(actual, expected)
+
+        # Sanity: every topology routes to exactly one panel (no
+        # accidental double-routing where a slug would render twice).
+        all_topos: list[str] = []
+        for topos in actual.values():
+            all_topos.extend(topos)
+        self.assertEqual(
+            len(all_topos), len(set(all_topos)),
+            f"topology routed to multiple panels: {all_topos}",
+        )
+
+        # Sanity: the routing covers every topology present in the
+        # checked-in example.json fixture, so no fixture slug silently
+        # disappears from the rendered chart.
+        fixture_path = (
+            REPO_ROOT / "docs" / "assets" / "bench-results" / "example.json"
+        )
+        fixture = json.loads(fixture_path.read_text())
+        fixture_topos = set()
+        for slug in fixture:
+            if slug.startswith("_"):
+                continue
+            parsed = parse_slug(slug)
+            if parsed is None:
+                continue
+            fixture_topos.add(parsed["topology"])
+        covered = set().union(*actual.values())
+        missing = fixture_topos - covered
+        self.assertFalse(
+            missing,
+            f"fixture topologies not routed to any panel: {missing}",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
