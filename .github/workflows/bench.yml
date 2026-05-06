@@ -227,9 +227,15 @@ jobs:
           # Compile and run the smoke binary with both gates so a single
           # invocation covers queue + spsc_queue. nim cpp because boost
           # headers are C++.
+          # --path:src is required because the boost adapters import
+          # `lockfreequeues/internal/aligned_alloc`, and the project's
+          # nim.cfg sets `--noNimblePath` (so the package's own srcDir
+          # is not auto-added to the search path for off-tree files
+          # like the smoke harness).
           nim cpp -d:release -d:danger --threads:on \
             -d:adapter_boost_lockfree_queue_available \
             -d:adapter_boost_lockfree_spsc_available \
+            --path:src \
             -o:.tmp/smoke_boost \
             benchmarks/nim/smoke/smoke_boost.nim
           ./.tmp/smoke_boost
@@ -256,14 +262,35 @@ jobs:
 
       - name: Install loony (nimble)
         # Loony is a Nim-only unbounded MPMC queue; nimble pulls it from
-        # the registry. Only bench_unbounded uses it.
+        # the registry. Only bench_unbounded uses it. Capture both the
+        # loony pkg path and its transitive `pkg/arc` dep path into env
+        # so the smoke and bench compile steps can pass them as
+        # explicit `--path:` flags. This is required because the
+        # project's `nim.cfg` sets `--noNimblePath`, which disables the
+        # auto-augmentation of the search path with installed nimble
+        # packages — without these explicit flags `import loony` and
+        # `import pkg/arc` both fail with `cannot open file`.
         id: install-loony
         if: |
           env.FORCE_SKIP_LOONY != '1' &&
           matrix.binary == 'bench_unbounded'
         continue-on-error: true
         run: |
+          set -eu
           nimble install -y loony
+          # `nimble path X` prints "Info: Using the environment
+          # variable: ..." on stderr and the actual path on stdout's
+          # final line; use `tail -1` to defensively strip any banner.
+          loony_path=$(nimble path loony 2>/dev/null | tail -1)
+          arc_path=$(nimble path arc 2>/dev/null | tail -1)
+          if [ -z "$loony_path" ] || [ -z "$arc_path" ]; then
+            echo "::error::nimble path resolution failed: loony=[$loony_path] arc=[$arc_path]" >&2
+            exit 1
+          fi
+          {
+            echo "LOONY_NIMBLE_PATH=$loony_path"
+            echo "ARC_NIMBLE_PATH=$arc_path"
+          } >> "$GITHUB_ENV"
 
       - name: Smoke loony adapter
         id: smoke-loony
@@ -278,6 +305,8 @@ jobs:
           set -eu
           nim c -d:release -d:danger --threads:on \
             -d:adapter_loony_available \
+            "--path:$LOONY_NIMBLE_PATH" \
+            "--path:$ARC_NIMBLE_PATH" \
             -o:.tmp/smoke_loony \
             -r tests/t_bench_adapters.nim
 
@@ -349,13 +378,24 @@ jobs:
 
       # threading.Chan (nimble package): only used by bench_mpmc.
       - name: Install threading (nimble)
+        # Capture the threading pkg path into env (same rationale as
+        # loony above): the project's `nim.cfg` uses `--noNimblePath`
+        # so `import threading/channels` fails without an explicit
+        # `--path:` to the installed package root.
         id: install-threading-channels
         if: |
           env.FORCE_SKIP_THREADING_CHANNELS != '1' &&
           matrix.binary == 'bench_mpmc'
         continue-on-error: true
         run: |
+          set -eu
           nimble install -y threading
+          threading_path=$(nimble path threading 2>/dev/null | tail -1)
+          if [ -z "$threading_path" ]; then
+            echo "::error::nimble path resolution failed: threading=[$threading_path]" >&2
+            exit 1
+          fi
+          echo "THREADING_NIMBLE_PATH=$threading_path" >> "$GITHUB_ENV"
 
       - name: Smoke threading.Chan adapter
         id: smoke-threading-channels
@@ -368,6 +408,7 @@ jobs:
           set -eu
           nim c -d:release -d:danger --threads:on \
             -d:adapter_threading_channels_available \
+            "--path:$THREADING_NIMBLE_PATH" \
             -o:.tmp/smoke_threading_channels \
             benchmarks/nim/smoke/smoke_threading_channels.nim
           ./.tmp/smoke_threading_channels
@@ -423,13 +464,25 @@ jobs:
           echo "::warning title=Adapter skipped::system.Channel smoke failed; bench will omit nim_channel slugs."
 
       - name: Build adapter define flags
-        # Aggregates the per-adapter env flags into a single shell
-        # variable consumed by the compile step. Empty when no adapter
-        # is enabled; properly space-separated otherwise.
+        # Aggregates the per-adapter env flags into two shell variables
+        # consumed by the compile step:
+        #   * `flags` — the `-d:adapter_*_available` defines.
+        #   * `paths` — the `--path:<nimble-pkg-root>` flags required
+        #     because the project's `nim.cfg` sets `--noNimblePath` and
+        #     the bench compile would otherwise fail to resolve nimble-
+        #     installed adapters (loony, threading, plus loony's
+        #     transitive `pkg/arc` dep). The smoke steps already pass
+        #     these per-adapter; this aggregator ensures the FULL bench
+        #     compile gets them too. Without this, an adapter could
+        #     pass smoke (one --path: flag in scope) and then silently
+        #     fail at bench-compile (no --path: flag), reintroducing
+        #     the silent-mask pattern this commit is fixing.
+        # Both empty when no adapter is enabled.
         id: adapter-flags
         run: |
           set -eu
           flags=""
+          paths=""
           mode="c"
           if [ "${ADAPTER_BOOST_QUEUE:-}" = "1" ]; then
             flags="$flags -d:adapter_boost_lockfree_queue_available"
@@ -439,8 +492,14 @@ jobs:
             flags="$flags -d:adapter_boost_lockfree_spsc_available"
             mode="cpp"
           fi
+          # Boost adapters import lockfreequeues/internal/aligned_alloc;
+          # add --path:src once if either boost gate is enabled.
+          if [ "${ADAPTER_BOOST_QUEUE:-}" = "1" ] || [ "${ADAPTER_BOOST_SPSC:-}" = "1" ]; then
+            paths="$paths --path:src"
+          fi
           if [ "${ADAPTER_LOONY:-}" = "1" ]; then
             flags="$flags -d:adapter_loony_available"
+            paths="$paths --path:${LOONY_NIMBLE_PATH:?LOONY_NIMBLE_PATH unset but ADAPTER_LOONY=1} --path:${ARC_NIMBLE_PATH:?ARC_NIMBLE_PATH unset but ADAPTER_LOONY=1}"
           fi
           if [ "${ADAPTER_MOODYCAMEL:-}" = "1" ]; then
             flags="$flags -d:adapter_moodycamel_available"
@@ -448,15 +507,18 @@ jobs:
           fi
           if [ "${ADAPTER_THREADING_CHANNELS:-}" = "1" ]; then
             flags="$flags -d:adapter_threading_channels_available"
+            paths="$paths --path:${THREADING_NIMBLE_PATH:?THREADING_NIMBLE_PATH unset but ADAPTER_THREADING_CHANNELS=1}"
           fi
           if [ "${ADAPTER_NIM_CHANNEL:-}" = "1" ]; then
             flags="$flags -d:adapter_nim_channel_available"
           fi
           {
             echo "flags=$flags"
+            echo "paths=$paths"
             echo "mode=$mode"
           } >> "$GITHUB_OUTPUT"
           echo "Adapter flags: $flags"
+          echo "Adapter paths: $paths"
           echo "Compile mode:  $mode"
 
       - name: Compile ${{ matrix.binary }} (CI-tuned run shape)
@@ -474,14 +536,22 @@ jobs:
         #
         # ${{ steps.adapter-flags.outputs.flags }} is the space-separated
         # set of -d:adapter_*_available defines that survived install +
-        # smoke. ${{ steps.adapter-flags.outputs.mode }} is 'cpp' iff at
-        # least one C++-only adapter (boost) is enabled, else 'c'.
+        # smoke. ${{ steps.adapter-flags.outputs.paths }} is the
+        # matching set of `--path:<nimble-pkg-root>` flags needed
+        # because the project's nim.cfg sets --noNimblePath; without
+        # these, nimble-installed adapters (loony, threading) and
+        # in-tree imports the boost adapter relies on
+        # (lockfreequeues/internal/aligned_alloc, via --path:src) would
+        # fail to resolve. ${{ steps.adapter-flags.outputs.mode }} is
+        # 'cpp' iff at least one C++-only adapter (boost) is enabled,
+        # else 'c'.
         env:
           NIM_MODE: ${{ steps.adapter-flags.outputs.mode }}
           ADAPTER_FLAGS: ${{ steps.adapter-flags.outputs.flags }}
+          ADAPTER_PATHS: ${{ steps.adapter-flags.outputs.paths }}
         run: |
           set -eu
-          # shellcheck disable=SC2086  # ADAPTER_FLAGS is intentionally word-split.
+          # shellcheck disable=SC2086  # ADAPTER_FLAGS / ADAPTER_PATHS are intentionally word-split.
           case "${{ matrix.binary }}" in
             bench_spsc)
               nim "$NIM_MODE" -d:release -d:danger --threads:on \
@@ -489,6 +559,7 @@ jobs:
                 -d:BenchSpscRuns=5 \
                 -d:BenchSpscWarmup=2 \
                 $ADAPTER_FLAGS \
+                $ADAPTER_PATHS \
                 benchmarks/nim/bench_spsc.nim
               ;;
             bench_mpsc)
@@ -501,6 +572,7 @@ jobs:
                 -d:BenchMpscRuns=5 \
                 -d:BenchMpscWarmup=2 \
                 $ADAPTER_FLAGS \
+                $ADAPTER_PATHS \
                 benchmarks/nim/bench_mpsc.nim
               ;;
             bench_mpmc)
@@ -509,6 +581,7 @@ jobs:
                 -d:BenchMpmcRuns=5 \
                 -d:BenchMpmcWarmup=2 \
                 $ADAPTER_FLAGS \
+                $ADAPTER_PATHS \
                 benchmarks/nim/bench_mpmc.nim
               ;;
             bench_unbounded)
@@ -528,6 +601,7 @@ jobs:
                 -d:BenchUnboundedWarmup=1 \
                 -d:BenchSkipOversubscribed \
                 $ADAPTER_FLAGS \
+                $ADAPTER_PATHS \
                 benchmarks/nim/bench_unbounded.nim
               ;;
             bench_latency)
