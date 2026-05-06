@@ -416,12 +416,21 @@ class ChartContractTests(unittest.TestCase):
         panel, and the routing must pair bounded with unbounded for
         each core topology so unbounded slugs in the fixture render.
 
-        Parses the `THROUGHPUT_PANELS` block in `bench-charts.js` and
-        asserts the (panel-id -> {topologies}) mapping matches the
-        agreed routing. If this test fails after a JS change, either
-        the routing regressed or the contract here needs to follow
-        suit; bench-charts.js is the source of truth for shape, and
-        this test is the source of truth for routing intent.
+        This test does NOT just pin the topology literals that appear
+        in the JS predicate — that strategy was identified by the
+        Phase 4.6.3 green-mirage audit as regex-extract-only: a
+        mutation flipping `||` to `&&` (silently dropping every spsc
+        slug from the chart) would PASS such a test because both
+        literals still appear in the source.
+
+        Instead, this test parses each panel's `includes` predicate
+        body, translates it into an evaluable Python callable
+        (preserving the operator semantics of the JS expression), and
+        asserts the predicate's *behaviour* matches an explicit
+        EXPECTED_ROUTING dict for every topology. Logical regressions
+        (operator flips, missing literals, mis-paired bounded/
+        unbounded variants) now fail the test because the mapping is
+        derived from predicate evaluation, not from string matching.
         """
         js_path = REPO_ROOT / "docs" / "assets" / "bench-charts.js"
         src = js_path.read_text()
@@ -452,36 +461,122 @@ class ChartContractTests(unittest.TestCase):
             f"expected 4 throughput panels, got {len(entries)}: {entries}",
         )
 
-        # For each panel, extract the set of topology string literals
-        # the predicate compares against. We accept `topology === 'X'`
-        # repeated with `||`, which is the only form the routing uses.
-        topo_lit_re = re.compile(r"topology\s*===\s*'([a-z_]+)'")
-        actual: dict[str, set[str]] = {}
-        for panel_id, expr in entries:
-            topos = set(topo_lit_re.findall(expr))
-            self.assertTrue(
-                topos,
-                f"panel {panel_id!r} predicate {expr!r} matched no topologies",
-            )
-            actual[panel_id] = topos
-
-        expected = {
-            "bench-throughput-spsc":           {"spsc", "spsc_unbounded"},
-            "bench-throughput-mpsc":           {"mpsc", "mpsc_unbounded"},
-            "bench-throughput-mpmc-bounded":   {"mpmc"},
-            "bench-throughput-mpmc-unbounded": {"mpmc_unbounded"},
+        # The agreed routing intent. Source of truth for what the
+        # chart MUST do; bench-charts.js is the source of truth for
+        # how it does it. If this dict and the JS predicate disagree
+        # on any topology, that is the regression we want to fail on.
+        EXPECTED_ROUTING = {
+            "spsc":            "bench-throughput-spsc",
+            "spsc_unbounded":  "bench-throughput-spsc",
+            "mpsc":            "bench-throughput-mpsc",
+            "mpsc_unbounded":  "bench-throughput-mpsc",
+            "mpmc":            "bench-throughput-mpmc-bounded",
+            "mpmc_unbounded":  "bench-throughput-mpmc-unbounded",
         }
-        self.assertEqual(actual, expected)
 
-        # Sanity: every topology routes to exactly one panel (no
-        # accidental double-routing where a slug would render twice).
-        all_topos: list[str] = []
-        for topos in actual.values():
-            all_topos.extend(topos)
+        # Translate each JS predicate body into a Python callable
+        # by safe token substitution. We allow only the exact token
+        # vocabulary the routing predicates use today; anything else
+        # raises so we don't accidentally compile a richer expression
+        # whose semantics differ between JS and Python.
+        #
+        # JS form (per current bench-charts.js):
+        #   topology === 'X' || topology === 'Y'
+        # Python form:
+        #   topology == 'X' or topology == 'Y'
+        def js_predicate_to_python(expr: str) -> str:
+            # Normalize whitespace (predicates wrap onto multiple lines).
+            normalized = " ".join(expr.split())
+            # Whitelist tokens. Anything outside this grammar fails
+            # the test loudly rather than silently translating to
+            # something with surprising semantics.
+            allowed_re = re.compile(
+                r"^(?:topology|===|!==|==|!=|&&|\|\||"
+                r"'[a-z_][a-z0-9_]*'|\(|\)|\s)+$"
+            )
+            self.assertRegex(
+                normalized, allowed_re,
+                msg=f"predicate {expr!r} contains tokens outside the "
+                    "supported routing grammar; tighten the test or "
+                    "narrow the predicate"
+            )
+            # Order matters: replace `===`/`!==` BEFORE `==`/`!=`.
+            translated = (normalized
+                          .replace("===", "==")
+                          .replace("!==", "!=")
+                          .replace("&&", " and ")
+                          .replace("||", " or "))
+            return translated
+
+        predicates: dict[str, "callable"] = {}
+        for panel_id, expr in entries:
+            py_expr = js_predicate_to_python(expr)
+            # `eval` here is bounded by the whitelist regex above:
+            # the expression can only reference the local `topology`
+            # name, string literals, comparisons, parens, and bool
+            # ops. No attribute access, no calls, no names.
+            code = compile(py_expr, f"<predicate:{panel_id}>", "eval")
+            predicates[panel_id] = (
+                lambda topology, _c=code: bool(
+                    eval(_c, {"__builtins__": {}}, {"topology": topology})
+                )
+            )
+
+        # The set of panel ids actually declared by the JS source —
+        # used to assert each EXPECTED_ROUTING value names a real
+        # panel and to detect unexpected extras.
+        declared_panel_ids = {panel_id for panel_id, _ in entries}
         self.assertEqual(
-            len(all_topos), len(set(all_topos)),
-            f"topology routed to multiple panels: {all_topos}",
+            declared_panel_ids,
+            set(EXPECTED_ROUTING.values()),
+            "set of declared panel ids does not match the panels "
+            "named in EXPECTED_ROUTING",
         )
+
+        # For each topology in the expected routing, exactly one
+        # panel's predicate must accept it, and that panel's id must
+        # match the expected target. This is the assertion that
+        # catches operator flips: under `||`→`&&`, every predicate
+        # collapses to False and the matched-panel count drops to 0.
+        for topology, expected_panel_id in EXPECTED_ROUTING.items():
+            matches = [
+                panel_id
+                for panel_id, predicate in predicates.items()
+                if predicate(topology)
+            ]
+            self.assertEqual(
+                matches, [expected_panel_id],
+                f"topology {topology!r} expected to route to "
+                f"[{expected_panel_id!r}] but predicate evaluation "
+                f"produced {matches!r}",
+            )
+
+        # Conversely: no panel may accept a topology that is not in
+        # EXPECTED_ROUTING, AND no panel may accept a topology routed
+        # to a different panel. This is the dual mutation guard: it
+        # catches a swap (e.g. moving `spsc_unbounded` from the spsc
+        # panel into the mpsc panel) because the mpsc predicate would
+        # then accept `spsc_unbounded`, which EXPECTED_ROUTING says
+        # belongs to the spsc panel.
+        for panel_id, predicate in predicates.items():
+            for topology, expected_panel_id in EXPECTED_ROUTING.items():
+                accepted = predicate(topology)
+                should_accept = (panel_id == expected_panel_id)
+                self.assertEqual(
+                    accepted, should_accept,
+                    f"panel {panel_id!r} predicate accepted="
+                    f"{accepted} for topology {topology!r}; "
+                    f"expected accepted={should_accept} "
+                    f"(EXPECTED_ROUTING -> {expected_panel_id!r})",
+                )
+            # Negative probe: an unknown topology must be rejected by
+            # every panel. Catches a predicate that returns truthy
+            # for any input (e.g. `topology === topology`).
+            self.assertFalse(
+                predicate("not_a_real_topology"),
+                f"panel {panel_id!r} accepted an unknown topology — "
+                "predicate is too permissive",
+            )
 
         # Sanity: the routing covers every topology present in the
         # checked-in example.json fixture, so no fixture slug silently
@@ -498,8 +593,7 @@ class ChartContractTests(unittest.TestCase):
             if parsed is None:
                 continue
             fixture_topos.add(parsed["topology"])
-        covered = set().union(*actual.values())
-        missing = fixture_topos - covered
+        missing = fixture_topos - EXPECTED_ROUTING.keys()
         self.assertFalse(
             missing,
             f"fixture topologies not routed to any panel: {missing}",
