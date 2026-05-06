@@ -43,6 +43,15 @@ when defined(adapter_crossbeam_array_queue_available):
 when defined(adapter_threading_channels_available):
   import ./adapters/threading_channels_adapter
 
+# v4.2.0 Stage 5.1 Tier 1 vendored comparison adapters (header-only C++).
+# atomic_queue is general MPMC (registered here at the {1,2,4} P x {1,2,4}
+# C grid); rigtorp_mpmc is Vyukov-style bounded MPMC.
+when defined(adapter_atomic_queue_available):
+  import ./adapters/atomic_queue_adapter
+
+when defined(adapter_rigtorp_mpmc_available):
+  import ./adapters/rigtorp_mpmc_adapter
+
 const
   BenchMpmcRuns* {.intdefine.} = 33
   BenchMpmcMessageCount* {.intdefine.} = 1_000_000
@@ -298,6 +307,14 @@ when defined(adapter_threading_channels_available):
   proc initThreadingChannelsQ(capacity: int): ThreadingChannelsAdapter[uint64] =
     makeThreadingChannelsAdapter[uint64](capacity)
 
+when defined(adapter_atomic_queue_available):
+  proc initAtomicQueueMpmcQ(capacity: int): AtomicQueueAdapter[uint64] =
+    makeAtomicQueueAdapter[uint64](capacity)
+
+when defined(adapter_rigtorp_mpmc_available):
+  proc initRigtorpMpmcQ(capacity: int): RigtorpMpmcAdapter[uint64] =
+    makeRigtorpMpmcAdapter[uint64](capacity)
+
 proc runMvpMpmcShape[A](
     em: var BMFEmitter,
     slugPrefix: string,
@@ -408,6 +425,28 @@ when declared(initThreadingChannelsQ):
           p, c, BenchMpmcRuns, BenchMpmcWarmup,
           BenchMpmcMessageCount, MpmcCapacity)
 
+when declared(initAtomicQueueMpmcQ):
+  proc runAtomicQueueMpmc(em: var BMFEmitter,
+                          topology: Topology) {.nimcall.} =
+    discard topology
+    for p in [1, 2, 4]:
+      for c in [1, 2, 4]:
+        runMvpMpmcShape[AtomicQueueAdapter[uint64]](
+          em, "atomic_queue", initAtomicQueueMpmcQ,
+          p, c, BenchMpmcRuns, BenchMpmcWarmup,
+          BenchMpmcMessageCount, MpmcCapacity)
+
+when declared(initRigtorpMpmcQ):
+  proc runRigtorpMpmc(em: var BMFEmitter,
+                      topology: Topology) {.nimcall.} =
+    discard topology
+    for p in [1, 2, 4]:
+      for c in [1, 2, 4]:
+        runMvpMpmcShape[RigtorpMpmcAdapter[uint64]](
+          em, "rigtorp_mpmc", initRigtorpMpmcQ,
+          p, c, BenchMpmcRuns, BenchMpmcWarmup,
+          BenchMpmcMessageCount, MpmcCapacity)
+
 # ---------- Adapter registry ----------
 
 proc buildAdapters(): seq[Adapter] =
@@ -443,6 +482,18 @@ proc buildAdapters(): seq[Adapter] =
       name: "threading_channels",
       topologiesSupported: {tMpmc},
       run: runThreadingChannels,
+    ))
+  when declared(initAtomicQueueMpmcQ):
+    result.add(Adapter(
+      name: "atomic_queue",
+      topologiesSupported: {tMpmc},
+      run: runAtomicQueueMpmc,
+    ))
+  when declared(initRigtorpMpmcQ):
+    result.add(Adapter(
+      name: "rigtorp_mpmc",
+      topologiesSupported: {tMpmc},
+      run: runRigtorpMpmc,
     ))
 
 let adapters: seq[Adapter] = buildAdapters()

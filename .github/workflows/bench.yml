@@ -59,6 +59,18 @@ on:
         description: 'Force Crossbeam soft-skip (v4.2.0 Stage 1 — Rust toolchain unavailable)'
         type: boolean
         default: false
+      force_skip_atomic_queue:
+        description: 'Force atomic_queue soft-skip (v4.2.0 Stage 5.1)'
+        type: boolean
+        default: false
+      force_skip_rigtorp_spsc:
+        description: 'Force rigtorp/SPSCQueue soft-skip (v4.2.0 Stage 5.1)'
+        type: boolean
+        default: false
+      force_skip_rigtorp_mpmc:
+        description: 'Force rigtorp/MPMCQueue soft-skip (v4.2.0 Stage 5.1)'
+        type: boolean
+        default: false
 # yamllint enable rule:truthy
 
 env:
@@ -76,6 +88,9 @@ env:
   FORCE_SKIP_THREADING_CHANNELS: ${{ inputs.force_skip_threading_channels && '1' || '' }}
   FORCE_SKIP_NIM_CHANNEL: ${{ inputs.force_skip_nim_channel && '1' || '' }}
   FORCE_SKIP_CROSSBEAM: ${{ inputs.force_skip_crossbeam && '1' || '' }}
+  FORCE_SKIP_ATOMIC_QUEUE: ${{ inputs.force_skip_atomic_queue && '1' || '' }}
+  FORCE_SKIP_RIGTORP_SPSC: ${{ inputs.force_skip_rigtorp_spsc && '1' || '' }}
+  FORCE_SKIP_RIGTORP_MPMC: ${{ inputs.force_skip_rigtorp_mpmc && '1' || '' }}
 
 jobs:
   bench-tests:
@@ -569,6 +584,146 @@ jobs:
         run: |
           echo "::warning title=Adapter skipped::crossbeam install or smoke failed for ${{ matrix.binary }}; bench will omit crossbeam slugs."
 
+      # ---------- v4.2.0 Stage 5.1: Tier 1 vendored header-only adapters ----------
+      #
+      # Three vendored single-header C++ libraries (atomic_queue,
+      # rigtorp/SPSCQueue, rigtorp/MPMCQueue) consumed via thin extern
+      # "C" wrappers — same shim pattern as MoodyCamel above. The
+      # "install" step is a `test -f` on the vendored header so the
+      # bench is reproducible without network egress; the "smoke" step
+      # compiles and runs the corresponding smoke binary; the
+      # "set-define" step gates the bench compile flag on smoke success.
+      #
+      # Topology routing:
+      #   atomic_queue  -> bench_spsc + bench_mpmc
+      #   rigtorp_spsc  -> bench_spsc only
+      #   rigtorp_mpmc  -> bench_mpmc only
+
+      - name: Install atomic_queue (vendored header presence check)
+        id: install-atomic-queue
+        if: |
+          env.FORCE_SKIP_ATOMIC_QUEUE != '1' &&
+          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc')
+        continue-on-error: true
+        run: |
+          test -f benchmarks/vendor/atomic_queue/include/atomic_queue/atomic_queue.h
+          test -f benchmarks/vendor/atomic_queue/atomic_queue_wrapper.cpp
+
+      - name: Smoke atomic_queue adapter
+        id: smoke-atomic-queue
+        if: |
+          env.FORCE_SKIP_ATOMIC_QUEUE != '1' &&
+          steps.install-atomic-queue.outcome == 'success' &&
+          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc')
+        continue-on-error: true
+        run: |
+          set -eu
+          # nim cpp because atomic_queue.h is C++ and the wrapper is
+          # C++ source compiled in via `{.compile: ...}`.
+          nim cpp -d:release -d:danger --threads:on \
+            -d:adapter_atomic_queue_available \
+            -o:.tmp/smoke_atomic_queue \
+            benchmarks/nim/smoke/smoke_atomic_queue.nim
+          ./.tmp/smoke_atomic_queue
+
+      - name: Set atomic_queue adapter define (success only)
+        if: |
+          env.FORCE_SKIP_ATOMIC_QUEUE != '1' &&
+          steps.install-atomic-queue.outcome == 'success' &&
+          steps.smoke-atomic-queue.outcome == 'success'
+        run: echo "ADAPTER_ATOMIC_QUEUE=1" >> "$GITHUB_ENV"
+
+      - name: Annotate atomic_queue skipped
+        if: |
+          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc') &&
+          (env.FORCE_SKIP_ATOMIC_QUEUE == '1' ||
+           steps.install-atomic-queue.outcome != 'success' ||
+           steps.smoke-atomic-queue.outcome != 'success')
+        run: |
+          echo "::warning title=Adapter skipped::atomic_queue install or smoke failed for ${{ matrix.binary }}; bench will omit atomic_queue slugs."
+
+      - name: Install rigtorp/SPSCQueue (vendored header presence check)
+        id: install-rigtorp-spsc
+        if: |
+          env.FORCE_SKIP_RIGTORP_SPSC != '1' &&
+          matrix.binary == 'bench_spsc'
+        continue-on-error: true
+        run: |
+          test -f benchmarks/vendor/rigtorp_spsc/include/rigtorp/SPSCQueue.h
+          test -f benchmarks/vendor/rigtorp_spsc/rigtorp_spsc_wrapper.cpp
+
+      - name: Smoke rigtorp/SPSCQueue adapter
+        id: smoke-rigtorp-spsc
+        if: |
+          env.FORCE_SKIP_RIGTORP_SPSC != '1' &&
+          steps.install-rigtorp-spsc.outcome == 'success' &&
+          matrix.binary == 'bench_spsc'
+        continue-on-error: true
+        run: |
+          set -eu
+          nim cpp -d:release -d:danger --threads:on \
+            -d:adapter_rigtorp_spsc_available \
+            -o:.tmp/smoke_rigtorp_spsc \
+            benchmarks/nim/smoke/smoke_rigtorp.nim
+          ./.tmp/smoke_rigtorp_spsc
+
+      - name: Set rigtorp/SPSCQueue adapter define (success only)
+        if: |
+          env.FORCE_SKIP_RIGTORP_SPSC != '1' &&
+          steps.install-rigtorp-spsc.outcome == 'success' &&
+          steps.smoke-rigtorp-spsc.outcome == 'success'
+        run: echo "ADAPTER_RIGTORP_SPSC=1" >> "$GITHUB_ENV"
+
+      - name: Annotate rigtorp/SPSCQueue skipped
+        if: |
+          matrix.binary == 'bench_spsc' &&
+          (env.FORCE_SKIP_RIGTORP_SPSC == '1' ||
+           steps.install-rigtorp-spsc.outcome != 'success' ||
+           steps.smoke-rigtorp-spsc.outcome != 'success')
+        run: |
+          echo "::warning title=Adapter skipped::rigtorp/SPSCQueue install or smoke failed; bench will omit rigtorp_spsc slugs."
+
+      - name: Install rigtorp/MPMCQueue (vendored header presence check)
+        id: install-rigtorp-mpmc
+        if: |
+          env.FORCE_SKIP_RIGTORP_MPMC != '1' &&
+          matrix.binary == 'bench_mpmc'
+        continue-on-error: true
+        run: |
+          test -f benchmarks/vendor/rigtorp_mpmc/include/rigtorp/MPMCQueue.h
+          test -f benchmarks/vendor/rigtorp_mpmc/rigtorp_mpmc_wrapper.cpp
+
+      - name: Smoke rigtorp/MPMCQueue adapter
+        id: smoke-rigtorp-mpmc
+        if: |
+          env.FORCE_SKIP_RIGTORP_MPMC != '1' &&
+          steps.install-rigtorp-mpmc.outcome == 'success' &&
+          matrix.binary == 'bench_mpmc'
+        continue-on-error: true
+        run: |
+          set -eu
+          nim cpp -d:release -d:danger --threads:on \
+            -d:adapter_rigtorp_mpmc_available \
+            -o:.tmp/smoke_rigtorp_mpmc \
+            benchmarks/nim/smoke/smoke_rigtorp.nim
+          ./.tmp/smoke_rigtorp_mpmc
+
+      - name: Set rigtorp/MPMCQueue adapter define (success only)
+        if: |
+          env.FORCE_SKIP_RIGTORP_MPMC != '1' &&
+          steps.install-rigtorp-mpmc.outcome == 'success' &&
+          steps.smoke-rigtorp-mpmc.outcome == 'success'
+        run: echo "ADAPTER_RIGTORP_MPMC=1" >> "$GITHUB_ENV"
+
+      - name: Annotate rigtorp/MPMCQueue skipped
+        if: |
+          matrix.binary == 'bench_mpmc' &&
+          (env.FORCE_SKIP_RIGTORP_MPMC == '1' ||
+           steps.install-rigtorp-mpmc.outcome != 'success' ||
+           steps.smoke-rigtorp-mpmc.outcome != 'success')
+        run: |
+          echo "::warning title=Adapter skipped::rigtorp/MPMCQueue install or smoke failed; bench will omit rigtorp_mpmc slugs."
+
       - name: Build adapter define flags
         # Aggregates the per-adapter env flags into two shell variables
         # consumed by the compile step:
@@ -630,6 +785,21 @@ jobs:
           fi
           if [ "${ADAPTER_CROSSBEAM_ARRAY:-}" = "1" ] || [ "${ADAPTER_CROSSBEAM_SEG:-}" = "1" ]; then
             flags="$flags --passL:-Wl,-rpath,${CROSSBEAM_RPATH_DIR:?CROSSBEAM_RPATH_DIR unset but crossbeam gate enabled}"
+          fi
+          # v4.2.0 Stage 5.1 Tier 1 vendored adapters (header-only C++).
+          # All three force `nim cpp` because their wrapper sources are
+          # C++ and the upstream headers are C++-only.
+          if [ "${ADAPTER_ATOMIC_QUEUE:-}" = "1" ]; then
+            flags="$flags -d:adapter_atomic_queue_available"
+            mode="cpp"
+          fi
+          if [ "${ADAPTER_RIGTORP_SPSC:-}" = "1" ]; then
+            flags="$flags -d:adapter_rigtorp_spsc_available"
+            mode="cpp"
+          fi
+          if [ "${ADAPTER_RIGTORP_MPMC:-}" = "1" ]; then
+            flags="$flags -d:adapter_rigtorp_mpmc_available"
+            mode="cpp"
           fi
           {
             echo "flags=$flags"

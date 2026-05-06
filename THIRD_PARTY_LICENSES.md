@@ -137,3 +137,46 @@ the nimble `threading` package is resolved at build time).
 - **License:** MIT (Nim compiler license)
 - **Vendored at:** _(not vendored — built into the Nim compiler)_
 - **Upgrade procedure:** _(not applicable; tracks Nim compiler)_
+
+## Tier 1 vendored comparison libraries (v4.2.0 Stage 5.1)
+
+Three header-only C++ queue libraries vendored to broaden the bench
+suite's coverage of bounded SPSC and bounded MPMC alternatives. Each is
+consumed via a thin `extern "C"` wrapper that reduces the templated C++
+surface to four `uint64_t`-payload functions — same shim pattern as
+`concurrentqueue` (MoodyCamel) above.
+
+### atomic_queue (max0x7ba)
+
+- **Source:** https://github.com/max0x7ba/atomic_queue
+- **Version:** commit
+  `1a3774a89c86ecfdf08753dbd41018ace5a833a4` (vendored at v4.2.0
+  Stage 5.1 implementation time; see
+  `benchmarks/vendor/atomic_queue/README.md` for the upgrade
+  procedure and rationale).
+- **License:** MIT
+- **Vendored at:** `benchmarks/vendor/atomic_queue/`
+- **Upgrade procedure:** see
+  `benchmarks/vendor/atomic_queue/README.md`
+
+### rigtorp/SPSCQueue
+
+- **Source:** https://github.com/rigtorp/SPSCQueue
+- **Version:** commit
+  `1053918dbd251fbff69b24ef27fa5d51c29ec2af` (vendored at v4.2.0
+  Stage 5.1 implementation time).
+- **License:** MIT
+- **Vendored at:** `benchmarks/vendor/rigtorp_spsc/`
+- **Upgrade procedure:** see
+  `benchmarks/vendor/rigtorp_spsc/README.md`
+
+### rigtorp/MPMCQueue
+
+- **Source:** https://github.com/rigtorp/MPMCQueue
+- **Version:** commit
+  `b9808ede08f26fa9df4df4e081d19cace8f6c6ea` (vendored at v4.2.0
+  Stage 5.1 implementation time).
+- **License:** MIT
+- **Vendored at:** `benchmarks/vendor/rigtorp_mpmc/`
+- **Upgrade procedure:** see
+  `benchmarks/vendor/rigtorp_mpmc/README.md`

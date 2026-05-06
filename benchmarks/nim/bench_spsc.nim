@@ -25,6 +25,16 @@ import ./adapters/lockfreequeues_sipsic_adapter
 when defined(adapter_boost_lockfree_spsc_available):
   import ./adapters/boost_lockfree_spsc_adapter
 
+# v4.2.0 Stage 5.1 Tier 1 vendored comparison adapters (header-only C++).
+# Both `atomic_queue` (max0x7ba) and `rigtorp::SPSCQueue` are bounded
+# rings; gated by per-library defines. atomic_queue runs at SPSC here
+# (it is general MPMC, but the SPSC slot exercises its 1p1c path).
+when defined(adapter_atomic_queue_available):
+  import ./adapters/atomic_queue_adapter
+
+when defined(adapter_rigtorp_spsc_available):
+  import ./adapters/rigtorp_spsc_adapter
+
 const
   ## Per-binary intdefines for SPSC wall-time control. Override at compile
   ## time with `-d:BenchSpscRuns=N` etc. Defaults match design §2.5.
@@ -56,6 +66,14 @@ proc initSipsicQ(capacity: int): SipsicAdapter[SpscCapacity, uint64] =
 when defined(adapter_boost_lockfree_spsc_available):
   proc initBoostSpscQ(capacity: int): BoostLockfreeSpscAdapter[uint64] =
     makeBoostLockfreeSpscAdapter[uint64](capacity)
+
+when defined(adapter_atomic_queue_available):
+  proc initAtomicQueueQ(capacity: int): AtomicQueueAdapter[uint64] =
+    makeAtomicQueueAdapter[uint64](capacity)
+
+when defined(adapter_rigtorp_spsc_available):
+  proc initRigtorpSpscQ(capacity: int): RigtorpSpscAdapter[uint64] =
+    makeRigtorpSpscAdapter[uint64](capacity)
 
 # ---------- Adapter procs (topology-based dispatch) ----------
 #
@@ -128,6 +146,28 @@ when declared(initBoostSpscQ):
       capacity = SpscCapacity,
     )
 
+when declared(initAtomicQueueQ):
+  proc runAtomicQueueSpsc(em: var BMFEmitter,
+                          topology: Topology) {.nimcall.} =
+    discard topology
+    runMvpVariant[AtomicQueueAdapter[uint64]](
+      em,
+      slug = "atomic_queue/spsc/1p1c",
+      queueInit = initAtomicQueueQ,
+      capacity = SpscCapacity,
+    )
+
+when declared(initRigtorpSpscQ):
+  proc runRigtorpSpsc(em: var BMFEmitter,
+                      topology: Topology) {.nimcall.} =
+    discard topology
+    runMvpVariant[RigtorpSpscAdapter[uint64]](
+      em,
+      slug = "rigtorp_spsc/spsc/1p1c",
+      queueInit = initRigtorpSpscQ,
+      capacity = SpscCapacity,
+    )
+
 # ---------- Adapter registry ----------
 
 proc buildAdapters(): seq[Adapter] =
@@ -141,6 +181,18 @@ proc buildAdapters(): seq[Adapter] =
       name: "boost_lockfree_spsc",
       topologiesSupported: {tSpsc},
       run: runBoostLockfreeSpsc,
+    ))
+  when declared(initAtomicQueueQ):
+    result.add(Adapter(
+      name: "atomic_queue",
+      topologiesSupported: {tSpsc},
+      run: runAtomicQueueSpsc,
+    ))
+  when declared(initRigtorpSpscQ):
+    result.add(Adapter(
+      name: "rigtorp_spsc",
+      topologiesSupported: {tSpsc},
+      run: runRigtorpSpsc,
     ))
 
 let adapters: seq[Adapter] = buildAdapters()
