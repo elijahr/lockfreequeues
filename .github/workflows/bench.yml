@@ -1142,7 +1142,15 @@ jobs:
         # outputs and union them into the binary's upload artifact via
         # `merge_bmf.py`. bench_latency is exempt — PR 1's CLI is
         # unaffected by this commit.
-        timeout-minutes: 10
+        #
+        # 20-minute budget (raised from 10): the v4.2.0 matrix expansion
+        # (flume_unbounded + kanal_unbounded adapters + spmc_unbounded
+        # topology in bench_unbounded) pushed the run past the original
+        # 10-minute ceiling on shared GitHub-hosted runners. R13 in the
+        # impl plan called the workflow timeout the authoritative
+        # completion-detector; this raises that ceiling so the new
+        # matrix has comfortable headroom.
+        timeout-minutes: 20
         run: |
           set -eu
           case "${{ matrix.binary }}" in
