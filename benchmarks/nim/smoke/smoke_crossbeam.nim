@@ -7,10 +7,10 @@
 ##
 ## Build:
 ##   cargo build --release --manifest-path \
-##     benchmarks/rust/bench-ffi-crossbeam/Cargo.toml
+##     benchmarks/rust/comparison/Cargo.toml
 ##   nim c -d:adapter_crossbeam_array_queue_available \
 ##         -d:adapter_crossbeam_seg_queue_available \
-##         --passL:-Wl,-rpath,benchmarks/rust/bench-ffi-crossbeam/target/release \
+##         --passL:-Wl,-rpath,benchmarks/rust/comparison/target/release \
 ##         benchmarks/nim/smoke/smoke_crossbeam.nim
 ##
 ## (the ``-rpath`` is only needed for run-time dlopen on Linux; on macOS

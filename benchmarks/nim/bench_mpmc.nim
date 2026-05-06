@@ -52,6 +52,14 @@ when defined(adapter_atomic_queue_available):
 when defined(adapter_rigtorp_mpmc_available):
   import ./adapters/rigtorp_mpmc_adapter
 
+# v4.2.0 Stage 5.2 Tier 2 Rust comparison adapters (flume + kanal,
+# bounded variants).
+when defined(adapter_flume_available):
+  import ./adapters/flume_adapter
+
+when defined(adapter_kanal_available):
+  import ./adapters/kanal_adapter
+
 const
   BenchMpmcRuns* {.intdefine.} = 33
   BenchMpmcMessageCount* {.intdefine.} = 1_000_000
@@ -315,6 +323,14 @@ when defined(adapter_rigtorp_mpmc_available):
   proc initRigtorpMpmcQ(capacity: int): RigtorpMpmcAdapter[uint64] =
     makeRigtorpMpmcAdapter[uint64](capacity)
 
+when defined(adapter_flume_available):
+  proc initFlumeMpmcQ(capacity: int): FlumeAdapter[uint64] =
+    makeFlumeAdapter[uint64](capacity)
+
+when defined(adapter_kanal_available):
+  proc initKanalMpmcQ(capacity: int): KanalAdapter[uint64] =
+    makeKanalAdapter[uint64](capacity)
+
 proc runMvpMpmcShape[A](
     em: var BMFEmitter,
     slugPrefix: string,
@@ -447,6 +463,28 @@ when declared(initRigtorpMpmcQ):
           p, c, BenchMpmcRuns, BenchMpmcWarmup,
           BenchMpmcMessageCount, MpmcCapacity)
 
+when declared(initFlumeMpmcQ):
+  proc runFlumeMpmc(em: var BMFEmitter,
+                    topology: Topology) {.nimcall.} =
+    discard topology
+    for p in [1, 2, 4]:
+      for c in [1, 2, 4]:
+        runMvpMpmcShape[FlumeAdapter[uint64]](
+          em, "flume", initFlumeMpmcQ,
+          p, c, BenchMpmcRuns, BenchMpmcWarmup,
+          BenchMpmcMessageCount, MpmcCapacity)
+
+when declared(initKanalMpmcQ):
+  proc runKanalMpmc(em: var BMFEmitter,
+                    topology: Topology) {.nimcall.} =
+    discard topology
+    for p in [1, 2, 4]:
+      for c in [1, 2, 4]:
+        runMvpMpmcShape[KanalAdapter[uint64]](
+          em, "kanal", initKanalMpmcQ,
+          p, c, BenchMpmcRuns, BenchMpmcWarmup,
+          BenchMpmcMessageCount, MpmcCapacity)
+
 # ---------- Adapter registry ----------
 
 proc buildAdapters(): seq[Adapter] =
@@ -494,6 +532,18 @@ proc buildAdapters(): seq[Adapter] =
       name: "rigtorp_mpmc",
       topologiesSupported: {tMpmc},
       run: runRigtorpMpmc,
+    ))
+  when declared(initFlumeMpmcQ):
+    result.add(Adapter(
+      name: "flume",
+      topologiesSupported: {tMpmc},
+      run: runFlumeMpmc,
+    ))
+  when declared(initKanalMpmcQ):
+    result.add(Adapter(
+      name: "kanal",
+      topologiesSupported: {tMpmc},
+      run: runKanalMpmc,
     ))
 
 let adapters: seq[Adapter] = buildAdapters()

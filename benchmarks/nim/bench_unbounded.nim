@@ -58,6 +58,14 @@ when defined(adapter_crossbeam_seg_queue_available):
 when defined(adapter_moodycamel_available):
   import ./adapters/moodycamel_adapter
 
+# v4.2.0 Stage 5.2 Tier 2 Rust comparison adapters: flume + kanal
+# unbounded MPMC channels via the consolidated cdylib.
+when defined(adapter_flume_available):
+  import ./adapters/flume_adapter
+
+when defined(adapter_kanal_available):
+  import ./adapters/kanal_adapter
+
 const
   UnboundedSipsicRuns* {.intdefine.} = 3
   UnboundedSipsicMessageCount* {.intdefine.} = 500_000
@@ -499,6 +507,16 @@ when defined(adapter_moodycamel_available):
     # convention for unbounded adapters that accept a hint).
     makeMoodycamelAdapter[uint64](capacity)
 
+when defined(adapter_flume_available):
+  proc initFlumeUnboundedQ(capacity: int): FlumeUnboundedAdapter[uint64] =
+    discard capacity
+    makeFlumeUnboundedAdapter[uint64]()
+
+when defined(adapter_kanal_available):
+  proc initKanalUnboundedQ(capacity: int): KanalUnboundedAdapter[uint64] =
+    discard capacity
+    makeKanalUnboundedAdapter[uint64]()
+
 proc runMvpUnboundedShape[A](
     em: var BMFEmitter,
     slugPrefix: string,
@@ -628,6 +646,28 @@ when declared(initMoodycamelQ):
           p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
           UnboundedMupmucMessageCount)
 
+when declared(initFlumeUnboundedQ):
+  proc runFlumeUnbounded(em: var BMFEmitter,
+                         topology: Topology) {.nimcall.} =
+    discard topology
+    for p in [1, 2]:
+      for c in [1, 2]:
+        runMvpUnboundedShape[FlumeUnboundedAdapter[uint64]](
+          em, "flume_unbounded", initFlumeUnboundedQ,
+          p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
+          UnboundedMupmucMessageCount)
+
+when declared(initKanalUnboundedQ):
+  proc runKanalUnbounded(em: var BMFEmitter,
+                         topology: Topology) {.nimcall.} =
+    discard topology
+    for p in [1, 2]:
+      for c in [1, 2]:
+        runMvpUnboundedShape[KanalUnboundedAdapter[uint64]](
+          em, "kanal_unbounded", initKanalUnboundedQ,
+          p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
+          UnboundedMupmucMessageCount)
+
 # ---------- Adapter registry ----------
 
 proc buildAdapters(): seq[Adapter] =
@@ -672,6 +712,18 @@ proc buildAdapters(): seq[Adapter] =
       name: "moodycamel",
       topologiesSupported: {tMpmcUnbounded},
       run: runMoodycamel,
+    ))
+  when declared(initFlumeUnboundedQ):
+    result.add(Adapter(
+      name: "flume_unbounded",
+      topologiesSupported: {tMpmcUnbounded},
+      run: runFlumeUnbounded,
+    ))
+  when declared(initKanalUnboundedQ):
+    result.add(Adapter(
+      name: "kanal_unbounded",
+      topologiesSupported: {tMpmcUnbounded},
+      run: runKanalUnbounded,
     ))
 
 let adapters: seq[Adapter] = buildAdapters()

@@ -71,6 +71,14 @@ on:
         description: 'Force rigtorp/MPMCQueue soft-skip (v4.2.0 Stage 5.1)'
         type: boolean
         default: false
+      force_skip_flume:
+        description: 'Force flume soft-skip (v4.2.0 Stage 5.2)'
+        type: boolean
+        default: false
+      force_skip_kanal:
+        description: 'Force kanal soft-skip (v4.2.0 Stage 5.2)'
+        type: boolean
+        default: false
 # yamllint enable rule:truthy
 
 env:
@@ -91,6 +99,8 @@ env:
   FORCE_SKIP_ATOMIC_QUEUE: ${{ inputs.force_skip_atomic_queue && '1' || '' }}
   FORCE_SKIP_RIGTORP_SPSC: ${{ inputs.force_skip_rigtorp_spsc && '1' || '' }}
   FORCE_SKIP_RIGTORP_MPMC: ${{ inputs.force_skip_rigtorp_mpmc && '1' || '' }}
+  FORCE_SKIP_FLUME: ${{ inputs.force_skip_flume && '1' || '' }}
+  FORCE_SKIP_KANAL: ${{ inputs.force_skip_kanal && '1' || '' }}
 
 jobs:
   bench-tests:
@@ -483,25 +493,37 @@ jobs:
         run: |
           echo "::warning title=Adapter skipped::system.Channel smoke failed; bench will omit nim_channel slugs."
 
-      # ---------- v4.2.0 Stage 1: Crossbeam adapters consolidation ----------
+      # ---------- v4.2.0 Stage 1 + 5.2: consolidated Rust comparison cdylib ----------
       #
       # Crossbeam (Rust) was historically split into a separate
       # comparison workflow (retired in v4.2.0 Stage 1) to keep the
       # Rust toolchain off the bench.yml critical path. Stage 1 folded
       # the adapters into the regular bench matrix here, gated on the
       # smoke step's outcome so legs that don't exercise crossbeam pay
-      # nothing for the toolchain install. Five steps mirror the
-      # loony pattern: install (Rust toolchain + cdylib build) -> smoke
-      # -> set-env-on-success -> annotate-skip. Only bench_mpmc (uses
-      # crossbeam_array_queue) and bench_unbounded (uses crossbeam_seg_queue)
-      # gate on these steps; the other matrix legs short-circuit on the
-      # `if:` clauses and pay nothing for the Rust toolchain install.
+      # nothing for the toolchain install. Stage 5.2 then folded flume
+      # + kanal into the same cdylib (`libbench_ffi_comparison`,
+      # renamed from `libbench_ffi_crossbeam`) so a single Rust build
+      # serves all three crates and the bench binary only links one
+      # shared object.
+      #
+      # Routing of the four downstream Rust adapters across the matrix
+      # legs (used to gate the install / smoke / set-env steps):
+      #
+      #   bench_spsc       -> kanal (only)
+      #   bench_mpmc       -> crossbeam_array_queue, flume, kanal
+      #   bench_unbounded  -> crossbeam_seg_queue, flume_unbounded,
+      #                       kanal_unbounded
+      #
+      # Five steps mirror the loony pattern: install (Rust toolchain +
+      # cdylib build) -> smoke -> set-env-on-success -> annotate-skip.
 
       - name: Install Rust toolchain
         id: install-rust-toolchain
         if: |
           env.FORCE_SKIP_CROSSBEAM != '1' &&
-          (matrix.binary == 'bench_mpmc' || matrix.binary == 'bench_unbounded')
+          (matrix.binary == 'bench_spsc' ||
+           matrix.binary == 'bench_mpmc' ||
+           matrix.binary == 'bench_unbounded')
         continue-on-error: true
         uses: dtolnay/rust-toolchain@stable
 
@@ -509,35 +531,37 @@ jobs:
         if: |
           env.FORCE_SKIP_CROSSBEAM != '1' &&
           steps.install-rust-toolchain.outcome == 'success' &&
-          (matrix.binary == 'bench_mpmc' || matrix.binary == 'bench_unbounded')
+          (matrix.binary == 'bench_spsc' ||
+           matrix.binary == 'bench_mpmc' ||
+           matrix.binary == 'bench_unbounded')
         continue-on-error: true
         uses: Swatinem/rust-cache@v2
         with:
-          # Mirrors the cache key shape that the retired comparison
-          # workflow used so any pre-existing cache hits carry over
-          # after the consolidation. The manifest path is the
-          # current pre-Commit-5.2 location; Commit 5.2 will rename
-          # benchmarks/rust/bench-ffi-crossbeam/ -> .../comparison/
-          # and update both this workspace key and the manifest-path
-          # arg to the cargo build below.
-          workspaces: benchmarks/rust/bench-ffi-crossbeam
+          # Cache key shape preserved across the v4.2.0 Stage 5.2 rename
+          # (was `benchmarks/rust/bench-ffi-crossbeam`). The
+          # consolidated crate now also pulls flume + kanal sources
+          # into the same target/ tree.
+          workspaces: benchmarks/rust/comparison
 
-      - name: Build crossbeam cdylib
-        # Produces target/release/libbench_ffi_crossbeam.so on Linux.
-        # The Nim adapters' default {.passL.} block includes an -L flag
-        # for this path; the smoke + bench compile steps add a matching
-        # --passL:-Wl,-rpath,... below so the cdylib loads at runtime
-        # without LD_LIBRARY_PATH.
+      - name: Build comparison cdylib (crossbeam + flume + kanal)
+        # Produces target/release/libbench_ffi_comparison.so on Linux
+        # (the artifact name was libbench_ffi_crossbeam pre-Stage-5.2).
+        # The Nim adapters' shared `crossbeam_link.nim` module emits
+        # -L<dir> -lbench_ffi_comparison; the smoke + bench compile
+        # steps add a matching --passL:-Wl,-rpath,... below so the
+        # cdylib loads at runtime without LD_LIBRARY_PATH.
         id: install-crossbeam
         if: |
           env.FORCE_SKIP_CROSSBEAM != '1' &&
           steps.install-rust-toolchain.outcome == 'success' &&
-          (matrix.binary == 'bench_mpmc' || matrix.binary == 'bench_unbounded')
+          (matrix.binary == 'bench_spsc' ||
+           matrix.binary == 'bench_mpmc' ||
+           matrix.binary == 'bench_unbounded')
         continue-on-error: true
         run: |
           set -eu
           cargo build --release \
-            --manifest-path benchmarks/rust/bench-ffi-crossbeam/Cargo.toml
+            --manifest-path benchmarks/rust/comparison/Cargo.toml
 
       - name: Smoke crossbeam adapters
         id: smoke-crossbeam
@@ -555,23 +579,36 @@ jobs:
           nim c -d:release -d:danger --threads:on \
             -d:adapter_crossbeam_array_queue_available \
             -d:adapter_crossbeam_seg_queue_available \
-            --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
+            --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/comparison/target/release" \
             -o:.tmp/smoke_crossbeam \
             benchmarks/nim/smoke/smoke_crossbeam.nim
           ./.tmp/smoke_crossbeam
+
+      - name: Capture Rust comparison cdylib rpath
+        # Runs whenever the cdylib successfully built (regardless of
+        # which downstream adapter — crossbeam / flume / kanal — passes
+        # smoke). The aggregator emits a single --passL:-Wl,-rpath flag
+        # if any of the four downstream gates fires; the env var name
+        # is preserved across the v4.2.0 Stage 5.2 rename.
+        if: |
+          env.FORCE_SKIP_CROSSBEAM != '1' &&
+          steps.install-crossbeam.outcome == 'success' &&
+          (matrix.binary == 'bench_spsc' ||
+           matrix.binary == 'bench_mpmc' ||
+           matrix.binary == 'bench_unbounded')
+        run: |
+          echo "CROSSBEAM_RPATH_DIR=$(pwd)/benchmarks/rust/comparison/target/release" >> "$GITHUB_ENV"
 
       - name: Set crossbeam adapter defines (success only)
         if: |
           env.FORCE_SKIP_CROSSBEAM != '1' &&
           steps.install-crossbeam.outcome == 'success' &&
-          steps.smoke-crossbeam.outcome == 'success'
+          steps.smoke-crossbeam.outcome == 'success' &&
+          (matrix.binary == 'bench_mpmc' || matrix.binary == 'bench_unbounded')
         run: |
           {
             echo "ADAPTER_CROSSBEAM_ARRAY=1"
             echo "ADAPTER_CROSSBEAM_SEG=1"
-            # Capture the cdylib dir for the bench compile step's
-            # --passL:-Wl,-rpath,... flag (mirrors the smoke step above).
-            echo "CROSSBEAM_RPATH_DIR=$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release"
           } >> "$GITHUB_ENV"
 
       - name: Annotate crossbeam skipped
@@ -583,6 +620,87 @@ jobs:
            steps.smoke-crossbeam.outcome != 'success')
         run: |
           echo "::warning title=Adapter skipped::crossbeam install or smoke failed for ${{ matrix.binary }}; bench will omit crossbeam slugs."
+
+      # ---------- v4.2.0 Stage 5.2: flume + kanal share the consolidated cdylib ----------
+      #
+      # Same `install-rust-toolchain` + `install-crossbeam` (the cdylib
+      # build step) above produce libbench_ffi_comparison; flume + kanal
+      # only need a smoke + set-env step. The smoke compiles and runs
+      # smoke_comparison.nim, which exercises the bounded + unbounded
+      # variants of both crates (and is the gate that catches a missing
+      # symbol or a renamed export across crate version bumps).
+
+      - name: Smoke comparison flume+kanal adapters
+        id: smoke-comparison
+        if: |
+          env.FORCE_SKIP_CROSSBEAM != '1' &&
+          steps.install-crossbeam.outcome == 'success' &&
+          (matrix.binary == 'bench_spsc' ||
+           matrix.binary == 'bench_mpmc' ||
+           matrix.binary == 'bench_unbounded')
+        continue-on-error: true
+        run: |
+          set -eu
+          flags=""
+          if [ "${FORCE_SKIP_FLUME:-}" != "1" ]; then
+            flags="$flags -d:adapter_flume_available"
+          fi
+          if [ "${FORCE_SKIP_KANAL:-}" != "1" ]; then
+            flags="$flags -d:adapter_kanal_available"
+          fi
+          if [ -z "$flags" ]; then
+            echo "Both flume and kanal force-skipped; nothing to smoke."
+            exit 0
+          fi
+          # shellcheck disable=SC2086  # `flags` is intentionally word-split.
+          nim c -d:release -d:danger --threads:on \
+            $flags \
+            --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/comparison/target/release" \
+            -o:.tmp/smoke_comparison \
+            benchmarks/nim/smoke/smoke_comparison.nim
+          ./.tmp/smoke_comparison
+
+      - name: Set flume adapter define (success only)
+        if: |
+          env.FORCE_SKIP_CROSSBEAM != '1' &&
+          env.FORCE_SKIP_FLUME != '1' &&
+          steps.install-crossbeam.outcome == 'success' &&
+          steps.smoke-comparison.outcome == 'success' &&
+          (matrix.binary == 'bench_mpmc' || matrix.binary == 'bench_unbounded')
+        run: echo "ADAPTER_FLUME=1" >> "$GITHUB_ENV"
+
+      - name: Set kanal adapter define (success only)
+        if: |
+          env.FORCE_SKIP_CROSSBEAM != '1' &&
+          env.FORCE_SKIP_KANAL != '1' &&
+          steps.install-crossbeam.outcome == 'success' &&
+          steps.smoke-comparison.outcome == 'success' &&
+          (matrix.binary == 'bench_spsc' ||
+           matrix.binary == 'bench_mpmc' ||
+           matrix.binary == 'bench_unbounded')
+        run: echo "ADAPTER_KANAL=1" >> "$GITHUB_ENV"
+
+      - name: Annotate flume skipped
+        if: |
+          (matrix.binary == 'bench_mpmc' || matrix.binary == 'bench_unbounded') &&
+          (env.FORCE_SKIP_CROSSBEAM == '1' ||
+           env.FORCE_SKIP_FLUME == '1' ||
+           steps.install-crossbeam.outcome != 'success' ||
+           steps.smoke-comparison.outcome != 'success')
+        run: |
+          echo "::warning title=Adapter skipped::flume install or smoke failed for ${{ matrix.binary }}; bench will omit flume slugs."
+
+      - name: Annotate kanal skipped
+        if: |
+          (matrix.binary == 'bench_spsc' ||
+           matrix.binary == 'bench_mpmc' ||
+           matrix.binary == 'bench_unbounded') &&
+          (env.FORCE_SKIP_CROSSBEAM == '1' ||
+           env.FORCE_SKIP_KANAL == '1' ||
+           steps.install-crossbeam.outcome != 'success' ||
+           steps.smoke-comparison.outcome != 'success')
+        run: |
+          echo "::warning title=Adapter skipped::kanal install or smoke failed for ${{ matrix.binary }}; bench will omit kanal slugs."
 
       # ---------- v4.2.0 Stage 5.1: Tier 1 vendored header-only adapters ----------
       #
@@ -773,18 +891,34 @@ jobs:
           if [ "${ADAPTER_NIM_CHANNEL:-}" = "1" ]; then
             flags="$flags -d:adapter_nim_channel_available"
           fi
-          # Crossbeam (Rust cdylib): defines + a single --passL rpath so
-          # the bench binary loads libbench_ffi_crossbeam.so at runtime
-          # without LD_LIBRARY_PATH. Add the rpath flag once if either
-          # crossbeam gate is enabled.
+          # Consolidated Rust cdylib (libbench_ffi_comparison.so) backs
+          # the crossbeam, flume, and kanal adapters. All four downstream
+          # gates share the same --passL rpath so the bench binary loads
+          # the cdylib at runtime without LD_LIBRARY_PATH; emit the flag
+          # exactly once if any of the four are enabled. CROSSBEAM_RPATH_DIR
+          # was set by the cdylib's "set defines" step and points at the
+          # consolidated build output (renamed from libbench_ffi_crossbeam
+          # in v4.2.0 Stage 5.2).
           if [ "${ADAPTER_CROSSBEAM_ARRAY:-}" = "1" ]; then
             flags="$flags -d:adapter_crossbeam_array_queue_available"
           fi
           if [ "${ADAPTER_CROSSBEAM_SEG:-}" = "1" ]; then
             flags="$flags -d:adapter_crossbeam_seg_queue_available"
           fi
-          if [ "${ADAPTER_CROSSBEAM_ARRAY:-}" = "1" ] || [ "${ADAPTER_CROSSBEAM_SEG:-}" = "1" ]; then
-            flags="$flags --passL:-Wl,-rpath,${CROSSBEAM_RPATH_DIR:?CROSSBEAM_RPATH_DIR unset but crossbeam gate enabled}"
+          if [ "${ADAPTER_FLUME:-}" = "1" ]; then
+            flags="$flags -d:adapter_flume_available"
+          fi
+          if [ "${ADAPTER_KANAL:-}" = "1" ]; then
+            flags="$flags -d:adapter_kanal_available"
+          fi
+          if [ "${ADAPTER_CROSSBEAM_ARRAY:-}" = "1" ] || \
+             [ "${ADAPTER_CROSSBEAM_SEG:-}" = "1" ] || \
+             [ "${ADAPTER_FLUME:-}" = "1" ] || \
+             [ "${ADAPTER_KANAL:-}" = "1" ]; then
+            # CROSSBEAM_RPATH_DIR is set whenever any rust adapter
+            # passed install+smoke; the env-var name is preserved
+            # across the rename for backward compatibility.
+            flags="$flags --passL:-Wl,-rpath,${CROSSBEAM_RPATH_DIR:?CROSSBEAM_RPATH_DIR unset but a Rust comparison gate is enabled}"
           fi
           # v4.2.0 Stage 5.1 Tier 1 vendored adapters (header-only C++).
           # All three force `nim cpp` because their wrapper sources are

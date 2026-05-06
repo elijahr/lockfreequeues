@@ -35,6 +35,11 @@ when defined(adapter_atomic_queue_available):
 when defined(adapter_rigtorp_spsc_available):
   import ./adapters/rigtorp_spsc_adapter
 
+# v4.2.0 Stage 5.2 Tier 2 Rust comparison adapter: kanal exposes a
+# bounded MPMC channel that we exercise here at the 1p1c (SPSC) shape.
+when defined(adapter_kanal_available):
+  import ./adapters/kanal_adapter
+
 const
   ## Per-binary intdefines for SPSC wall-time control. Override at compile
   ## time with `-d:BenchSpscRuns=N` etc. Defaults match design §2.5.
@@ -74,6 +79,10 @@ when defined(adapter_atomic_queue_available):
 when defined(adapter_rigtorp_spsc_available):
   proc initRigtorpSpscQ(capacity: int): RigtorpSpscAdapter[uint64] =
     makeRigtorpSpscAdapter[uint64](capacity)
+
+when defined(adapter_kanal_available):
+  proc initKanalSpscQ(capacity: int): KanalAdapter[uint64] =
+    makeKanalAdapter[uint64](capacity)
 
 # ---------- Adapter procs (topology-based dispatch) ----------
 #
@@ -168,6 +177,16 @@ when declared(initRigtorpSpscQ):
       capacity = SpscCapacity,
     )
 
+when declared(initKanalSpscQ):
+  proc runKanalSpsc(em: var BMFEmitter, topology: Topology) {.nimcall.} =
+    discard topology
+    runMvpVariant[KanalAdapter[uint64]](
+      em,
+      slug = "kanal/spsc/1p1c",
+      queueInit = initKanalSpscQ,
+      capacity = SpscCapacity,
+    )
+
 # ---------- Adapter registry ----------
 
 proc buildAdapters(): seq[Adapter] =
@@ -193,6 +212,12 @@ proc buildAdapters(): seq[Adapter] =
       name: "rigtorp_spsc",
       topologiesSupported: {tSpsc},
       run: runRigtorpSpsc,
+    ))
+  when declared(initKanalSpscQ):
+    result.add(Adapter(
+      name: "kanal",
+      topologiesSupported: {tSpsc},
+      run: runKanalSpsc,
     ))
 
 let adapters: seq[Adapter] = buildAdapters()

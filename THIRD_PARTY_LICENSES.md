@@ -55,16 +55,18 @@ vendored into this repository. The benchmark adapter code (under
 
 - **Source:** https://github.com/crossbeam-rs/crossbeam
 - **Version:** `crossbeam-queue 0.3.x` (pinned by
-  `benchmarks/rust/bench-ffi-crossbeam/Cargo.toml`; recorded in the
-  generated `Cargo.lock` at build time)
+  `benchmarks/rust/comparison/Cargo.toml`; recorded in the
+  generated `Cargo.lock` at build time). The crate path was renamed
+  from `bench-ffi-crossbeam` in v4.2.0 Stage 5.2 when flume + kanal
+  were folded into the same consolidated cdylib.
 - **License:** Apache-2.0 OR MIT (choose either)
 - **Vendored at:** _(crate sources are downloaded by Cargo at build
   time; only our own thin C-ABI shim under
-  `benchmarks/rust/bench-ffi-crossbeam/` is committed)_
+  `benchmarks/rust/comparison/` is committed)_
 - **Upgrade procedure:** bump the `crossbeam-queue` version in
-  `benchmarks/rust/bench-ffi-crossbeam/Cargo.toml`, run `cargo build`
+  `benchmarks/rust/comparison/Cargo.toml`, run `cargo build`
   to refresh `Cargo.lock`, run the integration tests
-  (`cargo test --release --manifest-path benchmarks/rust/bench-ffi-crossbeam/Cargo.toml`)
+  (`cargo test --release --manifest-path benchmarks/rust/comparison/Cargo.toml`)
   and the Nim round-trip suite (`tests/t_bench_adapters.nim` with the
   crossbeam gates).
 
@@ -180,3 +182,45 @@ surface to four `uint64_t`-payload functions — same shim pattern as
 - **Vendored at:** `benchmarks/vendor/rigtorp_mpmc/`
 - **Upgrade procedure:** see
   `benchmarks/vendor/rigtorp_mpmc/README.md`
+
+## Tier 2 Rust comparison libraries (v4.2.0 Stage 5.2)
+
+Two additional Rust queue crates folded into the consolidated
+`bench_ffi_comparison` cdylib alongside crossbeam (see the Crossbeam
+block above for the renamed crate path and shared cdylib rationale).
+Crate sources are not vendored — Cargo resolves them from crates.io at
+build time and pins the resolved versions in `Cargo.lock`.
+
+### flume
+
+- **Source:** https://github.com/zesterer/flume
+- **Version:** `flume 0.11.x` (pinned by
+  `benchmarks/rust/comparison/Cargo.toml`; resolved version recorded
+  in `Cargo.lock` at build time).
+- **License:** Apache-2.0 OR MIT (choose either)
+- **Vendored at:** _(crate sources downloaded by Cargo at build time;
+  only our own thin C-ABI shim under
+  `benchmarks/rust/comparison/src/lib.rs` is committed)_
+- **Upgrade procedure:** bump the `flume` version in
+  `benchmarks/rust/comparison/Cargo.toml`, run
+  `cargo build --release --manifest-path benchmarks/rust/comparison/Cargo.toml`
+  to refresh `Cargo.lock`, re-run `smoke_comparison.nim` with
+  `-d:adapter_flume_available` to verify the four `flume_*` /
+  `flume_unbounded_*` symbols still resolve.
+
+### kanal
+
+- **Source:** https://github.com/fereidani/kanal
+- **Version:** `kanal 0.1.x` (pinned by
+  `benchmarks/rust/comparison/Cargo.toml`; resolved version recorded
+  in `Cargo.lock` at build time).
+- **License:** MIT
+- **Vendored at:** _(crate sources downloaded by Cargo at build time;
+  only our own thin C-ABI shim under
+  `benchmarks/rust/comparison/src/lib.rs` is committed)_
+- **Upgrade procedure:** bump the `kanal` version in
+  `benchmarks/rust/comparison/Cargo.toml`, run
+  `cargo build --release --manifest-path benchmarks/rust/comparison/Cargo.toml`
+  to refresh `Cargo.lock`, re-run `smoke_comparison.nim` with
+  `-d:adapter_kanal_available` to verify the four `kanal_*` /
+  `kanal_unbounded_*` symbols still resolve.
