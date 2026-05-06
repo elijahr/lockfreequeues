@@ -18,10 +18,11 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
-    uses: elijahr/.github/.github/workflows/momus.yml@devel
+    uses: axiomantic/.github/.github/workflows/momus.yml@devel
     with:
       pr_number: ${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pr_number }}
       event_name: ${{ github.event_name }}
+      trigger_command: /ai-review
       trigger_mention: "@axiomantic-momus[bot]"
     secrets:
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
