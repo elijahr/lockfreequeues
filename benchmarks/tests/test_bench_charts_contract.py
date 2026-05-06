@@ -151,7 +151,7 @@ SAMPLE_BMF: dict = {
 # `BLOCKING_LIBRARIES` in `docs/assets/bench-charts.js`; any drift
 # between the two is a contract regression caught by
 # `test_blocking_libraries_const_matches_contract`.
-EXPECTED_BLOCKING_LIBRARIES = {"threading_channels", "nim_channel"}
+EXPECTED_BLOCKING_LIBRARIES = {"threading_channels", "nim_channel", "nim_channels"}
 
 # Value-anchored regex for `LIBRARY_COLORS` entries in bench-charts.js
 # (per Phase 3.2 CRIT-4: marker-range extraction is brittle under

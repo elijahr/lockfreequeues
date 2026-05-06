@@ -61,11 +61,16 @@
     loony:                           '#8e24aa',
     threading_channels:              '#6d4c41',
     nim_channel:                     '#546e7a',
+    // `nim_channels` (plural) is the harness ID for Nim's stdlib
+    // `system/Channel` on platforms where the singular slug collides
+    // with another adapter. Same library, same blocking-on-full
+    // semantics — keep the color in sync with `nim_channel`.
+    nim_channels:                    '#546e7a',
   });
   // CONTRACT-TEST-PARSED-END LIBRARY_COLORS
 
   // CONTRACT-TEST-PARSED-START BLOCKING_LIBRARIES
-  const BLOCKING_LIBRARIES = ['threading_channels', 'nim_channel'];
+  const BLOCKING_LIBRARIES = ['threading_channels', 'nim_channel', 'nim_channels'];
   // CONTRACT-TEST-PARSED-END BLOCKING_LIBRARIES
   const BLOCKING_SET = new Set(BLOCKING_LIBRARIES);
 
