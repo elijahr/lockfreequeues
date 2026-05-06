@@ -84,6 +84,7 @@ task benchtests, "Runs the bench harness test suite":
   exec "nim c --threads:on -r -f tests/t_bench_common.nim"
   exec "nim c --threads:on -r -f tests/t_bench_latency.nim"
   exec "nim c --threads:on -r -f tests/t_bench_adapters.nim"
+  exec "nim c --threads:on -r -f tests/t_topology_split.nim"
 
 
 task benchteststress, "Runs the bench harness test suite including 3.3M-sample stress shapes":

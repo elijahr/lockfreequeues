@@ -49,7 +49,7 @@ decode an axis label or a slug.
 
 ### BMF
 
-Benchmark Manifest Format. The JSON shape produced by harness runs and merged
+Bencher Metric Format. The JSON shape produced by harness runs and merged
 by `merge_bmf.py` into `latest.json`. One slug per benchmark configuration.
 
 ### P×C

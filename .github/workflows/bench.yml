@@ -159,6 +159,21 @@ jobs:
       - name: Run bench harness tests
         run: nimble benchtests
 
+      - name: Run Python bench tests
+        # Stdlib unittest discovery picks up benchmarks/tests/*.py:
+        #   - test_bench_charts_contract: GENUINE behavior-locking
+        #     coverage of THROUGHPUT_PANELS routing, DOM container IDs,
+        #     LIBRARY_COLORS map, and example.json BMF schema.
+        #   - test_merge_bmf: SLUG_RE characterization plus union-step
+        #     conflict detection.
+        #   - test_smoke_compiles: STRICT_FLOOR guard against silent-
+        #     mask reintroduction; skip-by-default until the post-merge
+        #     bench.yml regenerates docs/assets/bench-results/latest.json
+        #     with the restored boost/loony/threading_channels/crossbeam
+        #     slugs (env-var flip is a v4.3.0 follow-up; CHANGELOG
+        #     [4.2.0] Known Limitations documents the deferral).
+        run: python3 -m unittest discover -s benchmarks/tests -v
+
   bench:
     # Track 2 PR 2: matrix over the 5 topology-split binaries. Each
     # matrix entry is its own GitHub Actions job with an independent
