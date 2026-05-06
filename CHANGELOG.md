@@ -13,6 +13,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Multi-panel benchmark chart layout on `docs/benchmarks.md`: a hero
+  panel highlighting lockfreequeues vs alternatives at the most-relevant
+  shape, per-topology throughput panels, and a dedicated latency panel.
+  Hero panel selects shape by preference order MPMC 4p4c → MPMC 2p2c →
+  MPSC 4p1c → SPSC 1p1c, with a bounded-only fallback when no shape in
+  the snapshot covers all comparison libraries.
+- Latency panel rendering (`#bench-latency`) — log-y stepped ladder
+  across the p50 / p95 / p99 / p999 / max percentiles emitted by
+  `bench_latency.nim`.
+- Library color discipline (`LIBRARY_COLORS` map in
+  `docs/assets/bench-charts.js`): a single brand color shared across the
+  full lockfreequeues family (sipsic / sipmuc / mupsic / mupmuc and
+  their unbounded counterparts) and distinct stable colors for each
+  comparison library, so toggling series in the legend never reassigns
+  hues.
+- Blocking-library visual differentiation: `threading_channels` and
+  `nim_channel` / `nim_channels` are drawn with dotted lines plus a
+  dedicated legend badge, marking them apart from the non-blocking
+  comparison set.
+- Five new guide pages under `docs/guide/`: Getting Started, Core
+  Concepts, Bounded vs Unbounded, Memory Management, and Performance
+  Tuning. Skeletons scaffolded against the typestates-pattern guide
+  shape, then filled in via a dedicated prose pass.
+- New top-level `docs/contributing.md` (substantially richer than the
+  9-line root `CONTRIBUTING.md`), covering branch / version / CHANGELOG
+  protocol and contributor workflow.
+- "How to read these numbers" and "When to pick lockfreequeues"
+  narrative sections in `docs/benchmarks.md`, surfacing methodology
+  context above the chart so readers don't have to dig through the
+  benchmarks README to interpret the numbers.
+- Hybrid README BENCHMARKS block: headline number (10.6× faster than
+  system Channel at MPMC 4p4c) plus the existing four-row variant table
+  plus a link line to the live chart page. Replaces the prior
+  table-only block.
+- Representative `docs/assets/bench-results/example.json` BMF fixture
+  used by the chart for fallback rendering when `latest.json` is
+  unavailable (e.g. fresh PRs before the snapshot pipeline runs on
+  devel).
+- Four new contract tests pinning the chart's BMF surface area: DOM
+  container IDs (`#bench-chart`, `#bench-latency`, …), `LIBRARY_COLORS`
+  coverage of every library slug emitted by the bench binaries,
+  `BLOCKING_LIBRARIES` membership for blocking-API libraries, and
+  `example.json` schema validity.
+- Defensive fallback step in `bench.yml` writing a
+  `_status: "fallback"` marker into `latest.json` when `merge_bmf.py`
+  fails or is cancelled, so the chart's silent-on-error behaviour
+  cannot mask a broken upload pipeline.
 - Latency p99 + throughput regression gating in Bencher (PR 6, Track 6).
   `bench.yml`'s base-branch tracking step now configures per-measure
   thresholds in a single `bencher run` invocation: `latency_p99_ns`
@@ -104,6 +151,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The three pre-existing guide-shaped pages (`safety-model.md`,
+  `slot-ownership-typestates.md`, `examples.md`) moved from
+  `docs/` to `docs/guide/` so the entire guide track lives under one
+  directory. Internal links updated; mkdocs nav follows the move.
+- API reference pages for `sipsic`, `mupsic`, and `mupmuc` expanded to
+  match the structural template established by `sipmuc.md` (consistent
+  section ordering, signatures, examples, cross-links).
+- mkdocs `nav:` restructured to a top-level `Guide` grouping (typestates
+  pattern), with the API reference and benchmarks sitting alongside it
+  rather than scattered through the tree.
+- `mkdocs.yml` aligned with the typestates pattern: `include-markdown`
+  plugin enabled, `theme.custom_dir: docs/overrides` wired in,
+  `show_attribution: false` set on the `mkdocstrings-nim` handler,
+  and `click<8.3.0` pinned via the docs requirements to dodge an
+  upstream incompatibility.
+- `docs.yml` workflow swapped its in-place `nim.cfg` patching for
+  `nimble install nim -y` to expose the Nim compiler API to
+  `mkdocstrings-nim` more cleanly. Nim pinned to 2.2.8 to match the
+  build matrix, and a daily cron at 05:17 UTC was added so the live
+  chart picks up new BMF snapshots even when no commit lands on devel.
+- `bench.yml` snapshot-commit message now carries `[skip ci]` (third
+  loop-prevention layer alongside the existing `paths-ignore` filter
+  and the bot-actor guard on the bench / bench-upload jobs).
+- `bench.yml` `Track base branch benchmarks with Bencher` step marked
+  `continue-on-error: true` as a release-day band-aid for an upstream
+  Bencher CLI threshold-model validation quirk; threshold gating remains
+  dormant pending the Track 6 calibration soak.
 - `README.md` BENCHMARKS markers now hold a hand-curated four-row
   summary table (Sipsic / Sipmuc / Mupsic / Mupmuc bounded at one
   representative shape each) plus a link line to the live chart page
