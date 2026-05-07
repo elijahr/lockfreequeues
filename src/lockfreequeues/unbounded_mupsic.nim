@@ -250,7 +250,6 @@ proc push*[S: static int, T; MaxThreads: static int](
         .}
 
   self.handle.withPin:
-    var spins = InitialSpin
     while true:
       var seg = self.queue.tailSegment.load(moAcquire)
       var tail = seg.tail.load(moAcquire)
@@ -276,7 +275,8 @@ proc push*[S: static int, T; MaxThreads: static int](
           else:
             # Lost the segment-alloc race, free our orphan and back off.
             freeAligned(newSeg)
-            backoffOnRetry(spins)
+            # CAS-loss-retry on segment-alloc race (producer-vs-producer).
+            backoffOnCASLossRetry()
             continue
         else:
           # Someone else allocated; advance tailSegment (best effort) and

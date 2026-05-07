@@ -266,7 +266,6 @@ proc push*[S: static int, T; MaxThreads: static int](
         .}
 
   self.handle.withPin:
-    var spins = InitialSpin
     while true:
       var seg = self.queue.tailSegment.load(moAcquire)
       var tail = seg.tail.load(moAcquire)
@@ -291,7 +290,8 @@ proc push*[S: static int, T; MaxThreads: static int](
             # Lost the segment-alloc race: another producer linked first.
             # Free our orphan segment and back off before retrying.
             freeAligned(newSeg)
-            backoffOnRetry(spins)
+            # CAS-loss-retry on segment-alloc race (producer-vs-producer).
+            backoffOnCASLossRetry()
             continue
         else:
           # Another producer already linked next; just advance tailSegment
@@ -354,7 +354,6 @@ proc pop*[S: static int, T; MaxThreads: static int](
     # from under us before we read it.
     var seg = self.queue.headSegment.load(moAcquire)
 
-    var spins = InitialSpin
     while true:
       let tail = seg.tail.load(moAcquire)
       var prevIdx = seg.prevConsumerIdx.load(moAcquire)
@@ -368,7 +367,8 @@ proc pop*[S: static int, T; MaxThreads: static int](
           if not seg.committed[mySlot].load(moAcquire):
             break
           # Try again
-          backoffOnRetry(spins)
+          # CAS-loss-retry: peer producer already finished; next iteration races consumer prevConsumerIdx CAS.
+          backoffOnCASLossRetry()
           continue
 
         # Segment exhausted, try to advance to the next one. CAS
@@ -398,7 +398,8 @@ proc pop*[S: static int, T; MaxThreads: static int](
         else:
           # Another consumer already advanced. Pick up its observation.
           seg = expected
-        backoffOnRetry(spins)
+        # CAS-loss-retry on segment-advance (consumer-vs-consumer headSegment CAS).
+        backoffOnCASLossRetry()
         continue
 
       # Check if this slot is committed

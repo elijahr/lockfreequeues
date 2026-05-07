@@ -27,6 +27,13 @@ suite "backoff":
       inc counter
     check counter == 1000
 
+  test "backoffOnCASLossRetry is callable in a tight loop without state":
+    var counter = 0
+    for i in 0 ..< 1000:
+      backoffOnCASLossRetry()
+      inc counter
+    check counter == 1000
+
   test "InitialSpin, MaxSpin, YieldThreshold defaults match design doc":
     check InitialSpin == 4
     check MaxSpin == 256
