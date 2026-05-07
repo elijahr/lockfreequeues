@@ -44,29 +44,81 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LATEST_JSON = REPO_ROOT / "docs" / "assets" / "bench-results" / "latest.json"
 
-# The strict 17-project floor for v4.2.0 — the set of library slug
-# prefixes that bench.yml MUST contribute to the published snapshot.
-# Each entry is matched as a prefix against the first slash-separated
-# segment of every slug in latest.json. A library is "present" iff at
-# least one slug starts with that prefix.
+# The strict slug-prefix floor for v4.2.0 — the set of first-segment
+# slug prefixes that bench.yml MUST contribute to the published
+# snapshot. Each entry is matched as a prefix against the first
+# slash-separated segment of every slug in latest.json. A prefix is
+# "present" iff at least one slug starts with that prefix.
 #
-# Provenance: see the v4.2.0 design doc ("Stage 1 — CI tightening")
-# and the diagnostic findings in commit
-# `ci(bench): diagnose and fix smoke-compile and install gaps for
-# absent comparison libs`. Updates to this list flow through the
-# CHANGELOG (Work Item I) when a library is autonomously dropped per
-# the 3-distinct-approaches self-unblocking budget.
+# Provenance: enumerated from the actual slug-emission sites in
+# `benchmarks/nim/bench_{spsc,mpsc,mpmc,unbounded}.nim`. The CHANGELOG's
+# "16/17 libraries" wording refers to *libraries-as-installed* in
+# bench.yml (after dropping `folly_pcq` per the v4.2.0 known
+# limitations). The slug-prefix count here is higher because some
+# libraries emit multiple distinct first-segment prefixes:
+#
+#   * Boost emits one shared prefix `boost_lockfree_queue` across both
+#     SPSC and MPMC bench files (the `boost_lockfree_spsc` adapter
+#     define exists at install time but the SPSC bench reuses the
+#     `boost_lockfree_queue/spsc/...` slug shape).
+#   * The system.Channel adapter is installed once but emits two
+#     prefixes: `nim_channel` (MPSC) and `nim_channels` (MPMC).
+#   * Flume and kanal each emit a bounded prefix (`flume`, `kanal`)
+#     from `bench_mpmc.nim` and a separate unbounded prefix
+#     (`flume_unbounded`, `kanal_unbounded`) from `bench_unbounded.nim`.
+#
+# Updates to this list flow through the CHANGELOG (Work Item I) when a
+# library or slug-prefix is autonomously dropped per the
+# 3-distinct-approaches self-unblocking budget. The
+# `LOCKFREEQUEUES_BENCH_STRICT_FLOOR=1` env-var gate below remains in
+# place until the post-merge bench.yml run regenerates `latest.json`
+# with every prefix listed here present.
 STRICT_FLOOR: frozenset[str] = frozenset(
     {
-        # Boost.LockFree — fixed via --path:src on the smoke step.
+        # ---- lockfreequeues family (8 prefixes, 4 bounded + 4 unbounded) ----
+        "lockfreequeues_sipsic",
+        "lockfreequeues_mupsic",
+        "lockfreequeues_sipmuc",
+        "lockfreequeues_mupmuc",
+        "lockfreequeues_unbounded_sipsic",
+        "lockfreequeues_unbounded_sipmuc",
+        "lockfreequeues_unbounded_mupsic",
+        "lockfreequeues_unbounded_mupmuc",
+        # ---- Comparison libraries (15 prefixes from 14 installed libs) ----
+        # Boost.LockFree (single prefix shared by SPSC + MPMC bench
+        # files; restored in v4.2.0 via --path:src on the smoke step).
         "boost_lockfree_queue",
-        "boost_lockfree_spsc",
-        # loony — fixed via --path:$(nimble path loony) +
+        # loony — restored via --path:$(nimble path loony) +
         # --path:$(nimble path arc) on smoke and bench compile.
         "loony",
-        # threading.Chan — fixed via
+        # MoodyCamel.
+        "moodycamel",
+        # threading.Chan — restored via
         # --path:$(nimble path threading) on smoke and bench compile.
         "threading_channels",
+        # system.Channel — emits two prefixes (singular for MPSC,
+        # plural for MPMC).
+        "nim_channel",
+        "nim_channels",
+        # Crossbeam — Rust cdylib exposes both queue families.
+        "crossbeam_array_queue",
+        "crossbeam_seg_queue",
+        # rigtorp — separate SPSC and MPMC headers.
+        "rigtorp_spsc",
+        "rigtorp_mpmc",
+        # atomic_queue (header-only).
+        "atomic_queue",
+        # liblfds — bounded SPSC and MPMC share the `liblfds` prefix.
+        "liblfds",
+        # flume + kanal — each emits a bounded prefix and a separate
+        # unbounded prefix.
+        "flume",
+        "flume_unbounded",
+        "kanal",
+        "kanal_unbounded",
+        # NOTE: `folly_pcq` was dropped from the floor in v4.2.0 per
+        # CHANGELOG ### Known Limitations (transitive-include closure
+        # exceeds threshold; folly main requires C++20 vs repo C++17).
     }
 )
 

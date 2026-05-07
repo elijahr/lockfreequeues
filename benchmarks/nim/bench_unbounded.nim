@@ -118,6 +118,10 @@ proc usipsicConsumerThread[S: static int; T](
     let r = ctx.queue[].pop()
     if r.isSome:
       inc local
+      # Reset the harness-side backoff after each successful pop so
+      # accumulated `spinsConsumed` from a prior empty-pop streak does
+      # not bias the next contention window into yielding too early.
+      hb = initHarnessBackoff()
     else:
       hb.backoff()
 
@@ -188,6 +192,9 @@ proc usipmucConsumerThread[S: static int; T; MaxT: static int](
       let r = consumer.pop()
       if r.isSome:
         inc local
+        # See `usipsicConsumerThread`: reset the sticky backoff window
+        # after each successful pop.
+        hb = initHarnessBackoff()
       else:
         hb.backoff()
 
@@ -331,6 +338,9 @@ proc runOneUMupsicRun[S: static int; T; MaxT: static int; P: static int](
     let r = queue[].pop()
     if r.isSome:
       inc local
+      # See `usipsicConsumerThread`: reset the sticky backoff window
+      # after each successful pop.
+      hb = initHarnessBackoff()
     else:
       hb.backoff()
   for i in 0 ..< P: joinThread(producerThreads[i])
@@ -398,6 +408,9 @@ proc umupmucConsumerThread[S: static int; T; MaxT: static int](
       let r = consumer.pop()
       if r.isSome:
         inc local
+        # See `usipsicConsumerThread`: reset the sticky backoff window
+        # after each successful pop.
+        hb = initHarnessBackoff()
       else:
         hb.backoff()
 
@@ -650,8 +663,13 @@ when declared(initFlumeUnboundedQ):
   proc runFlumeUnbounded(em: var BMFEmitter,
                          topology: Topology) {.nimcall.} =
     discard topology
-    for p in [1, 2]:
-      for c in [1, 2]:
+    # 3x3 grid for parity with the other unbounded MPMC adapters
+    # (loony, crossbeam_seg_queue, moodycamel, lockfreequeues
+    # unbounded_mupmuc). The 4-thread shapes are the oversubscribed
+    # cell on a 4-vCPU CI runner; peers run them unconditionally so
+    # we do too.
+    for p in [1, 2, 4]:
+      for c in [1, 2, 4]:
         runMvpUnboundedShape[FlumeUnboundedAdapter[uint64]](
           em, "flume_unbounded", initFlumeUnboundedQ,
           p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
@@ -661,8 +679,10 @@ when declared(initKanalUnboundedQ):
   proc runKanalUnbounded(em: var BMFEmitter,
                          topology: Topology) {.nimcall.} =
     discard topology
-    for p in [1, 2]:
-      for c in [1, 2]:
+    # 3x3 grid for parity with peer unbounded MPMC adapters; see
+    # `runFlumeUnbounded` above for the rationale.
+    for p in [1, 2, 4]:
+      for c in [1, 2, 4]:
         runMvpUnboundedShape[KanalUnboundedAdapter[uint64]](
           em, "kanal_unbounded", initKanalUnboundedQ,
           p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,

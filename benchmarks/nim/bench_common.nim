@@ -55,15 +55,21 @@ proc initHarnessBackoff*(): HarnessBackoff =
   result.spinsConsumed = 0
 
 proc backoff*(b: var HarnessBackoff) {.inline.} =
-  if b.spinsRemaining > 0:
-    cpuPause()
-    dec b.spinsRemaining
-    inc b.spinsConsumed
-    return
-  if b.spinsConsumed >= HarnessYieldThreshold:
-    schedYield()
-    b.spinsConsumed = 0
-  b.spinsRemaining = HarnessSpinBudget
+  # Restructured so every call that does NOT escalate to a scheduler
+  # yield issues exactly one `cpuPause` (preserves a uniform pause
+  # cadence). The previous shape skipped the pause whenever the spin
+  # budget was reset, even though a reset without yield is just a
+  # bookkeeping step between two pause-emitting iterations.
+  if b.spinsRemaining <= 0:
+    if b.spinsConsumed >= HarnessYieldThreshold:
+      schedYield()
+      b.spinsConsumed = 0
+      b.spinsRemaining = HarnessSpinBudget
+      return
+    b.spinsRemaining = HarnessSpinBudget
+  cpuPause()
+  dec b.spinsRemaining
+  inc b.spinsConsumed
 
 # ---------- Topology ----------
 

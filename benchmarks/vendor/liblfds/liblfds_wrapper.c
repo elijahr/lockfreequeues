@@ -118,7 +118,20 @@ typedef struct {
 
 void *bench_liblfds_bmm_init(unsigned long long capacity) {
   size_t cap = bench_next_pow2((size_t)capacity);
-  bench_liblfds_bmm_t *q = (bench_liblfds_bmm_t *)malloc(sizeof(*q));
+  /* `bench_liblfds_bmm_t` embeds `struct lfds711_queue_bmm_state`, whose
+   * `read_index` / `write_index` fields are declared with
+   * `LFDS711_PAL_ALIGN(LFDS711_PAL_ATOMIC_ISOLATION_IN_BYTES)` (128 B on
+   * x64). `malloc` only guarantees 16-byte alignment on most 64-bit
+   * platforms, which trips the alignment assertion in
+   * `lfds711_misc_internal_backoff_init` during queue init. Use
+   * `posix_memalign` with the upstream isolation constant so the struct
+   * is allocated at a 128-byte boundary. The bss variant does NOT need
+   * this fix: `lfds711_queue_bss_state` is not over-aligned. */
+  bench_liblfds_bmm_t *q = NULL;
+  if (posix_memalign((void **)&q, LFDS711_PAL_ATOMIC_ISOLATION_IN_BYTES,
+                     sizeof(*q)) != 0) {
+    return NULL;
+  }
   if (q == NULL) return NULL;
   q->elements = (struct lfds711_queue_bmm_element *)malloc(
       sizeof(struct lfds711_queue_bmm_element) * cap);

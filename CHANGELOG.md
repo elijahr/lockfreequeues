@@ -11,7 +11,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `benchmarks/nim/bench_unbounded.nim`: `runFlumeUnbounded` and
+  `runKanalUnbounded` expanded from a 2x2 producer/consumer grid
+  (`[1, 2]` x `[1, 2]`) to a 3x3 grid (`[1, 2, 4]` x `[1, 2, 4]`)
+  so the flume/kanal unbounded shapes match every other unbounded
+  MPMC peer (loony, crossbeam_seg_queue, moodycamel,
+  lockfreequeues_unbounded_mupmuc).
+- `benchmarks/tests/test_smoke_compiles.py` `STRICT_FLOOR` expanded
+  to enumerate every slug-prefix the bench harness emits (8
+  lockfreequeues family + 15 comparison-library prefixes) so the
+  silent-mask CI guard catches a drop from any installed adapter,
+  not only the four restored in the initial Stage 1 patch.
+
 ### Fixed
+
+- `benchmarks/vendor/liblfds/liblfds_wrapper.c`
+  `bench_liblfds_bmm_init` now allocates the wrapper struct with
+  `posix_memalign(LFDS711_PAL_ATOMIC_ISOLATION_IN_BYTES)` instead of
+  plain `malloc`. The embedded `lfds711_queue_bmm_state` declares
+  its `read_index` / `write_index` with
+  `LFDS711_PAL_ALIGN(LFDS711_PAL_ATOMIC_ISOLATION_IN_BYTES)` (128
+  bytes on x64), and `malloc`'s 16-byte minimum alignment tripped
+  the upstream alignment assertion in
+  `lfds711_misc_internal_backoff_init`. The `bss` (SPSC) variant
+  does not need this fix.
+- `benchmarks/nim/bench_common.nim` `HarnessBackoff.backoff`
+  restructured so every call that does not escalate to a scheduler
+  yield issues exactly one `cpuPause`. The previous shape skipped
+  the pause whenever the spin budget was reset, producing an
+  inconsistent pause cadence on the empty-pop path.
+- `benchmarks/nim/bench_unbounded.nim` consumer threads
+  (`usipsicConsumerThread`, `usipmucConsumerThread`,
+  `umupmucConsumerThread`, plus the in-line `runOneUMupsicRun`
+  consumer loop) now reset `HarnessBackoff` after every successful
+  pop. Previously the accumulated `spinsConsumed` from a prior
+  empty-pop streak persisted across success boundaries and biased
+  the next contention window into yielding too early.
 
 ### Removed
 
