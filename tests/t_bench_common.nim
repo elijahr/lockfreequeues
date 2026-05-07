@@ -315,37 +315,18 @@ suite "bench_common runThroughputHarness":
 
 # ---------- Task 0.6: runLatencyHarness smoke ----------
 
-when defined(gcRefc) and compileOption("threads"):
-  # Skipped under --mm:refc --threads:on. The latency harness shares
-  # `Histogram.topKHeap` and `reservoir` (Nim `seq`s) between the pinger
-  # thread and the main thread: the pinger populates them, then the main
-  # thread reads them via `percentiles()` after the pinger has joined.
-  # Under refc, each thread has its own local heap which is torn down at
-  # thread join, freeing those seqs out from under the main thread —
-  # producing a use-after-free that surfaces as a SIGSEGV inside
-  # `heapqueue.len` (called from `bench_common.percentiles`).
-  #
-  # Other MM modes (atomicArc, arc, orc — including the default --mm:orc)
-  # use a shared heap and run this path correctly. Refc + threads sharing
-  # `seq`/`string`/`ref` across threads is a documented Nim limitation,
-  # not a bench-harness logic bug. See the threading notes in the Nim
-  # manual / experimental manual.
-  suite "bench_common runLatencyHarness":
-    test "skipped under --mm:refc --threads:on (Nim refc + cross-thread seq footgun)":
-      skip()
-else:
-  suite "bench_common runLatencyHarness":
-    test "smoke: 1P/1C, 1000 messages, 1 run, 0 warmup; p50<p99<max":
-      let metrics = runLatencyHarness[SmokeAdapter](
-        queueInit = proc(): SmokeAdapter = initSmokeAdapter(1024),
-        messageCount = 1000,
-        runCount = 1,
-        warmupCount = 0,
-      )
-      check metrics.samples >= 1000
-      check metrics.p50_ns > 0.0
-      check metrics.p99_ns >= metrics.p50_ns
-      check metrics.max_ns >= metrics.p99_ns
+suite "bench_common runLatencyHarness":
+  test "smoke: 1P/1C, 1000 messages, 1 run, 0 warmup; p50<p99<max":
+    let metrics = runLatencyHarness[SmokeAdapter](
+      queueInit = proc(): SmokeAdapter = initSmokeAdapter(1024),
+      messageCount = 1000,
+      runCount = 1,
+      warmupCount = 0,
+    )
+    check metrics.samples >= 1000
+    check metrics.p50_ns > 0.0
+    check metrics.p99_ns >= metrics.p50_ns
+    check metrics.max_ns >= metrics.p99_ns
 
 # ---------- Task 0.8: lockfreequeues adapter smoke tests ----------
 
