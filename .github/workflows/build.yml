@@ -52,10 +52,6 @@ jobs:
             nim-version: 'stable'
             sanitize-threads: 'yes'
             sanitize-address: 'yes'
-          - runs-on: macos-latest
-            nim-version: 'stable'
-            sanitize-threads: 'yes'
-            sanitize-address: 'yes'
 
     steps:
       - name: Restore cache
@@ -126,6 +122,68 @@ jobs:
           # not used. The sibling-clone step above is what populates the
           # local nimble store; going through `nimble develop` would only
           # add a redundant dep-resolution round trip.
+          echo "::group::Run test suite (includes arc, orc, refc, lock-free enforcement)"
+          nimble_run nimble test
+          echo "::endgroup::"
+          echo "::group::Run examples"
+          nimble_run nimble examples
+          echo "::endgroup::"
+
+  test-macos:
+    name: Test nim-stable / macos-latest
+    # macOS smoke coverage runs on devel pushes and tag pushes only — skipped
+    # on PRs to save CI time. Darwin-only regressions are rare for a Nim
+    # project where Linux is the primary build; if one slips through, it
+    # surfaces on the next push to devel.
+    if: github.event_name != 'pull_request'
+    runs-on: macos-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Restore cache
+        uses: actions/cache@v4
+        with:
+          path: ${HOME}/.cache
+          key: cache-macos-latest-stable
+
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Setup Nim stable
+        uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: 'stable'
+
+      - name: Clone and install sibling deps (nim-debra, nim-typestates)
+        run: |
+          set -e
+          cd ..
+          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
+          git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
+          (cd nim-typestates && nimble install -y)
+          (cd nim-debra && nimble install -y)
+
+      - name: Vendor unittest2 (nim.cfg expects deps/unittest2)
+        run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
+
+      - name: Run tests
+        run: |
+          set -o pipefail
+          export SANITIZE_THREADS=yes
+          export SANITIZE_ADDRESS=yes
+          nimble_run() {
+            local logfile
+            logfile="$(mktemp)"
+            "$@" 2>&1 | tee "$logfile"
+            local rc=${PIPESTATUS[0]}
+            if [[ $rc -ne 0 ]]; then
+              return $rc
+            fi
+            if grep -Eq '^[[:space:]]*Error:' "$logfile"; then
+              echo "::error::nimble reported an error but exited 0; failing the step."
+              return 1
+            fi
+          }
           echo "::group::Run test suite (includes arc, orc, refc, lock-free enforcement)"
           nimble_run nimble test
           echo "::endgroup::"
