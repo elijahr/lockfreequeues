@@ -2,6 +2,9 @@
 .vscode/
 .DS_Store
 
+# mise tool-version pin (per-developer; canonical Nim version is in lockfreequeues.nimble)
+mise.toml
+
 # Local PR description scratch file (do not commit)
 .pr-description.md
 
