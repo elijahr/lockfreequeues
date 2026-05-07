@@ -508,7 +508,8 @@ type
     fwd: ptr Q
     rev: ptr Q
     count: int
-    histogram: ptr Histogram
+    chan: ptr Channel[float]
+    debugMode: bool
 
   PongerCtx[Q] = object
     fwd: ptr Q
@@ -519,7 +520,15 @@ proc pingerThreadBody[Q](ctx: ptr PingerCtx[Q]) {.thread.} =
   ## Send a monotonic-ns timestamp via the forward queue, spin on the
   ## reverse queue until the ponger echoes it back, record RTT.
   ## `mixin push / pop` defers symbol resolution to the call site.
+  ##
+  ## Histogram lives entirely on this thread's local heap; after the
+  ## measurement loop finishes we drain its classified state to
+  ## `ctx.chan` so the main thread can reconstruct a fresh Histogram
+  ## without touching this thread's seqs (which refc tears down at
+  ## thread exit). See plans/2026-05-07-histogram-refc-thread-safety-impl.md
+  ## Task 1.
   mixin push, pop
+  var hist = initHistogram(ctx.debugMode)
   for _ in 0 ..< ctx.count:
     let t0 = getMonoTime()
     let payload = uint64(inNanoseconds(t0 - MonoTime()))
@@ -531,8 +540,31 @@ proc pingerThreadBody[Q](ctx: ptr PingerCtx[Q]) {.thread.} =
         let t1 = getMonoTime()
         let rtt = float(inNanoseconds(t1 - t0))
         if rtt > 0.0:
-          ctx.histogram[].record(rtt)
+          hist.record(rtt)
         break
+
+  # Drain classified Histogram state to the main thread. The 5-counter
+  # prefix is always sent (regardless of debugMode); the main thread
+  # sizes its own Histogram from `ctx.debugMode` and ignores the
+  # debugAll length when not in debug mode. `joinThread` provides the
+  # happens-before edge that makes blocking recv() with known counts
+  # safe.
+  ctx.chan[].send(float(hist.seenAll))
+  ctx.chan[].send(float(hist.seenBody))
+  ctx.chan[].send(float(hist.topKHeap.len))
+  ctx.chan[].send(float(hist.reservoir.len))
+  ctx.chan[].send(float(hist.debugAll.len))
+  # HeapQueue's `items` iterator was added in 2.1.1 but isn't picked up
+  # consistently across mm modes here, so go through the indexer (which
+  # is plain `lent T` access into the underlying seq — heap order, but
+  # the main thread re-pushes through `topKHeap.push` so order doesn't
+  # matter on the wire).
+  for i in 0 ..< hist.topKHeap.len:
+    ctx.chan[].send(hist.topKHeap[i])
+  for v in hist.reservoir:
+    ctx.chan[].send(v)
+  for v in hist.debugAll:
+    ctx.chan[].send(v)
 
 proc pongerThreadBody[Q](ctx: ptr PongerCtx[Q]) {.thread.} =
   mixin push, pop
@@ -562,12 +594,22 @@ proc runOneLatencyRun[Q](
   ## p50 / p99 measurements in PR 1 hinge on.
   var fwd = queueInit()
   var rev = queueInit()
-  var hist = initHistogram()
+
+  # Per-run shared-heap channel for draining the pinger's local
+  # Histogram state across the refc thread-heap boundary. Heap-allocated
+  # so the Channel itself doesn't sit on either thread's local heap.
+  # See plans/2026-05-07-histogram-refc-thread-safety-impl.md Task 1.
+  var chan = create(Channel[float])
+  chan[].open(0)  # unbounded
+  defer:
+    chan[].close()
+    dealloc(chan)
 
   var pingerCtx = PingerCtx[Q](
     fwd: addr fwd, rev: addr rev,
     count: messageCount,
-    histogram: addr hist,
+    chan: chan,
+    debugMode: false,  # latency harness never enables debugMode today
   )
   var pongerCtx = PongerCtx[Q](
     fwd: addr fwd, rev: addr rev,
@@ -581,6 +623,34 @@ proc runOneLatencyRun[Q](
   createThread(pongerThread, pongerThreadBody[Q], addr pongerCtx)
   joinThread(pingerThread)
   joinThread(pongerThread)
+
+  # Drain the pinger's classified Histogram state into a fresh
+  # main-thread Histogram. joinThread above provides the happens-before
+  # edge, and the pinger sent a fixed 5-counter prefix followed by the
+  # exact number of floats those counters describe — so blocking recv()
+  # cannot deadlock here.
+  var hist = initHistogram(pingerCtx.debugMode)
+  let seenAll       = int(chan[].recv())
+  let seenBody      = int(chan[].recv())
+  let topKLen       = int(chan[].recv())
+  let reservoirLen  = int(chan[].recv())
+  let debugAllLen   = int(chan[].recv())
+  for _ in 0 ..< topKLen:
+    hist.topKHeap.push(chan[].recv())
+  for _ in 0 ..< reservoirLen:
+    hist.reservoir.add(chan[].recv())
+  if pingerCtx.debugMode:
+    for _ in 0 ..< debugAllLen:
+      hist.debugAll.add(chan[].recv())
+  else:
+    # Drain (and discard) any debugAll values the pinger sent so the
+    # channel is empty when we close it. Today this branch never fires
+    # because debugMode is hard-coded false in the ctx above, but we
+    # honor the on-wire protocol so future debug-mode use doesn't leak.
+    for _ in 0 ..< debugAllLen:
+      discard chan[].recv()
+  hist.seenAll  = seenAll
+  hist.seenBody = seenBody
 
   # Bulk-percentile so the reservoir/top-K snapshot is sorted once per
   # run rather than five times. Order MUST match the LatencyMetrics
