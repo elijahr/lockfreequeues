@@ -253,10 +253,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `bench.yml` snapshot-commit message now carries `[skip ci]` (third
   loop-prevention layer alongside the existing `paths-ignore` filter
   and the bot-actor guard on the bench / bench-upload jobs).
-- `bench.yml` `Track base branch benchmarks with Bencher` step marked
-  `continue-on-error: true` as a release-day band-aid for an upstream
-  Bencher CLI threshold-model validation quirk; threshold gating remains
-  dormant pending the Track 6 calibration soak.
+- `bench.yml` `Track base branch benchmarks with Bencher` step now binds
+  both per-measure boundaries correctly. The Bencher CLI's
+  `CliReportThresholds` parser zips the `--threshold-{upper,lower}-boundary`
+  flags with `--threshold-measure` element-wise via `.next()`; supplying one
+  boundary value per measure when there are two measures sent both bound
+  values to the first measure and left the second with none, which Bencher
+  rejected with "Invalid threshold model: Invalid model, no boundary
+  provided". The fix uses the CLI's documented `_` `ElidedOption`
+  convention to align the boundary arrays with the measure array (latency
+  gets `--threshold-upper-boundary 0.99 --threshold-lower-boundary _`;
+  throughput gets the inverse). `continue-on-error: true` removed; the
+  step is now a hard gate again.
 - `README.md` BENCHMARKS markers now hold a hand-curated four-row
   summary table (Sipsic / Sipmuc / Mupsic / Mupmuc bounded at one
   representative shape each) plus a link line to the live chart page

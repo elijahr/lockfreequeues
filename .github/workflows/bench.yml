@@ -1444,31 +1444,36 @@ jobs:
       # bench_{spsc,mpsc,mpmc,unbounded}.nim is `throughput_ops_ms`, so the
       # earlier threshold never matched any measure. Track 6 corrects this.
       #
-      # NOTE on continue-on-error (v4.2.0): the Bencher CLI is currently
-      # rejecting the multi-measure threshold configuration with
-      # "Failed to validate the model for the throughput_ops_ms Measure
-      # Threshold: Invalid threshold model: Invalid model, no boundary
-      # provided" even though the invocation matches the documented
-      # bencher.dev pattern (see https://bencher.dev/docs/explanation/thresholds/
-      # "Two-Measure Example"). The failing step short-circuits the job
-      # before `Snapshot to docs assets` runs, leaving the chart on
-      # docs/benchmarks.md without fresh data. As a release-day band-aid
-      # we mark this step continue-on-error so the snapshot path keeps
-      # flowing; the threshold gating itself remains dormant until
-      # Task 6.4's 10-run soak completes anyway, so functionally nothing
-      # is lost in the short term.
+      # NOTE on multi-measure boundary binding (v4.2.0 fix). The Bencher CLI
+      # zips the multi-measure threshold flags element-wise via `.next()` over
+      # each `Vec<...>` (see services/cli/src/bencher/sub/project/report/
+      # create/thresholds.rs `TryFrom<CliReportThresholds>`). When the
+      # invocation supplies one boundary value per measure but two measures,
+      # both boundaries get consumed by the FIRST measure and the second
+      # measure ends up with no boundaries at all — which fails model
+      # validation with "Invalid threshold model: Invalid model, no boundary
+      # provided" on the second measure.
       #
-      # TODO(post-v4.2.0): diagnose the boundary-flag binding issue.
-      # Hypothesis: clap absorbs the trailing `--threshold-lower-boundary`
-      # into the first measure block (latency) instead of the second
-      # (throughput), so throughput's model has no boundary. Try giving
-      # each measure both boundaries explicitly, splitting into two
-      # `bencher run` invocations, or pinning the bencherdev/bencher
-      # action to a specific tag once Bencher confirms the bug/expected
-      # syntax.
+      # The fix per the CLI's `ElidedOption` convention is to pass `_` for
+      # the inapplicable boundary on each measure so the boundary arrays
+      # align with the measure array. For latency we want the upper bound
+      # (regression = latency increase), elided lower; for throughput we
+      # want the lower bound (regression = throughput drop), elided upper.
+      #
+      # NOTE on activation: per Track 6 Task 6.4, t_test thresholds require
+      # ≥ 10 prior runs accumulated in Bencher to calibrate the per-slug
+      # confidence interval. Until that soak completes (post-merge runs),
+      # the gates are dormant — Bencher does not alert on measures that
+      # have insufficient sample history. The configuration is in place so
+      # activation is purely a function of run count, not workflow edits.
+      #
+      # NOTE on prior measure-name regression: an earlier config used
+      # `--threshold-measure throughput`; the actual key emitted by the
+      # five topology-split bench_*.nim binaries is `throughput_ops_ms`,
+      # so that threshold never matched any measure. v4.2.0 corrects it
+      # together with the boundary-binding fix above.
       - name: Track base branch benchmarks with Bencher
         if: github.event_name == 'push' && env.BENCHER_API_TOKEN != ''
-        continue-on-error: true
         run: |
           bencher run \
             --project lockfreequeues \
@@ -1479,9 +1484,11 @@ jobs:
             --threshold-test t_test \
             --threshold-max-sample-size 64 \
             --threshold-upper-boundary 0.99 \
+            --threshold-lower-boundary _ \
             --threshold-measure throughput_ops_ms \
             --threshold-test t_test \
             --threshold-max-sample-size 64 \
+            --threshold-upper-boundary _ \
             --threshold-lower-boundary 0.99 \
             --thresholds-reset \
             --adapter json \
