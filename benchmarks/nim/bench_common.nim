@@ -20,8 +20,24 @@
 ## while the implementation lands behind them.
 
 import std/[algorithm, atomics, heapqueue, json, math, monotimes, options,
-            random, tables, times]
+            os, random, tables, times]
 import debra/atomics/backoff  # cpuPause, schedYield directly from debra
+
+# ---------- Harness backoff runtime toggle (Task 02, v4.3) ----------
+#
+# When `LFQ_BENCH_HARNESS_BACKOFF=0` is set in the environment at process
+# start, `HarnessBackoff.backoff` early-returns immediately, exposing
+# the queue's CAS-retry path end-to-end without the harness's
+# spin-then-yield safety net. Default behavior (env var unset or `=1`)
+# is unchanged.
+#
+# The env var is read **once** at module init via this top-level `let`
+# binding so there is zero `getEnv` cost in the bench hot path. In-process
+# `putEnv` after import will NOT exercise the cache; the toggle is
+# tested out-of-process by the `benchToggleSmoke` nimble task.
+#
+# Exported so tests can assert the default-case value.
+let disableHarnessBackoff* = getEnv("LFQ_BENCH_HARNESS_BACKOFF", "1") == "0"
 
 # ---------- Harness backoff (consumer-side, oversubscription stopgap) ----------
 #
@@ -55,6 +71,12 @@ proc initHarnessBackoff*(): HarnessBackoff =
   result.spinsConsumed = 0
 
 proc backoff*(b: var HarnessBackoff) {.inline.} =
+  # Task 02 (v4.3): runtime kill-switch. When the cached toggle is on
+  # (LFQ_BENCH_HARNESS_BACKOFF=0 at process start), exit before any
+  # cpuPause / schedYield so the bench observes the queue's behavior
+  # end-to-end without the harness backoff smoothing CAS-retry
+  # latency cliffs. Default path (toggle false) is unchanged.
+  if disableHarnessBackoff: return
   # Restructured so every call that does NOT escalate to a scheduler
   # yield issues exactly one `cpuPause` (preserves a uniform pause
   # cadence). The previous shape skipped the pause whenever the spin

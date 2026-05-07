@@ -87,6 +87,13 @@ task benchtests, "Runs the bench harness test suite":
   exec "nim c --threads:on -r -f tests/t_topology_split.nim"
 
 
+task benchToggleSmoke, "Verify LFQ_BENCH_HARNESS_BACKOFF=0 toggle is observed at module init":
+  exec "nim c --threads:on -o:.tmp/bench_toggle_smoke tests/bench_toggle_smoke_driver.nim"
+  exec "sh -c 'LFQ_BENCH_HARNESS_BACKOFF=0 .tmp/bench_toggle_smoke | grep -q true || (echo FAIL && exit 1)'"
+  exec "sh -c 'LFQ_BENCH_HARNESS_BACKOFF=1 .tmp/bench_toggle_smoke | grep -q false || (echo FAIL && exit 1)'"
+  exec "sh -c '.tmp/bench_toggle_smoke | grep -q false || (echo FAIL && exit 1)'"
+
+
 task benchteststress, "Runs the bench harness test suite including 3.3M-sample stress shapes":
   # Like `benchtests` but enables the gated 3.3M-sample p999 stress
   # shape in t_bench_common (HistogramTopK headroom validation against
