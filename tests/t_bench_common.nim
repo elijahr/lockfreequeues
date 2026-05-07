@@ -323,7 +323,11 @@ suite "bench_common runLatencyHarness":
       runCount = 1,
       warmupCount = 0,
     )
-    check metrics.samples >= 1000
+    # At messageCount=1000 < HistogramTopK=5000 every sample lands in topK,
+    # so the channel-drained sample count must equal the input exactly.
+    # Catches drain-protocol counter-ordering bugs (e.g. wire-swap of
+    # seenAll vs topKLen) that pass a >= bound but differ from input.
+    check metrics.samples == 1000
     check metrics.p50_ns > 0.0
     check metrics.p99_ns >= metrics.p50_ns
     check metrics.max_ns >= metrics.p99_ns
