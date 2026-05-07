@@ -525,8 +525,7 @@ proc pingerThreadBody[Q](ctx: ptr PingerCtx[Q]) {.thread.} =
   ## measurement loop finishes we drain its classified state to
   ## `ctx.chan` so the main thread can reconstruct a fresh Histogram
   ## without touching this thread's seqs (which refc tears down at
-  ## thread exit). See plans/2026-05-07-histogram-refc-thread-safety-impl.md
-  ## Task 1.
+  ## thread exit).
   mixin push, pop
   var hist = initHistogram(ctx.debugMode)
   for _ in 0 ..< ctx.count:
@@ -595,10 +594,12 @@ proc runOneLatencyRun[Q](
   var fwd = queueInit()
   var rev = queueInit()
 
-  # Per-run shared-heap channel for draining the pinger's local
-  # Histogram state across the refc thread-heap boundary. Heap-allocated
-  # so the Channel itself doesn't sit on either thread's local heap.
-  # See plans/2026-05-07-histogram-refc-thread-safety-impl.md Task 1.
+  # Per-run channel for draining the pinger's classified Histogram state
+  # across the refc thread-heap boundary. The Channel struct itself is
+  # main-thread-allocated (alloc/dealloc both happen here on the main
+  # thread); the channel's internal message buffer goes through Nim's
+  # shared-heap allocator, so floats sent by the pinger survive its
+  # local-heap teardown.
   var chan = create(Channel[float])
   chan[].open(0)  # unbounded
   defer:
