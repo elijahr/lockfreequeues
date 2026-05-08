@@ -332,6 +332,21 @@ suite "bench_common runLatencyHarness":
     check metrics.p99_ns >= metrics.p50_ns
     check metrics.max_ns >= metrics.p99_ns
 
+  test "smoke: 1P/1C, 5100 messages exercises reservoir drain branch":
+    # messageCount > HistogramTopK (5000) so ~100 samples flow through
+    # reservoirAdmit. Catches drain-protocol bugs that the small-volume
+    # smoke (1000 samples, all in topK) cannot exercise.
+    let metrics = runLatencyHarness[SmokeAdapter](
+      queueInit = proc(): SmokeAdapter = initSmokeAdapter(1024),
+      messageCount = 5100,
+      runCount = 1,
+      warmupCount = 0,
+    )
+    check metrics.samples == 5100
+    check metrics.p50_ns > 0.0
+    check metrics.p99_ns >= metrics.p50_ns
+    check metrics.max_ns >= metrics.p99_ns
+
 # ---------- Task 0.8: lockfreequeues adapter smoke tests ----------
 
 import std/sets
