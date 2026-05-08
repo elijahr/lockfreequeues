@@ -277,25 +277,42 @@ suite "bench_common Histogram":
 # ---------- Task 0.5: runThroughputHarness smoke ----------
 
 # Tiny inline adapter that satisfies bench_common's BenchAdapter shape
-# (push -> PushResult, pop -> PopResult[uint64]) wrapping a Nim
-# system Channel. Lives in this test file because Task 0.9 has not
-# yet reconciled benchmarks/nim/adapter.nim (legacy) with bench_common
-# (new); once that lands, this shim moves to a real adapter file.
+# (push -> PushResult, pop -> PopResult[uint64]). Lives in this test
+# file because Task 0.9 has not yet reconciled benchmarks/nim/adapter.nim
+# (legacy) with bench_common (new); once that lands, this shim moves
+# to a real adapter file.
+#
+# Wraps lockfreequeues' Sipsic (SPSC bounded). The smoke is 1P/1C in
+# all uses (throughput queue, latency fwd, latency rev), so SPSC fits.
+# Replaces an earlier `Channel[uint64]` shim whose stdlib `tryRecv`
+# read `q.mask` without holding the mutex while `rawSend` wrote it
+# under the mutex — a real C++ memory-model data race that TSAN
+# flagged (3 instances, one per SmokeAdapter).
+
+import lockfreequeues
+import options
+
+# N=1024 covers every smoke caller (all pass capacity=1024). With
+# 1P/1C backpressure, in-flight depth never exceeds N regardless of
+# total messageCount.
+const SmokeAdapterCapacity = 1024
 
 type SmokeAdapter = object
-  chan: ptr Channel[uint64]
+  queue: Sipsic[SmokeAdapterCapacity, uint64]
 
 proc initSmokeAdapter(capacity: int): SmokeAdapter =
-  result.chan = create(Channel[uint64])
-  result.chan[].open(capacity)
+  doAssert capacity <= SmokeAdapterCapacity,
+    "SmokeAdapter capacity " & $capacity & " exceeds compile-time " &
+    $SmokeAdapterCapacity
+  result.queue = initSipsic[SmokeAdapterCapacity, uint64]()
 
 proc push(a: var SmokeAdapter, v: uint64): PushResult =
-  if a.chan[].trySend(v): prSuccess else: prFull
+  if a.queue.push(v): prSuccess else: prFull
 
 proc pop(a: var SmokeAdapter): PopResult[uint64] =
-  let r = a.chan[].tryRecv()
-  if r.dataAvailable:
-    PopResult[uint64](success: true, value: r.msg)
+  let item = a.queue.pop()
+  if item.isSome:
+    PopResult[uint64](success: true, value: item.get)
   else:
     PopResult[uint64](success: false, value: 0'u64)
 
