@@ -87,6 +87,15 @@ task benchtests, "Runs the bench harness test suite":
   exec "nim c --threads:on -r -f tests/t_bench_adapters.nim"
   exec "nim c --threads:on -r -f tests/t_topology_split.nim"
 
+  if getEnv("SANITIZE_THREADS") != "no":
+    # Mirrors `task test`'s TSAN clause so future regressions on the
+    # bench harness (e.g. a non-atomic shared field on a SmokeAdapter
+    # variant) are caught in CI rather than during a manual TSAN run.
+    exec "nim c --cc:clang --mm:atomicArc --passC:\"-fsanitize=thread\" --passL:\"-fsanitize=thread\" --threads:on -r -f tests/t_bench_common.nim"
+    exec "nim c --cc:clang --mm:atomicArc --passC:\"-fsanitize=thread\" --passL:\"-fsanitize=thread\" --threads:on -r -f tests/t_bench_latency.nim"
+    exec "nim c --cc:clang --mm:atomicArc --passC:\"-fsanitize=thread\" --passL:\"-fsanitize=thread\" --threads:on -r -f tests/t_bench_adapters.nim"
+    exec "nim c --cc:clang --mm:atomicArc --passC:\"-fsanitize=thread\" --passL:\"-fsanitize=thread\" --threads:on -r -f tests/t_topology_split.nim"
+
 
 task benchToggleSmoke, "Verify LFQ_BENCH_HARNESS_BACKOFF=0 toggle is observed at module init":
   exec "nim c --threads:on -o:.tmp/bench_toggle_smoke tests/bench_toggle_smoke_driver.nim"
