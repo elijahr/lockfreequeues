@@ -82,6 +82,7 @@ task benchtests, "Runs the bench harness test suite":
   # because the bench harness itself is the system under test, not the
   # queue MM matrix.
   exec "nim c --threads:on -r -f tests/t_bench_common.nim"
+  exec "nim c --mm:refc --threads:on -r -f tests/t_bench_common.nim"
   exec "nim c --threads:on -r -f tests/t_bench_latency.nim"
   exec "nim c --threads:on -r -f tests/t_bench_adapters.nim"
   exec "nim c --threads:on -r -f tests/t_topology_split.nim"
