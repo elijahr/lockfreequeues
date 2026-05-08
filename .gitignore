@@ -5,6 +5,12 @@
 # mise tool-version pin (per-developer; canonical Nim version is in lockfreequeues.nimble)
 mise.toml
 
+# local nim.cfg overrides (e.g. for worktree-specific deps paths)
+nim.cfg
+
+# claude config
+.claude/
+
 # Local PR description scratch file (do not commit)
 .pr-description.md
 
