@@ -32,8 +32,8 @@ suite "SPSC Pop Typestate":
     seg.data[0] = 99
 
     var queue: TestQueue
-    queue.headSegment = seg
-    queue.tailSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
+    queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(1, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
@@ -57,8 +57,8 @@ suite "SPSC Pop Typestate":
     seg.tail.store(10, moRelaxed)
 
     var queue: TestQueue
-    queue.headSegment = seg
-    queue.tailSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
+    queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(5, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
@@ -91,8 +91,8 @@ suite "SPSC Pop Typestate":
     seg.data[0] = 42
 
     var queue: TestQueue
-    queue.headSegment = seg
-    queue.tailSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
+    queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(5, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
@@ -114,8 +114,8 @@ suite "SPSC Pop Typestate":
     seg.tail.store(5, moRelaxed) # head == tail, no items
 
     var queue: TestQueue
-    queue.headSegment = seg
-    queue.tailSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
+    queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
@@ -130,7 +130,8 @@ suite "SPSC Pop Typestate":
 
     # Verify queue state remains consistent
     check queue.itemCount.load(moRelaxed) == 0 # Queue still reports empty
-    check queue.headSegment == seg # No advancement happened (expected - no next segment)
+    check queue.headSegment.load(moRelaxed) == seg
+      # No advancement happened (expected - no next segment)
 
     freeTestSegment(seg)
 
@@ -145,8 +146,8 @@ suite "SPSC Pop Typestate":
     seg2.data[0] = 100
 
     var queue: TestQueue
-    queue.headSegment = seg1
-    queue.tailSegment = seg2
+    queue.headSegment.store(seg1, moRelaxed)
+    queue.tailSegment.store(seg2, moRelaxed)
     queue.itemCount.store(3, moRelaxed)
     queue.segments.store(2, moRelaxed)
 
@@ -158,7 +159,7 @@ suite "SPSC Pop Typestate":
     let advanceResult = checkResult.uspscpopsegmentexhausted.advanceSegment()
 
     check advanceResult.kind == uUSPSCPopReady
-    check queue.headSegment == seg2 # Head advanced
+    check queue.headSegment.load(moRelaxed) == seg2 # Head advanced
 
     # Now load and read from the new segment
     let loaded2 = advanceResult.uspscpopready.loadSegment()
@@ -184,8 +185,8 @@ suite "SPSC Pop Typestate":
     seg.data[2] = 44
 
     var queue: TestQueue
-    queue.headSegment = seg
-    queue.tailSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
+    queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(3, moRelaxed)
     queue.segments.store(1, moRelaxed)
 

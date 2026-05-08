@@ -71,8 +71,11 @@ proc loadSegment*[T; S: static int](
     ready: sink USPSCPopReady[T, S]
 ): USPSCPopSegmentLoaded[T, S] {.transition.} =
   ## Load current head segment and positions.
+  ## Mirrors production memory ordering: SPSC consumer is the only writer
+  ## to headSegment, but acquire load picks up the producer's release stores
+  ## to seg.next when the consumer crosses segments.
   let ctx = USPSCPopContext[T, S](ready)
-  let seg = ctx.queue.headSegment
+  let seg = ctx.queue.headSegment.load(moAcquire)
   let head = seg.head.load(moRelaxed)
   let tail = seg.tail.load(moAcquire)
 
@@ -98,14 +101,17 @@ proc advanceSegment*[T; S: static int](
 ): USPSCAdvanceResult[T, S] {.transition.} =
   ## Try to advance to next segment.
   ## Returns Ready if next segment exists, Empty otherwise.
-  ## Note: Caller is responsible for freeing the old segment (returned in oldSegment field).
+  ## Note: Caller is responsible for freeing the old segment (the facade
+  ## tracks this via oldSegment lifetime; this verb only updates queue state).
+  ## Mirrors production memory ordering: publish the head-segment advance
+  ## via release store so any future readers see the up-to-date head.
   let nextSeg = exhausted.segment.next.load(moAcquire)
 
   if nextSeg == nil:
     return USPSCAdvanceResult[T, S] -> USPSCPopEmpty[T, S](queue: exhausted.queue)
 
   # Advance head segment (caller should dealloc old segment)
-  exhausted.queue.headSegment = nextSeg
+  exhausted.queue.headSegment.store(nextSeg, moRelease)
   discard exhausted.queue.segments.fetchSub(1, moRelaxed)
 
   USPSCAdvanceResult[T, S] ->

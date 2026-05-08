@@ -28,8 +28,8 @@ suite "SPSC Push Typestate":
     # Verify state types exist and fields are accessible
     var seg = newTestSegment()
     var queue: TestQueue
-    queue.headSegment = seg
-    queue.tailSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
+    queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
@@ -52,8 +52,8 @@ suite "SPSC Push Typestate":
     seg.tail.store(10, moRelaxed) # Pre-set tail
 
     var queue: TestQueue
-    queue.headSegment = seg
-    queue.tailSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
+    queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
@@ -80,8 +80,8 @@ suite "SPSC Push Typestate":
   test "checkFull returns SlotReady when not full":
     var seg = newTestSegment()
     var queue: TestQueue
-    queue.headSegment = seg
-    queue.tailSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
+    queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
@@ -103,8 +103,8 @@ suite "SPSC Push Typestate":
     seg.tail.store(64, moRelaxed) # Full segment
 
     var queue: TestQueue
-    queue.headSegment = seg
-    queue.tailSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
+    queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
@@ -135,8 +135,8 @@ suite "SPSC Push Typestate":
   test "writeItem writes data and publishes":
     var seg = newTestSegment()
     var queue: TestQueue
-    queue.headSegment = seg
-    queue.tailSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
+    queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 

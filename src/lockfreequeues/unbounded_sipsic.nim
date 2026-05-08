@@ -14,11 +14,21 @@
 ## queue.push(42)
 ## let item = queue.pop()  # some(42)
 ## ```
+##
+## v4.3 facade migration: this module is a thin facade over the typestate
+## verbs in ``typestates/unbounded_spsc_push`` and
+## ``typestates/unbounded_spsc_pop``. Production owns the canonical memory
+## layout (Queue and Segment); the typestate Base type's layout equivalence
+## is gated by per-field offsetOf / sizeof static-asserts below.
 
 import ./atomic_dsl
 import ./internal/aligned_alloc
 import std/options
 import std/typetraits
+
+import typestates
+import ./typestates/unbounded_spsc_push as ts_spsc_push
+import ./typestates/unbounded_spsc_pop as ts_spsc_pop
 
 type
   Segment*[S: static int, T] = object
@@ -38,6 +48,34 @@ type
       # Producer writes here
     itemCount: Atomic[int] # Total items in queue
     segments: Atomic[int] # Number of segments
+
+# Layout-equivalence gates: production Queue and Segment must have identical
+# field offsets (and sizeof) to the typestate Base type/Segment so that the
+# `cast[ptr UnboundedSipsicBase[S, T]](addr self)` in push/pop and the
+# typestate's per-Segment-field accesses are sound. See design §2.2 / §3
+# Item 2 (SPSC row: 4 fields, both head/tail Segment as Atomic[ptr]).
+static:
+  # Queue-type equivalence (4 fields + sizeof).
+  doAssert offsetOf(UnboundedSipsic[64, int], headSegment) ==
+    offsetOf(ts_spsc_push.UnboundedSipsicBase[64, int], headSegment)
+  doAssert offsetOf(UnboundedSipsic[64, int], tailSegment) ==
+    offsetOf(ts_spsc_push.UnboundedSipsicBase[64, int], tailSegment)
+  doAssert offsetOf(UnboundedSipsic[64, int], itemCount) ==
+    offsetOf(ts_spsc_push.UnboundedSipsicBase[64, int], itemCount)
+  doAssert offsetOf(UnboundedSipsic[64, int], segments) ==
+    offsetOf(ts_spsc_push.UnboundedSipsicBase[64, int], segments)
+  doAssert sizeof(UnboundedSipsic[64, int]) ==
+    sizeof(ts_spsc_push.UnboundedSipsicBase[64, int])
+  # Per-Segment-field equivalence (SPSC Segment fields: data, next, head, tail).
+  doAssert sizeof(Segment[64, int]) == sizeof(ts_spsc_push.Segment[64, int])
+  doAssert offsetOf(Segment[64, int], data) ==
+    offsetOf(ts_spsc_push.Segment[64, int], data)
+  doAssert offsetOf(Segment[64, int], next) ==
+    offsetOf(ts_spsc_push.Segment[64, int], next)
+  doAssert offsetOf(Segment[64, int], head) ==
+    offsetOf(ts_spsc_push.Segment[64, int], head)
+  doAssert offsetOf(Segment[64, int], tail) ==
+    offsetOf(ts_spsc_push.Segment[64, int], tail)
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
   ## Allocate a new segment on a CacheLineBytes boundary so the
@@ -94,28 +132,32 @@ proc push*[S: static int, T](self: var UnboundedSipsic[S, T], item: T) =
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
-  var seg = self.tailSegment.load(moRelaxed)
+  # Cast queue to UnboundedSipsicBase for typestate compatibility (sound per
+  # the static offsetof asserts at the top of this module). Production
+  # Segment and the typestate-local ts_spsc_push.Segment also have identical
+  # layouts, so pointer equality and field offsets are interchangeable.
+  let queueBase = cast[ptr ts_spsc_push.UnboundedSipsicBase[S, T]](addr self)
 
-  # Check if current segment is full
-  let tail = seg.tail.load(moRelaxed)
-  if tail >= S:
-    # Allocate new segment. Publish via seg.next first (release) so a
-    # concurrent consumer that observes the new next pointer also sees
-    # the segment's initialized fields. Then publish via tailSegment.
-    let newSeg = newSegment[S, T]()
-    seg.next.store(newSeg, moRelease)
-    self.tailSegment.store(newSeg, moRelease)
-    seg = newSeg
-    discard self.segments.fetchAdd(1, moRelaxed)
-
-  # Write item then publish with release semantics
-  let pos = seg.tail.load(moRelaxed)
-  seg.data[pos] = item
-  seg.tail.store(pos + 1, moRelease)
-  discard self.itemCount.fetchAdd(1, moRelaxed)
+  # Granular pipeline: startPush -> loadSegment -> checkFull
+  #   -> { writeItem (publish via tail.store(moRelease))
+  #      | allocateNewSegment then retry }
+  while true:
+    var loaded = ts_spsc_push.startPush[T, S](queueBase).loadSegment()
+    var check = loaded.checkFull()
+    match check:
+      SPSCPushSlotReady(slotReady):
+        discard slotReady.writeItem(item)
+        return
+      SPSCPushSegmentFull(full):
+        let newSeg = cast[ptr ts_spsc_push.Segment[S, T]](newSegment[S, T]())
+        discard full.allocateNewSegment(newSeg)
+        # Loop back to retry: loadSegment will pick up the freshly published
+        # tailSegment via the next-iteration relaxed load.
+        continue
 
 proc push*[S: static int, T](self: var UnboundedSipsic[S, T], items: openArray[T]) =
   ## Push multiple items.
+  # Bulk variant: per-iteration single-item call has its own (no-op) pin scope.
   for item in items:
     self.push(item)
 
@@ -135,35 +177,32 @@ proc pop*[S: static int, T](self: var UnboundedSipsic[S, T]): Option[T] =
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
-  # SPSC: only the consumer reads/writes headSegment. Acquire load picks up
-  # the producer's release stores to seg.next when we cross segments.
-  var seg = self.headSegment.load(moAcquire)
+  # Cast queue to UnboundedSipsicBase for typestate compatibility (sound per
+  # the static offsetof asserts at the top of this module).
+  let queueBase = cast[ptr ts_spsc_push.UnboundedSipsicBase[S, T]](addr self)
 
+  # Granular pipeline: startPop -> loadSegment -> checkSlot
+  #   -> { readItem -> some(value)
+  #      | advanceSegment -> { Empty -> none ; Ready -> free old, retry } }
   while true:
-    let head = seg.head.load(moRelaxed)
-    let tail = seg.tail.load(moAcquire)
-
-    # Check if there's data in current segment
-    if head < tail:
-      # Read value
-      let value = seg.data[head]
-      seg.head.store(head + 1, moRelaxed)
-      discard self.itemCount.fetchSub(1, moRelaxed)
-      return some(value)
-
-    # Segment exhausted, try to advance
-    let nextSeg = seg.next.load(moAcquire)
-    if nextSeg == nil:
-      # Queue is empty
-      return none(T)
-
-    # Advance to next segment and free old one. Publish the advance via
-    # release store so any future readers see the up-to-date head.
-    let oldSeg = seg
-    self.headSegment.store(nextSeg, moRelease)
-    seg = nextSeg
-    discard self.segments.fetchSub(1, moRelaxed)
-    freeAligned(oldSeg)
+    var loaded = ts_spsc_pop.startPop[T, S](queueBase).loadSegment()
+    var check = loaded.checkSlot()
+    match check:
+      USPSCPopSlotAvailable(slotAvail):
+        let complete = slotAvail.readItem()
+        return some(ts_spsc_pop.getValue(complete))
+      USPSCPopSegmentExhausted(exhausted):
+        # Capture the old segment pointer BEFORE the typestate consumes the
+        # state — the facade owns segment lifetime since the typestate has
+        # no DEBRA dependency.
+        let oldSeg = cast[ptr Segment[S, T]](exhausted.segment)
+        var advance = exhausted.advanceSegment()
+        match advance:
+          USPSCPopEmpty(_):
+            return none(T)
+          USPSCPopReady(_):
+            freeAligned(oldSeg)
+            continue
 
 proc pop*[S: static int, T](
     self: var UnboundedSipsic[S, T], count: int
@@ -176,6 +215,7 @@ proc pop*[S: static int, T](
 
   var items = newSeq[T]()
 
+  # Bulk variant: per-iteration single-item call has its own (no-op) pin scope.
   for i in 0 ..< count:
     let item = self.pop()
     if item.isNone:
