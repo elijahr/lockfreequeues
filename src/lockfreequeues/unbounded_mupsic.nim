@@ -41,6 +41,9 @@ import std/options
 import std/typetraits
 
 import debra
+import typestates
+import ./typestates/unbounded_mpsc_push as ts_mpsc_push
+import ./typestates/unbounded_mpsc_pop as ts_mpsc_pop
 
 const LockFreeQueuesAdvanceEvery {.intdefine.}: int = 64
   ## Cadence for `advanceEvery` calls in this file's Eager reclamation path.
@@ -107,6 +110,57 @@ type
     queue: ptr UnboundedMupsic[S, T, MaxThreads]
     idx*: int
     handle: ThreadHandle[MaxThreads] # Each producer has its own handle
+
+# Layout-equivalence gates: production Queue and Segment must have identical
+# field offsets (and sizeof) to the typestate Base type/Segment so that the
+# `cast[ptr UnboundedMupsicBase[S, T, MaxThreads]](addr self)` in push/pop and
+# the typestate's per-Segment-field accesses are sound. See design §2.2 (MPSC
+# 9-field set) and §3 Item 2 (MPSC row: both head/tail Segment as
+# Atomic[ptr]). 9 Queue offsets + 1 Queue sizeof + 1 Segment sizeof + 5
+# Segment offsets = 16 doAsserts.
+static:
+  # `DeallocationStrategy` enum equivalence: the typestate file declares a
+  # local mirror enum (cycle break — see comment at the top of
+  # `typestates/unbounded_mpsc_push.nim`). Confirm ord values and storage
+  # size match so the `strategy` field's bit-pattern is identical across
+  # the two declarations.
+  doAssert ord(Manual) == ord(ts_mpsc_push.Manual)
+  doAssert ord(Eager) == ord(ts_mpsc_push.Eager)
+  doAssert sizeof(DeallocationStrategy) == sizeof(ts_mpsc_push.DeallocationStrategy)
+  # Queue-type equivalence (9 fields + sizeof).
+  doAssert offsetOf(UnboundedMupsic[64, int, 4], manager) ==
+    offsetOf(ts_mpsc_push.UnboundedMupsicBase[64, int, 4], manager)
+  doAssert offsetOf(UnboundedMupsic[64, int, 4], headSegment) ==
+    offsetOf(ts_mpsc_push.UnboundedMupsicBase[64, int, 4], headSegment)
+  doAssert offsetOf(UnboundedMupsic[64, int, 4], tailSegment) ==
+    offsetOf(ts_mpsc_push.UnboundedMupsicBase[64, int, 4], tailSegment)
+  doAssert offsetOf(UnboundedMupsic[64, int, 4], strategy) ==
+    offsetOf(ts_mpsc_push.UnboundedMupsicBase[64, int, 4], strategy)
+  doAssert offsetOf(UnboundedMupsic[64, int, 4], handle) ==
+    offsetOf(ts_mpsc_push.UnboundedMupsicBase[64, int, 4], handle)
+  doAssert offsetOf(UnboundedMupsic[64, int, 4], itemCount) ==
+    offsetOf(ts_mpsc_push.UnboundedMupsicBase[64, int, 4], itemCount)
+  doAssert offsetOf(UnboundedMupsic[64, int, 4], segments) ==
+    offsetOf(ts_mpsc_push.UnboundedMupsicBase[64, int, 4], segments)
+  doAssert offsetOf(UnboundedMupsic[64, int, 4], producerCount) ==
+    offsetOf(ts_mpsc_push.UnboundedMupsicBase[64, int, 4], producerCount)
+  doAssert offsetOf(UnboundedMupsic[64, int, 4], ownsManager) ==
+    offsetOf(ts_mpsc_push.UnboundedMupsicBase[64, int, 4], ownsManager)
+  doAssert sizeof(UnboundedMupsic[64, int, 4]) ==
+    sizeof(ts_mpsc_push.UnboundedMupsicBase[64, int, 4])
+  # Per-Segment-field equivalence (MPSC Segment fields: data, next, tail,
+  # head, committed).
+  doAssert sizeof(Segment[64, int]) == sizeof(ts_mpsc_push.UMPSCSegment[64, int])
+  doAssert offsetOf(Segment[64, int], data) ==
+    offsetOf(ts_mpsc_push.UMPSCSegment[64, int], data)
+  doAssert offsetOf(Segment[64, int], next) ==
+    offsetOf(ts_mpsc_push.UMPSCSegment[64, int], next)
+  doAssert offsetOf(Segment[64, int], tail) ==
+    offsetOf(ts_mpsc_push.UMPSCSegment[64, int], tail)
+  doAssert offsetOf(Segment[64, int], head) ==
+    offsetOf(ts_mpsc_push.UMPSCSegment[64, int], head)
+  doAssert offsetOf(Segment[64, int], committed) ==
+    offsetOf(ts_mpsc_push.UMPSCSegment[64, int], committed)
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
   ## Allocate a new segment on a CacheLineBytes boundary so the
@@ -249,59 +303,56 @@ proc push*[S: static int, T; MaxThreads: static int](
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
+  # Cast queue to UnboundedMupsicBase for typestate compatibility (sound per
+  # the static offsetof asserts at the top of this module). Production
+  # Segment and the typestate-local ts_mpsc_push.UMPSCSegment also have
+  # identical layouts, so pointer equality and field offsets are
+  # interchangeable.
+  let queueBase =
+    cast[ptr ts_mpsc_push.UnboundedMupsicBase[S, T, MaxThreads]](addr self.queue[])
+
+  # Single `withPin` around the WHOLE verb loop per design §2.3 (NOT
+  # one-pin-per-iteration). The actual DEBRA pin is held by `it` (a
+  # `RetireReady[MT]` injected by `withPin`); the typestate's
+  # `startPush` consumes a `Pinned[MT]`, which we project from `it`
+  # (same handle+epoch — the slot's `pinned` flag is unchanged, this is
+  # a typestate rebrand symmetric to `pinnedFromRetired`).
   self.handle.withPin:
     while true:
-      var seg = self.queue.tailSegment.load(moAcquire)
-      var tail = seg.tail.load(moAcquire)
-
-      # Check if current segment is full
-      if tail >= S:
-        # Try to allocate new segment
-        let nextSeg = seg.next.load(moAcquire)
-        if nextSeg == nil:
-          # No next segment, try to create one
-          let newSeg = newSegment[S, T]()
-          var expectedNext: ptr Segment[S, T] = nil
-          if seg.next.compareExchange(expectedNext, newSeg, moRelease, moRelaxed):
-            # Won the allocation race
-            var expectedSeg = seg
-            discard self.queue.tailSegment.compareExchange(
-              expectedSeg, newSeg, moRelease, moRelaxed
-            )
-            discard self.queue.segments.fetchAdd(1, moRelaxed)
-            # Allocation succeeded; loop to retry slot claim on the new segment.
-            # No backoff: this is a success edge, not a CAS-retry failure.
-            continue
-          else:
-            # Lost the segment-alloc race, free our orphan and back off.
-            freeAligned(newSeg)
-            # CAS-loss-retry on segment-alloc race (producer-vs-producer).
+      # Project the active pin (held by `it: RetireReady`) into a Pinned
+      # value for the typestate to consume. This is a typestate rebrand
+      # (same handle+epoch); the slot's `pinned` flag is unchanged. It
+      # mirrors `pinnedFromRetired` from `debra/typestates/retire`.
+      let itCtx = RetireContext[MaxThreads](it)
+      let pinned = Pinned[MaxThreads](
+        EpochGuardContext[MaxThreads](handle: itCtx.handle, epoch: itCtx.epoch)
+      )
+      var ready = ts_mpsc_push.startPush[T, S, MaxThreads](pinned, queueBase)
+      var loaded = ready.loadSegment()
+      var claim = loaded.tryClaimSlot()
+      match claim:
+        UMPSCPushSlotClaimed(slotClaimed):
+          discard slotClaimed.writeItem(item).markCommitted()
+          break
+        UMPSCPushSegmentFull(full):
+          # Need a new segment. Allocate first, then link via CAS; if a
+          # concurrent producer wins the alloc race, free our orphan and
+          # back off (mirrors production at `:279`).
+          let newSeg = cast[ptr ts_mpsc_push.UMPSCSegment[S, T]](newSegment[S, T]())
+          let (_, allocated) = full.tryAllocateNewSegment(newSeg)
+          if not allocated:
+            freeAligned(cast[ptr Segment[S, T]](newSeg))
             backoffOnCASLossRetry()
-            continue
-        else:
-          # Someone else allocated; advance tailSegment (best effort) and
-          # retry slot claim. No backoff: success edge.
-          var expectedSeg = seg
-          discard self.queue.tailSegment.compareExchange(
-            expectedSeg, nextSeg, moRelease, moRelaxed
-          )
           continue
-
-      # Try to claim a slot
-      var expected = tail
-      if seg.tail.compareExchange(expected, tail + 1, moAcquire, moRelaxed):
-        # Won the slot
-        seg.data[tail] = item
-        seg.committed[tail].store(true, moRelease) # Mark as ready to read
-        discard self.queue.itemCount.fetchAdd(1, moRelaxed)
-        break
-
-      # Lost CAS, retry
+        UMPSCPushReady(_):
+          # Lost slot-claim CAS to a peer; loop to retry from Ready.
+          continue
 
 proc push*[S: static int, T; MaxThreads: static int](
     self: var Producer[S, T, MaxThreads], items: openArray[T]
 ) =
   ## Push multiple items.
+  # Bulk variant runs OUTSIDE withPin; each iteration acquires its own pin.
   for item in items:
     self.push(item)
 
@@ -334,47 +385,56 @@ proc pop*[S: static int, T; MaxThreads: static int](
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
+  let queueBase =
+    cast[ptr ts_mpsc_push.UnboundedMupsicBase[S, T, MaxThreads]](addr self)
+
+  # Single `withPin` around the WHOLE verb loop per design §2.3. The pin
+  # also lets us call `it.retire(...)` for retired segments — the facade
+  # owns segment lifetime via DEBRA so consumers never observe a freed
+  # pointer until every pinned thread has rotated past the retirement
+  # epoch.
   self.handle.withPin:
-    # Re-read headSegment under the pin. Acquire load synchronises with
-    # the release store performed when this consumer last advanced the
-    # head, ensuring we never observe a freed pointer.
-    var seg = self.headSegment.load(moAcquire)
-
     while true:
-      let tail = seg.tail.load(moAcquire)
-
-      # Check if there's data to read
-      if seg.head < tail:
-        # Check if this slot is committed (producer finished writing)
-        if seg.committed[seg.head].load(moAcquire):
-          result = some(seg.data[seg.head])
-          inc seg.head
-          discard self.itemCount.fetchSub(1, moRelaxed)
-        # If not committed, producer hasn't finished writing yet; result stays none
-        break
-
-      # Segment exhausted, try next
-      let nextSeg = seg.next.load(moAcquire)
-      if nextSeg == nil:
-        break
-
-      # Single consumer, so no race on headSegment. Advance with release
-      # semantics and retire under the active pin so a follow-up reclaim
-      # cannot free this segment until every pinned thread observes the
-      # advance. Always retire (regardless of strategy) so DEBRA owns the
-      # detached segment: Manual mode leaves it in limbo for `tryReclaim`
-      # (or `manager.=destroy` at scope exit) to drain; Eager mode reclaims
-      # it shortly via the `reclaimNow` call after the pin block. Without
-      # retiring, the segment is detached from the head chain but reachable
-      # from no root, and leaks at process exit.
-      self.headSegment.store(nextSeg, moRelease)
-      it.retire(cast[pointer](seg), segmentDestructor[S, T])
-      if self.strategy != Manual:
-        discard self.segments.fetchSub(1, moRelaxed)
-      # With Manual strategy the segment is in limbo (retired but not yet
-      # reclaimed); segmentCount keeps reflecting the peak count until the
-      # user calls `tryReclaim`.
-      seg = nextSeg
+      # Project the active pin (held by `it: RetireReady`) into a Pinned
+      # value for the typestate to consume. This is a typestate rebrand
+      # (same handle+epoch); the slot's `pinned` flag is unchanged. It
+      # mirrors `pinnedFromRetired` from `debra/typestates/retire`.
+      let itCtx = RetireContext[MaxThreads](it)
+      let pinned = Pinned[MaxThreads](
+        EpochGuardContext[MaxThreads](handle: itCtx.handle, epoch: itCtx.epoch)
+      )
+      var ready = ts_mpsc_pop.startPop[T, S, MaxThreads](pinned, queueBase)
+      var loaded = ready.loadSegment()
+      var slotCheck = loaded.checkSlot()
+      match slotCheck:
+        UMPSCPopSlotAvailable(slotAvail):
+          var commitCheck = slotAvail.checkCommitted()
+          match commitCheck:
+            UMPSCPopComplete(popDone):
+              # A3: read the public `value*` field directly. The prior
+              # `ts_mpsc_pop.getValue` wrapper added one generic verb-proc
+              # instantiation per (T, S, MT, mm-mode) for no behavioral
+              # benefit; the field is already public on `UMPSCPopComplete`.
+              result = some(popDone.value)
+              break
+            UMPSCPopSlotUncommitted(_):
+              # Producer hasn't finished writing yet; return none and
+              # break — same semantics as production line 354.
+              break
+        UMPSCPopSegmentExhausted(exhausted):
+          # Capture the old segment pointer BEFORE the typestate consumes
+          # the state. Always retire (regardless of strategy) so DEBRA owns
+          # the detached segment — see production comment at `:418-422`.
+          let oldSeg = cast[ptr Segment[S, T]](exhausted.segment)
+          var advance = exhausted.advanceSegment()
+          match advance:
+            UMPSCPopEmpty(_):
+              break
+            UMPSCPopReady(_):
+              it.retire(cast[pointer](oldSeg), segmentDestructor[S, T])
+              if self.strategy != Manual:
+                discard self.segments.fetchSub(1, moRelaxed)
+              continue
 
   if self.strategy == Eager:
     if self.handle.advanceEvery(LockFreeQueuesAdvanceEvery):
@@ -391,6 +451,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
 
   var items = newSeq[T]()
 
+  # Bulk variant runs OUTSIDE withPin; each iteration acquires its own pin.
   for i in 0 ..< count:
     let item = self.pop()
     if item.isNone:

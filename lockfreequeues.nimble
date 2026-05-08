@@ -15,7 +15,23 @@ requires "typestates >= 0.8.0"
 requires "debra >= 0.7.2"
 
 # Tasks
+task checkBulkOutsidePin, "Verify bulk loops are not nested inside withPin blocks":
+  # R6 invariant gate (per v4.3 design §2.4): bulk variants of push/pop on
+  # unbounded queues MUST run OUTSIDE the producer/consumer's `withPin:`
+  # block so each iteration acquires its own pin. A bulk loop nested inside
+  # `withPin:` would extend the pin epoch arbitrarily, blocking DEBRA
+  # reclamation. The regex looks at 5 lines after every `withPin:` site;
+  # if any single-letter loop variable (`item` or `i`) appears in that
+  # window, fail loudly. This is a CI-enforced gate introduced with the
+  # MPSC facade migration (Task 5).
+  exec "sh -c 'rg -A 5 \"withPin:\" src/lockfreequeues/unbounded_*.nim | rg -q \"for (item|i) in\" && (echo \"FAIL: bulk loop inside withPin\" && exit 1) || echo \"OK: bulk-outside-pin invariant holds\"'"
+
+
 task test, "Runs the test suite":
+  # R6 invariant gate (bulk-outside-pin) — runs FIRST so a violation
+  # short-circuits the long MM-matrix test pass.
+  exec "nimble checkBulkOutsidePin"
+
   # C with default MM (orc)
   exec "nim c --threads:on -r -f tests/test.nim"
 

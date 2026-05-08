@@ -12,7 +12,7 @@ import lockfreequeues/typestates/unbounded_mpsc_push
 # Type aliases for our test types
 type
   TestQueue = UnboundedMupsicBase[64, int, 4]
-  TestSegment = MPSCSegment[64, int]
+  TestSegment = UMPSCSegment[64, int]
 
 # Test segment allocation
 proc newTestSegment(): ptr TestSegment =
@@ -36,7 +36,7 @@ suite "MPSC Push Typestate":
     var seg = newTestSegment()
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
@@ -52,8 +52,8 @@ suite "MPSC Push Typestate":
 
     # Clean up
     let claimResult = loaded.tryClaimSlot()
-    check claimResult.kind == mMPSCPushSlotClaimed
-    discard claimResult.mpscpushslotclaimed
+    check claimResult.kind == uUMPSCPushSlotClaimed
+    discard claimResult.umpscpushslotclaimed
       .writeItem(0)
       .markCommitted()
       .extractPinned()
@@ -69,7 +69,7 @@ suite "MPSC Push Typestate":
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
@@ -85,10 +85,10 @@ suite "MPSC Push Typestate":
 
     # Complete operation
     let claimResult = loaded.tryClaimSlot()
-    check claimResult.kind == mMPSCPushSlotClaimed
+    check claimResult.kind == uUMPSCPushSlotClaimed
 
     # Write item and VERIFY the value was written
-    let complete = claimResult.mpscpushslotclaimed.writeItem(42).markCommitted()
+    let complete = claimResult.umpscpushslotclaimed.writeItem(42).markCommitted()
     check seg.data[10] == 42 # Verify write to correct slot
     check seg.committed[10].load(moRelaxed) == true # Verify committed
     check seg.tail.load(moRelaxed) == 11 # Verify tail advanced
@@ -103,7 +103,7 @@ suite "MPSC Push Typestate":
     var seg = newTestSegment()
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
@@ -112,11 +112,11 @@ suite "MPSC Push Typestate":
       .loadSegment()
       .tryClaimSlot()
 
-    check claimResult.kind == mMPSCPushSlotClaimed
-    check claimResult.mpscpushslotclaimed.slot == 0
+    check claimResult.kind == uUMPSCPushSlotClaimed
+    check claimResult.umpscpushslotclaimed.slot == 0
 
     # Write item and VERIFY
-    discard claimResult.mpscpushslotclaimed
+    discard claimResult.umpscpushslotclaimed
       .writeItem(42)
       .markCommitted()
       .extractPinned()
@@ -137,7 +137,7 @@ suite "MPSC Push Typestate":
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
@@ -146,18 +146,20 @@ suite "MPSC Push Typestate":
       .loadSegment()
       .tryClaimSlot()
 
-    check claimResult.kind == mMPSCPushSegmentFull
+    check claimResult.kind == uUMPSCPushSegmentFull
 
-    # Allocate new segment and retry
+    # Allocate new segment and retry. A1: the standalone `allocateNewSegment`
+    # transition variant was removed (verb-count consolidation); the tuple-
+    # returning `tryAllocateNewSegment` is the single canonical form. We
+    # discard the `allocated` bit here because this test stages an
+    # uncontested allocation (no peer thread); it always wins.
     var newSeg = newTestSegment()
-    let claimResult2 = claimResult.mpscpushsegmentfull
-      .allocateNewSegment(newSeg)
-      .loadSegment()
-      .tryClaimSlot()
+    let (ready2, _) = claimResult.umpscpushsegmentfull.tryAllocateNewSegment(newSeg)
+    let claimResult2 = ready2.loadSegment().tryClaimSlot()
 
-    check claimResult2.kind == mMPSCPushSlotClaimed
+    check claimResult2.kind == uUMPSCPushSlotClaimed
 
-    discard claimResult2.mpscpushslotclaimed
+    discard claimResult2.umpscpushslotclaimed
       .writeItem(42)
       .markCommitted()
       .extractPinned()
@@ -182,7 +184,7 @@ suite "MPSC Push Typestate":
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
@@ -197,12 +199,12 @@ suite "MPSC Push Typestate":
 
     # tryClaimSlot should detect CAS failure and return Ready for retry
     let claimResult = loaded.tryClaimSlot()
-    check claimResult.kind == mMPSCPushReady
+    check claimResult.kind == uUMPSCPushReady
 
     # Clean up - do a successful operation
-    let claimResult2 = claimResult.mpscpushready.loadSegment().tryClaimSlot()
-    check claimResult2.kind == mMPSCPushSlotClaimed
-    discard claimResult2.mpscpushslotclaimed
+    let claimResult2 = claimResult.umpscpushready.loadSegment().tryClaimSlot()
+    check claimResult2.kind == uUMPSCPushSlotClaimed
+    discard claimResult2.umpscpushslotclaimed
       .writeItem(99)
       .markCommitted()
       .extractPinned()
@@ -210,7 +212,7 @@ suite "MPSC Push Typestate":
 
     freeTestSegment(seg)
 
-  test "allocateNewSegment handles allocation race":
+  test "tryAllocateNewSegment handles allocation race":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
 
@@ -219,7 +221,7 @@ suite "MPSC Push Typestate":
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
@@ -234,18 +236,18 @@ suite "MPSC Push Typestate":
       .loadSegment()
       .tryClaimSlot()
 
-    check claimResult.kind == mMPSCPushSegmentFull
+    check claimResult.kind == uUMPSCPushSegmentFull
 
     # Use tryAllocateNewSegment to detect the race
-    let (ready, allocated) = claimResult.mpscpushsegmentfull.tryAllocateNewSegment(seg3)
+    let (ready, allocated) = claimResult.umpscpushsegmentfull.tryAllocateNewSegment(seg3)
 
     check allocated == false # Lost the race, another thread allocated
 
     # Should still work - retry and use the winner's segment
     let claimResult2 = ready.loadSegment().tryClaimSlot()
-    check claimResult2.kind == mMPSCPushSlotClaimed
+    check claimResult2.kind == uUMPSCPushSlotClaimed
 
-    discard claimResult2.mpscpushslotclaimed
+    discard claimResult2.umpscpushslotclaimed
       .writeItem(42)
       .markCommitted()
       .extractPinned()
@@ -266,7 +268,7 @@ suite "MPSC Push Typestate":
     var seg = newTestSegment()
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
@@ -275,9 +277,9 @@ suite "MPSC Push Typestate":
       .loadSegment()
       .tryClaimSlot()
 
-    check claimResult.kind == mMPSCPushSlotClaimed
+    check claimResult.kind == uUMPSCPushSlotClaimed
 
-    let written = claimResult.mpscpushslotclaimed.writeItem(42)
+    let written = claimResult.umpscpushslotclaimed.writeItem(42)
 
     # Verify data written but not yet committed
     check seg.data[0] == 42
@@ -298,7 +300,7 @@ suite "MPSC Push Typestate":
     var seg = newTestSegment()
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
@@ -307,7 +309,7 @@ suite "MPSC Push Typestate":
       .loadSegment()
       .tryClaimSlot()
 
-    let complete = claimResult.mpscpushslotclaimed.writeItem(42).markCommitted()
+    let complete = claimResult.umpscpushslotclaimed.writeItem(42).markCommitted()
 
     check seg.data[0] == 42
     check seg.committed[0].load(moRelaxed) == true
