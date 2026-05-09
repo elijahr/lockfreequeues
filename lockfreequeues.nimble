@@ -34,6 +34,18 @@ task checkBulkOutsidePin, "Verify bulk loops are not nested inside withPin block
   exec "sh -c 'rg -A 5 \"withPin:\" src/lockfreequeues/unbounded_*.nim | rg -q \"for (item|i) in\" && (echo \"FAIL: bulk loop inside withPin\" && exit 1) || echo \"OK: bulk-outside-pin invariant holds\"'"
 
 
+task stresstest, "Run intermittent-bug-class stress tests":
+  # Hammers `tests/t_unbounded_sipmuc_threaded_stress.nim` with the
+  # ``-d:stress`` switch flipped on (50× outer loop on the SPMC
+  # high-segment-turnover scenario). Atomic-arc + threads:on mirrors
+  # the configuration that historically surfaced the SPMC end-of-run
+  # livelock. Add ``-d:stressDebug`` for the heartbeat + per-1000-item
+  # checkpoint logging when triaging a hang via
+  # ``scripts/run_with_hang_sample.py``.
+  exec "nim c --mm:atomicArc --threads:on -d:stress " &
+       "-r tests/t_unbounded_sipmuc_threaded_stress.nim"
+
+
 task test, "Runs the test suite":
   # v4.3 Task 6 invariant gate (consumerHeads absent) — runs FIRST so a
   # regression short-circuits the long MM-matrix test pass.

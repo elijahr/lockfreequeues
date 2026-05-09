@@ -153,6 +153,10 @@ proc tryClaimSlot*[T; S, MT: static int](
   ## so any newly published slot in this segment is observed before we
   ## decide to advance.
   let seg = loaded.segment
+  # Note: loaded.prevConsumerIdx is a snapshot. A consumer that
+  # races with another consumer's CAS will see a stale value here,
+  # but the resulting CAS attempt will simply fail (expected != actual)
+  # and the loop re-iterates via the Ready arm. Benign; not a livelock.
   let mySlot = loaded.prevConsumerIdx + 1
 
   if mySlot >= loaded.tail:

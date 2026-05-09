@@ -9,6 +9,13 @@ const
   ItemCount = 10000
   ConsumerCount = 4
   MaxThreads = 8
+  TestRepeats = 5
+    ## Each test runs its scenario this many times in a loop. The
+    ## intermittent SPMC end-of-run livelock pattern is statistically
+    ## rare in single-shot runs (≈1/30 at S=8 / ItemCount=10000), so a
+    ## modest in-test loop catches the regression without crossing the
+    ## stress-test boundary (see ``t_unbounded_sipmuc_threaded_stress``
+    ## for the heavier 50× gated variant).
 
 type
   ProducerContext[S: static int] = object
@@ -52,104 +59,113 @@ suite "UnboundedSipmuc threaded":
     producerDone: Atomic[bool]
     totalConsumed: Atomic[int]
 
-  setup:
+  template resetState() =
     for i in 0 ..< ItemCount:
       received[i].store(false, moRelaxed)
     duplicateFound.store(false, moRelaxed)
     producerDone.store(false, moRelaxed)
     totalConsumed.store(0, moRelaxed)
 
+  setup:
+    resetState()
+
   test "high segment turnover":
-    var manager = initDebraManager[MaxThreads]()
-    var queue = newUnboundedSipmuc[8, int, MaxThreads](addr manager)
-    var prodCtx = ProducerContext[8](queue: addr queue, producerDone: addr producerDone)
-    var consCtxs: array[ConsumerCount, ConsumerContext[8]]
-    for i in 0 ..< ConsumerCount:
-      consCtxs[i] = ConsumerContext[8](
-        queue: addr queue,
-        manager: addr manager,
-        received: addr received,
-        duplicateFound: addr duplicateFound,
-        producerDone: addr producerDone,
-        totalConsumed: addr totalConsumed,
-      )
+    for run in 1 .. TestRepeats:
+      resetState()
+      var manager = initDebraManager[MaxThreads]()
+      var queue = newUnboundedSipmuc[8, int, MaxThreads](addr manager)
+      var prodCtx = ProducerContext[8](queue: addr queue, producerDone: addr producerDone)
+      var consCtxs: array[ConsumerCount, ConsumerContext[8]]
+      for i in 0 ..< ConsumerCount:
+        consCtxs[i] = ConsumerContext[8](
+          queue: addr queue,
+          manager: addr manager,
+          received: addr received,
+          duplicateFound: addr duplicateFound,
+          producerDone: addr producerDone,
+          totalConsumed: addr totalConsumed,
+        )
 
-    var prodThread: Thread[ptr ProducerContext[8]]
-    var consThreads: array[ConsumerCount, Thread[ptr ConsumerContext[8]]]
+      var prodThread: Thread[ptr ProducerContext[8]]
+      var consThreads: array[ConsumerCount, Thread[ptr ConsumerContext[8]]]
 
-    createThread(prodThread, producer[8], addr prodCtx)
-    for i in 0 ..< ConsumerCount:
-      createThread(consThreads[i], consumer[8], addr consCtxs[i])
+      createThread(prodThread, producer[8], addr prodCtx)
+      for i in 0 ..< ConsumerCount:
+        createThread(consThreads[i], consumer[8], addr consCtxs[i])
 
-    joinThread(prodThread)
-    for i in 0 ..< ConsumerCount:
-      joinThread(consThreads[i])
+      joinThread(prodThread)
+      for i in 0 ..< ConsumerCount:
+        joinThread(consThreads[i])
 
-    check(not duplicateFound.load(moRelaxed))
-    for i in 0 ..< ItemCount:
-      check(received[i].load(moRelaxed))
+      check(not duplicateFound.load(moRelaxed))
+      for i in 0 ..< ItemCount:
+        check(received[i].load(moRelaxed))
 
   test "normal segment size":
-    var manager = initDebraManager[MaxThreads]()
-    var queue = newUnboundedSipmuc[64, int, MaxThreads](addr manager)
-    var prodCtx = ProducerContext[64](queue: addr queue, producerDone: addr producerDone)
-    var consCtxs: array[ConsumerCount, ConsumerContext[64]]
-    for i in 0 ..< ConsumerCount:
-      consCtxs[i] = ConsumerContext[64](
-        queue: addr queue,
-        manager: addr manager,
-        received: addr received,
-        duplicateFound: addr duplicateFound,
-        producerDone: addr producerDone,
-        totalConsumed: addr totalConsumed,
-      )
+    for run in 1 .. TestRepeats:
+      resetState()
+      var manager = initDebraManager[MaxThreads]()
+      var queue = newUnboundedSipmuc[64, int, MaxThreads](addr manager)
+      var prodCtx = ProducerContext[64](queue: addr queue, producerDone: addr producerDone)
+      var consCtxs: array[ConsumerCount, ConsumerContext[64]]
+      for i in 0 ..< ConsumerCount:
+        consCtxs[i] = ConsumerContext[64](
+          queue: addr queue,
+          manager: addr manager,
+          received: addr received,
+          duplicateFound: addr duplicateFound,
+          producerDone: addr producerDone,
+          totalConsumed: addr totalConsumed,
+        )
 
-    var prodThread: Thread[ptr ProducerContext[64]]
-    var consThreads: array[ConsumerCount, Thread[ptr ConsumerContext[64]]]
+      var prodThread: Thread[ptr ProducerContext[64]]
+      var consThreads: array[ConsumerCount, Thread[ptr ConsumerContext[64]]]
 
-    createThread(prodThread, producer[64], addr prodCtx)
-    for i in 0 ..< ConsumerCount:
-      createThread(consThreads[i], consumer[64], addr consCtxs[i])
+      createThread(prodThread, producer[64], addr prodCtx)
+      for i in 0 ..< ConsumerCount:
+        createThread(consThreads[i], consumer[64], addr consCtxs[i])
 
-    joinThread(prodThread)
-    for i in 0 ..< ConsumerCount:
-      joinThread(consThreads[i])
+      joinThread(prodThread)
+      for i in 0 ..< ConsumerCount:
+        joinThread(consThreads[i])
 
-    check(not duplicateFound.load(moRelaxed))
-    for i in 0 ..< ItemCount:
-      check(received[i].load(moRelaxed))
+      check(not duplicateFound.load(moRelaxed))
+      for i in 0 ..< ItemCount:
+        check(received[i].load(moRelaxed))
 
   test "segment retirement (Manual)":
-    var manager = initDebraManager[MaxThreads]()
-    var queue = newUnboundedSipmuc[8, int, MaxThreads](addr manager, Manual)
+    for run in 1 .. TestRepeats:
+      var manager = initDebraManager[MaxThreads]()
+      var queue = newUnboundedSipmuc[8, int, MaxThreads](addr manager, Manual)
 
-    # Push items to create segments
-    for i in 1 .. 1000:
-      queue.push(i)
-    let peakSegments = queue.segmentCount()
+      # Push items to create segments
+      for i in 1 .. 1000:
+        queue.push(i)
+      let peakSegments = queue.segmentCount()
 
-    # Pop all items
-    let handle = registerThread(manager)
-    var c = queue.getConsumer(handle)
-    for i in 1 .. 1000:
-      discard c.pop()
+      # Pop all items
+      let handle = registerThread(manager)
+      var c = queue.getConsumer(handle)
+      for i in 1 .. 1000:
+        discard c.pop()
 
-    # Segments should NOT be freed with Manual (no reclaim called)
-    check(queue.segmentCount() == peakSegments)
+      # Segments should NOT be freed with Manual (no reclaim called)
+      check(queue.segmentCount() == peakSegments)
 
   test "segment retirement (Eager)":
-    var manager = initDebraManager[MaxThreads]()
-    var queue = newUnboundedSipmuc[8, int, MaxThreads](addr manager, Eager)
+    for run in 1 .. TestRepeats:
+      var manager = initDebraManager[MaxThreads]()
+      var queue = newUnboundedSipmuc[8, int, MaxThreads](addr manager, Eager)
 
-    # Push items to create segments
-    for i in 1 .. 1000:
-      queue.push(i)
+      # Push items to create segments
+      for i in 1 .. 1000:
+        queue.push(i)
 
-    # Pop all items
-    let handle = registerThread(manager)
-    var c = queue.getConsumer(handle)
-    for i in 1 .. 1000:
-      discard c.pop()
+      # Pop all items
+      let handle = registerThread(manager)
+      var c = queue.getConsumer(handle)
+      for i in 1 .. 1000:
+        discard c.pop()
 
-    # Segments SHOULD be freed with Eager
-    check(queue.segmentCount() <= 3)
+      # Segments SHOULD be freed with Eager
+      check(queue.segmentCount() <= 3)

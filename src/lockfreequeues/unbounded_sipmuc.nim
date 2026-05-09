@@ -419,6 +419,11 @@ proc pop*[S: static int, T; MaxThreads: static int](
           var advance = exhausted.advanceSegment()
           match advance:
             USPMCPopEmpty(_):
+              # Transient miss: when oldSeg.next == nil at the load below but
+              # the producer publishes immediately after, this pop returns none
+              # for one call. The outer pop()/getConsumer() loop re-enters and
+              # observes the new state on the next iteration. Working as designed
+              # for non-blocking SPMC; not a livelock.
               break
             USPMCPopReady(_):
               # Item-loss livelock fix: before CAS-advancing past oldSeg,
