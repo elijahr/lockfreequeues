@@ -12,7 +12,7 @@ entryPoints    = @["tests/test.nim"]
 requires "nim >= 2.2.10"
 requires "unittest2"
 requires "typestates >= 0.8.0"
-requires "debra >= 0.7.2"
+requires "debra >= 0.7.3"
 
 # Tasks
 task checkConsumerHeadsAbsent, "Verify consumerHeads is absent from src/":
