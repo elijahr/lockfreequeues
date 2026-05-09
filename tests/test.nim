@@ -19,6 +19,8 @@ import ./t_unbounded_sipmuc
 import ./t_unbounded_sipmuc_threaded
 import ./t_unbounded_sipsic
 import ./t_unbounded_sipsic_threaded
+import ./t_unbounded_sipsic_threaded_r7
+import ./t_unbounded_mupsic_threaded_r7
 import ./t_unbounded_auto_create
 
 import ./t_wraparound
@@ -45,5 +47,7 @@ export
   t_unbounded_sipmuc_threaded,
   t_unbounded_sipsic,
   t_unbounded_sipsic_threaded,
+  t_unbounded_sipsic_threaded_r7,
+  t_unbounded_mupsic_threaded_r7,
   t_unbounded_auto_create,
   t_wraparound

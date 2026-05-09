@@ -154,13 +154,27 @@ proc checkSlot*[T; S, MT: static int](
         slot: loaded.head,
       )
   else:
-    UMPSCSlotCheck[T, S, MT] ->
-      UMPSCPopSegmentExhausted[T, S, MT](
-        pinnedHandle: loaded.pinnedHandle,
-        pinnedEpoch: loaded.pinnedEpoch,
-        queue: loaded.queue,
-        segment: loaded.segment,
-      )
+    # F1 (Window A close, mirrors bb50bc9 in unbounded_spmc_pop.nim:168):
+    # re-load tail with moAcquire so a stale loadSegment snapshot doesn't
+    # cause us to advance past slots producers just published+committed.
+    let freshTail = loaded.segment.tail.load(moAcquire)
+    if loaded.head < freshTail:
+      UMPSCSlotCheck[T, S, MT] ->
+        UMPSCPopSlotAvailable[T, S, MT](
+          pinnedHandle: loaded.pinnedHandle,
+          pinnedEpoch: loaded.pinnedEpoch,
+          queue: loaded.queue,
+          segment: loaded.segment,
+          slot: loaded.head,
+        )
+    else:
+      UMPSCSlotCheck[T, S, MT] ->
+        UMPSCPopSegmentExhausted[T, S, MT](
+          pinnedHandle: loaded.pinnedHandle,
+          pinnedEpoch: loaded.pinnedEpoch,
+          queue: loaded.queue,
+          segment: loaded.segment,
+        )
 
 # Check if slot is committed and read item if ready
 proc checkCommitted*[T; S, MT: static int](
@@ -201,6 +215,27 @@ proc advanceSegment*[T; S, MT: static int](
   ## Try to advance to next segment.
   ## Returns Ready if next segment exists, Empty otherwise.
   let nextSeg = exhausted.segment.next.load(moAcquire)
+
+  # F1' (Window B close): re-confirm exhaustion before committing the head-
+  # segment advance. moAcquire on .next above synchronises-with producer's
+  # release-store on .next, transitively ordering all prior producer writes
+  # including tail.store on this segment. If a producer published more items
+  # between checkSlot and now, abort the advance and let the caller retry
+  # on the same segment. Architectural mirror of bb50bc9's commit-point
+  # defense; placement follows commit point (advanceSegment is the commit
+  # for SPSC/MPSC since their headSegment.store is a plain release-store).
+  let freshTail = exhausted.segment.tail.load(moAcquire)
+  let head = exhausted.segment.head
+  if freshTail > head:
+    return
+      UMPSCAdvanceResult[T, S, MT] ->
+      UMPSCPopReady[T, S, MT](
+        UMPSCPopContext[T, S, MT](
+          pinnedHandle: exhausted.pinnedHandle,
+          pinnedEpoch: exhausted.pinnedEpoch,
+          queue: exhausted.queue,
+        )
+      )
 
   if nextSeg == nil:
     return

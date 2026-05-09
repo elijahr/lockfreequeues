@@ -201,7 +201,13 @@ proc pop*[S: static int, T](self: var UnboundedSipsic[S, T]): Option[T] =
           USPSCPopEmpty(_):
             return none(T)
           USPSCPopReady(_):
-            freeAligned(oldSeg)
+            # F1' may return Ready WITHOUT advancing headSegment (abort-and-
+            # retry path: producer published more between checkSlot and the
+            # commit point). Single-consumer SPSC means only this thread
+            # frees, so re-loading headSegment is race-free wrt freeing.
+            let curHead = queueBase.headSegment.load(moAcquire)
+            if curHead != oldSeg:
+              freeAligned(oldSeg)
             continue
 
 proc pop*[S: static int, T](

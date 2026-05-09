@@ -431,9 +431,18 @@ proc pop*[S: static int, T; MaxThreads: static int](
             UMPSCPopEmpty(_):
               break
             UMPSCPopReady(_):
-              it.retire(cast[pointer](oldSeg), segmentDestructor[S, T])
-              if self.strategy != Manual:
-                discard self.segments.fetchSub(1, moRelaxed)
+              # F1' may return Ready WITHOUT advancing headSegment (abort-
+              # and-retry path: producer published more between checkSlot
+              # and the commit point). Single-consumer MPSC means only this
+              # thread retires, so re-loading headSegment is race-free wrt
+              # retirement.
+              let curHead = cast[ptr Segment[S, T]](
+                queueBase.headSegment.load(moAcquire)
+              )
+              if curHead != oldSeg:
+                it.retire(cast[pointer](oldSeg), segmentDestructor[S, T])
+                if self.strategy != Manual:
+                  discard self.segments.fetchSub(1, moRelaxed)
               continue
 
   if self.strategy == Eager:
