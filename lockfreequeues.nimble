@@ -15,6 +15,13 @@ requires "typestates >= 0.8.0"
 requires "debra >= 0.7.2"
 
 # Tasks
+task checkConsumerHeadsAbsent, "Verify consumerHeads is absent from src/":
+  # v4.3 Task 6 invariant gate: the SPMC `consumerHeads` array was dead
+  # (allocated/zeroed but never read) and was deleted in Task 6. This
+  # gate fails CI loudly if any future change reintroduces the field.
+  exec "sh -c 'rg --quiet consumerHeads src/lockfreequeues/ && (echo \"FAIL: consumerHeads found\" && exit 1) || echo \"OK: consumerHeads absent\"'"
+
+
 task checkBulkOutsidePin, "Verify bulk loops are not nested inside withPin blocks":
   # R6 invariant gate (per v4.3 design §2.4): bulk variants of push/pop on
   # unbounded queues MUST run OUTSIDE the producer/consumer's `withPin:`
@@ -28,7 +35,11 @@ task checkBulkOutsidePin, "Verify bulk loops are not nested inside withPin block
 
 
 task test, "Runs the test suite":
-  # R6 invariant gate (bulk-outside-pin) — runs FIRST so a violation
+  # v4.3 Task 6 invariant gate (consumerHeads absent) — runs FIRST so a
+  # regression short-circuits the long MM-matrix test pass.
+  exec "nimble checkConsumerHeadsAbsent"
+
+  # R6 invariant gate (bulk-outside-pin) — runs early so a violation
   # short-circuits the long MM-matrix test pass.
   exec "nimble checkBulkOutsidePin"
 

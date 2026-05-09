@@ -7,12 +7,13 @@ import unittest2
 import lockfreequeues/atomic_dsl
 import debra
 
+import lockfreequeues/typestates/unbounded_spmc_push
 import lockfreequeues/typestates/unbounded_spmc_pop
 
 # Type aliases for our test types
 type
   TestQueue = UnboundedSipmucBase[64, int, 4]
-  TestSegment = SPMCSegment[64, int]
+  TestSegment = Segment[64, int]
 
 # Test segment allocation
 proc newTestSegment(): ptr TestSegment =
@@ -35,7 +36,7 @@ suite "SPMC Pop Typestate":
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment = seg
     queue.itemCount.store(1, moRelaxed)
     queue.segments.store(1, moRelaxed)
@@ -47,7 +48,7 @@ suite "SPMC Pop Typestate":
     check loaded.segment.data[0] == 99
 
     let claimResult = loaded.tryClaimSlot()
-    discard claimResult.spmcpopslotclaimed.readItem().extractPinned().unpin()
+    discard claimResult.uspmcpopslotclaimed.readItem().extractPinned().unpin()
     freeTestSegment(seg)
 
   test "loadSegment loads head segment and prevConsumerIdx":
@@ -60,7 +61,7 @@ suite "SPMC Pop Typestate":
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment = seg
     queue.itemCount.store(5, moRelaxed)
     queue.segments.store(1, moRelaxed)
@@ -75,9 +76,9 @@ suite "SPMC Pop Typestate":
 
     seg.data[5] = 77
     let claimResult = loaded.tryClaimSlot()
-    check claimResult.kind == sSPMCPopSlotClaimed
+    check claimResult.kind == uUSPMCPopSlotClaimed
 
-    let complete = claimResult.spmcpopslotclaimed.readItem()
+    let complete = claimResult.uspmcpopslotclaimed.readItem()
     check complete.value == 77
     discard complete.extractPinned().unpin()
 
@@ -94,7 +95,7 @@ suite "SPMC Pop Typestate":
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment = seg
     queue.itemCount.store(5, moRelaxed)
     queue.segments.store(1, moRelaxed)
@@ -103,10 +104,10 @@ suite "SPMC Pop Typestate":
       .loadSegment()
       .tryClaimSlot()
 
-    check claimResult.kind == sSPMCPopSlotClaimed
-    check claimResult.spmcpopslotclaimed.slot == 0
+    check claimResult.kind == uUSPMCPopSlotClaimed
+    check claimResult.uspmcpopslotclaimed.slot == 0
 
-    let complete = claimResult.spmcpopslotclaimed.readItem()
+    let complete = claimResult.uspmcpopslotclaimed.readItem()
     check complete.value == 42
     check seg.prevConsumerIdx.load(moRelaxed) == 0
     discard complete.extractPinned().unpin()
@@ -123,7 +124,7 @@ suite "SPMC Pop Typestate":
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment = seg
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
@@ -132,13 +133,13 @@ suite "SPMC Pop Typestate":
       .loadSegment()
       .tryClaimSlot()
 
-    check claimResult.kind == sSPMCPopSegmentExhausted
+    check claimResult.kind == uUSPMCPopSegmentExhausted
 
-    let advanceResult = claimResult.spmcpopsegmentexhausted.advanceSegment()
+    let advanceResult = claimResult.uspmcpopsegmentexhausted.advanceSegment()
 
-    check advanceResult.kind == sSPMCPopEmpty
+    check advanceResult.kind == uUSPMCPopEmpty
 
-    discard advanceResult.spmcpopempty.extractPinned().unpin()
+    discard advanceResult.uspmcpopempty.extractPinned().unpin()
 
     freeTestSegment(seg)
 
@@ -152,7 +153,7 @@ suite "SPMC Pop Typestate":
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment = seg
     queue.itemCount.store(5, moRelaxed)
     queue.segments.store(1, moRelaxed)
@@ -166,13 +167,13 @@ suite "SPMC Pop Typestate":
 
     # tryClaimSlot should detect CAS failure and return Ready
     let claimResult = loaded.tryClaimSlot()
-    check claimResult.kind == sSPMCPopReady
+    check claimResult.kind == uUSPMCPopReady
 
     # Clean up - do a successful operation
     seg.data[4] = 99
-    let claimResult2 = claimResult.spmcpopready.loadSegment().tryClaimSlot()
-    check claimResult2.kind == sSPMCPopSlotClaimed
-    discard claimResult2.spmcpopslotclaimed.readItem().extractPinned().unpin()
+    let claimResult2 = claimResult.uspmcpopready.loadSegment().tryClaimSlot()
+    check claimResult2.kind == uUSPMCPopSlotClaimed
+    discard claimResult2.uspmcpopslotclaimed.readItem().extractPinned().unpin()
 
     freeTestSegment(seg)
 
@@ -189,7 +190,7 @@ suite "SPMC Pop Typestate":
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment = seg
     queue.itemCount.store(3, moRelaxed)
     queue.segments.store(1, moRelaxed)
@@ -198,7 +199,7 @@ suite "SPMC Pop Typestate":
       .loadSegment()
       .tryClaimSlot()
 
-    let complete = claimResult.spmcpopslotclaimed.readItem()
+    let complete = claimResult.uspmcpopslotclaimed.readItem()
 
     check complete.value == 42
     check seg.prevConsumerIdx.load(moRelaxed) == 0
@@ -223,7 +224,7 @@ suite "SPMC Pop Typestate":
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg1
+    queue.headSegment.store(seg1, moRelaxed)
     queue.tailSegment = seg2
     queue.itemCount.store(3, moRelaxed)
     queue.segments.store(2, moRelaxed)
@@ -232,11 +233,11 @@ suite "SPMC Pop Typestate":
       .loadSegment()
       .tryClaimSlot()
 
-    check claimResult.kind == sSPMCPopSegmentExhausted
+    check claimResult.kind == uUSPMCPopSegmentExhausted
 
-    let advanceResult = claimResult.spmcpopsegmentexhausted.advanceSegment()
+    let advanceResult = claimResult.uspmcpopsegmentexhausted.advanceSegment()
 
-    check advanceResult.kind == sSPMCPopReady
+    check advanceResult.kind == uUSPMCPopReady
 
     # Note: Unlike MPSC, SPMC doesn't update headSegment during advanceSegment
     # The consumer needs to coordinate segment advancement at a higher level

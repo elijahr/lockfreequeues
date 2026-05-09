@@ -11,7 +11,7 @@ import lockfreequeues/typestates/unbounded_spmc_push
 
 # Type aliases for our test types
 type
-  TestQueue = UnboundedSipmuc[64, int, 4]
+  TestQueue = UnboundedSipmucBase[64, int, 4]
   TestSegment = Segment[64, int]
 
 # Test segment allocation
@@ -33,9 +33,9 @@ suite "SPMC Push Typestate":
     var seg = newTestSegment()
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment = seg
-    queue.strategy = 0 # Manual
+    queue.strategy = Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
@@ -51,7 +51,7 @@ suite "SPMC Push Typestate":
 
     # Clean up
     let checkResult = loaded.checkFull()
-    discard checkResult.spmcpushslotready.writeItem(0).extractPinned().unpin()
+    discard checkResult.uspmcpushslotready.writeItem(0).extractPinned().unpin()
     freeTestSegment(seg)
 
   test "loadSegment loads tail segment":
@@ -63,9 +63,9 @@ suite "SPMC Push Typestate":
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment = seg
-    queue.strategy = 0 # Manual
+    queue.strategy = Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
@@ -82,10 +82,10 @@ suite "SPMC Push Typestate":
 
     # Complete operation
     let checkResult = loaded.checkFull()
-    check checkResult.kind == sSPMCPushSlotReady
+    check checkResult.kind == uUSPMCPushSlotReady
 
     # Write item and VERIFY the value was written
-    let complete = checkResult.spmcpushslotready.writeItem(42)
+    let complete = checkResult.uspmcpushslotready.writeItem(42)
     check seg.data[10] == 42 # Consume: verify write to correct slot
     check seg.tail.load(moRelaxed) == 11 # Verify tail advanced
     discard complete.extractPinned().unpin()
@@ -99,9 +99,9 @@ suite "SPMC Push Typestate":
     var seg = newTestSegment()
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment = seg
-    queue.strategy = 0 # Manual
+    queue.strategy = Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
@@ -110,11 +110,11 @@ suite "SPMC Push Typestate":
       .loadSegment()
       .checkFull()
 
-    check checkResult.kind == sSPMCPushSlotReady
-    check checkResult.spmcpushslotready.slot == 0
+    check checkResult.kind == uUSPMCPushSlotReady
+    check checkResult.uspmcpushslotready.slot == 0
 
     # Write item and VERIFY the value was written
-    discard checkResult.spmcpushslotready.writeItem(42).extractPinned().unpin()
+    discard checkResult.uspmcpushslotready.writeItem(42).extractPinned().unpin()
 
     check seg.data[0] == 42 # Consume: verify write happened
     check seg.tail.load(moRelaxed) == 1 # Verify tail advanced
@@ -130,9 +130,9 @@ suite "SPMC Push Typestate":
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment = seg
-    queue.strategy = 0 # Manual
+    queue.strategy = Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
@@ -141,18 +141,18 @@ suite "SPMC Push Typestate":
       .loadSegment()
       .checkFull()
 
-    check checkResult.kind == sSPMCPushSegmentFull
+    check checkResult.kind == uUSPMCPushSegmentFull
 
     # Allocate new segment and retry
     var newSeg = newTestSegment()
-    let checkResult2 = checkResult.spmcpushsegmentfull
+    let checkResult2 = checkResult.uspmcpushsegmentfull
       .allocateNewSegment(newSeg)
       .loadSegment()
       .checkFull()
 
-    check checkResult2.kind == sSPMCPushSlotReady
+    check checkResult2.kind == uUSPMCPushSlotReady
 
-    discard checkResult2.spmcpushslotready.writeItem(42).extractPinned().unpin()
+    discard checkResult2.uspmcpushslotready.writeItem(42).extractPinned().unpin()
 
     # Consume: verify write went to NEW segment, not old one
     check newSeg.data[0] == 42 # Value written to new segment
@@ -170,9 +170,9 @@ suite "SPMC Push Typestate":
     var seg = newTestSegment()
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment = seg
-    queue.strategy = 0 # Manual
+    queue.strategy = Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
@@ -181,7 +181,7 @@ suite "SPMC Push Typestate":
       .loadSegment()
       .checkFull()
 
-    discard checkResult.spmcpushslotready.writeItem(42).extractPinned().unpin()
+    discard checkResult.uspmcpushslotready.writeItem(42).extractPinned().unpin()
 
     check seg.data[0] == 42
     check seg.tail.load(moRelaxed) == 1
