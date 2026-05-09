@@ -31,6 +31,12 @@
 ## See `unbounded_sipmuc` for documentation of the
 ## `-d:LockFreeQueuesAdvanceEvery=N` compile-time knob, which also tunes
 ## this queue's Eager reclamation cadence.
+##
+## v4.3 facade migration: this module is a thin facade over the typestate
+## verbs in ``typestates/unbounded_mpmc_push`` and
+## ``typestates/unbounded_mpmc_pop``. Production owns the canonical memory
+## layout (Queue and Segment); the typestate Base type's layout equivalence
+## is gated by per-field offsetOf / sizeof static-asserts below.
 
 import ./atomic_dsl
 import ./backoff
@@ -39,6 +45,9 @@ import std/options
 import std/typetraits
 
 import debra
+import typestates
+import ./typestates/unbounded_mpmc_push as ts_mpmc_push
+import ./typestates/unbounded_mpmc_pop as ts_mpmc_pop
 
 const LockFreeQueuesAdvanceEvery {.intdefine.}: int = 64
   ## Cadence for `advanceEvery` calls in this file's Eager reclamation path.
@@ -108,6 +117,57 @@ type
     queue: ptr UnboundedMupmuc[S, T, MaxThreads]
     idx*: int
     handle: ThreadHandle[MaxThreads]
+
+# Layout-equivalence gates: production Queue and Segment must have identical
+# field offsets (and sizeof) to the typestate Base type/Segment so that the
+# `cast[ptr UnboundedMupmucBase[S, T, MaxThreads]](addr self)` in push/pop and
+# the typestate's per-Segment-field accesses are sound. See design §2.2 (MPMC
+# 9-field set) and §3 Item 2 (MPMC row: both head/tail Segment as
+# Atomic[ptr]). 9 Queue offsets + 1 Queue sizeof + 1 Segment sizeof + 5
+# Segment offsets + 3 enum asserts = 19 doAsserts.
+static:
+  # `DeallocationStrategy` enum equivalence: the typestate file declares a
+  # local mirror enum (cycle break — see comment at the top of
+  # `typestates/unbounded_mpmc_push.nim`). Confirm ord values and storage
+  # size match so the `strategy` field's bit-pattern is identical across
+  # the two declarations.
+  doAssert ord(Manual) == ord(ts_mpmc_push.Manual)
+  doAssert ord(Eager) == ord(ts_mpmc_push.Eager)
+  doAssert sizeof(DeallocationStrategy) == sizeof(ts_mpmc_push.DeallocationStrategy)
+  # Queue-type equivalence (9 fields + sizeof).
+  doAssert offsetOf(UnboundedMupmuc[64, int, 4], manager) ==
+    offsetOf(ts_mpmc_push.UnboundedMupmucBase[64, int, 4], manager)
+  doAssert offsetOf(UnboundedMupmuc[64, int, 4], headSegment) ==
+    offsetOf(ts_mpmc_push.UnboundedMupmucBase[64, int, 4], headSegment)
+  doAssert offsetOf(UnboundedMupmuc[64, int, 4], tailSegment) ==
+    offsetOf(ts_mpmc_push.UnboundedMupmucBase[64, int, 4], tailSegment)
+  doAssert offsetOf(UnboundedMupmuc[64, int, 4], strategy) ==
+    offsetOf(ts_mpmc_push.UnboundedMupmucBase[64, int, 4], strategy)
+  doAssert offsetOf(UnboundedMupmuc[64, int, 4], itemCount) ==
+    offsetOf(ts_mpmc_push.UnboundedMupmucBase[64, int, 4], itemCount)
+  doAssert offsetOf(UnboundedMupmuc[64, int, 4], segments) ==
+    offsetOf(ts_mpmc_push.UnboundedMupmucBase[64, int, 4], segments)
+  doAssert offsetOf(UnboundedMupmuc[64, int, 4], producerCount) ==
+    offsetOf(ts_mpmc_push.UnboundedMupmucBase[64, int, 4], producerCount)
+  doAssert offsetOf(UnboundedMupmuc[64, int, 4], consumerCount) ==
+    offsetOf(ts_mpmc_push.UnboundedMupmucBase[64, int, 4], consumerCount)
+  doAssert offsetOf(UnboundedMupmuc[64, int, 4], ownsManager) ==
+    offsetOf(ts_mpmc_push.UnboundedMupmucBase[64, int, 4], ownsManager)
+  doAssert sizeof(UnboundedMupmuc[64, int, 4]) ==
+    sizeof(ts_mpmc_push.UnboundedMupmucBase[64, int, 4])
+  # Per-Segment-field equivalence (MPMC Segment fields: data, next, tail,
+  # prevConsumerIdx, committed).
+  doAssert sizeof(Segment[64, int]) == sizeof(ts_mpmc_push.UMPMCSegment[64, int])
+  doAssert offsetOf(Segment[64, int], data) ==
+    offsetOf(ts_mpmc_push.UMPMCSegment[64, int], data)
+  doAssert offsetOf(Segment[64, int], next) ==
+    offsetOf(ts_mpmc_push.UMPMCSegment[64, int], next)
+  doAssert offsetOf(Segment[64, int], tail) ==
+    offsetOf(ts_mpmc_push.UMPMCSegment[64, int], tail)
+  doAssert offsetOf(Segment[64, int], prevConsumerIdx) ==
+    offsetOf(ts_mpmc_push.UMPMCSegment[64, int], prevConsumerIdx)
+  doAssert offsetOf(Segment[64, int], committed) ==
+    offsetOf(ts_mpmc_push.UMPMCSegment[64, int], committed)
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
   ## Allocate a new segment on a CacheLineBytes boundary so the
@@ -265,56 +325,60 @@ proc push*[S: static int, T; MaxThreads: static int](
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
+  # Cast queue to UnboundedMupmucBase for typestate compatibility (sound per
+  # the static offsetof asserts at the top of this module). Production
+  # Segment and the typestate-local ts_mpmc_push.UMPMCSegment also have
+  # identical layouts, so pointer equality and field offsets are
+  # interchangeable.
+  let queueBase =
+    cast[ptr ts_mpmc_push.UnboundedMupmucBase[S, T, MaxThreads]](addr self.queue[])
+
+  # Single `withPin` around the WHOLE verb loop per design §2.3 (NOT
+  # one-pin-per-iteration). The actual DEBRA pin is held by `it` (a
+  # `RetireReady[MT]` injected by `withPin`); the typestate's
+  # `startPush` consumes a `Pinned[MT]`, which we project from `it`
+  # (same handle+epoch — the slot's `pinned` flag is unchanged, this is
+  # a typestate rebrand symmetric to `pinnedFromRetired`).
   self.handle.withPin:
     while true:
-      var seg = self.queue.tailSegment.load(moAcquire)
-      var tail = seg.tail.load(moAcquire)
-
-      # Check if current segment is full
-      if tail >= S:
-        # Try to allocate new segment
-        let nextSeg = seg.next.load(moAcquire)
-        if nextSeg == nil:
-          let newSeg = newSegment[S, T]()
-          var expectedNext: ptr Segment[S, T] = nil
-          if seg.next.compareExchange(expectedNext, newSeg, moRelease, moRelaxed):
-            var expectedSeg = seg
-            discard self.queue.tailSegment.compareExchange(
-              expectedSeg, newSeg, moRelease, moRelaxed
-            )
-            discard self.queue.segments.fetchAdd(1, moRelaxed)
-            # Allocation succeeded; loop to retry slot claim on the new segment.
-            # No backoff: this is a success edge, not a CAS-retry failure.
-            continue
-          else:
-            # Lost the segment-alloc race: another producer linked first.
-            # Free our orphan segment and back off before retrying.
-            freeAligned(newSeg)
+      # Project the active pin (held by `it: RetireReady`) into a Pinned
+      # value for the typestate to consume. This is a typestate rebrand
+      # (same handle+epoch); the slot's `pinned` flag is unchanged. It
+      # mirrors `pinnedFromRetired` from `debra/typestates/retire`.
+      let itCtx = RetireContext[MaxThreads](it)
+      let pinned = Pinned[MaxThreads](
+        EpochGuardContext[MaxThreads](handle: itCtx.handle, epoch: itCtx.epoch)
+      )
+      var ready = ts_mpmc_push.startPush[T, S, MaxThreads](pinned, queueBase)
+      var loaded = ready.loadSegment()
+      var claim = loaded.tryClaimSlot()
+      match claim:
+        UMPMCPushSlotClaimed(slotClaimed):
+          discard slotClaimed.writeItem(item).markCommitted()
+          break
+        UMPMCPushSegmentFull(full):
+          # Need a new segment. Allocate first, then link via CAS; if a
+          # concurrent producer wins the alloc race, free our orphan and
+          # back off (mirrors production at `:294`).
+          let newSeg = cast[ptr ts_mpmc_push.UMPMCSegment[S, T]](newSegment[S, T]())
+          let (_, allocated) = full.tryAllocateNewSegment(newSeg)
+          if not allocated:
+            freeAligned(cast[ptr Segment[S, T]](newSeg))
             # CAS-loss-retry on segment-alloc race (producer-vs-producer).
             backoffOnCASLossRetry()
-            continue
-        else:
-          # Another producer already linked next; just advance tailSegment
-          # (best effort, may CAS-fail because someone else advanced) and
-          # retry slot claim on the new segment. No backoff: success edge.
-          var expectedSeg = seg
-          discard self.queue.tailSegment.compareExchange(
-            expectedSeg, nextSeg, moRelease, moRelaxed
-          )
           continue
-
-      # Try to claim a slot
-      var expected = tail
-      if seg.tail.compareExchange(expected, tail + 1, moAcquire, moRelaxed):
-        seg.data[tail] = item
-        seg.committed[tail].store(true, moRelease)
-        discard self.queue.itemCount.fetchAdd(1, moRelaxed)
-        break
+        UMPMCPushReady(_):
+          # Lost slot-claim CAS to a peer producer; loop to retry from
+          # Ready. No backoff: the production code does not backoff at
+          # this site (production line :308 is a CAS in a tight retry
+          # loop without intervening backoff).
+          continue
 
 proc push*[S: static int, T; MaxThreads: static int](
     self: var Producer[S, T, MaxThreads], items: openArray[T]
 ) =
   ## Push multiple items.
+  # Bulk variant runs OUTSIDE withPin; each iteration acquires its own pin.
   for item in items:
     self.push(item)
 
@@ -348,69 +412,132 @@ proc pop*[S: static int, T; MaxThreads: static int](
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
+  let queueBase =
+    cast[ptr ts_mpmc_push.UnboundedMupmucBase[S, T, MaxThreads]](addr self.queue[])
+
+  # Single `withPin` around the WHOLE verb loop per design §2.3 (NOT
+  # one-pin-per-iteration). The pin lets us call `it.retire(...)` for
+  # retired segments — the facade owns segment lifetime via DEBRA so
+  # consumers never observe a freed pointer until every pinned thread
+  # has rotated past the retirement epoch.
   self.handle.withPin:
-    # Re-read headSegment under the pin so a concurrent consumer's
-    # retire+advance from a previous pop cannot pull this segment out
-    # from under us before we read it.
-    var seg = self.queue.headSegment.load(moAcquire)
-
     while true:
-      let tail = seg.tail.load(moAcquire)
-      var prevIdx = seg.prevConsumerIdx.load(moAcquire)
-
-      # Try to claim the next slot
-      let mySlot = prevIdx + 1
-      if mySlot >= tail:
-        # Check if there might be uncommitted items (producer still writing)
-        if mySlot < S and seg.tail.load(moAcquire) > mySlot:
-          # Slot reserved but maybe not committed yet
-          if not seg.committed[mySlot].load(moAcquire):
-            break
-          # Try again
-          # CAS-loss-retry: peer producer already finished; next iteration races consumer prevConsumerIdx CAS.
+      # Project the active pin (held by `it: RetireReady`) into a Pinned
+      # value for the typestate to consume. This is a typestate rebrand
+      # (same handle+epoch); the slot's `pinned` flag is unchanged. It
+      # mirrors `pinnedFromRetired` from `debra/typestates/retire`.
+      let itCtx = RetireContext[MaxThreads](it)
+      let pinned = Pinned[MaxThreads](
+        EpochGuardContext[MaxThreads](handle: itCtx.handle, epoch: itCtx.epoch)
+      )
+      var ready = ts_mpmc_pop.startPop[T, S, MaxThreads](pinned, queueBase)
+      var loaded = ready.loadSegment()
+      var claim = loaded.tryClaimSlot()
+      match claim:
+        UMPMCPopSlotClaimed(slotClaimed):
+          # Slot was committed at tryClaimSlot time; readItem performs a
+          # paranoid double-check (structurally always succeeds for
+          # well-formed producers — see typestate readItem comment).
+          var commitCheck = slotClaimed.readItem()
+          match commitCheck:
+            UMPMCPopComplete(popDone):
+              # A3: read the public `value*` field directly. The prior
+              # `ts_mpmc_pop.getValue` wrapper added one generic verb-proc
+              # instantiation per (T, S, MT, mm-mode) for no behavioral
+              # benefit; the field is already public on `UMPMCPopComplete`.
+              result = some(popDone.value)
+              break
+            UMPMCPopSlotUncommitted(_):
+              # Defensive arm: producer rolled back committed[]
+              # (structurally unreachable). Return none(T) per design §1
+              # not-committed semantics — production line :405-406 break.
+              break
+        UMPMCPopSlotUncommitted(_):
+          # Slot reserved but not yet committed (producer still writing).
+          # Return none(T) per design §1 — non-blocking pop contract.
+          # Mirrors production line :405-407 break.
+          break
+        UMPMCPopReady(_):
+          # Lost prevConsumerIdx CAS to a peer consumer; loop back to
+          # re-load and retry. CAS-loss-retry on the consumer-vs-consumer
+          # CAS (production line :371 classification per Decision §2.1).
           backoffOnCASLossRetry()
           continue
-
-        # Segment exhausted, try to advance to the next one. CAS
-        # headSegment from seg to nextSeg; the winner retires.
-        let nextSeg = seg.next.load(moAcquire)
-        if nextSeg == nil:
-          break
-
-        var expected = seg
-        if self.queue.headSegment.compareExchangeStrong(
-          expected, nextSeg, moAcquireRelease, moAcquire
-        ):
-          # Always retire the detached segment so DEBRA owns it: in Manual
-          # mode the user (or `manager.=destroy` at scope exit) drains the
-          # limbo bag via `tryReclaim`; in Eager mode the per-pop
-          # `reclaimNow` call below does it. Without retiring, the segment
-          # is detached from the head chain but reachable from no root, and
-          # leaks at process exit. Only the live segmentCount is mode-
-          # dependent.
-          it.retire(cast[pointer](seg), segmentDestructor[S, T])
-          if self.queue.strategy != Manual:
-            discard self.queue.segments.fetchSub(1, moRelaxed)
-          # With Manual strategy the segment is in limbo (retired but not
-          # yet reclaimed); the test contract is that `segmentCount` reports
-          # peak until the user calls `tryReclaim`.
-          seg = nextSeg
-        else:
-          # Another consumer already advanced. Pick up its observation.
-          seg = expected
-        # CAS-loss-retry on segment-advance (consumer-vs-consumer headSegment CAS).
-        backoffOnCASLossRetry()
-        continue
-
-      # Check if this slot is committed
-      if not seg.committed[mySlot].load(moAcquire):
-        break # Producer still writing
-
-      # CAS to claim slot
-      if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
-        result = some(seg.data[mySlot])
-        discard self.queue.itemCount.fetchSub(1, moRelaxed)
-        break
+        UMPMCPopSegmentExhausted(exhausted):
+          # Capture the old segment pointer BEFORE the typestate consumes
+          # the state — the facade owns segment lifetime and DEBRA-retires
+          # the old segment when it wins the headSegment CAS.
+          let oldSeg = cast[ptr Segment[S, T]](exhausted.segment)
+          var advance = exhausted.advanceSegment()
+          match advance:
+            UMPMCPopEmpty(_):
+              # Transient miss: when oldSeg.next == nil at the load below
+              # but the producer publishes immediately after, this pop
+              # returns none for one call. The outer pop()/consumer loop
+              # re-enters and observes the new state on the next
+              # iteration. Working as designed for non-blocking MPMC; not
+              # a livelock.
+              break
+            UMPMCPopReady(_):
+              # Item-loss livelock fix (preempted from sipmuc bb50bc9):
+              # before CAS-advancing past oldSeg, verify there are no
+              # unclaimed items remaining. The producer's invariant is
+              # that `oldSeg.next.store(newSeg, moRelease)` happens AFTER
+              # `oldSeg.tail` reaches `S` (the segment is full), and
+              # producers release-store `committed[slot]` AFTER the CAS
+              # on `seg.tail`. The acquire-load on `oldSeg.next`
+              # (already performed inside `advanceSegment`) establishes
+              # happens-before with the producer's release-store on
+              # `next`, so a fresh acquire-load of `prevConsumerIdx`
+              # here observes the latest CAS state.
+              # If `prevConsumerIdx < S - 1`, items remain unclaimed in
+              # `oldSeg`. We MUST NOT advance past it — the items would
+              # become unreachable when `oldSeg` is retired and pop
+              # would return `none` while items still exist, manifesting
+              # as a consumer hot-spin at end-of-run when producers
+              # filled the final segment after a consumer's stale tail
+              # snapshot.
+              #
+              # The combined defense — typestate-side `tryClaimSlot`
+              # re-loads `seg.tail` before transitioning to Exhausted,
+              # plus this facade-side `prevConsumerIdx` re-check before
+              # advancing — closes the same TOCTOU window that affected
+              # SPMC pop. MPMC has the same SHAPE (snapshot tail +
+              # advance segment + CAS-advance head) and is preempted
+              # here so Phase C's TSAN×100 doesn't surface the bug a
+              # second time.
+              let freshPrevIdx = oldSeg.prevConsumerIdx.load(moAcquire)
+              if freshPrevIdx < S - 1:
+                # Unclaimed slots remain in oldSeg. Skip the head CAS
+                # and retire — loop back to re-load and try to claim.
+                backoffOnCASLossRetry()
+                continue
+              # Try to be the thread that retires this segment by CAS-
+              # advancing headSegment from oldSeg to the next segment.
+              # The winner retires; the loser observes that another
+              # consumer already advanced and continues. Mirrors the
+              # consumer-vs-consumer coordination the previous direct
+              # production code performed at the head-advance site
+              # (production line :381-403).
+              let nextSeg = cast[ptr Segment[S, T]](oldSeg.next.load(moAcquire))
+              var expected = oldSeg
+              if self.queue.headSegment.compareExchange(
+                expected, nextSeg, moAcquireRelease, moAcquire
+              ):
+                # Always retire the detached segment so DEBRA owns it: in
+                # Manual mode the user (or `manager.=destroy` at scope
+                # exit) drains the limbo bag via `tryReclaim`; in Eager
+                # mode the per-pop `reclaimNow` call below does it.
+                # Without retiring, the segment is detached from the head
+                # chain but reachable from no root, and leaks at process
+                # exit. Only the live segmentCount is mode-dependent.
+                it.retire(cast[pointer](oldSeg), segmentDestructor[S, T])
+                if self.queue.strategy != Manual:
+                  discard self.queue.segments.fetchSub(1, moRelaxed)
+              # CAS-loss-retry on segment-advance (consumer-vs-consumer
+              # headSegment CAS — production line :401).
+              backoffOnCASLossRetry()
+              continue
 
   if self.queue.strategy == Eager:
     if self.handle.advanceEvery(LockFreeQueuesAdvanceEvery):
@@ -427,6 +554,8 @@ proc pop*[S: static int, T; MaxThreads: static int](
 
   var items = newSeq[T]()
 
+  # Bulk variant runs OUTSIDE withPin; each iteration acquires its own pin
+  # via the per-iteration single-item `pop()` call.
   for i in 0 ..< count:
     let item = self.pop()
     if item.isNone:
