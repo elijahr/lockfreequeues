@@ -421,6 +421,40 @@ proc pop*[S: static int, T; MaxThreads: static int](
             USPMCPopEmpty(_):
               break
             USPMCPopReady(_):
+              # Item-loss livelock fix: before CAS-advancing past oldSeg,
+              # verify there are no unclaimed items remaining. The
+              # producer's invariant is that
+              # `oldSeg.next.store(newSeg, moRelease)` happens AFTER
+              # `oldSeg.tail` reaches `S` (the segment is full). The
+              # acquire-load on `oldSeg.next` (already performed inside
+              # `advanceSegment`) establishes happens-before with that
+              # release-store, so a fresh acquire-load of
+              # `prevConsumerIdx` here observes the latest CAS state.
+              # If `prevConsumerIdx < S - 1`, items remain unclaimed in
+              # `oldSeg`. We MUST NOT advance past it — the items would
+              # become unreachable when `oldSeg` is retired and pop
+              # would return `none` while items still exist, manifesting
+              # as a consumer hot-spin at end-of-run when the producer
+              # filled the final segment after a consumer's stale tail
+              # snapshot.
+              #
+              # Without this check, the snapshot of `tail` taken in
+              # `loadSegment` (and the subsequent `tryClaimSlot`-time
+              # re-load of `tail`) can race the producer's release-store:
+              # the consumer concludes "exhausted" with `mySlot >= tail`
+              # for some `tail < S`, then advances past `oldSeg` while
+              # the producer is still publishing slots `tail..S-1`. Even
+              # though `tryClaimSlot` re-loads `tail`, the producer can
+              # publish more slots between that re-load and the head
+              # CAS. The `prevConsumerIdx` re-check here closes that
+              # window: if any slot < S - 1 has not been claimed via
+              # CAS, we restart the claim loop instead of advancing.
+              let freshPrevIdx = oldSeg.prevConsumerIdx.load(moAcquire)
+              if freshPrevIdx < S - 1:
+                # Unclaimed slots remain in oldSeg. Skip the head CAS
+                # and retire — loop back to re-load and try to claim.
+                backoffOnCASLossRetry()
+                continue
               # Try to be the thread that retires this segment by CAS-
               # advancing headSegment from oldSeg to the next segment.
               # The winner retires; the loser observes that another

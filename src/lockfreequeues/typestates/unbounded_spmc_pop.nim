@@ -139,18 +139,38 @@ proc tryClaimSlot*[T; S, MT: static int](
   ## - SlotClaimed: CAS succeeded, slot is ours
   ## - SegmentExhausted: no more slots in segment
   ## - Ready: CAS failed, retry from beginning
+  ##
+  ## Item-loss livelock fix: when the snapshotted `loaded.tail` says we are
+  ## exhausted, we MUST re-read `seg.tail` with acquire ordering before
+  ## committing to that conclusion. The single producer's `tail.store(...,
+  ## moRelease)` after each `data[slot] = item` write may have advanced
+  ## past the snapshot taken in `loadSegment`. If we trust the stale
+  ## snapshot and propagate to `advanceSegment`, the facade will CAS-
+  ## advance `headSegment` past a segment that still has unclaimed items —
+  ## those items become unreachable when the segment is retired, and
+  ## `pop` returns `none` indefinitely while the test loop spins. The
+  ## fresh acquire-load synchronises with the producer's release-store,
+  ## so any newly published slot in this segment is observed before we
+  ## decide to advance.
   let seg = loaded.segment
   let mySlot = loaded.prevConsumerIdx + 1
 
   if mySlot >= loaded.tail:
-    return
-      USPMCSlotClaimResult[T, S, MT] ->
-      USPMCPopSegmentExhausted[T, S, MT](
-        pinnedHandle: loaded.pinnedHandle,
-        pinnedEpoch: loaded.pinnedEpoch,
-        queue: loaded.queue,
-        segment: loaded.segment,
-      )
+    # Re-load tail with acquire to pair with the producer's release-store.
+    # If the producer published more slots since `loadSegment`, fall
+    # through to the CAS path. If the segment really is exhausted, the
+    # fresh load returns the same value and we transition to Exhausted
+    # as before.
+    let freshTail = seg.tail.load(moAcquire)
+    if mySlot >= freshTail:
+      return
+        USPMCSlotClaimResult[T, S, MT] ->
+        USPMCPopSegmentExhausted[T, S, MT](
+          pinnedHandle: loaded.pinnedHandle,
+          pinnedEpoch: loaded.pinnedEpoch,
+          queue: loaded.queue,
+          segment: loaded.segment,
+        )
 
   # Try CAS
   var expected = loaded.prevConsumerIdx
