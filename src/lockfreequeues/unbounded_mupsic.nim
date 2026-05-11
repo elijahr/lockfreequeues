@@ -431,10 +431,14 @@ proc pop*[S: static int, T; MaxThreads: static int](
             UMPSCPopEmpty(_):
               break
             UMPSCPopReady(_):
-              # F1' may return Ready WITHOUT advancing headSegment (abort-
-              # and-retry path: producer published more between checkSlot
-              # and the commit point). Single-consumer MPSC means only this
-              # thread retires, so re-loading headSegment is race-free wrt
+              # F1' widened advanceSegment's Ready return to two semantics:
+              # (a) headSegment actually advanced (oldSeg detached, safe
+              # to retire); (b) F1' aborted the advance because a producer
+              # published more between checkSlot and the commit point
+              # (oldSeg still attached, MUST NOT retire). If a future
+              # change adds a third Ready-shape semantic, revisit this
+              # comparison. Single-consumer MPSC means only this thread
+              # retires, so the post-advance load is race-free wrt
               # retirement.
               let curHead = cast[ptr Segment[S, T]](
                 queueBase.headSegment.load(moAcquire)

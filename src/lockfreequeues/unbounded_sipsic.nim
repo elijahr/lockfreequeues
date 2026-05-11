@@ -201,10 +201,14 @@ proc pop*[S: static int, T](self: var UnboundedSipsic[S, T]): Option[T] =
           USPSCPopEmpty(_):
             return none(T)
           USPSCPopReady(_):
-            # F1' may return Ready WITHOUT advancing headSegment (abort-and-
-            # retry path: producer published more between checkSlot and the
-            # commit point). Single-consumer SPSC means only this thread
-            # frees, so re-loading headSegment is race-free wrt freeing.
+            # F1' widened advanceSegment's Ready return to two semantics:
+            # (a) headSegment actually advanced (oldSeg detached, safe to
+            # free); (b) F1' aborted the advance because the producer
+            # published more between checkSlot and the commit point
+            # (oldSeg still attached, MUST NOT free). If a future change
+            # adds a third Ready-shape semantic, revisit this comparison.
+            # Single-consumer SPSC means only this thread frees, so the
+            # post-advance load is race-free wrt freeing.
             let curHead = queueBase.headSegment.load(moAcquire)
             if curHead != oldSeg:
               freeAligned(oldSeg)
