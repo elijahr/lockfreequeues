@@ -125,8 +125,15 @@ as much as the queue.
 Consumer-side ordering invariant where each consumer must observe the next
 sequence index `prevConsumerIdx + 1`. Cannot skip slots reserved by
 descheduled producers, leading to head-of-line stalls under oversubscription.
-This is the root cause of the unbounded mupmuc/sipmuc stalls v4.2.0's
-harness backoff works around.
+Contributes to the unbounded mupmuc/sipmuc stalls v4.2.0's harness backoff
+works around. The item-loss path that made the stalls catastrophic was a
+TOCTOU race between a stale `loadSegment` tail snapshot and the
+`headSegment`-advance commit point; that race was closed in v4.3.0 via
+`bb50bc9` (SPMC facade-side `prevConsumerIdx` re-check) and `7296240`
+(SPSC/MPSC verb-side `seg.tail` re-load in `advanceSegment`, F1 + F1').
+The strict-FIFO claim itself remains pending relaxation in v4.4 (rename
+`prevConsumerIdx → consumerHead` and the CAS-on-head consumer-claim
+mechanism that comes with it).
 
 ### Work-stealing
 

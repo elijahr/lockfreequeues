@@ -59,3 +59,54 @@ agent for 5+ minutes per attempt if the agent waits for `nim c -r` to return.
 Detecting the hang early and pivoting to direct binary invocation keeps the
 mitigation/verification loop tight without losing TSAN coverage — the binary
 *is* TSAN-instrumented; only the runner driver is misbehaving.
+
+## Defense placement follows commit placement
+
+When a typestate verb's correctness depends on snapshotted state, the
+defense against TOCTOU drift between snapshot and commit goes
+**immediately before the irreversible commit**, not at the snapshot site
+and not after the commit. The commit is the moment the snapshot's
+staleness becomes load-bearing. Defending earlier wastes work on
+snapshots that were never used; defending after is too late — the commit
+has already been observed by other actors and cannot be unwound.
+
+The two unbounded TOCTOU fixes in v4.3 illustrate this with mirrored
+physical placement. In SPMC pop (`bb50bc9`), the irreversible commit is
+the facade's CAS that advances `headSegment` past `oldSeg` (multi-
+consumer coordination requires the CAS to live outside the verb to keep
+the verb pipeline single-CAS-free). The defense — re-acquire-load
+`prevConsumerIdx` and abort if items remain unclaimed — lives at the
+facade, immediately before that CAS, in `unbounded_sipmuc.nim`'s
+`USPMCPopReady` arm. In SPSC/MPSC pop (`7296240`), the irreversible
+commit is the plain `headSegment.store` inside `advanceSegment`
+(single-consumer; no coordination required, so the commit stays
+verb-internal). The defense — F1' — re-loads `seg.tail` between
+`next.load(moAcquire)` and the `headSegment.store`, and aborts the
+advance if `freshTail > head`. Same principle, different physical
+placement; both defenses sit at their respective commit points, not
+before, not after.
+
+For any future typestate work where commit-point defense is needed, the
+heuristic is: locate the irreversible state transition (whether it is a
+CAS, a plain release-store, or a multi-step facade-coordinated advance),
+then place the defense immediately before that transition. If you can
+not articulate where the commit lives — in the verb, in the facade, in
+a coordinated CAS — you do not yet understand the topology well enough
+to add a defense; the placement question will surface bugs before the
+defense is needed. Note that this means the defense can widen the
+verb's return contract (e.g., F1' makes `Ready` either "advance
+happened" or "retry on same segment"); when that happens, callers need
+a disambiguator (e.g., facade comparing `headSegment` before and after
+`advanceSegment`). Document the widened contract at the call site so it
+does not decay (see `unbounded_spsc.nim` and `unbounded_mpsc.nim`
+comparison-site comments per `12eb259`).
+
+## Typestate state-name U-prefix rule
+
+State names in the eight `typestates/unbounded_*_{push,pop}.nim` files
+use a `U`-prefix to avoid registry collisions with the bounded-graph
+names, with one exception: SPSC PUSH (`unbounded_spsc_push.nim`) leaves
+its states UN-prefixed because the SPSC push state graph has no bounded
+counterpart to collide with. SPSC POP and the other six files are
+U-prefixed. The rule is per state-graph, not per concurrency variant —
+see commit body of `3d96020` for the migration-time discovery.

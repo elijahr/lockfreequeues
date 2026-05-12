@@ -11,6 +11,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+### Fixed
+
+### Removed
+
+## [4.3.0] - 2026-05-12
+
+### Added
+
+- `backoffOnCASLossRetry()` helper in `src/lockfreequeues/backoff.nim`
+  alongside the existing `backoffOnRetry` (exponential cpuPause
+  escalating to `schedYield` at `YieldThreshold`) and
+  `backoffOnPeerWait` (cpuPause-only). Eleven previously-`backoffOnRetry`
+  sites across bounded sipmuc/mupsic/mupmuc and unbounded
+  mupsic/sipmuc/mupmuc are re-attributed to `backoffOnCASLossRetry`,
+  which is cpuPause-only — yielding the OS quantum on a self-CAS
+  loss delays the caller's retry without helping the peer that won.
+  `backoffOnCASLossRetry` is byte-identical to `backoffOnPeerWait`
+  today; the two names are kept distinct for call-site grep-ability
+  and so the two semantic intents can be tuned independently in
+  future without re-attributing call sites.
+- `LFQ_BENCH_HARNESS_BACKOFF=0` runtime env toggle: disables the
+  bench harness-side `HarnessBackoff` wrapper so benchmarks measure
+  the queue-side backoff in isolation. Default (unset or `=1`) keeps
+  the harness backoff on. New `nimble benchToggleSmoke` task
+  verifies the toggle is observed at module init.
+- `nimble lockfreeCheck`: compile-time invariant gate that asserts
+  arc/orc rejects non-lock-free queue item types absent
+  `-d:allowNonLockFreeQueueItems`. Fails CI loudly if the lock-free-
+  types enforcement regresses.
+- `nimble checkConsumerHeadsAbsent`: CI gate against any future
+  reintroduction of the SPMC `consumerHeads` field (deleted in
+  Task 6 as dead allocation).
+- `nimble checkBulkOutsidePin`: R6 invariant gate asserting bulk
+  push/pop loops on unbounded queues run OUTSIDE producer/consumer
+  `withPin:` blocks, so each iteration acquires its own pin and
+  DEBRA reclamation is not blocked by an arbitrarily-extended pin
+  epoch.
+
+### Changed
+
+- Unbounded `Sipsic`, `Mupsic`, `Sipmuc`, `Mupmuc` migrated to the
+  facade-over-typestate-verbs pattern. `withPin:` opens once at the
+  facade; verbs carry a `Pinned[MaxThreads]` payload through the
+  push/pop pipelines. Bulk variants run OUTSIDE the pin (per-
+  iteration single-item call has its own pin scope), enforced by
+  `nimble checkBulkOutsidePin`. Public API surface unchanged
+  (API-DIFF gate is zero exported-signature changes).
+- Test suite migrated to `typestates` 0.8.0 `match` macro with
+  exhaustive arms across 74 typestate sites in eight unbounded
+  test files. Replaces the prior `check X.kind == K` +
+  `X.<lower>.method()` two-statement pattern. Test count grew from
+  268 to 340 as a consequence of wiring previously-orphan files
+  (see Tests).
 - `benchmarks/nim/bench_unbounded.nim`: `runFlumeUnbounded` and
   `runKanalUnbounded` expanded from a 2x2 producer/consumer grid
   (`[1, 2]` x `[1, 2]`) to a 3x3 grid (`[1, 2, 4]` x `[1, 2, 4]`)
@@ -22,9 +75,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lockfreequeues family + 15 comparison-library prefixes) so the
   silent-mask CI guard catches a drop from any installed adapter,
   not only the four restored in the initial Stage 1 patch.
+- Dependency pins: `typestates >= 0.8.0` (was `>= 0.7.2`; 0.8.0's
+  `generateSingleTargetMatch` and var-l-value-for-move codegen are
+  load-bearing for the test migration). `debra >= 0.7.3`
+  (was `>= 0.7.1`).
 
 ### Fixed
 
+- Consumer-side livelock in unbounded SPMC / MPMC / SPSC / MPSC pop
+  (the symptom v4.2.0 documented as Constraint #7's deferred
+  closure). Two TOCTOU races between a stale `loadSegment` tail
+  snapshot and the `headSegment`-advance commit point allowed the
+  consumer to advance past slots a producer was still publishing,
+  stranding items and manifesting as a hot-spin returning `none`
+  while items existed (~25 minute bench hang at S=8 under
+  oversubscription pre-fix; 3 minutes post-fix). Closed by two
+  coordinated commits described below, plus a contributing factor
+  reduction from the path-typed backoff split (see Added). Note
+  that the v4.2.0 deferral text predicted a different fix shape
+  (queue-side schedYield + strict-FIFO consumer-claim relaxation);
+  v4.3 took a different path. The schedYield-escalation half was
+  rejected in favor of path-typed classification; the strict-FIFO
+  relaxation half (rename `prevConsumerIdx → consumerHead`) is
+  deferred to v4.4 (see Known Limitations).
+- Unbounded SPMC pop TOCTOU item-loss livelock (`bb50bc9`):
+  `unbounded_spmc_pop.nim` `tryClaimSlot` re-loads `seg.tail` with
+  acquire ordering before declaring `SegmentExhausted`, and
+  `unbounded_sipmuc.nim`'s `USPMCPopReady` facade arm acquire-loads
+  `oldSeg.prevConsumerIdx` before the `headSegment`-CAS-advance and
+  backs off the claim loop if items remain unclaimed. Defense lives
+  at the facade because multi-consumer CAS coordination keeps the
+  verb pipeline single-CAS-free. Reproduced 1/30 in the new sipmuc
+  threaded stress test pre-fix; 50/50 PASS post-fix.
+- Unbounded SPSC and MPSC pop TOCTOU item-loss livelock (`7296240`,
+  mirror of the SPMC fix shape on single-consumer topology). Two
+  race windows, two verb-side defenses: F1 (`tryClaimSlot` checkSlot)
+  re-loads `seg.tail` with `moAcquire` before declaring
+  `SegmentExhausted`; F1' (`advanceSegment`) re-loads `seg.tail`
+  between `next.load(moAcquire)` and the `headSegment.store` commit
+  point, aborting the advance if `freshTail > head`. F1' widens the
+  `Ready` return contract from "advance happened, free `oldSeg`" to
+  "advance happened OR aborted-do-not-free"; the SPSC and MPSC
+  facades disambiguate by comparing `headSegment` against `oldSeg`
+  post-advance and only `freeAligned`/`it.retire` when the head
+  actually moved. Two new R7 regression tests
+  (`t_unbounded_sipsic_threaded_r7.nim`,
+  `t_unbounded_mupsic_threaded_r7.nim`) assert pushed-equals-popped
+  count and FIFO-per-producer; 100/100 PASS each at atomicArc and
+  atomicArc+TSAN.
 - `benchmarks/vendor/liblfds/liblfds_wrapper.c`
   `bench_liblfds_bmm_init` now allocates the wrapper struct with
   `posix_memalign(LFDS711_PAL_ATOMIC_ISOLATION_IN_BYTES)` instead of
@@ -49,6 +147,119 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the next contention window into yielding too early.
 
 ### Removed
+
+- SPMC `consumerHeads` array field (Task 6): dead allocation. The
+  field was zero-initialised and pinned to its own cache line but
+  never read by any code path. Removal is asserted by the
+  `nimble checkConsumerHeadsAbsent` invariant gate so any future
+  reintroduction is caught loudly in CI.
+- `tests/test_minimal.nim` (empty file) and `tests/test_bounded.nim`
+  (referenced a nonexistent `t_ops` symbol; broken since v3.2.0).
+
+### Tests
+
+- 14 previously-orphan test files wired into `nimble test` and
+  `nimble stresstest` matrices; coverage gap closure dating to
+  v3.2.0. Atomic / storage / cell primitives (8 files):
+  `t_atomic_loaders`, `t_fullness_checks`, `t_mpmc_cell`,
+  `t_slot_seq_n`, `t_storage_n`, `t_storage_n1`,
+  `t_virtual_values_n`, `t_virtual_values_n1`. Typestate / match
+  macro (3 files): `t_cas`, `t_typestates_import`,
+  `t_match_in_generic_context_smoke`. Lock-free type validation
+  (1 file): `t_unbounded_sipsic_lockfree_types`. Re-enabled (had
+  been disabled with deadlock comment, now resolved by the v4.0.0
+  Vyukov bounded protocol rewrite): `t_mupmuc_threaded`,
+  `t_sipmuc_threaded`. `tests/test.nim` test count: 268 → 340
+  (+72 tests).
+- Four unbounded threaded stress tests re-enabled with R7
+  protection assertions: (a) pushed-equals-popped count equality,
+  (b) content equality (every pushed item observed exactly once),
+  (b′) duplicate detection across consumer fan-out for SPMC/MPMC,
+  (c) FIFO-per-producer via stack-local `lastSeen[pid]` arrays.
+  Topology budgets: `sipsic` 1p×1c S=8 10000 items;
+  `mupsic` 4p×1c S=8 4×2500; `sipmuc` 1p×4c S=8 1×10000 4-way
+  fan-out; `mupmuc` 2p×2c S=8 2×5000 2-way fan-out.
+- `t_match_in_generic_context_smoke`: 44 `MPMCPop*` references
+  migrated to `UMPMCPop*` (production state-name drift since
+  v3.2.0); 4 plain-ptr-to-atomic-field assignments converted to
+  `.store(seg, moRelaxed)`.
+- Bench harness reliability: TSAN-clean smoke adapter (Sipsic
+  replaces Channel[uint64]); per-thread Histogram + Channel drain
+  in latency harness; refc skip on the latency harness;
+  Bencher-CLI multi-measure threshold-boundary binding fix;
+  bench_unbounded matrix timeout raised to 20 minutes; macOS test
+  job skipped on PRs (kept on devel + tag pushes).
+
+### Documentation
+
+- `AGENTS.md` (created earlier in this release window): TSAN
+  test-runner hang workaround. Build-then-exec-binary-directly
+  short-circuit pattern documented with detection signal. Same
+  pattern works for the focused TSAN×100 loop the v4.3 mitigation
+  briefs prescribe.
+- `AGENTS.md`: "Defense placement follows commit placement"
+  principle for typestate verbs whose correctness depends on
+  snapshotted state. Defense goes immediately before the
+  irreversible commit, not at the snapshot site, not after. The
+  two unbounded TOCTOU fixes in this release illustrate the
+  principle with mirrored physical placement (SPMC at facade,
+  SPSC/MPSC inside `advanceSegment`). Plus a one-liner for the
+  typestate state-name U-prefix rule (per state-graph, not per
+  concurrency variant; see commit body of `3d96020` for the
+  migration-time discovery).
+- `docs/guide/slot-ownership-typestates.md` rewritten for the
+  facade pattern unification: bounded vs unbounded share the same
+  facade-over-typestate-verbs shape; `withPin:` scope and bulk-
+  outside-pin convention documented; bind-name convention table
+  extended (`b`/`p`/`r`/`s`/`c`/`cmp`/`l`/`f`/`u`/`e`); R5
+  limitation noted (queue push/pop not safe under
+  `neutralizeStalled` mid-call).
+- `docs/guide/memory-management.md` sharpened with explicit R12
+  attribution: `tryReclaim` is a `DebraManager` method, NOT
+  exported by `lockfreequeues`. Eager strategy auto-calls
+  `manager.tryReclaim()` after segment retirement (default under
+  arc/orc/atomicArc/refc); Manual strategy retires only and
+  requires user-driven `manager.tryReclaim()` (default under
+  `--mm:none`).
+- `docs/benchmarks.md` `Strict-FIFO claim` glossary entry softened
+  from "is the root cause of" to "contributes to" the unbounded
+  mupmuc/sipmuc stalls, with cross-references to the v4.3.0 TOCTOU
+  fixes that closed the catastrophic item-loss path (`bb50bc9`,
+  `7296240`) and the v4.4 deferral of the strict-FIFO claim
+  relaxation. Field reference `prevConsumerIdx` verified accurate
+  (rename to `consumerHead` deferred to v4.4 per design §3 Item 2).
+- F1' widened-`Ready`-contract clarification at SPSC and MPSC
+  facade comparison sites in `unbounded_spsc.nim` and
+  `unbounded_mpsc.nim` (commit-only docstring change; no
+  behavioral diff).
+
+### Known Limitations
+
+- Compile-time growth on the order of ~65–70% under the v4.3
+  facade-over-typestate-verbs pattern, measured against the
+  pre-Task-4 baseline. Operator-accepted as the cost of the
+  runtime / readability / cleanness wins; tracked as a v4.4-or-
+  later optimisation candidate. Not a release gate.
+- Strict-FIFO consumer-claim path relaxation (renaming
+  `prevConsumerIdx → consumerHead` and the CAS-on-head consumer-
+  claim mechanism that comes with it) is deferred to v4.4 (design
+  §3 Item 2). The v4.3 release closes the item-loss path that made
+  the strict-FIFO claim worst-case-catastrophic via the TOCTOU
+  defenses described under Fixed; oversubscription head-of-line
+  stalls remain possible but no longer manifest as item loss or
+  hot-spin livelock. This updates v4.2.0 Constraint #7's deferral
+  framing — the schedYield-escalation half of that promise was
+  superseded by the path-typed backoff split (`4153554`); the
+  strict-FIFO relaxation half stays deferred.
+- Queue push/pop is not safe under `neutralizeStalled` mid-call
+  (R5). Documented in `docs/guide/slot-ownership-typestates.md`;
+  callers must serialise neutralisation against active push/pop
+  flows.
+- Apple Silicon padding test (`-d:CacheLineBytes=128`) runs
+  manually rather than as part of the CI matrix on
+  `ubuntu-latest` (which provides a 64-byte cache line). See
+  `nimble testApplePadding` (or the documented manual command in
+  `docs/guide/performance-tuning.md`) for the on-device run.
 
 ## [4.2.0] - 2026-05-06
 

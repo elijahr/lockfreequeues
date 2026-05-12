@@ -1,7 +1,7 @@
 import os
 
 # Package
-version        = "4.2.0"
+version        = "4.3.0"
 author         = "Elijah Shaw-Rutschman"
 description    = "Lock-free queue implementations for Nim."
 license        = "MIT"
@@ -45,6 +45,24 @@ task lockfreeCheck, "Verify lock-free-types gate fires at compile time":
   # See also: `task benchToggleSmoke` for the project convention on
   # expected-output gating via `sh -c '...'`.
   exec "sh -c 'nim c -c -d:release --mm:arc --skipParentCfg:on \"--hint[Conf]:off\" tests/t_unbounded_sipsic_lockfree_check.nim >/dev/null 2>&1 && (echo \"FAIL: lockfree-types gate did not fire; non-lock-free type compiled without -d:allowNonLockFreeQueueItems\" && exit 1) || echo \"OK: lockfree-types gate fires as expected\"'"
+
+
+task testApplePadding, "Verify Segment padding holds at 128-byte cache lines (Apple Silicon)":
+  # R10 invariant gate (per v4.3 design §4 Phase E item 7): the
+  # `tests/t_unbounded_padding.nim` suite asserts that the per-Segment
+  # cache-line-padded fields (head, tail, prevConsumerIdx, committed)
+  # have offsets that are multiples of `CacheLineBytes`, AND that a
+  # freshly-allocated Segment base is CacheLineBytes-aligned. The
+  # default `CacheLineBytes` is 64 (x86_64, aarch64-Linux); Apple
+  # Silicon (M1/M2/M3) and PowerPC use 128-byte effective cache lines.
+  # This task forces `-d:CacheLineBytes=128` so the padding assertions
+  # are validated under the wider alignment a 128-byte target would
+  # require, regardless of the host's native cache-line width. Opt-in:
+  # not invoked by `task test` because the standard MM-MATRIX already
+  # exercises the 64-byte path. Run manually before tagging a release
+  # if you want explicit coverage of the 128-byte alignment surface
+  # (especially relevant for Apple-Silicon / PowerPC consumers).
+  exec "nim c --mm:atomicArc -d:CacheLineBytes=128 --threads:on -r -f tests/t_unbounded_padding.nim"
 
 
 task stresstest, "Run intermittent-bug-class stress tests":
