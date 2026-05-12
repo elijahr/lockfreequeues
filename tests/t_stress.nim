@@ -4,9 +4,12 @@
 when not compileOption("threads"):
   {.error: "t_stress requires --threads:on option.".}
 
-import std/[atomics, options]
+import std/options
 import unittest2
 import lockfreequeues
+  # `lockfreequeues` re-exports `atomic_dsl`, which re-exports `debra/atomics`.
+  # We rely on debra's `Atomic[T]` here; importing `std/atomics` would make
+  # `Atomic` ambiguous between the two `atomics` modules.
 
 const
   SmallBuffer = 16
@@ -145,7 +148,7 @@ proc mupmucProducer[N, P, C: static int](ctx: ptr MupmucPCtx[N, P, C, int]) {.th
   for i in 0 ..< ctx.count:
     while not p.push(i):
       discard
-    ctx.sent[].atomicInc()
+    discard ctx.sent[].fetchAdd(1)
 
 proc mupmucConsumer[N, P, C: static int](ctx: ptr MupmucCCtx[N, P, C, int]) {.thread.} =
   let c = ctx.queue[].getConsumer(idx = ctx.consumerIdx)
@@ -154,7 +157,7 @@ proc mupmucConsumer[N, P, C: static int](ctx: ptr MupmucCCtx[N, P, C, int]) {.th
     let item = c.pop()
     if item.isSome:
       inc localReceived
-      ctx.received[].atomicInc()
+      discard ctx.received[].fetchAdd(1)
 
 suite "Stress - Mupmuc (MPMC)":
   test "Mupmuc 1P/1C 10k int":
@@ -273,7 +276,7 @@ proc sipmucConsumer[N, C: static int](ctx: ptr SipmucCCtx[N, C, int]) {.thread.}
     let item = c.pop()
     if item.isSome:
       inc localReceived
-      ctx.received[].atomicInc()
+      discard ctx.received[].fetchAdd(1)
 
 suite "Stress - Sipmuc (SPMC)":
   test "Sipmuc 1P/2C 10k int":
@@ -320,7 +323,7 @@ proc mupsicProducer[N, P: static int](ctx: ptr MupsicPCtx[N, P, int]) {.thread.}
   for i in 0 ..< ctx.count:
     while not p.push(i):
       discard
-    ctx.sent[].atomicInc()
+    discard ctx.sent[].fetchAdd(1)
 
 suite "Stress - Mupsic (MPSC)":
   test "Mupsic 2P/1C 10k int":

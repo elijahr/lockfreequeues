@@ -34,6 +34,19 @@ task checkBulkOutsidePin, "Verify bulk loops are not nested inside withPin block
   exec "sh -c 'rg -A 5 \"withPin:\" src/lockfreequeues/unbounded_*.nim | rg -q \"for (item|i) in\" && (echo \"FAIL: bulk loop inside withPin\" && exit 1) || echo \"OK: bulk-outside-pin invariant holds\"'"
 
 
+task lockfreeCheck, "Verify lock-free-types gate fires at compile time":
+  # Invariant gate: `tests/t_unbounded_sipsic_lockfree_check.nim` constructs
+  # an `UnboundedSipsic[64, Node]` with `Node = ref object`. On arc/orc the
+  # `unbounded_sipsic` module MUST reject this at compile time via
+  # `nimEnforceLockFreeAtomics`-style enforcement, UNLESS the user opts in
+  # via `-d:allowNonLockFreeQueueItems`. We verify the negative case here:
+  # `nim c -c --mm:arc` (no opt-in) MUST exit non-zero. A successful
+  # compile means the enforcement gate has regressed and CI fails loudly.
+  # See also: `task benchToggleSmoke` for the project convention on
+  # expected-output gating via `sh -c '...'`.
+  exec "sh -c 'nim c -c -d:release --mm:arc --skipParentCfg:on \"--hint[Conf]:off\" tests/t_unbounded_sipsic_lockfree_check.nim >/dev/null 2>&1 && (echo \"FAIL: lockfree-types gate did not fire; non-lock-free type compiled without -d:allowNonLockFreeQueueItems\" && exit 1) || echo \"OK: lockfree-types gate fires as expected\"'"
+
+
 task stresstest, "Run intermittent-bug-class stress tests":
   # Hammers `tests/t_unbounded_sipmuc_threaded_stress.nim` with the
   # ``-d:stress`` switch flipped on (50× outer loop on the SPMC
@@ -45,6 +58,14 @@ task stresstest, "Run intermittent-bug-class stress tests":
   exec "nim c --mm:atomicArc --threads:on -d:stress " &
        "-r tests/t_unbounded_sipmuc_threaded_stress.nim"
 
+  # High-volume bounded-queue stress: pushes 10k-100k items through
+  # Sipsic / Mupmuc / Sipmuc / Mupsic to catch ring-buffer wraparound
+  # and collision bugs that the regular MM-matrix suite is too short
+  # to surface. Same atomicArc + threads:on + -d:stress config as the
+  # unbounded SPMC scenario above.
+  exec "nim c --mm:atomicArc --threads:on -d:stress " &
+       "-r tests/t_stress.nim"
+
 
 task test, "Runs the test suite":
   # v4.3 Task 6 invariant gate (consumerHeads absent) — runs FIRST so a
@@ -54,6 +75,11 @@ task test, "Runs the test suite":
   # R6 invariant gate (bulk-outside-pin) — runs early so a violation
   # short-circuits the long MM-matrix test pass.
   exec "nimble checkBulkOutsidePin"
+
+  # Lock-free-types compile gate — verifies arc/orc still refuses
+  # non-lock-free queue item types when `-d:allowNonLockFreeQueueItems`
+  # is absent. Runs early so a silent regression short-circuits CI.
+  exec "nimble lockfreeCheck"
 
   # C with default MM (orc)
   exec "nim c --threads:on -r -f tests/test.nim"

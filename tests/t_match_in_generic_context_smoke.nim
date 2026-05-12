@@ -5,27 +5,27 @@
 ## expand correctly when invoked from inside a generic helper proc whose
 ## own type parameters drive the typestate union's instantiation
 ## ([S: static int; T; MaxThreads: static int]). This file validates the
-## macro on every union arm reachable from MPMCPopContext, on the
+## macro on every union arm reachable from UMPMCPopContext, on the
 ## production unbounded-MPMC pop typestate, using uniform `match` syntax
-## across all 7 arms (including the single-target MPMCPopSegmentLoaded
+## across all 7 arms (including the single-target UMPMCPopSegmentLoaded
 ## transition, made possible by the per-state `match` overload that
 ## typestates 0.8.0 emits via `generateSingleTargetMatch`).
 ##
-## Coverage of the 7 MPMCPop constructors:
+## Coverage of the 7 UMPMCPop constructors:
 ##
-##   counts[0] MPMCPopReady             - via match arm in MPMCPopSlotClaimResult (CAS race)
-##   counts[1] MPMCPopSegmentLoaded     - via single-target match arm in
+##   counts[0] UMPMCPopReady             - via match arm in UMPMCPopSlotClaimResult (CAS race)
+##   counts[1] UMPMCPopSegmentLoaded     - via single-target match arm in
 ##                                        smokeSlotClaimedThenComplete
 ##                                        (typestates 0.8.0 emits a
 ##                                         dedicated `match` overload for
 ##                                         single-target transitions,
 ##                                         disambiguated by typed
 ##                                         first-parameter resolution).
-##   counts[2] MPMCPopSlotClaimed       - via match arm in MPMCPopSlotClaimResult
-##   counts[3] MPMCPopSlotUncommitted   - via match arm in MPMCPopSlotClaimResult
-##   counts[4] MPMCPopSegmentExhausted  - via match arm in MPMCPopSlotClaimResult
-##   counts[5] MPMCPopEmpty             - via match arm in MPMCPopAdvanceResult
-##   counts[6] MPMCPopComplete          - via match arm in MPMCPopCommitCheck
+##   counts[2] UMPMCPopSlotClaimed       - via match arm in UMPMCPopSlotClaimResult
+##   counts[3] UMPMCPopSlotUncommitted   - via match arm in UMPMCPopSlotClaimResult
+##   counts[4] UMPMCPopSegmentExhausted  - via match arm in UMPMCPopSlotClaimResult
+##   counts[5] UMPMCPopEmpty             - via match arm in UMPMCPopAdvanceResult
+##   counts[6] UMPMCPopComplete          - via match arm in UMPMCPopCommitCheck
 ##
 ## All `match` invocations occur inside generic helper procs parameterized
 ## over `[S: static int; T; MaxThreads: static int]`, satisfying R2's
@@ -48,30 +48,30 @@ proc smokeSlotClaimedThenComplete[S: static int; T;
     counts: var array[7, int],
 ) =
   ## Scenario 1: drive into SlotClaimed → Complete.
-  ## Touches arms: MPMCPopSegmentLoaded (counts[1], via single-target
-  ## match), MPMCPopSlotClaimed (counts[2]), and MPMCPopComplete
+  ## Touches arms: UMPMCPopSegmentLoaded (counts[1], via single-target
+  ## match), UMPMCPopSlotClaimed (counts[2]), and UMPMCPopComplete
   ## (counts[6]).
   var op = startPop[T, S, MaxThreads](unpinned(handle).pin(), addr base)
   var loaded = op.loadSegment()
   match loaded:
-    MPMCPopSegmentLoaded(l):
+    UMPMCPopSegmentLoaded(l):
       inc counts[1]
       var claim = l.tryClaimSlot()
       match claim:
-        MPMCPopSlotClaimed(c):
+        UMPMCPopSlotClaimed(c):
           inc counts[2]
           var commit = c.readItem()
           match commit:
-            MPMCPopComplete(done):
+            UMPMCPopComplete(done):
               inc counts[6]
               discard done.extractPinned().unpin()
-            MPMCPopSlotUncommitted(_):
+            UMPMCPopSlotUncommitted(_):
               check false # unreachable in this scenario
-        MPMCPopSegmentExhausted(_):
+        UMPMCPopSegmentExhausted(_):
           check false
-        MPMCPopSlotUncommitted(_):
+        UMPMCPopSlotUncommitted(_):
           check false
-        MPMCPopReady(_):
+        UMPMCPopReady(_):
           check false
 
 proc smokeSegmentExhaustedThenEmpty[S: static int; T;
@@ -81,25 +81,25 @@ proc smokeSegmentExhaustedThenEmpty[S: static int; T;
     counts: var array[7, int],
 ) =
   ## Scenario 2: drive into SegmentExhausted → Empty.
-  ## Touches arms: MPMCPopSegmentExhausted (counts[4]) and MPMCPopEmpty (counts[5]).
+  ## Touches arms: UMPMCPopSegmentExhausted (counts[4]) and UMPMCPopEmpty (counts[5]).
   var op = startPop[T, S, MaxThreads](unpinned(handle).pin(), addr base)
   var loaded = op.loadSegment()
   var claim = loaded.tryClaimSlot()
   match claim:
-    MPMCPopSegmentExhausted(ex):
+    UMPMCPopSegmentExhausted(ex):
       inc counts[4]
       var advance = ex.advanceSegment()
       match advance:
-        MPMCPopEmpty(em):
+        UMPMCPopEmpty(em):
           inc counts[5]
           discard em.extractPinned().unpin()
-        MPMCPopReady(_):
+        UMPMCPopReady(_):
           check false # unreachable: no next segment
-    MPMCPopSlotClaimed(_):
+    UMPMCPopSlotClaimed(_):
       check false
-    MPMCPopSlotUncommitted(_):
+    UMPMCPopSlotUncommitted(_):
       check false
-    MPMCPopReady(_):
+    UMPMCPopReady(_):
       check false
 
 proc smokeSlotUncommitted[S: static int; T;
@@ -109,19 +109,19 @@ proc smokeSlotUncommitted[S: static int; T;
     counts: var array[7, int],
 ) =
   ## Scenario 3: drive into SlotUncommitted (committed flag false).
-  ## Touches arm: MPMCPopSlotUncommitted (counts[3]).
+  ## Touches arm: UMPMCPopSlotUncommitted (counts[3]).
   var op = startPop[T, S, MaxThreads](unpinned(handle).pin(), addr base)
   var loaded = op.loadSegment()
   var claim = loaded.tryClaimSlot()
   match claim:
-    MPMCPopSlotUncommitted(u):
+    UMPMCPopSlotUncommitted(u):
       inc counts[3]
       discard u.extractPinned().unpin()
-    MPMCPopSlotClaimed(_):
+    UMPMCPopSlotClaimed(_):
       check false
-    MPMCPopSegmentExhausted(_):
+    UMPMCPopSegmentExhausted(_):
       check false
-    MPMCPopReady(_):
+    UMPMCPopReady(_):
       check false
 
 proc smokeReadyViaCASRace[S: static int; T;
@@ -131,7 +131,7 @@ proc smokeReadyViaCASRace[S: static int; T;
     counts: var array[7, int],
 ) =
   ## Scenario 4: drive into Ready via CAS-loss retry path.
-  ## Touches arm: MPMCPopReady (counts[0]).
+  ## Touches arm: UMPMCPopReady (counts[0]).
   var op = startPop[T, S, MaxThreads](unpinned(handle).pin(), addr base)
   var loaded = op.loadSegment()
   # Simulate another consumer racing ahead (canonical pattern from
@@ -141,7 +141,7 @@ proc smokeReadyViaCASRace[S: static int; T;
   discard seg.prevConsumerIdx.fetchAdd(1, moRelaxed)
   var claim = loaded.tryClaimSlot()
   match claim:
-    MPMCPopReady(r):
+    UMPMCPopReady(r):
       inc counts[0]
       # Drain the queue to clean up the pin (Ready has no extractPinned;
       # it must be advanced through the pipeline). One more loadSegment +
@@ -151,31 +151,31 @@ proc smokeReadyViaCASRace[S: static int; T;
       var loaded2 = r.loadSegment()
       var claim2 = loaded2.tryClaimSlot()
       match claim2:
-        MPMCPopSlotClaimed(c):
+        UMPMCPopSlotClaimed(c):
           var commit = c.readItem()
           match commit:
-            MPMCPopComplete(done):
+            UMPMCPopComplete(done):
               discard done.extractPinned().unpin()
-            MPMCPopSlotUncommitted(_):
+            UMPMCPopSlotUncommitted(_):
               check false
-        MPMCPopSegmentExhausted(_):
+        UMPMCPopSegmentExhausted(_):
           check false
-        MPMCPopSlotUncommitted(_):
+        UMPMCPopSlotUncommitted(_):
           check false
-        MPMCPopReady(_):
+        UMPMCPopReady(_):
           check false
-    MPMCPopSlotClaimed(_):
+    UMPMCPopSlotClaimed(_):
       check false
-    MPMCPopSegmentExhausted(_):
+    UMPMCPopSegmentExhausted(_):
       check false
-    MPMCPopSlotUncommitted(_):
+    UMPMCPopSlotUncommitted(_):
       check false
 
 # ---- Test segment / queue setup helpers (non-generic; use S=64, MT=4, T=int).
 
 type
   TestQueue = UnboundedMupmucBase[64, int, 4]
-  TestSegment = MPMCSegment[64, int]
+  TestSegment = UMPMCSegment[64, int]
 
 proc newTestSegment(): ptr TestSegment =
   result = cast[ptr TestSegment](alloc0(sizeof(TestSegment)))
@@ -191,7 +191,7 @@ proc freeTestSegment(seg: ptr TestSegment) =
 # ---- Tests
 
 # Module-level shared counter array. Aggregated across the per-scenario
-# tests; the final test asserts each counter == 1 (each MPMCPop arm fired
+# tests; the final test asserts each counter == 1 (each UMPMCPop arm fired
 # exactly once across the suite).
 var allCounts: array[7, int]
 
@@ -205,7 +205,7 @@ suite "Match macro in [S, T, MaxThreads] generic context (R2 gate)":
     seg.committed[0].store(true, moRelaxed)
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(1, moRelaxed)
     queue.segments.store(1, moRelaxed)
@@ -220,7 +220,7 @@ suite "Match macro in [S, T, MaxThreads] generic context (R2 gate)":
     seg.tail.store(5, moRelaxed) # mySlot=5 >= tail=5 → SegmentExhausted
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
@@ -236,7 +236,7 @@ suite "Match macro in [S, T, MaxThreads] generic context (R2 gate)":
     seg.committed[0].store(false, moRelaxed) # NOT committed
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(1, moRelaxed)
     queue.segments.store(1, moRelaxed)
@@ -255,14 +255,14 @@ suite "Match macro in [S, T, MaxThreads] generic context (R2 gate)":
     seg.committed[4].store(true, moRelaxed)
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment.store(seg, moRelaxed)
     queue.itemCount.store(7, moRelaxed)
     queue.segments.store(1, moRelaxed)
     smokeReadyViaCASRace[64, int, 4](queue, handle, allCounts)
     freeTestSegment(seg)
 
-  test "All 7 MPMCPop arms fired exactly once (R2 acceptance)":
+  test "All 7 UMPMCPop arms fired exactly once (R2 acceptance)":
     # Acceptance: each of the 7 arms fired exactly once across the
     # preceding scenario tests.
     for i in 0 .. 6:
