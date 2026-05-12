@@ -50,8 +50,12 @@ suite "SPMC Push Typestate":
     check loaded.segment.next.load(moRelaxed) == nil
 
     # Clean up
-    let checkResult = loaded.checkFull()
-    discard checkResult.uspmcpushslotready.writeItem(0).extractPinned().unpin()
+    var checkResult = loaded.checkFull()
+    match checkResult:
+      USPMCPushSlotReady(s):
+        discard s.writeItem(0).extractPinned().unpin()
+      USPMCPushSegmentFull(_):
+        check false
     freeTestSegment(seg)
 
   test "loadSegment loads tail segment":
@@ -81,14 +85,16 @@ suite "SPMC Push Typestate":
     check loaded.segment.next.load(moRelaxed) == nil
 
     # Complete operation
-    let checkResult = loaded.checkFull()
-    check checkResult.kind == uUSPMCPushSlotReady
-
-    # Write item and VERIFY the value was written
-    let complete = checkResult.uspmcpushslotready.writeItem(42)
-    check seg.data[10] == 42 # Consume: verify write to correct slot
-    check seg.tail.load(moRelaxed) == 11 # Verify tail advanced
-    discard complete.extractPinned().unpin()
+    var checkResult = loaded.checkFull()
+    match checkResult:
+      USPMCPushSlotReady(s):
+        # Write item and VERIFY the value was written
+        let complete = s.writeItem(42)
+        check seg.data[10] == 42 # Consume: verify write to correct slot
+        check seg.tail.load(moRelaxed) == 11 # Verify tail advanced
+        discard complete.extractPinned().unpin()
+      USPMCPushSegmentFull(_):
+        check false
 
     freeTestSegment(seg)
 
@@ -106,18 +112,21 @@ suite "SPMC Push Typestate":
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
 
-    let checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    var checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
       .loadSegment()
       .checkFull()
 
-    check checkResult.kind == uUSPMCPushSlotReady
-    check checkResult.uspmcpushslotready.slot == 0
+    match checkResult:
+      USPMCPushSlotReady(s):
+        check s.slot == 0
 
-    # Write item and VERIFY the value was written
-    discard checkResult.uspmcpushslotready.writeItem(42).extractPinned().unpin()
+        # Write item and VERIFY the value was written
+        discard s.writeItem(42).extractPinned().unpin()
 
-    check seg.data[0] == 42 # Consume: verify write happened
-    check seg.tail.load(moRelaxed) == 1 # Verify tail advanced
+        check seg.data[0] == 42 # Consume: verify write happened
+        check seg.tail.load(moRelaxed) == 1 # Verify tail advanced
+      USPMCPushSegmentFull(_):
+        check false
 
     freeTestSegment(seg)
 
@@ -137,28 +146,32 @@ suite "SPMC Push Typestate":
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
 
-    let checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    var checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
       .loadSegment()
       .checkFull()
-
-    check checkResult.kind == uUSPMCPushSegmentFull
 
     # Allocate new segment and retry
     var newSeg = newTestSegment()
-    let checkResult2 = checkResult.uspmcpushsegmentfull
-      .allocateNewSegment(newSeg)
-      .loadSegment()
-      .checkFull()
+    match checkResult:
+      USPMCPushSegmentFull(f):
+        var checkResult2 = f
+          .allocateNewSegment(newSeg)
+          .loadSegment()
+          .checkFull()
 
-    check checkResult2.kind == uUSPMCPushSlotReady
+        match checkResult2:
+          USPMCPushSlotReady(s):
+            discard s.writeItem(42).extractPinned().unpin()
 
-    discard checkResult2.uspmcpushslotready.writeItem(42).extractPinned().unpin()
-
-    # Consume: verify write went to NEW segment, not old one
-    check newSeg.data[0] == 42 # Value written to new segment
-    check newSeg.tail.load(moRelaxed) == 1 # New segment tail advanced
-    check seg.next.load(moRelaxed) == newSeg # Segments correctly linked
-    check seg.tail.load(moRelaxed) == 64 # Old segment unchanged
+            # Consume: verify write went to NEW segment, not old one
+            check newSeg.data[0] == 42 # Value written to new segment
+            check newSeg.tail.load(moRelaxed) == 1 # New segment tail advanced
+            check seg.next.load(moRelaxed) == newSeg # Segments correctly linked
+            check seg.tail.load(moRelaxed) == 64 # Old segment unchanged
+          USPMCPushSegmentFull(_):
+            check false
+      USPMCPushSlotReady(_):
+        check false
 
     freeTestSegment(seg)
     freeTestSegment(newSeg)
@@ -177,14 +190,18 @@ suite "SPMC Push Typestate":
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
 
-    let checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    var checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
       .loadSegment()
       .checkFull()
 
-    discard checkResult.uspmcpushslotready.writeItem(42).extractPinned().unpin()
+    match checkResult:
+      USPMCPushSlotReady(s):
+        discard s.writeItem(42).extractPinned().unpin()
 
-    check seg.data[0] == 42
-    check seg.tail.load(moRelaxed) == 1
-    check queue.itemCount.load(moRelaxed) == 1
+        check seg.data[0] == 42
+        check seg.tail.load(moRelaxed) == 1
+        check queue.itemCount.load(moRelaxed) == 1
+      USPMCPushSegmentFull(_):
+        check false
 
     freeTestSegment(seg)

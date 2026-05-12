@@ -23,6 +23,16 @@ import ./t_unbounded_sipsic_threaded_r7
 import ./t_unbounded_mupsic_threaded_r7
 import ./t_unbounded_auto_create
 
+# Unbounded typestate tests (push/pop per queue variant)
+import ./t_unbounded_spsc_push_typestate
+import ./t_unbounded_spsc_pop_typestate
+import ./t_unbounded_mpsc_push_typestate
+import ./t_unbounded_mpsc_pop_typestate
+import ./t_unbounded_spmc_push_typestate
+import ./t_unbounded_spmc_pop_typestate
+import ./t_unbounded_mpmc_push_typestate
+import ./t_unbounded_mpmc_pop_typestate
+
 import ./t_wraparound
 
 export
@@ -50,4 +60,12 @@ export
   t_unbounded_sipsic_threaded_r7,
   t_unbounded_mupsic_threaded_r7,
   t_unbounded_auto_create,
+  t_unbounded_spsc_push_typestate,
+  t_unbounded_spsc_pop_typestate,
+  t_unbounded_mpsc_push_typestate,
+  t_unbounded_mpsc_pop_typestate,
+  t_unbounded_spmc_push_typestate,
+  t_unbounded_spmc_pop_typestate,
+  t_unbounded_mpmc_push_typestate,
+  t_unbounded_mpmc_pop_typestate,
   t_wraparound

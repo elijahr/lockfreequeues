@@ -43,8 +43,12 @@ suite "SPSC Push Typestate":
     check loaded.segment.next.load(moRelaxed) == nil
 
     # Clean up
-    let checkResult = loaded.checkFull()
-    discard checkResult.spscpushslotready.writeItem(0)
+    var checkResult = loaded.checkFull()
+    match checkResult:
+      SPSCPushSlotReady(s):
+        discard s.writeItem(0)
+      SPSCPushSegmentFull(_):
+        check false
     freeTestSegment(seg)
 
   test "loadSegment loads tail segment":
@@ -67,13 +71,15 @@ suite "SPSC Push Typestate":
     check loaded.segment.next.load(moRelaxed) == nil
 
     # Complete operation
-    let checkResult = loaded.checkFull()
-    check checkResult.kind == sSPSCPushSlotReady
-
-    # Write item and VERIFY the value was written
-    discard checkResult.spscpushslotready.writeItem(42)
-    check seg.data[10] == 42 # Verify write to correct slot
-    check seg.tail.load(moRelaxed) == 11 # Verify tail advanced
+    var checkResult = loaded.checkFull()
+    match checkResult:
+      SPSCPushSlotReady(s):
+        # Write item and VERIFY the value was written
+        discard s.writeItem(42)
+        check seg.data[10] == 42 # Verify write to correct slot
+        check seg.tail.load(moRelaxed) == 11 # Verify tail advanced
+      SPSCPushSegmentFull(_):
+        check false
 
     freeTestSegment(seg)
 
@@ -85,16 +91,19 @@ suite "SPSC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let checkResult = startPush[int, 64](addr queue).loadSegment().checkFull()
+    var checkResult = startPush[int, 64](addr queue).loadSegment().checkFull()
 
-    check checkResult.kind == sSPSCPushSlotReady
-    check checkResult.spscpushslotready.slot == 0
+    match checkResult:
+      SPSCPushSlotReady(s):
+        check s.slot == 0
 
-    # Write item and VERIFY the value was written
-    discard checkResult.spscpushslotready.writeItem(42)
+        # Write item and VERIFY the value was written
+        discard s.writeItem(42)
 
-    check seg.data[0] == 42 # Verify write happened
-    check seg.tail.load(moRelaxed) == 1 # Verify tail advanced
+        check seg.data[0] == 42 # Verify write happened
+        check seg.tail.load(moRelaxed) == 1 # Verify tail advanced
+      SPSCPushSegmentFull(_):
+        check false
 
     freeTestSegment(seg)
 
@@ -108,26 +117,30 @@ suite "SPSC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let checkResult = startPush[int, 64](addr queue).loadSegment().checkFull()
-
-    check checkResult.kind == sSPSCPushSegmentFull
+    var checkResult = startPush[int, 64](addr queue).loadSegment().checkFull()
 
     # Allocate new segment and retry
     var newSeg = newTestSegment()
-    let checkResult2 = checkResult.spscpushsegmentfull
-      .allocateNewSegment(newSeg)
-      .loadSegment()
-      .checkFull()
+    match checkResult:
+      SPSCPushSegmentFull(f):
+        var checkResult2 = f
+          .allocateNewSegment(newSeg)
+          .loadSegment()
+          .checkFull()
 
-    check checkResult2.kind == sSPSCPushSlotReady
+        match checkResult2:
+          SPSCPushSlotReady(s):
+            discard s.writeItem(42)
 
-    discard checkResult2.spscpushslotready.writeItem(42)
-
-    # Verify write went to NEW segment, not old one
-    check newSeg.data[0] == 42 # Value written to new segment
-    check newSeg.tail.load(moRelaxed) == 1 # New segment tail advanced
-    check seg.next.load(moRelaxed) == newSeg # Segments correctly linked
-    check seg.tail.load(moRelaxed) == 64 # Old segment unchanged
+            # Verify write went to NEW segment, not old one
+            check newSeg.data[0] == 42 # Value written to new segment
+            check newSeg.tail.load(moRelaxed) == 1 # New segment tail advanced
+            check seg.next.load(moRelaxed) == newSeg # Segments correctly linked
+            check seg.tail.load(moRelaxed) == 64 # Old segment unchanged
+          SPSCPushSegmentFull(_):
+            check false
+      SPSCPushSlotReady(_):
+        check false
 
     freeTestSegment(seg)
     freeTestSegment(newSeg)
@@ -140,12 +153,16 @@ suite "SPSC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let checkResult = startPush[int, 64](addr queue).loadSegment().checkFull()
+    var checkResult = startPush[int, 64](addr queue).loadSegment().checkFull()
 
-    discard checkResult.spscpushslotready.writeItem(42)
+    match checkResult:
+      SPSCPushSlotReady(s):
+        discard s.writeItem(42)
 
-    check seg.data[0] == 42
-    check seg.tail.load(moRelaxed) == 1
-    check queue.itemCount.load(moRelaxed) == 1
+        check seg.data[0] == 42
+        check seg.tail.load(moRelaxed) == 1
+        check queue.itemCount.load(moRelaxed) == 1
+      SPSCPushSegmentFull(_):
+        check false
 
     freeTestSegment(seg)

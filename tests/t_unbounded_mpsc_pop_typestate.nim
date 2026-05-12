@@ -55,10 +55,17 @@ suite "MPSC Pop Typestate":
     check loaded.segment.data[0] == 99
 
     # Clean up
-    let checkResult = loaded.checkSlot()
-    check checkResult.kind == uUMPSCPopSlotAvailable
-    let commitResult = checkResult.umpscpopslotavailable.checkCommitted()
-    discard commitResult.umpscpopcomplete.extractPinned().unpin()
+    var checkResult = loaded.checkSlot()
+    match checkResult:
+      UMPSCPopSlotAvailable(s):
+        var commitResult = s.checkCommitted()
+        match commitResult:
+          UMPSCPopComplete(c):
+            discard c.extractPinned().unpin()
+          UMPSCPopSlotUncommitted(_):
+            check false
+      UMPSCPopSegmentExhausted(_):
+        check false
     freeTestSegment(seg)
 
   test "loadSegment loads head segment":
@@ -86,18 +93,24 @@ suite "MPSC Pop Typestate":
     check loaded.segment.next.load(moRelaxed) == nil
 
     # Complete operation and VERIFY value read
-    let checkResult = loaded.checkSlot()
-    check checkResult.kind == uUMPSCPopSlotAvailable
+    var checkResult = loaded.checkSlot()
 
     # Pre-populate data for verification
     seg.data[5] = 77
     seg.committed[5].store(true, moRelaxed)
 
-    let complete = checkResult.umpscpopslotavailable.checkCommitted()
-    check complete.kind == uUMPSCPopComplete
-    check complete.umpscpopcomplete.value == 77
-    check seg.head == 6 # Verify head advanced
-    discard complete.umpscpopcomplete.extractPinned().unpin()
+    match checkResult:
+      UMPSCPopSlotAvailable(s):
+        var complete = s.checkCommitted()
+        match complete:
+          UMPSCPopComplete(c):
+            check c.value == 77
+            check seg.head == 6 # Verify head advanced
+            discard c.extractPinned().unpin()
+          UMPSCPopSlotUncommitted(_):
+            check false
+      UMPSCPopSegmentExhausted(_):
+        check false
 
     freeTestSegment(seg)
 
@@ -118,18 +131,24 @@ suite "MPSC Pop Typestate":
     queue.itemCount.store(5, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let checkResult =
+    var checkResult =
       startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment().checkSlot()
 
-    check checkResult.kind == uUMPSCPopSlotAvailable
-    check checkResult.umpscpopslotavailable.slot == 0
+    match checkResult:
+      UMPSCPopSlotAvailable(s):
+        check s.slot == 0
 
-    # Read item and VERIFY value
-    let complete = checkResult.umpscpopslotavailable.checkCommitted()
-    check complete.kind == uUMPSCPopComplete
-    check complete.umpscpopcomplete.value == 42
-    check seg.head == 1 # Verify head advanced
-    discard complete.umpscpopcomplete.extractPinned().unpin()
+        # Read item and VERIFY value
+        var complete = s.checkCommitted()
+        match complete:
+          UMPSCPopComplete(c):
+            check c.value == 42
+            check seg.head == 1 # Verify head advanced
+            discard c.extractPinned().unpin()
+          UMPSCPopSlotUncommitted(_):
+            check false
+      UMPSCPopSegmentExhausted(_):
+        check false
 
     freeTestSegment(seg)
 
@@ -148,21 +167,25 @@ suite "MPSC Pop Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let checkResult =
+    var checkResult =
       startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment().checkSlot()
 
-    check checkResult.kind == uUMPSCPopSegmentExhausted
+    match checkResult:
+      UMPSCPopSegmentExhausted(f):
+        # Try to advance - should return Empty since no next segment
+        var advanceResult = f.advanceSegment()
 
-    # Try to advance - should return Empty since no next segment
-    let advanceResult = checkResult.umpscpopsegmentexhausted.advanceSegment()
+        match advanceResult:
+          UMPSCPopEmpty(e):
+            # Verify queue state remains consistent
+            check queue.itemCount.load(moRelaxed) == 0
+            check queue.headSegment.load(moRelaxed) == seg
 
-    check advanceResult.kind == uUMPSCPopEmpty
-
-    # Verify queue state remains consistent
-    check queue.itemCount.load(moRelaxed) == 0
-    check queue.headSegment.load(moRelaxed) == seg
-
-    discard advanceResult.umpscpopempty.extractPinned().unpin()
+            discard e.extractPinned().unpin()
+          UMPSCPopReady(_):
+            check false
+      UMPSCPopSlotAvailable(_):
+        check false
 
     freeTestSegment(seg)
 
@@ -183,19 +206,24 @@ suite "MPSC Pop Typestate":
     queue.itemCount.store(3, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let slotAvail =
+    var slotAvail =
       startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment().checkSlot()
 
-    check slotAvail.kind == uUMPSCPopSlotAvailable
+    match slotAvail:
+      UMPSCPopSlotAvailable(s):
+        var complete = s.checkCommitted()
 
-    let complete = slotAvail.umpscpopslotavailable.checkCommitted()
+        match complete:
+          UMPSCPopComplete(c):
+            check c.value == 42
+            check seg.head == 1
+            check queue.itemCount.load(moRelaxed) == 2
 
-    check complete.kind == uUMPSCPopComplete
-    check complete.umpscpopcomplete.value == 42
-    check seg.head == 1
-    check queue.itemCount.load(moRelaxed) == 2
-
-    discard complete.umpscpopcomplete.extractPinned().unpin()
+            discard c.extractPinned().unpin()
+          UMPSCPopSlotUncommitted(_):
+            check false
+      UMPSCPopSegmentExhausted(_):
+        check false
 
     freeTestSegment(seg)
 
@@ -216,20 +244,24 @@ suite "MPSC Pop Typestate":
     queue.itemCount.store(3, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let slotAvail =
+    var slotAvail =
       startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment().checkSlot()
 
-    check slotAvail.kind == uUMPSCPopSlotAvailable
+    match slotAvail:
+      UMPSCPopSlotAvailable(s):
+        var uncommitted = s.checkCommitted()
 
-    let uncommitted = slotAvail.umpscpopslotavailable.checkCommitted()
+        match uncommitted:
+          UMPSCPopSlotUncommitted(u):
+            # Verify queue state unchanged (no pop happened)
+            check queue.itemCount.load(moRelaxed) == 3
+            check seg.head == 0
 
-    check uncommitted.kind == uUMPSCPopSlotUncommitted
-
-    # Verify queue state unchanged (no pop happened)
-    check queue.itemCount.load(moRelaxed) == 3
-    check seg.head == 0
-
-    discard uncommitted.umpscpopslotuncommitted.extractPinned().unpin()
+            discard u.extractPinned().unpin()
+          UMPSCPopComplete(_):
+            check false
+      UMPSCPopSegmentExhausted(_):
+        check false
 
     freeTestSegment(seg)
 
@@ -254,30 +286,40 @@ suite "MPSC Pop Typestate":
     queue.itemCount.store(3, moRelaxed)
     queue.segments.store(2, moRelaxed)
 
-    let checkResult =
+    var checkResult =
       startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment().checkSlot()
 
-    check checkResult.kind == uUMPSCPopSegmentExhausted
+    match checkResult:
+      UMPSCPopSegmentExhausted(f):
+        # Advance to next segment
+        var advanceResult = f.advanceSegment()
 
-    # Advance to next segment
-    let advanceResult = checkResult.umpscpopsegmentexhausted.advanceSegment()
+        match advanceResult:
+          UMPSCPopReady(r):
+            check queue.headSegment.load(moRelaxed) == seg2 # Head advanced
 
-    check advanceResult.kind == uUMPSCPopReady
-    check queue.headSegment.load(moRelaxed) == seg2 # Head advanced
+            # Now load and read from the new segment
+            let loaded2 = r.loadSegment()
+            check loaded2.segment == seg2
 
-    # Now load and read from the new segment
-    let loaded2 = advanceResult.umpscpopready.loadSegment()
-    check loaded2.segment == seg2
-
-    let checkResult2 = loaded2.checkSlot()
-    check checkResult2.kind == uUMPSCPopSlotAvailable
-
-    # Read item and VERIFY we're reading from seg2, not seg1
-    let complete = checkResult2.umpscpopslotavailable.checkCommitted()
-    check complete.kind == uUMPSCPopComplete
-    check complete.umpscpopcomplete.value == 100
-    check seg2.head == 1
-    discard complete.umpscpopcomplete.extractPinned().unpin()
+            var checkResult2 = loaded2.checkSlot()
+            match checkResult2:
+              UMPSCPopSlotAvailable(s):
+                # Read item and VERIFY we're reading from seg2, not seg1
+                var complete = s.checkCommitted()
+                match complete:
+                  UMPSCPopComplete(c):
+                    check c.value == 100
+                    check seg2.head == 1
+                    discard c.extractPinned().unpin()
+                  UMPSCPopSlotUncommitted(_):
+                    check false
+              UMPSCPopSegmentExhausted(_):
+                check false
+          UMPSCPopEmpty(_):
+            check false
+      UMPSCPopSlotAvailable(_):
+        check false
 
     freeTestSegment(seg1)
     freeTestSegment(seg2)
