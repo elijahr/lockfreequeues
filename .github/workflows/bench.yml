@@ -1079,6 +1079,7 @@ jobs:
           case "${{ matrix.binary }}" in
             bench_spsc)
               nim "$NIM_MODE" -d:release -d:danger --threads:on \
+                -o:.tmp/bench_spsc \
                 -d:BenchSpscMessageCount=1000000 \
                 -d:BenchSpscRuns=5 \
                 -d:BenchSpscWarmup=2 \
@@ -1092,6 +1093,7 @@ jobs:
               # NIM_MODE and stay on `nim c`; ADAPTER_FLAGS may carry
               # -d:adapter_nim_channel_available.
               nim c -d:release -d:danger --threads:on \
+                -o:.tmp/bench_mpsc \
                 -d:BenchMpscMessageCount=1000000 \
                 -d:BenchMpscRuns=5 \
                 -d:BenchMpscWarmup=2 \
@@ -1101,6 +1103,7 @@ jobs:
               ;;
             bench_mpmc)
               nim "$NIM_MODE" -d:release -d:danger --threads:on \
+                -o:.tmp/bench_mpmc \
                 -d:BenchMpmcMessageCount=1000000 \
                 -d:BenchMpmcRuns=5 \
                 -d:BenchMpmcWarmup=2 \
@@ -1114,6 +1117,7 @@ jobs:
               # cpp`). NIM_MODE is "cpp" iff ADAPTER_MOODYCAMEL was
               # set; otherwise it stays "c". loony is mode-neutral.
               nim "$NIM_MODE" -d:release -d:danger --threads:on \
+                -o:.tmp/bench_unbounded \
                 -d:UnboundedSipsicMessageCount=200000 \
                 -d:UnboundedSipsicRuns=3 \
                 -d:UnboundedSipmucMessageCount=100000 \
@@ -1129,6 +1133,7 @@ jobs:
               ;;
             bench_latency)
               nim c -d:release -d:danger --threads:on \
+                -o:.tmp/bench_latency \
                 -d:BenchLatencyMessageCount=50000 \
                 -d:BenchLatencyRuns=11 \
                 -d:BenchLatencyWarmupRuns=2 \
@@ -1167,7 +1172,14 @@ jobs:
         # matrix has comfortable headroom.
         timeout-minutes: 20
         run: |
-          set -eu
+          # pipefail is load-bearing: every binary invocation pipes through
+          # `tee` for log capture. Without pipefail the pipeline status is
+          # `tee`'s exit code, so a missing-binary or runtime crash in the
+          # bench would silently report success. Single-invocation legs
+          # (bench_spsc / bench_mpsc / bench_latency) hid exactly that
+          # failure mode pre-fix; bench_mpmc / bench_unbounded surfaced
+          # only because their downstream merge_bmf.py failed loudly.
+          set -euo pipefail
           case "${{ matrix.binary }}" in
             bench_spsc)
               ./.tmp/bench_spsc spsc \

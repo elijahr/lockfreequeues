@@ -30,7 +30,11 @@ jobs:
           nim-version: 'stable'
 
       - name: Install typestates
-        run: nimble install -y "typestates@0.7.2"
+        # Version is the single source of truth in lockfreequeues.nimble
+        # (`requires "typestates >= 0.8.0"`). Letting nimble resolve the
+        # exact version here avoids the workflow drifting out of sync
+        # with the package manifest.
+        run: nimble install -y typestates
 
       - name: Typestates verify
         run: typestates verify -W --format=github src/
@@ -38,7 +42,7 @@ jobs:
   test:
     name: Test nim-${{ matrix.nim-version }} / ${{ matrix.runs-on }}
     runs-on: ${{ matrix.runs-on }}
-    timeout-minutes: 25
+    timeout-minutes: 35
 
     strategy:
       fail-fast: false
@@ -137,7 +141,7 @@ jobs:
     # surfaces on the next push to devel.
     if: github.event_name != 'pull_request'
     runs-on: macos-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
 
     steps:
       - name: Restore cache
