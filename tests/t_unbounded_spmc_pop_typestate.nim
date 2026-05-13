@@ -1,7 +1,7 @@
 ## Tests for unbounded SPMC pop typestate.
 ##
 ## These tests verify the typestate structure and transitions work correctly.
-## Multiple consumers use CAS on prevConsumerIdx to coordinate.
+## Multiple consumers use CAS on consumerHead to coordinate.
 
 import unittest2
 import lockfreequeues/atomic_dsl
@@ -20,7 +20,7 @@ proc newTestSegment(): ptr TestSegment =
   result = cast[ptr TestSegment](alloc0(sizeof(TestSegment)))
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
-  result.prevConsumerIdx.store(-1, moRelaxed)
+  result.consumerHead.store(-1, moRelaxed)
 
 proc freeTestSegment(seg: ptr TestSegment) =
   dealloc(seg)
@@ -43,7 +43,7 @@ suite "SPMC Pop Typestate":
 
     let loaded = startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
 
-    check loaded.tail >= loaded.prevConsumerIdx
+    check loaded.tail >= loaded.consumerHead
     check loaded.segment != nil
     check loaded.segment.data[0] == 99
 
@@ -57,12 +57,12 @@ suite "SPMC Pop Typestate":
         check false
     freeTestSegment(seg)
 
-  test "loadSegment loads head segment and prevConsumerIdx":
+  test "loadSegment loads head segment and consumerHead":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(4, moRelaxed)
+    seg.consumerHead.store(4, moRelaxed)
     seg.tail.store(10, moRelaxed)
 
     var queue: TestQueue
@@ -74,7 +74,7 @@ suite "SPMC Pop Typestate":
 
     let loaded = startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
 
-    check loaded.prevConsumerIdx == 4
+    check loaded.consumerHead == 4
     check loaded.tail == 10
     check loaded.segment == seg
 
@@ -99,7 +99,7 @@ suite "SPMC Pop Typestate":
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(-1, moRelaxed)
+    seg.consumerHead.store(-1, moRelaxed)
     seg.tail.store(5, moRelaxed)
     seg.data[0] = 42
 
@@ -120,7 +120,7 @@ suite "SPMC Pop Typestate":
 
         let complete = c.readItem()
         check complete.value == 42
-        check seg.prevConsumerIdx.load(moRelaxed) == 0
+        check seg.consumerHead.load(moRelaxed) == 0
         discard complete.extractPinned().unpin()
       USPMCPopSegmentExhausted(_):
         check false
@@ -134,7 +134,7 @@ suite "SPMC Pop Typestate":
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(4, moRelaxed)
+    seg.consumerHead.store(4, moRelaxed)
     seg.tail.store(5, moRelaxed)
 
     var queue: TestQueue
@@ -169,7 +169,7 @@ suite "SPMC Pop Typestate":
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(2, moRelaxed)
+    seg.consumerHead.store(2, moRelaxed)
     seg.tail.store(10, moRelaxed)
 
     var queue: TestQueue
@@ -181,10 +181,10 @@ suite "SPMC Pop Typestate":
 
     let loaded = startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
 
-    check loaded.prevConsumerIdx == 2
+    check loaded.consumerHead == 2
 
-    # Simulate another thread advancing prevConsumerIdx
-    discard seg.prevConsumerIdx.fetchAdd(1, moRelaxed) # Now 3
+    # Simulate another thread advancing consumerHead
+    discard seg.consumerHead.fetchAdd(1, moRelaxed) # Now 3
 
     # tryClaimSlot should detect CAS failure and return Ready
     var claimResult = loaded.tryClaimSlot()
@@ -212,7 +212,7 @@ suite "SPMC Pop Typestate":
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(-1, moRelaxed)
+    seg.consumerHead.store(-1, moRelaxed)
     seg.tail.store(3, moRelaxed)
     seg.data[0] = 42
     seg.data[1] = 43
@@ -234,7 +234,7 @@ suite "SPMC Pop Typestate":
         let complete = c.readItem()
 
         check complete.value == 42
-        check seg.prevConsumerIdx.load(moRelaxed) == 0
+        check seg.consumerHead.load(moRelaxed) == 0
         check queue.itemCount.load(moRelaxed) == 2
 
         discard complete.extractPinned().unpin()
@@ -251,10 +251,10 @@ suite "SPMC Pop Typestate":
 
     var seg1 = newTestSegment()
     var seg2 = newTestSegment()
-    seg1.prevConsumerIdx.store(63, moRelaxed)
+    seg1.consumerHead.store(63, moRelaxed)
     seg1.tail.store(64, moRelaxed)
     seg1.next.store(seg2, moRelease)
-    seg2.prevConsumerIdx.store(-1, moRelaxed)
+    seg2.consumerHead.store(-1, moRelaxed)
     seg2.tail.store(3, moRelaxed)
     seg2.data[0] = 100
 

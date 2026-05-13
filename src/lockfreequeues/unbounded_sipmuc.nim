@@ -80,7 +80,7 @@ type
     next {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
     tail {.align: CacheLineBytes.}: Atomic[int]
       # Producer write position within segment
-    prevConsumerIdx {.align: CacheLineBytes.}: Atomic[int]
+    consumerHead {.align: CacheLineBytes.}: Atomic[int]
       # CAS coordination for consumers
 
   UnboundedSipmuc*[S: static int, T; MaxThreads: static int] = object
@@ -152,7 +152,7 @@ static:
   doAssert sizeof(UnboundedSipmuc[64, int, 4]) ==
     sizeof(ts_spmc_push.UnboundedSipmucBase[64, int, 4])
   # Per-Segment-field equivalence (SPMC Segment fields: data, next, tail,
-  # prevConsumerIdx).
+  # consumerHead).
   doAssert sizeof(Segment[64, int]) == sizeof(ts_spmc_push.Segment[64, int])
   doAssert offsetOf(Segment[64, int], data) ==
     offsetOf(ts_spmc_push.Segment[64, int], data)
@@ -160,8 +160,8 @@ static:
     offsetOf(ts_spmc_push.Segment[64, int], next)
   doAssert offsetOf(Segment[64, int], tail) ==
     offsetOf(ts_spmc_push.Segment[64, int], tail)
-  doAssert offsetOf(Segment[64, int], prevConsumerIdx) ==
-    offsetOf(ts_spmc_push.Segment[64, int], prevConsumerIdx)
+  doAssert offsetOf(Segment[64, int], consumerHead) ==
+    offsetOf(ts_spmc_push.Segment[64, int], consumerHead)
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
   ## Allocate a new segment on a CacheLineBytes boundary so the
@@ -169,7 +169,7 @@ proc newSegment[S: static int, T](): ptr Segment[S, T] =
   result = allocAligned[Segment[S, T]]()
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
-  result.prevConsumerIdx.store(-1, moRelaxed) # No consumer yet
+  result.consumerHead.store(-1, moRelaxed) # No consumer yet
 
 proc newUnboundedSipmuc*[S: static int, T; MaxThreads: static int](
     manager: ptr DebraManager[MaxThreads],
@@ -408,7 +408,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
           result = some(complete.value)
           break
         USPMCPopReady(_):
-          # CAS-loss on `prevConsumerIdx` claim — another consumer raced
+          # CAS-loss on `consumerHead` claim — another consumer raced
           # us. Loop back to re-load the segment and retry.
           continue
         USPMCPopSegmentExhausted(exhausted):
@@ -434,8 +434,8 @@ proc pop*[S: static int, T; MaxThreads: static int](
               # acquire-load on `oldSeg.next` (already performed inside
               # `advanceSegment`) establishes happens-before with that
               # release-store, so a fresh acquire-load of
-              # `prevConsumerIdx` here observes the latest CAS state.
-              # If `prevConsumerIdx < S - 1`, items remain unclaimed in
+              # `consumerHead` here observes the latest CAS state.
+              # If `consumerHead < S - 1`, items remain unclaimed in
               # `oldSeg`. We MUST NOT advance past it — the items would
               # become unreachable when `oldSeg` is retired and pop
               # would return `none` while items still exist, manifesting
@@ -451,10 +451,10 @@ proc pop*[S: static int, T; MaxThreads: static int](
               # the producer is still publishing slots `tail..S-1`. Even
               # though `tryClaimSlot` re-loads `tail`, the producer can
               # publish more slots between that re-load and the head
-              # CAS. The `prevConsumerIdx` re-check here closes that
+              # CAS. The `consumerHead` re-check here closes that
               # window: if any slot < S - 1 has not been claimed via
               # CAS, we restart the claim loop instead of advancing.
-              let freshPrevIdx = oldSeg.prevConsumerIdx.load(moAcquire)
+              let freshPrevIdx = oldSeg.consumerHead.load(moAcquire)
               if freshPrevIdx < S - 1:
                 # Unclaimed slots remain in oldSeg. Skip the head CAS
                 # and retire — loop back to re-load and try to claim.
@@ -522,10 +522,10 @@ when defined(testing):
 
   proc segmentHeadOffsetForTest*[S: static int, T; MaxThreads: static int](
       _: typedesc[UnboundedSipmuc[S, T, MaxThreads]]
-  ): tuple[tail: int, prevConsumerIdx: int] =
+  ): tuple[tail: int, consumerHead: int] =
     ## Test-only accessor: returns offsets of cache-line-padded fields within
     ## the unbounded sipmuc Segment for the cache-line padding audit.
-    result = (offsetOf(Segment[S, T], tail), offsetOf(Segment[S, T], prevConsumerIdx))
+    result = (offsetOf(Segment[S, T], tail), offsetOf(Segment[S, T], consumerHead))
 
 proc `=destroy`*[S: static int, T; MaxThreads: static int](
     self: var UnboundedSipmuc[S, T, MaxThreads]

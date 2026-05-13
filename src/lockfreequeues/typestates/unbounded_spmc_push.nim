@@ -2,7 +2,7 @@
 ##
 ## SPMC has a single producer (no CAS coordination needed for push) but
 ## multiple consumers; producer publishes via `tail.store(moRelease)` and
-## consumers spin on `prevConsumerIdx` CAS in the pop typestate. There is
+## consumers spin on `consumerHead` CAS in the pop typestate. There is
 ## NO `committed` array on SPMC segments — the single producer's release
 ## store is the publication signal.
 ##
@@ -37,13 +37,13 @@ type
   # Field set, types, and {.align: CacheLineBytes.} pragmas mirror production
   # exactly so the facade's per-Segment-field offsetOf static-asserts pass.
   # SPMC has NO `committed` array — the single producer publishes via
-  # `tail.store(moRelease)`; consumers coordinate via `prevConsumerIdx` CAS.
+  # `tail.store(moRelease)`; consumers coordinate via `consumerHead` CAS.
   Segment*[S: static int, T] = object
     data*: array[S, T]
     next* {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
     tail* {.align: CacheLineBytes.}: Atomic[int]
       # Producer write position within segment
-    prevConsumerIdx* {.align: CacheLineBytes.}: Atomic[int]
+    consumerHead* {.align: CacheLineBytes.}: Atomic[int]
       # CAS coordination for consumers
 
   # Base queue type for SPMC. 8-field shape per design §2.2 (SPMC row,

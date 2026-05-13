@@ -27,13 +27,13 @@ type
   # Field set, types, and {.align: CacheLineBytes.} pragmas mirror production
   # exactly so the facade's per-Segment-field offsetOf static-asserts pass.
   # MPMC has BOTH `committed` array (multi-producer publication signal) AND
-  # `prevConsumerIdx` (consumer-vs-consumer CAS coordination).
+  # `consumerHead` (consumer-vs-consumer CAS coordination).
   UMPMCSegment*[S: static int, T] = object
     data*: array[S, T]
     next* {.align: CacheLineBytes.}: Atomic[ptr UMPMCSegment[S, T]]
     tail* {.align: CacheLineBytes.}: Atomic[int]
       # CAS coordination for producers
-    prevConsumerIdx* {.align: CacheLineBytes.}: Atomic[int]
+    consumerHead* {.align: CacheLineBytes.}: Atomic[int]
       # CAS coordination for consumers
     committed* {.align: CacheLineBytes.}: array[S, Atomic[bool]]
       # Track which slots are ready to read

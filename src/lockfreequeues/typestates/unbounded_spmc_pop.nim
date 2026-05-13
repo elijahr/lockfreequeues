@@ -1,6 +1,6 @@
 ## Typestate for unbounded SPMC pop operations.
 ##
-## Multiple consumers coordinate via CAS on `prevConsumerIdx`. SPMC has
+## Multiple consumers coordinate via CAS on `consumerHead`. SPMC has
 ## NO `committed` array — the producer's release store on `tail` is the
 ## publication signal that consumers acquire-load before reading.
 ##
@@ -29,7 +29,7 @@ type
     queue*: ptr UnboundedSipmucBase[S, T, MT]
     segment*: ptr Segment[S, T]
     tail*: int
-    prevConsumerIdx*: int
+    consumerHead*: int
 
   USPMCPopSlotClaimed*[T; S, MT: static int] = object
     pinnedHandle*: ThreadHandle[MT]
@@ -114,13 +114,13 @@ proc loadSegment*[T; S, MT: static int](
   ## Mirrors production memory ordering: acquire load on `headSegment`
   ## synchronises with the consumer-side release store performed when a
   ## prior consumer advanced the head, so we never observe a freed
-  ## pointer. `tail` and `prevConsumerIdx` are acquire-loaded so the
+  ## pointer. `tail` and `consumerHead` are acquire-loaded so the
   ## producer's `tail.store(moRelease)` and other consumers' CAS
   ## successes happen-before this load.
   let ctx = USPMCPopContext[T, S, MT](ready)
   let seg = ctx.queue.headSegment.load(moAcquire)
   let tail = seg.tail.load(moAcquire)
-  let prevIdx = seg.prevConsumerIdx.load(moAcquire)
+  let prevIdx = seg.consumerHead.load(moAcquire)
 
   USPMCPopSegmentLoaded[T, S, MT](
     pinnedHandle: ctx.pinnedHandle,
@@ -128,14 +128,14 @@ proc loadSegment*[T; S, MT: static int](
     queue: ctx.queue,
     segment: seg,
     tail: tail,
-    prevConsumerIdx: prevIdx,
+    consumerHead: prevIdx,
   )
 
 # Try to claim slot with CAS
 proc tryClaimSlot*[T; S, MT: static int](
     loaded: sink USPMCPopSegmentLoaded[T, S, MT]
 ): USPMCSlotClaimResult[T, S, MT] {.transition.} =
-  ## Try to claim a slot using CAS on `prevConsumerIdx`. Returns:
+  ## Try to claim a slot using CAS on `consumerHead`. Returns:
   ## - SlotClaimed: CAS succeeded, slot is ours
   ## - SegmentExhausted: no more slots in segment
   ## - Ready: CAS failed, retry from beginning
@@ -153,11 +153,11 @@ proc tryClaimSlot*[T; S, MT: static int](
   ## so any newly published slot in this segment is observed before we
   ## decide to advance.
   let seg = loaded.segment
-  # Note: loaded.prevConsumerIdx is a snapshot. A consumer that
+  # Note: loaded.consumerHead is a snapshot. A consumer that
   # races with another consumer's CAS will see a stale value here,
   # but the resulting CAS attempt will simply fail (expected != actual)
   # and the loop re-iterates via the Ready arm. Benign; not a livelock.
-  let mySlot = loaded.prevConsumerIdx + 1
+  let mySlot = loaded.consumerHead + 1
 
   if mySlot >= loaded.tail:
     # Re-load tail with acquire to pair with the producer's release-store.
@@ -177,8 +177,8 @@ proc tryClaimSlot*[T; S, MT: static int](
         )
 
   # Try CAS
-  var expected = loaded.prevConsumerIdx
-  if seg.prevConsumerIdx.compareExchange(expected, mySlot, moAcquire, moRelaxed):
+  var expected = loaded.consumerHead
+  if seg.consumerHead.compareExchange(expected, mySlot, moAcquire, moRelaxed):
     # Won the slot
     return
       USPMCSlotClaimResult[T, S, MT] ->

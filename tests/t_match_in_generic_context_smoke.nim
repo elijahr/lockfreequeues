@@ -138,14 +138,14 @@ proc smokeReadyViaCASRace[S: static int; T;
   # tests/t_unbounded_mpmc_pop_typestate.nim "tryClaimSlot returns Ready
   # when CAS fails").
   let seg = loaded.segment
-  discard seg.prevConsumerIdx.fetchAdd(1, moRelaxed)
+  discard seg.consumerHead.fetchAdd(1, moRelaxed)
   var claim = loaded.tryClaimSlot()
   match claim:
     UMPMCPopReady(r):
       inc counts[0]
       # Drain the queue to clean up the pin (Ready has no extractPinned;
       # it must be advanced through the pipeline). One more loadSegment +
-      # tryClaimSlot is enough on this scenario's seed: prevConsumerIdx
+      # tryClaimSlot is enough on this scenario's seed: consumerHead
       # has been bumped to a slot whose committed flag is true and the
       # CAS will succeed this time.
       var loaded2 = r.loadSegment()
@@ -181,7 +181,7 @@ proc newTestSegment(): ptr TestSegment =
   result = cast[ptr TestSegment](alloc0(sizeof(TestSegment)))
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
-  result.prevConsumerIdx.store(-1, moRelaxed)
+  result.consumerHead.store(-1, moRelaxed)
   for i in 0 ..< 64:
     result.committed[i].store(false, moRelaxed)
 
@@ -216,7 +216,7 @@ suite "Match macro in [S, T, MaxThreads] generic context (R2 gate)":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(4, moRelaxed)
+    seg.consumerHead.store(4, moRelaxed)
     seg.tail.store(5, moRelaxed) # mySlot=5 >= tail=5 → SegmentExhausted
     var queue: TestQueue
     queue.manager = addr manager
@@ -247,7 +247,7 @@ suite "Match macro in [S, T, MaxThreads] generic context (R2 gate)":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(2, moRelaxed)
+    seg.consumerHead.store(2, moRelaxed)
     seg.tail.store(10, moRelaxed)
     seg.data[3] = 99
     seg.data[4] = 88

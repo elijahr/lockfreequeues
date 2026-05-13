@@ -2,7 +2,7 @@
 ##
 ## Bridges from DEBRA's Pinned[MT] state, performs pop with CAS coordination
 ## and committed flag check, bridges back. Multiple consumers coordinate via
-## CAS on `prevConsumerIdx`, and must check `committed` flag before reading.
+## CAS on `consumerHead`, and must check `committed` flag before reading.
 ##
 ## State names are U-prefixed (Unbounded) to avoid registry collision with
 ## the bounded MPMC* graph (typestates 0.8.0 keys by base state name).
@@ -30,7 +30,7 @@ type
     queue*: ptr UnboundedMupmucBase[S, T, MT]
     segment*: ptr UMPMCSegment[S, T]
     tail*: int
-    prevConsumerIdx*: int
+    consumerHead*: int
 
   UMPMCPopSlotClaimed*[T; S, MT: static int] = object
     pinnedHandle*: ThreadHandle[MT]
@@ -135,14 +135,14 @@ proc loadSegment*[T; S, MT: static int](
   ## Mirrors production memory ordering at `unbounded_mupmuc.nim:355-359`:
   ## acquire-load the headSegment (so a peer consumer's release-store on
   ## `headSegment.compareExchange` happens-before this load), then
-  ## acquire-load `tail` and `prevConsumerIdx`. The `tail` load pairs with
+  ## acquire-load `tail` and `consumerHead`. The `tail` load pairs with
   ## producers' `committed[slot].store(moRelease)` via the `seg.tail`
-  ## release-edges; the `prevConsumerIdx` load pairs with peer consumers'
+  ## release-edges; the `consumerHead` load pairs with peer consumers'
   ## successful CAS releases.
   let ctx = UMPMCPopContext[T, S, MT](ready)
   let seg = ctx.queue.headSegment.load(moAcquire)
   let tail = seg.tail.load(moAcquire)
-  let prevIdx = seg.prevConsumerIdx.load(moAcquire)
+  let prevIdx = seg.consumerHead.load(moAcquire)
 
   UMPMCPopSegmentLoaded[T, S, MT](
     pinnedHandle: ctx.pinnedHandle,
@@ -150,14 +150,14 @@ proc loadSegment*[T; S, MT: static int](
     queue: ctx.queue,
     segment: seg,
     tail: tail,
-    prevConsumerIdx: prevIdx,
+    consumerHead: prevIdx,
   )
 
 # Try to claim slot with CAS
 proc tryClaimSlot*[T; S, MT: static int](
     loaded: sink UMPMCPopSegmentLoaded[T, S, MT]
 ): UMPMCPopSlotClaimResult[T, S, MT] {.transition.} =
-  ## Try to claim a slot with CAS coordination on `prevConsumerIdx`.
+  ## Try to claim a slot with CAS coordination on `consumerHead`.
   ## Returns SlotClaimed, SegmentExhausted, SlotUncommitted, or Ready.
   ##
   ## Item-loss livelock fix (preempted from sipmuc bb50bc9): MPMC pop has
@@ -184,14 +184,14 @@ proc tryClaimSlot*[T; S, MT: static int](
   ## conclusion; if that conclusion was made on stale `tail`, we can
   ## still skip past slots whose committed flag has not yet been
   ## observed, stranding items in the retired segment. The combined
-  ## (typestate-side tail re-load) + (facade-side prevConsumerIdx
+  ## (typestate-side tail re-load) + (facade-side consumerHead
   ## re-check) defense matches the SPMC fix.
   let seg = loaded.segment
-  # Note: loaded.prevConsumerIdx is a snapshot. A consumer that races
+  # Note: loaded.consumerHead is a snapshot. A consumer that races
   # with another consumer's CAS will see a stale value here, but the
   # resulting CAS attempt simply fails (expected != actual) and the loop
   # re-iterates via the Ready arm. Benign; not a livelock.
-  let mySlot = loaded.prevConsumerIdx + 1
+  let mySlot = loaded.consumerHead + 1
 
   if mySlot >= loaded.tail:
     # Re-load tail with acquire to pair with the producers' release-store
@@ -224,10 +224,10 @@ proc tryClaimSlot*[T; S, MT: static int](
         queue: loaded.queue,
       )
 
-  # CAS to claim slot via prevConsumerIdx. Free-running counter-CAS, NOT a
+  # CAS to claim slot via consumerHead. Free-running counter-CAS, NOT a
   # wait-chain (per design §1 / production line :409).
-  var expected = loaded.prevConsumerIdx
-  if seg.prevConsumerIdx.compareExchange(expected, mySlot, moAcquire, moRelaxed):
+  var expected = loaded.consumerHead
+  if seg.consumerHead.compareExchange(expected, mySlot, moAcquire, moRelaxed):
     return
       UMPMCPopSlotClaimResult[T, S, MT] ->
       UMPMCPopSlotClaimed[T, S, MT](
@@ -300,7 +300,7 @@ proc advanceSegment*[T; S, MT: static int](
   ## `headSegment.compareExchange` happens at the call site, not here).
   ## The facade also retires the old segment via DEBRA when it wins the
   ## headSegment CAS. The facade's Ready arm additionally re-checks
-  ## `oldSeg.prevConsumerIdx` before advancing — see the bb50bc9
+  ## `oldSeg.consumerHead` before advancing — see the bb50bc9
   ## livelock fix pattern applied to sipmuc and preempted here for MPMC.
   let seg = exhausted.segment
   let nextSeg = seg.next.load(moAcquire)

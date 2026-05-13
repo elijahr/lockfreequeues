@@ -50,7 +50,7 @@ task lockfreeCheck, "Verify lock-free-types gate fires at compile time":
 task testApplePadding, "Verify Segment padding holds at 128-byte cache lines (Apple Silicon)":
   # R10 invariant gate (per v4.3 design §4 Phase E item 7): the
   # `tests/t_unbounded_padding.nim` suite asserts that the per-Segment
-  # cache-line-padded fields (head, tail, prevConsumerIdx, committed)
+  # cache-line-padded fields (head, tail, consumerHead, committed)
   # have offsets that are multiples of `CacheLineBytes`, AND that a
   # freshly-allocated Segment base is CacheLineBytes-aligned. The
   # default `CacheLineBytes` is 64 (x86_64, aarch64-Linux); Apple

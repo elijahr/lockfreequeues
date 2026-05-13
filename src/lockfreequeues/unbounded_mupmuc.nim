@@ -76,7 +76,7 @@ type
     next {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
     tail {.align: CacheLineBytes.}: Atomic[int]
       # CAS coordination for producers
-    prevConsumerIdx {.align: CacheLineBytes.}: Atomic[int]
+    consumerHead {.align: CacheLineBytes.}: Atomic[int]
       # CAS coordination for consumers
     committed {.align: CacheLineBytes.}: array[S, Atomic[bool]]
       # Track which slots are ready to read
@@ -156,7 +156,7 @@ static:
   doAssert sizeof(UnboundedMupmuc[64, int, 4]) ==
     sizeof(ts_mpmc_push.UnboundedMupmucBase[64, int, 4])
   # Per-Segment-field equivalence (MPMC Segment fields: data, next, tail,
-  # prevConsumerIdx, committed).
+  # consumerHead, committed).
   doAssert sizeof(Segment[64, int]) == sizeof(ts_mpmc_push.UMPMCSegment[64, int])
   doAssert offsetOf(Segment[64, int], data) ==
     offsetOf(ts_mpmc_push.UMPMCSegment[64, int], data)
@@ -164,8 +164,8 @@ static:
     offsetOf(ts_mpmc_push.UMPMCSegment[64, int], next)
   doAssert offsetOf(Segment[64, int], tail) ==
     offsetOf(ts_mpmc_push.UMPMCSegment[64, int], tail)
-  doAssert offsetOf(Segment[64, int], prevConsumerIdx) ==
-    offsetOf(ts_mpmc_push.UMPMCSegment[64, int], prevConsumerIdx)
+  doAssert offsetOf(Segment[64, int], consumerHead) ==
+    offsetOf(ts_mpmc_push.UMPMCSegment[64, int], consumerHead)
   doAssert offsetOf(Segment[64, int], committed) ==
     offsetOf(ts_mpmc_push.UMPMCSegment[64, int], committed)
 
@@ -175,7 +175,7 @@ proc newSegment[S: static int, T](): ptr Segment[S, T] =
   result = allocAligned[Segment[S, T]]()
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
-  result.prevConsumerIdx.store(-1, moRelaxed)
+  result.consumerHead.store(-1, moRelaxed)
   for i in 0 ..< S:
     result.committed[i].store(false, moRelaxed)
 
@@ -458,7 +458,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
           # Mirrors production line :405-407 break.
           break
         UMPMCPopReady(_):
-          # Lost prevConsumerIdx CAS to a peer consumer; loop back to
+          # Lost consumerHead CAS to a peer consumer; loop back to
           # re-load and retry. CAS-loss-retry on the consumer-vs-consumer
           # CAS (production line :371 classification per Decision §2.1).
           backoffOnCASLossRetry()
@@ -488,9 +488,9 @@ proc pop*[S: static int, T; MaxThreads: static int](
               # on `seg.tail`. The acquire-load on `oldSeg.next`
               # (already performed inside `advanceSegment`) establishes
               # happens-before with the producer's release-store on
-              # `next`, so a fresh acquire-load of `prevConsumerIdx`
+              # `next`, so a fresh acquire-load of `consumerHead`
               # here observes the latest CAS state.
-              # If `prevConsumerIdx < S - 1`, items remain unclaimed in
+              # If `consumerHead < S - 1`, items remain unclaimed in
               # `oldSeg`. We MUST NOT advance past it — the items would
               # become unreachable when `oldSeg` is retired and pop
               # would return `none` while items still exist, manifesting
@@ -500,13 +500,13 @@ proc pop*[S: static int, T; MaxThreads: static int](
               #
               # The combined defense — typestate-side `tryClaimSlot`
               # re-loads `seg.tail` before transitioning to Exhausted,
-              # plus this facade-side `prevConsumerIdx` re-check before
+              # plus this facade-side `consumerHead` re-check before
               # advancing — closes the same TOCTOU window that affected
               # SPMC pop. MPMC has the same SHAPE (snapshot tail +
               # advance segment + CAS-advance head) and is preempted
               # here so Phase C's TSAN×100 doesn't surface the bug a
               # second time.
-              let freshPrevIdx = oldSeg.prevConsumerIdx.load(moAcquire)
+              let freshPrevIdx = oldSeg.consumerHead.load(moAcquire)
               if freshPrevIdx < S - 1:
                 # Unclaimed slots remain in oldSeg. Skip the head CAS
                 # and retire — loop back to re-load and try to claim.
@@ -576,12 +576,12 @@ when defined(testing):
 
   proc segmentHeadOffsetForTest*[S: static int, T; MaxThreads: static int](
       _: typedesc[UnboundedMupmuc[S, T, MaxThreads]]
-  ): tuple[tail: int, prevConsumerIdx: int, committed: int] =
+  ): tuple[tail: int, consumerHead: int, committed: int] =
     ## Test-only accessor: returns offsets of cache-line-padded fields within
     ## the unbounded mupmuc Segment for the cache-line padding audit.
     result = (
       offsetOf(Segment[S, T], tail),
-      offsetOf(Segment[S, T], prevConsumerIdx),
+      offsetOf(Segment[S, T], consumerHead),
       offsetOf(Segment[S, T], committed),
     )
 

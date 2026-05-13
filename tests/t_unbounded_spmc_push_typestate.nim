@@ -19,7 +19,7 @@ proc newTestSegment(): ptr TestSegment =
   result = cast[ptr TestSegment](alloc0(sizeof(TestSegment)))
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
-  result.prevConsumerIdx.store(-1, moRelaxed)
+  result.consumerHead.store(-1, moRelaxed)
 
 proc freeTestSegment(seg: ptr TestSegment) =
   dealloc(seg)
@@ -46,7 +46,7 @@ suite "SPMC Push Typestate":
     # Verify fields are accessible and have valid values
     check loaded.tail >= 0
     check loaded.segment != nil
-    check loaded.segment.prevConsumerIdx.load(moRelaxed) == -1
+    check loaded.segment.consumerHead.load(moRelaxed) == -1
     check loaded.segment.next.load(moRelaxed) == nil
 
     # Clean up
@@ -81,7 +81,7 @@ suite "SPMC Push Typestate":
     check loaded.segment == seg
 
     # Verify segment structure is accessible and intact
-    check loaded.segment.prevConsumerIdx.load(moRelaxed) == -1
+    check loaded.segment.consumerHead.load(moRelaxed) == -1
     check loaded.segment.next.load(moRelaxed) == nil
 
     # Complete operation

@@ -20,7 +20,7 @@ proc newTestSegment(): ptr TestSegment =
   result = cast[ptr TestSegment](alloc0(sizeof(TestSegment)))
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
-  result.prevConsumerIdx.store(-1, moRelaxed)
+  result.consumerHead.store(-1, moRelaxed)
   for i in 0 ..< 64:
     result.committed[i].store(false, moRelaxed)
 
@@ -49,8 +49,8 @@ suite "MPMC Pop Typestate":
     let loaded = startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
 
     # Verify fields are accessible and have valid values
-    check loaded.prevConsumerIdx == -1
-    check loaded.tail >= loaded.prevConsumerIdx
+    check loaded.consumerHead == -1
+    check loaded.tail >= loaded.consumerHead
     check loaded.segment != nil
     check loaded.segment.data[0] == 99
 
@@ -77,7 +77,7 @@ suite "MPMC Pop Typestate":
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(4, moRelaxed)
+    seg.consumerHead.store(4, moRelaxed)
     seg.tail.store(10, moRelaxed)
 
     var queue: TestQueue
@@ -89,7 +89,7 @@ suite "MPMC Pop Typestate":
 
     let loaded = startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
 
-    check loaded.prevConsumerIdx == 4
+    check loaded.consumerHead == 4
     check loaded.tail == 10
     check loaded.segment == seg
 
@@ -124,7 +124,7 @@ suite "MPMC Pop Typestate":
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(-1, moRelaxed)
+    seg.consumerHead.store(-1, moRelaxed)
     seg.tail.store(5, moRelaxed)
     seg.data[0] = 42
     seg.committed[0].store(true, moRelaxed)
@@ -149,7 +149,7 @@ suite "MPMC Pop Typestate":
         match complete:
           UMPMCPopComplete(cmp):
             check cmp.value == 42
-            check seg.prevConsumerIdx.load(moRelaxed) == 0
+            check seg.consumerHead.load(moRelaxed) == 0
             discard cmp.extractPinned().unpin()
           UMPMCPopSlotUncommitted(_):
             check false
@@ -167,7 +167,7 @@ suite "MPMC Pop Typestate":
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(4, moRelaxed)
+    seg.consumerHead.store(4, moRelaxed)
     seg.tail.store(5, moRelaxed)
 
     var queue: TestQueue
@@ -208,7 +208,7 @@ suite "MPMC Pop Typestate":
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(2, moRelaxed)
+    seg.consumerHead.store(2, moRelaxed)
     seg.tail.store(10, moRelaxed)
     seg.data[3] = 99
     seg.data[4] = 88
@@ -224,10 +224,10 @@ suite "MPMC Pop Typestate":
 
     let loaded = startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
 
-    check loaded.prevConsumerIdx == 2
+    check loaded.consumerHead == 2
 
-    # Simulate another thread advancing prevConsumerIdx
-    discard seg.prevConsumerIdx.fetchAdd(1, moRelaxed) # Now 3
+    # Simulate another thread advancing consumerHead
+    discard seg.consumerHead.fetchAdd(1, moRelaxed) # Now 3
 
     # tryClaimSlot should detect CAS failure and return Ready
     var claimResult = loaded.tryClaimSlot()
@@ -263,7 +263,7 @@ suite "MPMC Pop Typestate":
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(-1, moRelaxed)
+    seg.consumerHead.store(-1, moRelaxed)
     seg.tail.store(3, moRelaxed)
     seg.data[0] = 42
     seg.committed[0].store(true, moRelaxed)
@@ -286,7 +286,7 @@ suite "MPMC Pop Typestate":
         match complete:
           UMPMCPopComplete(cmp):
             check cmp.value == 42
-            check seg.prevConsumerIdx.load(moRelaxed) == 0
+            check seg.consumerHead.load(moRelaxed) == 0
             check queue.itemCount.load(moRelaxed) == 2
 
             discard cmp.extractPinned().unpin()
@@ -306,7 +306,7 @@ suite "MPMC Pop Typestate":
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(-1, moRelaxed)
+    seg.consumerHead.store(-1, moRelaxed)
     seg.tail.store(3, moRelaxed)
     seg.data[0] = 42
     seg.committed[0].store(false, moRelaxed) # NOT committed yet
@@ -327,7 +327,7 @@ suite "MPMC Pop Typestate":
       UMPMCPopSlotUncommitted(u):
         # Verify queue state unchanged (no pop happened)
         check queue.itemCount.load(moRelaxed) == 3
-        check seg.prevConsumerIdx.load(moRelaxed) == -1
+        check seg.consumerHead.load(moRelaxed) == -1
 
         discard u.extractPinned().unpin()
       UMPMCPopSlotClaimed(_):
@@ -345,10 +345,10 @@ suite "MPMC Pop Typestate":
 
     var seg1 = newTestSegment()
     var seg2 = newTestSegment()
-    seg1.prevConsumerIdx.store(63, moRelaxed)
+    seg1.consumerHead.store(63, moRelaxed)
     seg1.tail.store(64, moRelaxed)
     seg1.next.store(seg2, moRelease)
-    seg2.prevConsumerIdx.store(-1, moRelaxed)
+    seg2.consumerHead.store(-1, moRelaxed)
     seg2.tail.store(3, moRelaxed)
     seg2.data[0] = 100
     seg2.committed[0].store(true, moRelaxed)
@@ -395,8 +395,8 @@ suite "MPMC Pop Typestate":
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(5, moRelaxed)
-    seg.tail.store(5, moRelaxed) # prevConsumerIdx + 1 >= tail
+    seg.consumerHead.store(5, moRelaxed)
+    seg.tail.store(5, moRelaxed) # consumerHead + 1 >= tail
 
     var queue: TestQueue
     queue.manager = addr manager
