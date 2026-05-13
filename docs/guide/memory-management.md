@@ -1,6 +1,6 @@
 # Memory Management
 
-> Current as of v4.2.0; DEBRA integration patterns may evolve.
+> Current as of v4.3.0; DEBRA integration patterns may evolve.
 
 How `lockfreequeues` interacts with the memory model, what guarantees the
 queues provide vs. what the user must guarantee, the role of cache-line
@@ -285,17 +285,62 @@ retired from queue A might still be referenced via queue B.
 ### When to enable
 
 Reclamation strategy is a compile-time choice via the
-`DeallocationStrategy` enum: `Eager` calls `tryReclaim()` after every
-segment retirement (best for GC environments where the extra check is
-cheap); `Manual` retires only, leaving the user to call `tryReclaim()`
-when convenient (best for `--mm:none` and embedded targets).
+`DeallocationStrategy` enum:
 
-The default is `Eager` everywhere except `--mm:none`, where `Manual` is
-the default. Override per queue at construction.
+- **`Eager`** (default under `--mm:arc`/`orc`/`atomicArc`/`refc`): the
+  queue calls DEBRA's reclamation drain automatically every
+  `LockFreeQueuesAdvanceEvery` (default 64) pops, via
+  `reclaimNow(self.handle)` inside the unbounded MPSC/SPMC/MPMC pop
+  paths. The cadence is tunable at compile time with
+  `-d:LockFreeQueuesAdvanceEvery=N`. Best for GC environments where
+  the extra check is cheap.
+- **`Manual`** (default under `--mm:none`): the queue retires segments
+  to the manager's limbo bag but does NOT call `tryReclaim` for you.
+  The user MUST periodically call `manager.tryReclaim()` (see
+  Attribution below) to drain limbo, otherwise retired segments
+  accumulate without being freed. Best for `--mm:none` and embedded
+  targets where syscall avoidance matters.
+
+Override per queue at construction.
+
+### Attribution: `tryReclaim` is a DEBRA API, not a `lockfreequeues` export
+
+`tryReclaim` is a method on the **DEBRA `Manager`** type (defined in
+the `debra` package, not in `lockfreequeues`). Manual-strategy users
+call it on their `manager` instance:
+
+```nim
+import debra
+import lockfreequeues
+
+var manager = initDebraManager[8]()
+var queue = newUnboundedMupmuc[64, int, 8](addr manager)
+# ... push / pop work ...
+
+# Manual reclamation drain (Manual strategy only — Eager does this
+# automatically). Tries to advance the global epoch and free any
+# retired-and-now-safe segments.
+discard manager.tryReclaim()
+```
+
+`lockfreequeues` does NOT re-export `tryReclaim`; importing the queue
+module is not enough. Users running under `--mm:none` (or any setup
+that selects the `Manual` strategy) must `import debra` to access the
+manager API, then call `manager.tryReclaim()` themselves on whatever
+cadence fits the workload (the unbounded queues use 64 pops as their
+Eager-strategy cadence; that is a sensible starting point for Manual
+callers too).
+
+Eager-strategy callers don't need to reach for `tryReclaim` directly —
+the queue's pop path calls `reclaimNow(self.handle)` (a thin wrapper
+over the manager API) on its own cadence. See `unbounded_sipmuc.nim`,
+`unbounded_mupsic.nim`, and `unbounded_mupmuc.nim` pop paths for the
+exact call shape; the cadence is gated by
+`self.handle.advanceEvery(LockFreeQueuesAdvanceEvery)`.
 
 ### Versioning note
 
 DEBRA internals may change; treat the patterns documented here as
-current-as-of-v4.2.0. See the
+current-as-of-v4.3.0. See the
 [DEBRA repository](https://github.com/elijahr/nim-debra) for upstream
 changes.

@@ -1,0 +1,7 @@
+# Build artifacts produced by `make ar_rel` in
+# liblfds711/build/gcc_gnumake. CI re-runs the upstream Makefile from a
+# clean checkout, so committed artifacts would only diverge.
+liblfds711/obj/*
+!liblfds711/obj/.gitkeep
+liblfds711/bin/*
+!liblfds711/bin/.gitkeep

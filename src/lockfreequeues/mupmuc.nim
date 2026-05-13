@@ -174,7 +174,6 @@ proc push*[N, P, C: static int, T](self: MupmucProducer[N, P, C, T], item: T): b
   var queueBase = cast[ptr MupmucPushBase[N, P, C, T]](self.queue)
 
   var op = mpmc_push.start[N]()
-  var spins = InitialSpin
   while true:
     var claim = op.tryClaim(queueBase[])
     match claim:
@@ -184,7 +183,8 @@ proc push*[N, P, C: static int, T](self: MupmucProducer[N, P, C, T], item: T): b
         return slotClaimed.complete(queueBase[], item)
       MPMCPushStart(restart):
         op = restart # CAS race or producer raced ahead: retry
-        backoffOnRetry(spins)
+        # CAS-loss-retry on producer CAS.
+        backoffOnCASLossRetry()
         continue
 
 proc push*[N, P, C: static int, T](
@@ -223,7 +223,6 @@ proc pop*[N, P, C: static int, T](self: Consumer[N, P, C, T]): Option[T] =
   var queueBase = cast[ptr MupmucBase[N, P, C, T]](self.queue)
 
   var op = mpmc_pop.start[N]()
-  var spins = InitialSpin
   while true:
     var claim = op.tryClaim(queueBase[])
     match claim:
@@ -233,7 +232,8 @@ proc pop*[N, P, C: static int, T](self: Consumer[N, P, C, T]): Option[T] =
         return some(slotClaimed.complete(queueBase[]))
       MPMCPopStart(restart):
         op = restart # CAS race or consumer raced ahead: retry
-        backoffOnRetry(spins)
+        # CAS-loss-retry on consumer CAS.
+        backoffOnCASLossRetry()
         continue
 
 proc pop*[N, P, C: static int, T](

@@ -7,92 +7,92 @@ import ../atomic_dsl
 import typestates
 import debra
 
-import ./unbounded_mpsc_push # Reuse MPSCSegment, UnboundedMupsicBase
+import ./unbounded_mpsc_push # Reuse UMPSCSegment, UnboundedMupsicBase
 
 type
   # Base context - carries pinned state and queue pointer
-  MPSCPopContext*[T; S, MT: static int] = object of RootObj
+  UMPSCPopContext*[T; S, MT: static int] = object of RootObj
     pinnedHandle*: ThreadHandle[MT]
     pinnedEpoch*: uint64
     queue*: ptr UnboundedMupsicBase[S, T, MT]
 
   # States
-  MPSCPopReady*[T; S, MT: static int] = distinct MPSCPopContext[T, S, MT]
+  UMPSCPopReady*[T; S, MT: static int] = distinct UMPSCPopContext[T, S, MT]
 
-  MPSCPopSegmentLoaded*[T; S, MT: static int] = object
+  UMPSCPopSegmentLoaded*[T; S, MT: static int] = object
     pinnedHandle*: ThreadHandle[MT]
     pinnedEpoch*: uint64
     queue*: ptr UnboundedMupsicBase[S, T, MT]
-    segment*: ptr MPSCSegment[S, T]
+    segment*: ptr UMPSCSegment[S, T]
     head*: int
     tail*: int
 
-  MPSCPopSlotAvailable*[T; S, MT: static int] = object
+  UMPSCPopSlotAvailable*[T; S, MT: static int] = object
     pinnedHandle*: ThreadHandle[MT]
     pinnedEpoch*: uint64
     queue*: ptr UnboundedMupsicBase[S, T, MT]
-    segment*: ptr MPSCSegment[S, T]
+    segment*: ptr UMPSCSegment[S, T]
     slot*: int
 
-  MPSCPopSlotUncommitted*[T; S, MT: static int] = object
+  UMPSCPopSlotUncommitted*[T; S, MT: static int] = object
     ## Producer claimed slot but hasn't finished writing yet.
     pinnedHandle*: ThreadHandle[MT]
     pinnedEpoch*: uint64
     queue*: ptr UnboundedMupsicBase[S, T, MT]
 
-  MPSCPopSegmentExhausted*[T; S, MT: static int] = object
+  UMPSCPopSegmentExhausted*[T; S, MT: static int] = object
     pinnedHandle*: ThreadHandle[MT]
     pinnedEpoch*: uint64
     queue*: ptr UnboundedMupsicBase[S, T, MT]
-    segment*: ptr MPSCSegment[S, T]
+    segment*: ptr UMPSCSegment[S, T]
 
-  MPSCPopEmpty*[T; S, MT: static int] = object
+  UMPSCPopEmpty*[T; S, MT: static int] = object
     pinnedHandle*: ThreadHandle[MT]
     pinnedEpoch*: uint64
     queue*: ptr UnboundedMupsicBase[S, T, MT]
 
-  MPSCPopComplete*[T; S, MT: static int] = object
+  UMPSCPopComplete*[T; S, MT: static int] = object
     pinnedHandle*: ThreadHandle[MT]
     pinnedEpoch*: uint64
     queue*: ptr UnboundedMupsicBase[S, T, MT]
     value*: T
     slot*: int
 
-typestate MPSCPopContext[T, S: static int, MT: static int]:
+typestate UMPSCPopContext[T, S: static int, MT: static int]:
   inheritsFromRootObj = true
   consumeOnTransition = true
-  states MPSCPopReady[T, S, MT],
-    MPSCPopSegmentLoaded[T, S, MT],
-    MPSCPopSlotAvailable[T, S, MT],
-    MPSCPopSlotUncommitted[T, S, MT],
-    MPSCPopSegmentExhausted[T, S, MT],
-    MPSCPopEmpty[T, S, MT],
-    MPSCPopComplete[T, S, MT]
+  states UMPSCPopReady[T, S, MT],
+    UMPSCPopSegmentLoaded[T, S, MT],
+    UMPSCPopSlotAvailable[T, S, MT],
+    UMPSCPopSlotUncommitted[T, S, MT],
+    UMPSCPopSegmentExhausted[T, S, MT],
+    UMPSCPopEmpty[T, S, MT],
+    UMPSCPopComplete[T, S, MT]
   transitions:
-    MPSCPopReady[T, S, MT] -> MPSCPopSegmentLoaded[T, S, MT]
-    MPSCPopSegmentLoaded[T, S, MT] ->
-      (MPSCPopSlotAvailable[T, S, MT] | MPSCPopSegmentExhausted[T, S, MT]) as
-      MPSCSlotCheck[T, S, MT]
-    MPSCPopSlotAvailable[T, S, MT] ->
-      (MPSCPopComplete[T, S, MT] | MPSCPopSlotUncommitted[T, S, MT]) as
-      MPSCCommitCheck[T, S, MT]
-    MPSCPopSegmentExhausted[T, S, MT] ->
-      (MPSCPopReady[T, S, MT] | MPSCPopEmpty[T, S, MT]) as MPSCAdvanceResult[T, S, MT]
+    UMPSCPopReady[T, S, MT] -> UMPSCPopSegmentLoaded[T, S, MT]
+    UMPSCPopSegmentLoaded[T, S, MT] ->
+      (UMPSCPopSlotAvailable[T, S, MT] | UMPSCPopSegmentExhausted[T, S, MT]) as
+      UMPSCSlotCheck[T, S, MT]
+    UMPSCPopSlotAvailable[T, S, MT] ->
+      (UMPSCPopComplete[T, S, MT] | UMPSCPopSlotUncommitted[T, S, MT]) as
+      UMPSCCommitCheck[T, S, MT]
+    UMPSCPopSegmentExhausted[T, S, MT] ->
+      (UMPSCPopReady[T, S, MT] | UMPSCPopEmpty[T, S, MT]) as UMPSCAdvanceResult[T, S, MT]
 
 # Factory: Create pop typestate context from DEBRA's Pinned state
 proc startPop*[T; S, MT: static int](
     pinned: sink Pinned[MT], queue: ptr UnboundedMupsicBase[S, T, MT]
-): MPSCPopReady[T, S, MT] =
+): UMPSCPopReady[T, S, MT] =
   ## Create pop context from DEBRA's Pinned state.
-  MPSCPopReady[T, S, MT](
-    MPSCPopContext[T, S, MT](
+  UMPSCPopReady[T, S, MT](
+    UMPSCPopContext[T, S, MT](
       pinnedHandle: pinned.handle, pinnedEpoch: pinned.epoch, queue: queue
     )
   )
 
 # Extract Pinned state from terminal states
 proc extractPinned*[T; S, MT: static int](
-    complete: sink MPSCPopComplete[T, S, MT]
+    complete: sink UMPSCPopComplete[T, S, MT]
 ): Pinned[MT] =
   ## Extract DEBRA's Pinned state for unpinning.
   Pinned[MT](
@@ -100,7 +100,7 @@ proc extractPinned*[T; S, MT: static int](
   )
 
 proc extractPinned*[T; S, MT: static int](
-    empty: sink MPSCPopEmpty[T, S, MT]
+    empty: sink UMPSCPopEmpty[T, S, MT]
 ): Pinned[MT] =
   ## Extract DEBRA's Pinned state for unpinning.
   Pinned[MT](
@@ -108,7 +108,7 @@ proc extractPinned*[T; S, MT: static int](
   )
 
 proc extractPinned*[T; S, MT: static int](
-    uncommitted: sink MPSCPopSlotUncommitted[T, S, MT]
+    uncommitted: sink UMPSCPopSlotUncommitted[T, S, MT]
 ): Pinned[MT] =
   ## Extract DEBRA's Pinned state for unpinning.
   Pinned[MT](
@@ -119,15 +119,18 @@ proc extractPinned*[T; S, MT: static int](
 
 # Load segment transition
 proc loadSegment*[T; S, MT: static int](
-    ready: sink MPSCPopReady[T, S, MT]
-): MPSCPopSegmentLoaded[T, S, MT] {.transition.} =
+    ready: sink UMPSCPopReady[T, S, MT]
+): UMPSCPopSegmentLoaded[T, S, MT] {.transition.} =
   ## Load current head segment and positions.
-  let ctx = MPSCPopContext[T, S, MT](ready)
-  let seg = ctx.queue.headSegment
+  ## Mirrors production memory ordering: acquire load on `headSegment`
+  ## synchronises with the release store performed by the consumer when it
+  ## advanced the head, so we never observe a freed pointer.
+  let ctx = UMPSCPopContext[T, S, MT](ready)
+  let seg = ctx.queue.headSegment.load(moAcquire)
   let head = seg.head
   let tail = seg.tail.load(moAcquire)
 
-  MPSCPopSegmentLoaded[T, S, MT](
+  UMPSCPopSegmentLoaded[T, S, MT](
     pinnedHandle: ctx.pinnedHandle,
     pinnedEpoch: ctx.pinnedEpoch,
     queue: ctx.queue,
@@ -138,12 +141,12 @@ proc loadSegment*[T; S, MT: static int](
 
 # Check slot availability transition
 proc checkSlot*[T; S, MT: static int](
-    loaded: sink MPSCPopSegmentLoaded[T, S, MT]
-): MPSCSlotCheck[T, S, MT] {.transition.} =
+    loaded: sink UMPSCPopSegmentLoaded[T, S, MT]
+): UMPSCSlotCheck[T, S, MT] {.transition.} =
   ## Check if there's data available. Returns SlotAvailable or SegmentExhausted.
   if loaded.head < loaded.tail:
-    MPSCSlotCheck[T, S, MT] ->
-      MPSCPopSlotAvailable[T, S, MT](
+    UMPSCSlotCheck[T, S, MT] ->
+      UMPSCPopSlotAvailable[T, S, MT](
         pinnedHandle: loaded.pinnedHandle,
         pinnedEpoch: loaded.pinnedEpoch,
         queue: loaded.queue,
@@ -151,18 +154,32 @@ proc checkSlot*[T; S, MT: static int](
         slot: loaded.head,
       )
   else:
-    MPSCSlotCheck[T, S, MT] ->
-      MPSCPopSegmentExhausted[T, S, MT](
-        pinnedHandle: loaded.pinnedHandle,
-        pinnedEpoch: loaded.pinnedEpoch,
-        queue: loaded.queue,
-        segment: loaded.segment,
-      )
+    # F1 (Window A close, mirrors bb50bc9 in unbounded_spmc_pop.nim:168):
+    # re-load tail with moAcquire so a stale loadSegment snapshot doesn't
+    # cause us to advance past slots producers just published+committed.
+    let freshTail = loaded.segment.tail.load(moAcquire)
+    if loaded.head < freshTail:
+      UMPSCSlotCheck[T, S, MT] ->
+        UMPSCPopSlotAvailable[T, S, MT](
+          pinnedHandle: loaded.pinnedHandle,
+          pinnedEpoch: loaded.pinnedEpoch,
+          queue: loaded.queue,
+          segment: loaded.segment,
+          slot: loaded.head,
+        )
+    else:
+      UMPSCSlotCheck[T, S, MT] ->
+        UMPSCPopSegmentExhausted[T, S, MT](
+          pinnedHandle: loaded.pinnedHandle,
+          pinnedEpoch: loaded.pinnedEpoch,
+          queue: loaded.queue,
+          segment: loaded.segment,
+        )
 
 # Check if slot is committed and read item if ready
 proc checkCommitted*[T; S, MT: static int](
-    slotAvail: sink MPSCPopSlotAvailable[T, S, MT]
-): MPSCCommitCheck[T, S, MT] {.transition.} =
+    slotAvail: sink UMPSCPopSlotAvailable[T, S, MT]
+): UMPSCCommitCheck[T, S, MT] {.transition.} =
   ## Check committed flag and read item if ready.
   if slotAvail.segment.committed[slotAvail.slot].load(moAcquire):
     # Slot is committed, read the item
@@ -173,8 +190,8 @@ proc checkCommitted*[T; S, MT: static int](
     discard slotAvail.queue.itemCount.fetchSub(1, moRelaxed)
 
     return
-      MPSCCommitCheck[T, S, MT] ->
-      MPSCPopComplete[T, S, MT](
+      UMPSCCommitCheck[T, S, MT] ->
+      UMPSCPopComplete[T, S, MT](
         pinnedHandle: slotAvail.pinnedHandle,
         pinnedEpoch: slotAvail.pinnedEpoch,
         queue: slotAvail.queue,
@@ -184,8 +201,8 @@ proc checkCommitted*[T; S, MT: static int](
   else:
     # Producer hasn't finished writing yet
     return
-      MPSCCommitCheck[T, S, MT] ->
-      MPSCPopSlotUncommitted[T, S, MT](
+      UMPSCCommitCheck[T, S, MT] ->
+      UMPSCPopSlotUncommitted[T, S, MT](
         pinnedHandle: slotAvail.pinnedHandle,
         pinnedEpoch: slotAvail.pinnedEpoch,
         queue: slotAvail.queue,
@@ -193,35 +210,59 @@ proc checkCommitted*[T; S, MT: static int](
 
 # Advance segment transition
 proc advanceSegment*[T; S, MT: static int](
-    exhausted: sink MPSCPopSegmentExhausted[T, S, MT]
-): MPSCAdvanceResult[T, S, MT] {.transition.} =
+    exhausted: sink UMPSCPopSegmentExhausted[T, S, MT]
+): UMPSCAdvanceResult[T, S, MT] {.transition.} =
   ## Try to advance to next segment.
   ## Returns Ready if next segment exists, Empty otherwise.
   let nextSeg = exhausted.segment.next.load(moAcquire)
 
+  # F1' (Window B close): re-confirm exhaustion before committing the head-
+  # segment advance. moAcquire on .next above synchronises-with producer's
+  # release-store on .next, transitively ordering all prior producer writes
+  # including tail.store on this segment. If a producer published more items
+  # between checkSlot and now, abort the advance and let the caller retry
+  # on the same segment. Architectural mirror of bb50bc9's commit-point
+  # defense; placement follows commit point (advanceSegment is the commit
+  # for SPSC/MPSC since their headSegment.store is a plain release-store).
+  let freshTail = exhausted.segment.tail.load(moAcquire)
+  let head = exhausted.segment.head
+  if freshTail > head:
+    return
+      UMPSCAdvanceResult[T, S, MT] ->
+      UMPSCPopReady[T, S, MT](
+        UMPSCPopContext[T, S, MT](
+          pinnedHandle: exhausted.pinnedHandle,
+          pinnedEpoch: exhausted.pinnedEpoch,
+          queue: exhausted.queue,
+        )
+      )
+
   if nextSeg == nil:
     return
-      MPSCAdvanceResult[T, S, MT] ->
-      MPSCPopEmpty[T, S, MT](
+      UMPSCAdvanceResult[T, S, MT] ->
+      UMPSCPopEmpty[T, S, MT](
         pinnedHandle: exhausted.pinnedHandle,
         pinnedEpoch: exhausted.pinnedEpoch,
         queue: exhausted.queue,
       )
 
-  # Advance head segment
-  exhausted.queue.headSegment = nextSeg
-  # Note: Segment retirement handled by caller
+  # Advance head segment with release semantics so a follow-up reclaim
+  # cannot free this segment until pinned threads observe the advance.
+  # Mirrors production at `unbounded_mupsic.nim:370`. Segment retirement
+  # is the caller's responsibility (the facade owns DEBRA `it.retire`).
+  exhausted.queue.headSegment.store(nextSeg, moRelease)
 
-  MPSCAdvanceResult[T, S, MT] ->
-    MPSCPopReady[T, S, MT](
-      MPSCPopContext[T, S, MT](
+  UMPSCAdvanceResult[T, S, MT] ->
+    UMPSCPopReady[T, S, MT](
+      UMPSCPopContext[T, S, MT](
         pinnedHandle: exhausted.pinnedHandle,
         pinnedEpoch: exhausted.pinnedEpoch,
         queue: exhausted.queue,
       )
     )
 
-# Get value from completed pop
-proc getValue*[T; S, MT: static int](complete: MPSCPopComplete[T, S, MT]): T =
-  ## Extract the popped value.
-  complete.value
+# Note (A3): the popped value lives on `UMPSCPopComplete.value*` (declared
+# above as a public field). Callers read `complete.value` directly; no
+# `getValue` verb proc is needed. Avoiding the proc shaves one
+# generic-instantiation pass per (T, S, MT, mm-mode) tuple from compile time
+# and removes a trivial wrapper.

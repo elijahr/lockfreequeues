@@ -272,6 +272,30 @@ class MergeBmfTests(unittest.TestCase):
             merged["lockfreequeues_unbounded_mupmuc/mpmc_unbounded/4p4c"]
                   ["throughput_ops_ms"]["value"], 4000.0)
 
+    def test_slug_re_accepts_spmc_topologies(self) -> None:
+        """Characterization test: SLUG_RE accepts the SPMC topology
+        roots introduced by the v4.2.0 SPMC axis schema change. The
+        regex `^[a-z][a-z0-9_]*/[a-z][a-z0-9_]*/\\d+p\\d+c$` already
+        matches `<lib>/spmc/<NpNc>` and
+        `<lib>/spmc_unbounded/<NpNc>` because `spmc` / `spmc_unbounded`
+        are bare lowercase identifiers — no regex change is needed.
+        Pin that here so a future tightening of the regex (e.g. an
+        explicit topology allowlist) does not silently drop SPMC
+        slugs from the merged BMF.
+        """
+        from benchmarks.merge_bmf import SLUG_RE
+        self.assertIsNotNone(
+            SLUG_RE.match("lockfreequeues_sipmuc/spmc/1p2c"),
+            "SLUG_RE must accept lockfreequeues_sipmuc/spmc/1p2c",
+        )
+        self.assertIsNotNone(
+            SLUG_RE.match(
+                "lockfreequeues_unbounded_sipmuc/spmc_unbounded/1p2c"
+            ),
+            "SLUG_RE must accept "
+            "lockfreequeues_unbounded_sipmuc/spmc_unbounded/1p2c",
+        )
+
     def test_output_is_alpha_sorted(self) -> None:
         """Slugs and measures both emerge alpha-sorted regardless of input order."""
         inp = self.dir / "shuffled.json"

@@ -14,7 +14,7 @@
 ## Emitted measure per slug: `throughput_ops_ms` (mean, lower=mean-1σ,
 ## upper=mean+1σ). Slug shape: `lockfreequeues_sipsic/spsc/1p1c`.
 
-import std/[options, os, parseopt, sets, strformat, syncio]
+import std/[options, os, parseopt, strformat, syncio]
 import ./bench_common
 import ./adapters/lockfreequeues_sipsic_adapter
 
@@ -24,6 +24,28 @@ import ./adapters/lockfreequeues_sipsic_adapter
 # below via `when declared(...)`.
 when defined(adapter_boost_lockfree_spsc_available):
   import ./adapters/boost_lockfree_spsc_adapter
+
+# v4.2.0 Stage 5.1 Tier 1 vendored comparison adapters (header-only C++).
+# Both `atomic_queue` (max0x7ba) and `rigtorp::SPSCQueue` are bounded
+# rings; gated by per-library defines. atomic_queue runs at SPSC here
+# (it is general MPMC, but the SPSC slot exercises its 1p1c path).
+when defined(adapter_atomic_queue_available):
+  import ./adapters/atomic_queue_adapter
+
+when defined(adapter_rigtorp_spsc_available):
+  import ./adapters/rigtorp_spsc_adapter
+
+# v4.2.0 Stage 5.2 Tier 2 Rust comparison adapter: kanal exposes a
+# bounded MPMC channel that we exercise here at the 1p1c (SPSC) shape.
+when defined(adapter_kanal_available):
+  import ./adapters/kanal_adapter
+
+# v4.2.0 Stage 5.3 Tier 3 vendored adapter: liblfds 7.1.1 (C library,
+# license-verified public-domain + permissive grant). The adapter
+# routes the SPSC topology to the upstream `lfds711_queue_bss_*`
+# bounded single-producer / single-consumer queue.
+when defined(adapter_liblfds_available):
+  import ./adapters/liblfds_adapter
 
 const
   ## Per-binary intdefines for SPSC wall-time control. Override at compile
@@ -57,14 +79,30 @@ when defined(adapter_boost_lockfree_spsc_available):
   proc initBoostSpscQ(capacity: int): BoostLockfreeSpscAdapter[uint64] =
     makeBoostLockfreeSpscAdapter[uint64](capacity)
 
-# MVP variants are added to SupportedVariants only when the matching
-# adapter symbol is in scope (i.e. its compile-time gate is set).
-proc supportedVariantsList(): seq[string] {.compileTime.} =
-  result = @["sipsic"]
-  when declared(initBoostSpscQ):
-    result.add("boost_lockfree_spsc")
+when defined(adapter_atomic_queue_available):
+  proc initAtomicQueueQ(capacity: int): AtomicQueueAdapter[uint64] =
+    makeAtomicQueueAdapter[uint64](capacity)
 
-const SupportedVariants = supportedVariantsList()
+when defined(adapter_rigtorp_spsc_available):
+  proc initRigtorpSpscQ(capacity: int): RigtorpSpscAdapter[uint64] =
+    makeRigtorpSpscAdapter[uint64](capacity)
+
+when defined(adapter_kanal_available):
+  proc initKanalSpscQ(capacity: int): KanalAdapter[uint64] =
+    makeKanalAdapter[uint64](capacity)
+
+when defined(adapter_liblfds_available):
+  proc initLiblfdsSpscQ(capacity: int): LiblfdsAdapter[uint64] =
+    # SPSC slot uses the bounded single-producer / single-consumer queue
+    # (`lfds711_queue_bss_*`); see the adapter doc-comment for the
+    # ringbuffer-vs-bounded-queue rationale.
+    makeLiblfdsAdapter[uint64](kind = lkBss, capacity = capacity)
+
+# ---------- Adapter procs (topology-based dispatch) ----------
+#
+# Each adapter proc emits its hardcoded slug grid. The `topology` arg is
+# informational metadata; slug emission is invariant across topology
+# inputs (sipsic always emits `lockfreequeues_sipsic/spsc/1p1c`).
 
 proc runMvpVariant[A](
     em: var BMFEmitter,
@@ -96,41 +134,123 @@ proc runMvpVariant[A](
     metrics.ops_ms_mean + metrics.ops_ms_stddev,
   )
 
-proc runVariant(variant: string, em: var BMFEmitter) =
-  case variant
-  of "sipsic":
-    let slug = "lockfreequeues_sipsic/spsc/1p1c"
-    echo fmt"{variant} ({slug}):"
-    let metrics = runThroughputHarness[SipsicAdapter[SpscCapacity, uint64]](
-      queueInit = initSipsicQ,
+proc runSipsic(em: var BMFEmitter, topology: Topology) {.nimcall.} =
+  discard topology  # informational only; slug hardcoded below
+  let slug = "lockfreequeues_sipsic/spsc/1p1c"
+  echo fmt"sipsic ({slug}):"
+  let metrics = runThroughputHarness[SipsicAdapter[SpscCapacity, uint64]](
+    queueInit = initSipsicQ,
+    capacity = SpscCapacity,
+    numProducers = 1,
+    numConsumers = 1,
+    messageCount = BenchSpscMessageCount,
+    runCount = BenchSpscRuns,
+    warmupCount = BenchSpscWarmup,
+  )
+  echo fmt"  mean: {metrics.ops_ms_mean:.1f} ops/ms"
+  echo fmt"  stddev: {metrics.ops_ms_stddev:.1f}"
+  echo fmt"  runs: {metrics.runs}"
+  echo ""
+  em.addMeasure(
+    slug, "throughput_ops_ms",
+    metrics.ops_ms_mean,
+    metrics.ops_ms_mean - metrics.ops_ms_stddev,
+    metrics.ops_ms_mean + metrics.ops_ms_stddev,
+  )
+
+when declared(initBoostSpscQ):
+  proc runBoostLockfreeSpsc(em: var BMFEmitter,
+                            topology: Topology) {.nimcall.} =
+    discard topology
+    runMvpVariant[BoostLockfreeSpscAdapter[uint64]](
+      em,
+      slug = "boost_lockfree_queue/spsc/1p1c",
+      queueInit = initBoostSpscQ,
       capacity = SpscCapacity,
-      numProducers = 1,
-      numConsumers = 1,
-      messageCount = BenchSpscMessageCount,
-      runCount = BenchSpscRuns,
-      warmupCount = BenchSpscWarmup,
     )
-    echo fmt"  mean: {metrics.ops_ms_mean:.1f} ops/ms"
-    echo fmt"  stddev: {metrics.ops_ms_stddev:.1f}"
-    echo fmt"  runs: {metrics.runs}"
-    echo ""
-    em.addMeasure(
-      slug, "throughput_ops_ms",
-      metrics.ops_ms_mean,
-      metrics.ops_ms_mean - metrics.ops_ms_stddev,
-      metrics.ops_ms_mean + metrics.ops_ms_stddev,
+
+when declared(initAtomicQueueQ):
+  proc runAtomicQueueSpsc(em: var BMFEmitter,
+                          topology: Topology) {.nimcall.} =
+    discard topology
+    runMvpVariant[AtomicQueueAdapter[uint64]](
+      em,
+      slug = "atomic_queue/spsc/1p1c",
+      queueInit = initAtomicQueueQ,
+      capacity = SpscCapacity,
     )
-  else:
-    when declared(initBoostSpscQ):
-      if variant == "boost_lockfree_spsc":
-        runMvpVariant[BoostLockfreeSpscAdapter[uint64]](
-          em,
-          slug = "boost_lockfree_queue/spsc/1p1c",
-          queueInit = initBoostSpscQ,
-          capacity = SpscCapacity,
-        )
-        return
-    raise newException(ValueError, "unknown variant: " & variant)
+
+when declared(initRigtorpSpscQ):
+  proc runRigtorpSpsc(em: var BMFEmitter,
+                      topology: Topology) {.nimcall.} =
+    discard topology
+    runMvpVariant[RigtorpSpscAdapter[uint64]](
+      em,
+      slug = "rigtorp_spsc/spsc/1p1c",
+      queueInit = initRigtorpSpscQ,
+      capacity = SpscCapacity,
+    )
+
+when declared(initKanalSpscQ):
+  proc runKanalSpsc(em: var BMFEmitter, topology: Topology) {.nimcall.} =
+    discard topology
+    runMvpVariant[KanalAdapter[uint64]](
+      em,
+      slug = "kanal/spsc/1p1c",
+      queueInit = initKanalSpscQ,
+      capacity = SpscCapacity,
+    )
+
+when declared(initLiblfdsSpscQ):
+  proc runLiblfdsSpsc(em: var BMFEmitter, topology: Topology) {.nimcall.} =
+    discard topology
+    runMvpVariant[LiblfdsAdapter[uint64]](
+      em,
+      slug = "liblfds/spsc/1p1c",
+      queueInit = initLiblfdsSpscQ,
+      capacity = SpscCapacity,
+    )
+
+# ---------- Adapter registry ----------
+
+proc buildAdapters(): seq[Adapter] =
+  result.add(Adapter(
+    name: "sipsic",
+    topologiesSupported: {tSpsc},
+    run: runSipsic,
+  ))
+  when declared(initBoostSpscQ):
+    result.add(Adapter(
+      name: "boost_lockfree_spsc",
+      topologiesSupported: {tSpsc},
+      run: runBoostLockfreeSpsc,
+    ))
+  when declared(initAtomicQueueQ):
+    result.add(Adapter(
+      name: "atomic_queue",
+      topologiesSupported: {tSpsc},
+      run: runAtomicQueueSpsc,
+    ))
+  when declared(initRigtorpSpscQ):
+    result.add(Adapter(
+      name: "rigtorp_spsc",
+      topologiesSupported: {tSpsc},
+      run: runRigtorpSpsc,
+    ))
+  when declared(initKanalSpscQ):
+    result.add(Adapter(
+      name: "kanal",
+      topologiesSupported: {tSpsc},
+      run: runKanalSpsc,
+    ))
+  when declared(initLiblfdsSpscQ):
+    result.add(Adapter(
+      name: "liblfds",
+      topologiesSupported: {tSpsc},
+      run: runLiblfdsSpsc,
+    ))
+
+let adapters: seq[Adapter] = buildAdapters()
 
 when isMainModule:
   # Unbuffer stdout so progress is visible under file redirects (mirrors
@@ -159,28 +279,34 @@ when isMainModule:
       of cmdArgument:
         positional.add(p.key)
 
-  let supported = SupportedVariants.toHashSet
-  let runVariants =
-    if positional.len == 0:
-      supported
-    else:
-      var groups = initHashSet[string]()
-      for arg in positional:
-        if arg notin supported:
-          echo "Unknown variant: ", arg
-          echo "Supported: ", SupportedVariants
-          quit 1
-        groups.incl arg
-      groups
+  # Topology filter: zero positionals = run every adapter (preserves the
+  # legacy "give me the whole binary" semantics that t_topology_split
+  # and the snapshot fixture rely on). One positional = topology slug;
+  # only adapters whose `topologiesSupported` set contains that topology
+  # run. Additional positionals (e.g. `<shape>` from the design example)
+  # are accepted and ignored — slug emission is hardcoded inside each
+  # adapter proc per the topology-based dispatch convention.
+  var topologyFilter: Option[Topology] = none(Topology)
+  if positional.len >= 1:
+    try:
+      topologyFilter = some(parseTopology(positional[0]))
+    except ValueError as e:
+      echo "Unknown topology: ", positional[0]
+      echo "Reason: ", e.msg
+      quit 1
 
   echo "SPSC Throughput Benchmark"
   echo "========================="
   echo ""
 
   var emitter = initBMFEmitter()
-  for v in SupportedVariants:
-    if v in runVariants:
-      runVariant(v, emitter)
+  for adapter in adapters:
+    if topologyFilter.isNone:
+      # Run every adapter at every topology it supports.
+      for t in adapter.topologiesSupported:
+        adapter.run(emitter, t)
+    elif topologyFilter.get in adapter.topologiesSupported:
+      adapter.run(emitter, topologyFilter.get)
 
   if bmfOutPath.len > 0:
     emitter.emit(bmfOutPath)

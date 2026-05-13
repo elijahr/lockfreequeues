@@ -12,7 +12,10 @@
 ##
 ## Same cdylib as ``crossbeam_array_queue_adapter``; both adapters can
 ## be enabled simultaneously without duplicate symbols (each adapter
-## ``importc`` s a disjoint set of fns: ``cb_array_*`` vs ``cb_seg_*``).
+## ``importc`` s a disjoint set of fns: ``crossbeam_array_*`` vs
+## ``crossbeam_seg_*``). v4.2.0 Stage 5.2 renamed both prefixes from the
+## former ``cb_*`` form when the cdylib was consolidated to also carry
+## ``flume_*`` and ``kanal_*`` shims.
 
 when defined(adapter_crossbeam_seg_queue_available):
   import ../bench_common
@@ -21,10 +24,10 @@ when defined(adapter_crossbeam_seg_queue_available):
   # bench binary that imports ANY crossbeam adapter.
   import ./crossbeam_link
 
-  proc cb_seg_init(): pointer {.importc, cdecl.}
-  proc cb_seg_push(q: pointer; item: uint64): bool {.importc, cdecl.}
-  proc cb_seg_pop(q: pointer; outVal: ptr uint64): bool {.importc, cdecl.}
-  proc cb_seg_destroy(q: pointer) {.importc, cdecl.}
+  proc crossbeam_seg_init(): pointer {.importc, cdecl.}
+  proc crossbeam_seg_push(q: pointer; item: uint64): bool {.importc, cdecl.}
+  proc crossbeam_seg_pop(q: pointer; outVal: ptr uint64): bool {.importc, cdecl.}
+  proc crossbeam_seg_destroy(q: pointer) {.importc, cdecl.}
 
   const topologiesSupported* = {tMpmcUnbounded}
 
@@ -36,27 +39,27 @@ when defined(adapter_crossbeam_seg_queue_available):
     ## the other adapters' shape so the wire-up sites can pass the same
     ## ``capacity`` uniformly without conditionals.
     discard capacity
-    result.queue = cb_seg_init()
-    doAssert result.queue != nil, "cb_seg_init returned null"
+    result.queue = crossbeam_seg_init()
+    doAssert result.queue != nil, "crossbeam_seg_init returned null"
 
   proc cleanup*[T](a: var CrossbeamSegQueueAdapter[T]) =
     if a.queue != nil:
-      cb_seg_destroy(a.queue)
+      crossbeam_seg_destroy(a.queue)
       a.queue = nil
 
   proc push*[T](a: var CrossbeamSegQueueAdapter[T], item: T): PushResult =
     ## Always succeeds when the queue is alive (SegQueue is unbounded;
-    ## the underlying ``cb_seg_push`` only returns false on a null handle).
+    ## the underlying ``crossbeam_seg_push`` only returns false on a null handle).
     if a.queue == nil:
       return prFull
-    discard cb_seg_push(a.queue, uint64(item))
+    discard crossbeam_seg_push(a.queue, uint64(item))
     prSuccess
 
   proc pop*[T](a: var CrossbeamSegQueueAdapter[T]): PopResult[T] =
     if a.queue == nil:
       return PopResult[T](success: false)
     var raw: uint64
-    if cb_seg_pop(a.queue, addr raw):
+    if crossbeam_seg_pop(a.queue, addr raw):
       PopResult[T](success: true, value: T(raw))
     else:
       PopResult[T](success: false)

@@ -38,6 +38,261 @@ those libraries reflect blocking semantics, not the `try_push` path the
 lockfreequeues bounded variants expose, so cross-comparisons need that
 asterisk in mind.
 
+See the [Glossary](#glossary) below for definitions of P×C, BMF, SPMC, sipmuc,
+oversubscription, and other shorthand used throughout this page.
+
+## Glossary
+
+The bench page uses a small vocabulary repeatedly. Definitions are inlined
+here so readers don't have to hop between this page and the source tree to
+decode an axis label or a slug.
+
+### BMF
+
+Bencher Metric Format. The JSON shape produced by harness runs and merged
+by `merge_bmf.py` into `latest.json`. One slug per benchmark configuration.
+
+### P×C
+
+Producers × Consumers. Categorical configuration label, e.g. `4p4c`. The
+number of producer threads × the number of consumer threads. P×C is
+categorical, not continuous; charts must use bars, not lines, because there's
+no meaningful interpolation between e.g. `2p2c` and `4p4c`.
+
+### Sipsic
+
+Single-In-Place (single producer, single consumer; the lockfreequeues SPSC
+family). Bounded and unbounded variants both exist.
+
+### Sipmuc
+
+Single-In-Place Multi-Consumer (single producer, multiple consumers; the
+lockfreequeues SPMC family). Promoted from the MPMC panel to its own SPMC
+panel in v4.2.0.
+
+### Mupsic
+
+Multi-Producer Single-Consumer (multiple producers, single consumer; the
+lockfreequeues MPSC family).
+
+### Mupmuc
+
+Multi-Producer Multi-Consumer (multiple producers, multiple consumers; the
+lockfreequeues MPMC family).
+
+### SPSC
+
+Single Producer, Single Consumer. The simplest topology — one writer, one
+reader. Admits wait-free algorithms with no atomic read-modify-write on the
+hot path.
+
+### MPSC
+
+Multi Producer, Single Consumer. Many writers fan into one reader. Producers
+contend on the enqueue index; the consumer side is uncontended.
+
+### SPMC
+
+Single Producer, Multi Consumer. One writer fans out to many readers.
+Consumers contend on the dequeue index; the producer side is uncontended.
+
+### MPMC
+
+Multi Producer, Multi Consumer. The hardest topology: contention on both
+ends, plus the need to coordinate a globally-consistent committed prefix
+across asymmetric producer and consumer claim orders.
+
+### Bounded
+
+Fixed capacity ring buffer; pushes can fail when the queue is full. Returns a
+non-blocking signal rather than parking the producer.
+
+### Unbounded
+
+Capacity grows on demand (typically segmented and reclaimed via DEBRA);
+pushes do not fail for capacity reasons. Pays a small per-pop reclamation
+overhead in exchange.
+
+### Oversubscription
+
+Running more producer + consumer threads than the runner has physical cores.
+Stresses scheduler interaction with queue backoff. The `ubuntu-latest` runner
+has 4 vCPU, so any P×C totalling more than 8 threads measures the scheduler
+as much as the queue.
+
+### Strict-FIFO claim
+
+Consumer-side ordering invariant where each consumer must observe the next
+sequence index `prevConsumerIdx + 1`. Cannot skip slots reserved by
+descheduled producers, leading to head-of-line stalls under oversubscription.
+Contributes to the unbounded mupmuc/sipmuc stalls v4.2.0's harness backoff
+works around. The item-loss path that made the stalls catastrophic was a
+TOCTOU race between a stale `loadSegment` tail snapshot and the
+`headSegment`-advance commit point; that race was closed in v4.3.0 via
+`bb50bc9` (SPMC facade-side `prevConsumerIdx` re-check) and `7296240`
+(SPSC/MPSC verb-side `seg.tail` re-load in `advanceSegment`, F1 + F1').
+The strict-FIFO claim itself remains pending relaxation in v4.4 (rename
+`prevConsumerIdx → consumerHead` and the CAS-on-head consumer-claim
+mechanism that comes with it).
+
+### Work-stealing
+
+Algorithmic property where consumers can claim from any producer's
+queue/slot, bypassing strict FIFO. Tolerates oversubscription gracefully.
+moodycamel, loony, and crossbeam's segmented queues all use this property.
+
+### SchedYield-escalating backoff
+
+Adaptive backoff that starts with `cpuPause` spin, escalates to `Thread.yield()`
+/ `sched_yield(2)` after a spin budget, then to longer sleeps. Lets the OS
+reschedule the descheduled producer holding a reserved-but-uncommitted slot.
+v4.2.0 introduces this in the harness; the canonical queue-side fix lives in
+v4.3.
+
+### DEBRA
+
+Distributed Epoch-Based Reclamation Algorithm. Memory reclamation scheme used
+by lockfreequeues for unbounded queues. v4.2.0 ships with `nim-debra` 0.7.1.
+
+### Epoch-based reclamation
+
+Memory reclamation strategy where freed memory is held until all threads have
+advanced past a global epoch counter. Avoids ABA hazards without per-pointer
+hazard tracking overhead. DEBRA is one such scheme.
+
+### Bench harness
+
+The Nim test programs in `benchmarks/nim/` that drive the queue under
+controlled load and emit BMF JSON. Distinct from the queue itself; harness
+changes can move chart numbers without any queue source change.
+
+### Queue
+
+The data structure being benchmarked, in `src/lockfreequeues/`. The queue
+source is read-only for v4.2.0 — performance numbers move only via harness
+or comparison-library changes.
+
+### Smoke compile
+
+Quick `nim c --compileOnly` step in CI used to verify a bench adapter builds
+before its full bench run is scheduled. Fails fast on missing deps.
+
+### Soft-skip matrix step
+
+CI matrix step that exits 0 with a warning when a comparison library is
+unavailable, rather than failing the whole bench job. Lets the chart show
+degraded data without breaking master.
+
+### `latest.json`
+
+The merged, canonical BMF document consumed by `bench-charts.js` to render
+the page. Single source of truth for what the chart shows.
+
+### `--path:src`
+
+Nim compiler flag adding a path to the import search list. Defensive addition
+to all comparison-library smokes in v4.2.0 to keep package-relative imports
+resolving regardless of nimble install state.
+
+### Slug
+
+BMF identifier of shape `<library>/<topology>/<P×C>`, e.g.
+`lockfreequeues/spmc_unbounded/1p8c`. Validated by `SLUG_RE` in
+`merge_bmf.py`.
+
+### Project
+
+Distinct top-level adapter target. One of the named entries (lockfreequeues,
+moodycamel, atomic_queue, flume, etc.). Distinct from "slug prefix" (a
+project may produce multiple slug prefixes via family fanout) and from
+"library" (used loosely; prefer "project" when the count matters).
+
+### Slug prefix
+
+First segment of a slug, e.g. `lockfreequeues_sipmuc`. The `lockfreequeues`
+project produces 8 slug prefixes (sipsic / sipmuc / mupsic / mupmuc ×
+bounded / unbounded). External libraries typically produce 1 slug prefix
+each but may produce more (e.g., flume bounded vs unbounded).
+
+### Topology axis
+
+The categorical axis splitting throughput panels by topology (SPSC, MPSC,
+SPMC, MPMC, plus unbounded variants). v4.2.0 adds SPMC as a first-class
+entry; sipmuc was previously rendered on MPMC panels.
+
+### P×C shape
+
+The set of (producers, consumers) pairs run for a given library × topology
+combination. Determines bar count per panel.
+
+### Hero panel
+
+The top-of-page summary panel showing headline numbers across libraries at a
+single representative bounded shape. Distinct from the per-topology
+throughput grid below.
+
+### Throughput panel
+
+One panel per topology in the grid. Bars per library × P×C configuration.
+v4.2.0 splits SPMC out of MPMC, taking the panel count from 4 to 5.
+
+### Dark-mode reflow
+
+Chart redraw triggered by Material theme toggle, picking up new
+`--md-default-fg-color` value via `getComputedStyle` and re-applying to uPlot
+axis stroke and font. Without reflow, axis labels render black against a
+dark background.
+
+## Why MPMC is harder than SPSC
+
+The bench numbers diverge by orders of magnitude across topology axes — SPSC
+reliably lands in the tens of millions of ops/sec on `ubuntu-latest` while
+MPMC under contention sits one to two orders of magnitude lower. Three
+distinct cost centers explain the gap.
+
+### Cache-line contention
+
+MPMC's multiple producers contend for the same enqueue index cache line, and
+multiple consumers contend for the same dequeue index cache line. Every CAS
+or fetch-add on those indices forces a coherence round trip across cores;
+under heavy contention the bus traffic dominates the algorithm. False
+sharing amplifies the cost when adjacent fields share a cache line.
+
+SPSC has exactly one writer per index — the producer owns the head, the
+consumer owns the tail — so the cache lines never bounce. The hot path
+becomes a plain load/store with appropriate memory ordering, no atomic
+read-modify-write needed.
+
+### ABA and reclamation
+
+Multi-consumer dequeue must defend against the ABA problem: a consumer reads
+a node pointer, the value at that pointer is freed and reallocated, and the
+consumer's CAS now succeeds against a stale identity. Lock-free MPMC designs
+solve this with hazard pointers, epoch-based reclamation (lockfreequeues
+uses DEBRA), or other safe-memory-reclamation (SMR) schemes. Each adds
+per-operation bookkeeping the consumer pays on every pop.
+
+SPSC needs neither. The single consumer can free or recycle slots without
+coordinating with peers, and the single producer's writes are sequenced with
+the consumer's reads via a simple acquire/release pair on the index.
+
+### Ordering and asymmetry
+
+MPMC's claim/publish protocol is intrinsically asymmetric. Producers reserve
+an index (claim) and then publish their payload (commit) in arbitrary order
+— producer A may claim slot 10 and stall before committing while producer B
+claims slot 11 and commits immediately. Consumers must observe a
+globally-consistent committed prefix, which means slot 11's payload is
+unreadable until slot 10 commits even though slot 11's data is already in
+memory. Vyukov's sequence-counter protocol encodes this prefix with
+per-slot generation tags; other designs use linked segments with per-segment
+commit fences.
+
+SPSC has total ordering for free. The producer publishes in slot order,
+the consumer reads in slot order, and an acquire/release pair on a single
+index is sufficient. There is no claim/publish asymmetry to coordinate
+because there's only one of each role.
+
 ## When to pick lockfreequeues
 
 If your bottleneck is **single-producer single-consumer with a known capacity**
@@ -154,6 +409,7 @@ section below.
 <div markdown="0">
   <div id="bench-throughput-spsc"           class="bench-panel"></div>
   <div id="bench-throughput-mpsc"           class="bench-panel"></div>
+  <div id="bench-throughput-spmc"           class="bench-panel"></div>
   <div id="bench-throughput-mpmc-bounded"   class="bench-panel"></div>
   <div id="bench-throughput-mpmc-unbounded" class="bench-panel"></div>
 </div>
@@ -197,3 +453,12 @@ Specific caveats:
   scheduler is the ground truth for thread placement.
 - **CPU oversubscription.** `ubuntu-latest` has 4 vCPU. MPMC variants beyond
   4P + 4C measure scheduler oversubscription, not lock-free contention.
+
+### Threshold history
+
+Bencher.dev threshold history for the `lockfreequeues_*sipmuc/mpmc*` slug
+roots was intentionally reset starting v4.2.0, because sipmuc moved from the
+MPMC topology axis to a first-class SPMC axis. The old slug history is
+retained on Bencher.dev as a record of pre-v4.2.0 behaviour but is not
+aliased forward into the new `lockfreequeues_*sipmuc/spmc*` slug roots —
+threshold-based regression detection on the SPMC slugs starts fresh.

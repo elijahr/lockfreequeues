@@ -35,6 +35,12 @@
 ##   (more reclamation work per pop), higher values amortize epoch advancement
 ##   across more pops at the cost of delaying reclamation. Must be a positive
 ##   integer.
+##
+## v4.3 facade migration: this module is a thin facade over the typestate
+## verbs in ``typestates/unbounded_spmc_push`` and
+## ``typestates/unbounded_spmc_pop``. Production owns the canonical memory
+## layout (Queue and Segment); the typestate Base type's layout equivalence
+## is gated by per-field offsetOf / sizeof static-asserts below.
 
 import ./atomic_dsl
 import ./backoff
@@ -43,6 +49,9 @@ import std/options
 import std/typetraits
 
 import debra
+import typestates
+import ./typestates/unbounded_spmc_push as ts_spmc_push
+import ./typestates/unbounded_spmc_pop as ts_spmc_pop
 
 const LockFreeQueuesAdvanceEvery {.intdefine.}: int = 64
   ## Cadence for `advanceEvery` calls in this file's Eager reclamation path.
@@ -71,7 +80,7 @@ type
     next {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
     tail {.align: CacheLineBytes.}: Atomic[int]
       # Producer write position within segment
-    prevConsumerIdx {.align: CacheLineBytes.}: Atomic[int]
+    consumerHead {.align: CacheLineBytes.}: Atomic[int]
       # CAS coordination for consumers
 
   UnboundedSipmuc*[S: static int, T; MaxThreads: static int] = object
@@ -82,15 +91,16 @@ type
     ## - MaxThreads: Maximum number of threads (compile-time constant).
     manager: ptr DebraManager[MaxThreads]
     headSegment {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
-      # Consumers read from here
+      # Consumers read from here (atomic for CAS-advance coordination)
     tailSegment {.align: CacheLineBytes.}: ptr Segment[S, T]
-      # Producer writes here (single-producer)
+      # Producer writes here (single-producer, plain ptr; align pragma keeps
+      # it on its own cache line so the producer's writes don't bounce the
+      # consumer-mutated headSegment line)
     strategy: DeallocationStrategy
     itemCount: Atomic[int] # Total items in queue
     segments: Atomic[int] # Number of segments
     # Consumer tracking
     consumerCount: Atomic[int]
-    consumerHeads: array[MaxThreads, Atomic[int]] # Per-consumer read position
     ownsManager: bool
       ## True only when the queue allocated its own private manager via
       ## the no-manager-arg constructor; the manager is destroyed and
@@ -106,13 +116,60 @@ type
     localHead: int # Local tracking of position
     handle: ThreadHandle[MaxThreads] # Thread handle for pin/unpin
 
+# Layout-equivalence gates: production Queue and Segment must have identical
+# field offsets (and sizeof) to the typestate Base type/Segment so that the
+# `cast[ptr UnboundedSipmucBase[S, T, MaxThreads]](addr self)` in push/pop and
+# the typestate's per-Segment-field accesses are sound. See design §2.2 (SPMC
+# 8-field set post-Item-5) and §3 Item 2 (SPMC row: headSegment Atomic[ptr],
+# tailSegment plain ptr). 8 Queue offsets + 1 Queue sizeof + 1 Segment sizeof
+# + 4 Segment offsets = 14 doAsserts.
+static:
+  # `DeallocationStrategy` enum equivalence: the typestate file declares a
+  # local mirror enum (cycle break — see comment at the top of
+  # `typestates/unbounded_spmc_push.nim`). Confirm ord values and storage
+  # size match so the `strategy` field's bit-pattern is identical across
+  # the two declarations.
+  doAssert ord(Manual) == ord(ts_spmc_push.Manual)
+  doAssert ord(Eager) == ord(ts_spmc_push.Eager)
+  doAssert sizeof(DeallocationStrategy) == sizeof(ts_spmc_push.DeallocationStrategy)
+  # Queue-type equivalence (8 fields + sizeof).
+  doAssert offsetOf(UnboundedSipmuc[64, int, 4], manager) ==
+    offsetOf(ts_spmc_push.UnboundedSipmucBase[64, int, 4], manager)
+  doAssert offsetOf(UnboundedSipmuc[64, int, 4], headSegment) ==
+    offsetOf(ts_spmc_push.UnboundedSipmucBase[64, int, 4], headSegment)
+  doAssert offsetOf(UnboundedSipmuc[64, int, 4], tailSegment) ==
+    offsetOf(ts_spmc_push.UnboundedSipmucBase[64, int, 4], tailSegment)
+  doAssert offsetOf(UnboundedSipmuc[64, int, 4], strategy) ==
+    offsetOf(ts_spmc_push.UnboundedSipmucBase[64, int, 4], strategy)
+  doAssert offsetOf(UnboundedSipmuc[64, int, 4], itemCount) ==
+    offsetOf(ts_spmc_push.UnboundedSipmucBase[64, int, 4], itemCount)
+  doAssert offsetOf(UnboundedSipmuc[64, int, 4], segments) ==
+    offsetOf(ts_spmc_push.UnboundedSipmucBase[64, int, 4], segments)
+  doAssert offsetOf(UnboundedSipmuc[64, int, 4], consumerCount) ==
+    offsetOf(ts_spmc_push.UnboundedSipmucBase[64, int, 4], consumerCount)
+  doAssert offsetOf(UnboundedSipmuc[64, int, 4], ownsManager) ==
+    offsetOf(ts_spmc_push.UnboundedSipmucBase[64, int, 4], ownsManager)
+  doAssert sizeof(UnboundedSipmuc[64, int, 4]) ==
+    sizeof(ts_spmc_push.UnboundedSipmucBase[64, int, 4])
+  # Per-Segment-field equivalence (SPMC Segment fields: data, next, tail,
+  # consumerHead).
+  doAssert sizeof(Segment[64, int]) == sizeof(ts_spmc_push.Segment[64, int])
+  doAssert offsetOf(Segment[64, int], data) ==
+    offsetOf(ts_spmc_push.Segment[64, int], data)
+  doAssert offsetOf(Segment[64, int], next) ==
+    offsetOf(ts_spmc_push.Segment[64, int], next)
+  doAssert offsetOf(Segment[64, int], tail) ==
+    offsetOf(ts_spmc_push.Segment[64, int], tail)
+  doAssert offsetOf(Segment[64, int], consumerHead) ==
+    offsetOf(ts_spmc_push.Segment[64, int], consumerHead)
+
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
   ## Allocate a new segment on a CacheLineBytes boundary so the
   ## ``{.align.}`` pragmas above land on distinct physical cache lines.
   result = allocAligned[Segment[S, T]]()
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
-  result.prevConsumerIdx.store(-1, moRelaxed) # No consumer yet
+  result.consumerHead.store(-1, moRelaxed) # No consumer yet
 
 proc newUnboundedSipmuc*[S: static int, T; MaxThreads: static int](
     manager: ptr DebraManager[MaxThreads],
@@ -153,8 +210,6 @@ proc newUnboundedSipmuc*[S: static int, T; MaxThreads: static int](
 
   # Initialize consumer tracking
   result.consumerCount.store(0, moRelaxed)
-  for i in 0 ..< MaxThreads:
-    result.consumerHeads[i].store(0, moRelaxed)
 
 proc newUnboundedSipmuc*[S: static int, T; MaxThreads: static int](
     strategy: DeallocationStrategy = DefaultDeallocationStrategy
@@ -198,6 +253,10 @@ proc push*[S: static int, T; MaxThreads: static int](
     self: var UnboundedSipmuc[S, T, MaxThreads], item: T
 ) =
   ## Push a single item. Never blocks or fails (unbounded).
+  ##
+  ## Single-producer: no `withPin:` scope is needed on the push path
+  ## (per design §2.4: the producer doesn't reclaim segments and isn't
+  ## racing other producers). Direct match-driven verb pipeline.
 
   # Compile-time lock-free check
   when not defined(allowNonLockFreeQueueItems):
@@ -210,28 +269,51 @@ proc push*[S: static int, T; MaxThreads: static int](
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
-  var seg = self.tailSegment
-  var tail = seg.tail.load(moRelaxed)
+  # Cast queue to UnboundedSipmucBase for typestate compatibility (sound per
+  # the static offsetof asserts at the top of this module). Production
+  # Segment and the typestate-local ts_spmc_push.Segment also have identical
+  # layouts, so pointer equality and field offsets are interchangeable.
+  let queueBase =
+    cast[ptr ts_spmc_push.UnboundedSipmucBase[S, T, MaxThreads]](addr self)
 
-  # Check if current segment is full
-  if tail >= S:
-    # Allocate new segment
-    let newSeg = newSegment[S, T]()
-    seg.next.store(newSeg, moRelease)
-    self.tailSegment = newSeg
-    seg = newSeg
-    tail = 0
-    discard self.segments.fetchAdd(1, moRelaxed)
-
-  # Write item
-  seg.data[tail] = item
-  seg.tail.store(tail + 1, moRelease)
-  discard self.itemCount.fetchAdd(1, moRelaxed)
+  # The push typestate's `startPush` consumes a `Pinned[MT]` for symmetry
+  # with the pop side. SPMC has a single producer so the pin is functionally
+  # a no-op (no concurrent retires can drop our segment); we synthesise an
+  # un-pinned `Pinned[MT]` value with epoch 0 just to satisfy the typestate
+  # signature. This avoids requiring a real DEBRA registration on the
+  # producer thread (callers may not have one).
+  #
+  # Granular pipeline: startPush -> loadSegment -> checkFull
+  #   -> { writeItem (publish via tail.store(moRelease))
+  #      | allocateNewSegment then retry }
+  while true:
+    # Synthesised un-pinned `Pinned[MT]`: handle 0, epoch 0. The push
+    # verbs treat the pin as opaque payload — they neither pin nor unpin
+    # anything because SPMC has no producer-side reclamation.
+    let pinned = Pinned[MaxThreads](
+      EpochGuardContext[MaxThreads](handle: ThreadHandle[MaxThreads](), epoch: 0)
+    )
+    var loaded =
+      ts_spmc_push.startPush[T, S, MaxThreads](pinned, queueBase).loadSegment()
+    var check = loaded.checkFull()
+    match check:
+      USPMCPushSlotReady(slotReady):
+        discard slotReady.writeItem(item).extractPinned()
+        return
+      USPMCPushSegmentFull(full):
+        let newSeg = cast[ptr ts_spmc_push.Segment[S, T]](newSegment[S, T]())
+        discard full.allocateNewSegment(newSeg)
+        # Loop back to retry: loadSegment will pick up the freshly published
+        # tailSegment via the next-iteration direct read.
+        continue
 
 proc push*[S: static int, T; MaxThreads: static int](
     self: var UnboundedSipmuc[S, T, MaxThreads], items: openArray[T]
 ) =
   ## Push multiple items.
+  # Bulk variant: per-iteration single-item call has its own (no-op pin)
+  # entry. Stays OUTSIDE any pin scope (R6) — the single-item push has no
+  # pin scope to begin with.
   for item in items:
     self.push(item)
 
@@ -296,59 +378,113 @@ proc pop*[S: static int, T; MaxThreads: static int](
             "Use -d:allowNonLockFreeQueueItems to allow."
         .}
 
+  let queueBase =
+    cast[ptr ts_spmc_push.UnboundedSipmucBase[S, T, MaxThreads]](addr self.queue[])
+
+  # Single `withPin` around the WHOLE verb loop per design §2.3 (NOT
+  # one-pin-per-iteration). The pin lets us call `it.retire(...)` for
+  # retired segments — the facade owns segment lifetime via DEBRA so
+  # consumers never observe a freed pointer until every pinned thread
+  # has rotated past the retirement epoch.
   self.handle.withPin:
-    # Re-read headSegment under the pin so any retire from a prior pop
-    # cannot pull the segment out from under us before we read it.
-    var seg = self.queue.headSegment.load(moAcquire)
-
-    var spins = InitialSpin
     while true:
-      let tail = seg.tail.load(moAcquire)
-      var prevIdx = seg.prevConsumerIdx.load(moAcquire)
-
-      # Try to claim the next slot
-      let mySlot = prevIdx + 1
-      if mySlot >= tail:
-        # Segment exhausted, try to advance to the next segment.
-        let nextSeg = seg.next.load(moAcquire)
-        if nextSeg == nil:
+      # Project the active pin (held by `it: RetireReady`) into a Pinned
+      # value for the typestate to consume. This is a typestate rebrand
+      # (same handle+epoch); the slot's `pinned` flag is unchanged. It
+      # mirrors `pinnedFromRetired` from `debra/typestates/retire`.
+      let itCtx = RetireContext[MaxThreads](it)
+      let pinned = Pinned[MaxThreads](
+        EpochGuardContext[MaxThreads](handle: itCtx.handle, epoch: itCtx.epoch)
+      )
+      var loaded =
+        ts_spmc_pop.startPop[T, S, MaxThreads](pinned, queueBase).loadSegment()
+      var claim = loaded.tryClaimSlot()
+      match claim:
+        USPMCPopSlotClaimed(slotClaimed):
+          # A3: read the public `value*` field directly. The prior
+          # `ts_spmc_pop.getValue` wrapper added one generic verb-proc
+          # instantiation per (T, S, MT, mm-mode) for no behavioral benefit.
+          let complete = slotClaimed.readItem()
+          result = some(complete.value)
           break
-
-        # Try to be the thread that retires this segment by CAS-advancing
-        # headSegment from seg to nextSeg. The winner retires; the loser
-        # just observes that another thread already advanced and continues.
-        var expected = seg
-        if self.queue.headSegment.compareExchange(
-          expected, nextSeg, moAcquireRelease, moAcquire
-        ):
-          # Always retire so DEBRA owns the detached segment: Manual mode
-          # leaves it in limbo for `tryReclaim` (or `manager.=destroy` at
-          # scope exit) to drain; Eager mode reclaims it shortly via the
-          # `reclaimNow` call after the pin block. Without retiring, the
-          # segment is detached from the head chain but reachable from no
-          # root, and leaks at process exit.
-          it.retire(cast[pointer](seg), segmentDestructor[S, T])
-          if self.queue.strategy != Manual:
-            discard self.queue.segments.fetchSub(1, moRelaxed)
-          # With Manual strategy the segment is in limbo (retired but not
-          # yet reclaimed); segmentCount keeps reflecting the peak count
-          # until the user calls `tryReclaim`.
-          seg = nextSeg
-        else:
-          # Another consumer already advanced. expected now points at the
-          # current head segment as observed by the CAS failure load.
-          seg = expected
-        backoffOnRetry(spins)
-        continue
-
-      # CAS to claim slot
-      if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
-        # Won the slot
-        result = some(seg.data[mySlot])
-        discard self.queue.itemCount.fetchSub(1, moRelaxed)
-        break
-
-      # Lost CAS, retry
+        USPMCPopReady(_):
+          # CAS-loss on `consumerHead` claim — another consumer raced
+          # us. Loop back to re-load the segment and retry.
+          continue
+        USPMCPopSegmentExhausted(exhausted):
+          # Capture the old segment pointer BEFORE the typestate consumes
+          # the state — the facade owns segment lifetime and DEBRA-retires
+          # the old segment when it wins the headSegment CAS.
+          let oldSeg = cast[ptr Segment[S, T]](exhausted.segment)
+          var advance = exhausted.advanceSegment()
+          match advance:
+            USPMCPopEmpty(_):
+              # Transient miss: when oldSeg.next == nil at the load below but
+              # the producer publishes immediately after, this pop returns none
+              # for one call. The outer pop()/getConsumer() loop re-enters and
+              # observes the new state on the next iteration. Working as designed
+              # for non-blocking SPMC; not a livelock.
+              break
+            USPMCPopReady(_):
+              # Item-loss livelock fix: before CAS-advancing past oldSeg,
+              # verify there are no unclaimed items remaining. The
+              # producer's invariant is that
+              # `oldSeg.next.store(newSeg, moRelease)` happens AFTER
+              # `oldSeg.tail` reaches `S` (the segment is full). The
+              # acquire-load on `oldSeg.next` (already performed inside
+              # `advanceSegment`) establishes happens-before with that
+              # release-store, so a fresh acquire-load of
+              # `consumerHead` here observes the latest CAS state.
+              # If `consumerHead < S - 1`, items remain unclaimed in
+              # `oldSeg`. We MUST NOT advance past it — the items would
+              # become unreachable when `oldSeg` is retired and pop
+              # would return `none` while items still exist, manifesting
+              # as a consumer hot-spin at end-of-run when the producer
+              # filled the final segment after a consumer's stale tail
+              # snapshot.
+              #
+              # Without this check, the snapshot of `tail` taken in
+              # `loadSegment` (and the subsequent `tryClaimSlot`-time
+              # re-load of `tail`) can race the producer's release-store:
+              # the consumer concludes "exhausted" with `mySlot >= tail`
+              # for some `tail < S`, then advances past `oldSeg` while
+              # the producer is still publishing slots `tail..S-1`. Even
+              # though `tryClaimSlot` re-loads `tail`, the producer can
+              # publish more slots between that re-load and the head
+              # CAS. The `consumerHead` re-check here closes that
+              # window: if any slot < S - 1 has not been claimed via
+              # CAS, we restart the claim loop instead of advancing.
+              let freshPrevIdx = oldSeg.consumerHead.load(moAcquire)
+              if freshPrevIdx < S - 1:
+                # Unclaimed slots remain in oldSeg. Skip the head CAS
+                # and retire — loop back to re-load and try to claim.
+                backoffOnCASLossRetry()
+                continue
+              # Try to be the thread that retires this segment by CAS-
+              # advancing headSegment from oldSeg to the next segment.
+              # The winner retires; the loser observes that another
+              # consumer already advanced and continues. Mirrors the
+              # consumer-vs-consumer coordination the previous direct
+              # production code performed at the head-advance site.
+              let nextSeg = cast[ptr Segment[S, T]](oldSeg.next.load(moAcquire))
+              var expected = oldSeg
+              if self.queue.headSegment.compareExchange(
+                expected, nextSeg, moAcquireRelease, moAcquire
+              ):
+                # Always retire so DEBRA owns the detached segment: Manual
+                # leaves it in limbo for `tryReclaim` (or
+                # `manager.=destroy` at scope exit) to drain; Eager
+                # reclaims it shortly via the `reclaimNow` call after the
+                # pin block. Without retiring, the segment is detached
+                # from the head chain but reachable from no root, and
+                # leaks at process exit.
+                it.retire(cast[pointer](oldSeg), segmentDestructor[S, T])
+                if self.queue.strategy != Manual:
+                  discard self.queue.segments.fetchSub(1, moRelaxed)
+              # CAS-loss-retry on segment-advance (consumer-vs-consumer
+              # headSegment CAS).
+              backoffOnCASLossRetry()
+              continue
 
   if self.queue.strategy == Eager:
     if self.handle.advanceEvery(LockFreeQueuesAdvanceEvery):
@@ -365,6 +501,7 @@ proc pop*[S: static int, T; MaxThreads: static int](
 
   var items = newSeq[T]()
 
+  # Bulk variant runs OUTSIDE withPin; each iteration acquires its own pin.
   for i in 0 ..< count:
     let item = self.pop()
     if item.isNone:
@@ -385,10 +522,10 @@ when defined(testing):
 
   proc segmentHeadOffsetForTest*[S: static int, T; MaxThreads: static int](
       _: typedesc[UnboundedSipmuc[S, T, MaxThreads]]
-  ): tuple[tail: int, prevConsumerIdx: int] =
+  ): tuple[tail: int, consumerHead: int] =
     ## Test-only accessor: returns offsets of cache-line-padded fields within
     ## the unbounded sipmuc Segment for the cache-line padding audit.
-    result = (offsetOf(Segment[S, T], tail), offsetOf(Segment[S, T], prevConsumerIdx))
+    result = (offsetOf(Segment[S, T], tail), offsetOf(Segment[S, T], consumerHead))
 
 proc `=destroy`*[S: static int, T; MaxThreads: static int](
     self: var UnboundedSipmuc[S, T, MaxThreads]

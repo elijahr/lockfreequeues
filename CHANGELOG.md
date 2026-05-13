@@ -7,6 +7,262 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [4.3.0] - 2026-05-12
+
+### Added
+
+- `backoffOnCASLossRetry()` helper in `src/lockfreequeues/backoff.nim`
+  alongside the existing `backoffOnRetry` (exponential cpuPause
+  escalating to `schedYield` at `YieldThreshold`) and
+  `backoffOnPeerWait` (cpuPause-only). Eleven previously-`backoffOnRetry`
+  sites across bounded sipmuc/mupsic/mupmuc and unbounded
+  mupsic/sipmuc/mupmuc are re-attributed to `backoffOnCASLossRetry`,
+  which is cpuPause-only — yielding the OS quantum on a self-CAS
+  loss delays the caller's retry without helping the peer that won.
+  `backoffOnCASLossRetry` is byte-identical to `backoffOnPeerWait`
+  today; the two names are kept distinct for call-site grep-ability
+  and so the two semantic intents can be tuned independently in
+  future without re-attributing call sites.
+- `LFQ_BENCH_HARNESS_BACKOFF=0` runtime env toggle: disables the
+  bench harness-side `HarnessBackoff` wrapper so benchmarks measure
+  the queue-side backoff in isolation. Default (unset or `=1`) keeps
+  the harness backoff on. New `nimble benchToggleSmoke` task
+  verifies the toggle is observed at module init.
+- `nimble lockfreeCheck`: compile-time invariant gate that asserts
+  arc/orc rejects non-lock-free queue item types absent
+  `-d:allowNonLockFreeQueueItems`. Fails CI loudly if the lock-free-
+  types enforcement regresses.
+- `nimble checkConsumerHeadsAbsent`: CI gate against any future
+  reintroduction of the SPMC `consumerHeads` field (deleted in
+  Task 6 as dead allocation).
+- `nimble checkBulkOutsidePin`: R6 invariant gate asserting bulk
+  push/pop loops on unbounded queues run OUTSIDE producer/consumer
+  `withPin:` blocks, so each iteration acquires its own pin and
+  DEBRA reclamation is not blocked by an arbitrarily-extended pin
+  epoch.
+
+### Changed
+
+- Unbounded `Sipsic`, `Mupsic`, `Sipmuc`, `Mupmuc` migrated to the
+  facade-over-typestate-verbs pattern. `withPin:` opens once at the
+  facade; verbs carry a `Pinned[MaxThreads]` payload through the
+  push/pop pipelines. Bulk variants run OUTSIDE the pin (per-
+  iteration single-item call has its own pin scope), enforced by
+  `nimble checkBulkOutsidePin`. Public API surface unchanged
+  (API-DIFF gate is zero exported-signature changes).
+- Test suite migrated to `typestates` 0.8.0 `match` macro with
+  exhaustive arms across 74 typestate sites in eight unbounded
+  test files. Replaces the prior `check X.kind == K` +
+  `X.<lower>.method()` two-statement pattern. Test count grew from
+  268 to 340 as a consequence of wiring previously-orphan files
+  (see Tests).
+- `benchmarks/nim/bench_unbounded.nim`: `runFlumeUnbounded` and
+  `runKanalUnbounded` expanded from a 2x2 producer/consumer grid
+  (`[1, 2]` x `[1, 2]`) to a 3x3 grid (`[1, 2, 4]` x `[1, 2, 4]`)
+  so the flume/kanal unbounded shapes match every other unbounded
+  MPMC peer (loony, crossbeam_seg_queue, moodycamel,
+  lockfreequeues_unbounded_mupmuc).
+- `benchmarks/tests/test_smoke_compiles.py` `STRICT_FLOOR` expanded
+  to enumerate every slug-prefix the bench harness emits (8
+  lockfreequeues family + 15 comparison-library prefixes) so the
+  silent-mask CI guard catches a drop from any installed adapter,
+  not only the four restored in the initial Stage 1 patch.
+- Dependency pins: `typestates >= 0.8.0` (was `>= 0.7.2`; 0.8.0's
+  `generateSingleTargetMatch` and var-l-value-for-move codegen are
+  load-bearing for the test migration). `debra >= 0.7.3`
+  (was `>= 0.7.1`).
+
+### Fixed
+
+- Consumer-side livelock in unbounded SPMC / MPMC / SPSC / MPSC pop
+  (the symptom v4.2.0 documented as Constraint #7's deferred
+  closure). Two TOCTOU races between a stale `loadSegment` tail
+  snapshot and the `headSegment`-advance commit point allowed the
+  consumer to advance past slots a producer was still publishing,
+  stranding items and manifesting as a hot-spin returning `none`
+  while items existed (~25 minute bench hang at S=8 under
+  oversubscription pre-fix; 3 minutes post-fix). Closed by two
+  coordinated commits described below, plus a contributing factor
+  reduction from the path-typed backoff split (see Added). Note
+  that the v4.2.0 deferral text predicted a different fix shape
+  (queue-side schedYield + strict-FIFO consumer-claim relaxation);
+  v4.3 took a different path. The schedYield-escalation half was
+  rejected in favor of path-typed classification; the strict-FIFO
+  relaxation half (rename `prevConsumerIdx → consumerHead`) is
+  deferred to v4.4 (see Known Limitations).
+- Unbounded SPMC pop TOCTOU item-loss livelock (`bb50bc9`):
+  `unbounded_spmc_pop.nim` `tryClaimSlot` re-loads `seg.tail` with
+  acquire ordering before declaring `SegmentExhausted`, and
+  `unbounded_sipmuc.nim`'s `USPMCPopReady` facade arm acquire-loads
+  `oldSeg.prevConsumerIdx` before the `headSegment`-CAS-advance and
+  backs off the claim loop if items remain unclaimed. Defense lives
+  at the facade because multi-consumer CAS coordination keeps the
+  verb pipeline single-CAS-free. Reproduced 1/30 in the new sipmuc
+  threaded stress test pre-fix; 50/50 PASS post-fix.
+- Unbounded SPSC and MPSC pop TOCTOU item-loss livelock (`7296240`,
+  mirror of the SPMC fix shape on single-consumer topology). Two
+  race windows, two verb-side defenses: F1 (`tryClaimSlot` checkSlot)
+  re-loads `seg.tail` with `moAcquire` before declaring
+  `SegmentExhausted`; F1' (`advanceSegment`) re-loads `seg.tail`
+  between `next.load(moAcquire)` and the `headSegment.store` commit
+  point, aborting the advance if `freshTail > head`. F1' widens the
+  `Ready` return contract from "advance happened, free `oldSeg`" to
+  "advance happened OR aborted-do-not-free"; the SPSC and MPSC
+  facades disambiguate by comparing `headSegment` against `oldSeg`
+  post-advance and only `freeAligned`/`it.retire` when the head
+  actually moved. Two new R7 regression tests
+  (`t_unbounded_sipsic_threaded_r7.nim`,
+  `t_unbounded_mupsic_threaded_r7.nim`) assert pushed-equals-popped
+  count and FIFO-per-producer; 100/100 PASS each at atomicArc and
+  atomicArc+TSAN.
+- `benchmarks/vendor/liblfds/liblfds_wrapper.c`
+  `bench_liblfds_bmm_init` now allocates the wrapper struct with
+  `posix_memalign(LFDS711_PAL_ATOMIC_ISOLATION_IN_BYTES)` instead of
+  plain `malloc`. The embedded `lfds711_queue_bmm_state` declares
+  its `read_index` / `write_index` with
+  `LFDS711_PAL_ALIGN(LFDS711_PAL_ATOMIC_ISOLATION_IN_BYTES)` (128
+  bytes on x64), and `malloc`'s 16-byte minimum alignment tripped
+  the upstream alignment assertion in
+  `lfds711_misc_internal_backoff_init`. The `bss` (SPSC) variant
+  does not need this fix.
+- `benchmarks/nim/bench_common.nim` `HarnessBackoff.backoff`
+  restructured so every call that does not escalate to a scheduler
+  yield issues exactly one `cpuPause`. The previous shape skipped
+  the pause whenever the spin budget was reset, producing an
+  inconsistent pause cadence on the empty-pop path.
+- `benchmarks/nim/bench_unbounded.nim` consumer threads
+  (`usipsicConsumerThread`, `usipmucConsumerThread`,
+  `umupmucConsumerThread`, plus the in-line `runOneUMupsicRun`
+  consumer loop) now reset `HarnessBackoff` after every successful
+  pop. Previously the accumulated `spinsConsumed` from a prior
+  empty-pop streak persisted across success boundaries and biased
+  the next contention window into yielding too early.
+
+### Removed
+
+- SPMC `consumerHeads` array field (Task 6): dead allocation. The
+  field was zero-initialised and pinned to its own cache line but
+  never read by any code path. Removal is asserted by the
+  `nimble checkConsumerHeadsAbsent` invariant gate so any future
+  reintroduction is caught loudly in CI.
+- `tests/test_minimal.nim` (empty file) and `tests/test_bounded.nim`
+  (referenced a nonexistent `t_ops` symbol; broken since v3.2.0).
+
+### Tests
+
+- 14 previously-orphan test files wired into `nimble test` and
+  `nimble stresstest` matrices; coverage gap closure dating to
+  v3.2.0. Atomic / storage / cell primitives (8 files):
+  `t_atomic_loaders`, `t_fullness_checks`, `t_mpmc_cell`,
+  `t_slot_seq_n`, `t_storage_n`, `t_storage_n1`,
+  `t_virtual_values_n`, `t_virtual_values_n1`. Typestate / match
+  macro (3 files): `t_cas`, `t_typestates_import`,
+  `t_match_in_generic_context_smoke`. Lock-free type validation
+  (1 file): `t_unbounded_sipsic_lockfree_types`. Re-enabled (had
+  been disabled with deadlock comment, now resolved by the v4.0.0
+  Vyukov bounded protocol rewrite): `t_mupmuc_threaded`,
+  `t_sipmuc_threaded`. `tests/test.nim` test count: 268 → 340
+  (+72 tests).
+- Four unbounded threaded stress tests re-enabled with R7
+  protection assertions: (a) pushed-equals-popped count equality,
+  (b) content equality (every pushed item observed exactly once),
+  (b′) duplicate detection across consumer fan-out for SPMC/MPMC,
+  (c) FIFO-per-producer via stack-local `lastSeen[pid]` arrays.
+  Topology budgets: `sipsic` 1p×1c S=8 10000 items;
+  `mupsic` 4p×1c S=8 4×2500; `sipmuc` 1p×4c S=8 1×10000 4-way
+  fan-out; `mupmuc` 2p×2c S=8 2×5000 2-way fan-out.
+- `t_match_in_generic_context_smoke`: 44 `MPMCPop*` references
+  migrated to `UMPMCPop*` (production state-name drift since
+  v3.2.0); 4 plain-ptr-to-atomic-field assignments converted to
+  `.store(seg, moRelaxed)`.
+- Bench harness reliability: TSAN-clean smoke adapter (Sipsic
+  replaces Channel[uint64]); per-thread Histogram + Channel drain
+  in latency harness; refc skip on the latency harness;
+  Bencher-CLI multi-measure threshold-boundary binding fix;
+  bench_unbounded matrix timeout raised to 20 minutes; macOS test
+  job skipped on PRs (kept on devel + tag pushes).
+
+### Documentation
+
+- `AGENTS.md` (created earlier in this release window): TSAN
+  test-runner hang workaround. Build-then-exec-binary-directly
+  short-circuit pattern documented with detection signal. Same
+  pattern works for the focused TSAN×100 loop the v4.3 mitigation
+  briefs prescribe.
+- `AGENTS.md`: "Defense placement follows commit placement"
+  principle for typestate verbs whose correctness depends on
+  snapshotted state. Defense goes immediately before the
+  irreversible commit, not at the snapshot site, not after. The
+  two unbounded TOCTOU fixes in this release illustrate the
+  principle with mirrored physical placement (SPMC at facade,
+  SPSC/MPSC inside `advanceSegment`). Plus a one-liner for the
+  typestate state-name U-prefix rule (per state-graph, not per
+  concurrency variant; see commit body of `3d96020` for the
+  migration-time discovery).
+- `docs/guide/slot-ownership-typestates.md` rewritten for the
+  facade pattern unification: bounded vs unbounded share the same
+  facade-over-typestate-verbs shape; `withPin:` scope and bulk-
+  outside-pin convention documented; bind-name convention table
+  extended (`b`/`p`/`r`/`s`/`c`/`cmp`/`l`/`f`/`u`/`e`); R5
+  limitation noted (queue push/pop not safe under
+  `neutralizeStalled` mid-call).
+- `docs/guide/memory-management.md` sharpened with explicit R12
+  attribution: `tryReclaim` is a `DebraManager` method, NOT
+  exported by `lockfreequeues`. Eager strategy auto-calls
+  `manager.tryReclaim()` after segment retirement (default under
+  arc/orc/atomicArc/refc); Manual strategy retires only and
+  requires user-driven `manager.tryReclaim()` (default under
+  `--mm:none`).
+- `docs/benchmarks.md` `Strict-FIFO claim` glossary entry softened
+  from "is the root cause of" to "contributes to" the unbounded
+  mupmuc/sipmuc stalls, with cross-references to the v4.3.0 TOCTOU
+  fixes that closed the catastrophic item-loss path (`bb50bc9`,
+  `7296240`) and the v4.4 deferral of the strict-FIFO claim
+  relaxation. Field reference `prevConsumerIdx` verified accurate
+  (rename to `consumerHead` deferred to v4.4 per design §3 Item 2).
+- F1' widened-`Ready`-contract clarification at SPSC and MPSC
+  facade comparison sites in `unbounded_spsc.nim` and
+  `unbounded_mpsc.nim` (commit-only docstring change; no
+  behavioral diff).
+
+### Known Limitations
+
+- Compile-time growth on the order of ~65–70% under the v4.3
+  facade-over-typestate-verbs pattern, measured against the
+  pre-Task-4 baseline. Operator-accepted as the cost of the
+  runtime / readability / cleanness wins; tracked as a v4.4-or-
+  later optimisation candidate. Not a release gate.
+- Strict-FIFO consumer-claim path relaxation (renaming
+  `prevConsumerIdx → consumerHead` and the CAS-on-head consumer-
+  claim mechanism that comes with it) is deferred to v4.4 (design
+  §3 Item 2). The v4.3 release closes the item-loss path that made
+  the strict-FIFO claim worst-case-catastrophic via the TOCTOU
+  defenses described under Fixed; oversubscription head-of-line
+  stalls remain possible but no longer manifest as item loss or
+  hot-spin livelock. This updates v4.2.0 Constraint #7's deferral
+  framing — the schedYield-escalation half of that promise was
+  superseded by the path-typed backoff split (`4153554`); the
+  strict-FIFO relaxation half stays deferred.
+- Queue push/pop is not safe under `neutralizeStalled` mid-call
+  (R5). Documented in `docs/guide/slot-ownership-typestates.md`;
+  callers must serialise neutralisation against active push/pop
+  flows.
+- Apple Silicon padding test (`-d:CacheLineBytes=128`) runs
+  manually rather than as part of the CI matrix on
+  `ubuntu-latest` (which provides a 64-byte cache line). See
+  `nimble testApplePadding` (or the documented manual command in
+  `docs/guide/performance-tuning.md`) for the on-device run.
+
+## [4.2.0] - 2026-05-06
+
 ### BREAKING
 
 - `CASAttempt` typestate restructured into a proper typestate union. `CASPending` now transitions to `CASSucceeded | CASFailed` (aliased as `CASResult`) via `executeCAS`, replacing the previous single-state design with `assumeSuccess` / `assumeFailure` escape hatches. The `assumeSuccess` and `assumeFailure` procs have been removed. Callers that drove `CASAttempt` outside the bundled MPMC machinery must migrate to the union return form. These helpers were only consumed by `tests/t_cas.nim`; the bundled MPMC machinery calls `compareExchangeWeak` directly and was unaffected. No public lock-free queue API is affected.
@@ -148,6 +404,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `benchmarks/README.md` "Updating the README summary" subsection
   codifies the new hand-curation procedure for the README BENCHMARKS
   markers (which shapes to read, where to read them, when to commit).
+- Five additional comparison libraries reach the bench matrix:
+  `atomic_queue` (Tier 1, header-only, MIT), `rigtorp/SPSCQueue`
+  (Tier 1, header-only, MIT), `rigtorp/MPMCQueue` (Tier 1,
+  header-only, MIT), `flume` (Rust crate, MPL-2.0, mpsc / mpmc
+  unbounded), `kanal` (Rust crate, MPL-2.0, mpmc / mpmc_unbounded).
+  C++ header-only libraries are vendored under `benchmarks/vendor/`
+  with pinned upstream SHAs and project-authored READMEs documenting
+  the upgrade procedure; Rust crates are consolidated into a single
+  cdylib at `benchmarks/rust/comparison/` (`libbench_ffi_comparison`)
+  alongside the existing Crossbeam adapters. Plus `liblfds` (a C
+  ringbuffer library, public-domain) wired through a thin C wrapper
+  for SPSC + MPMC bounded coverage.
+- First-class SPMC topology axis. A fifth throughput panel
+  `bench-throughput-spmc` lands in `docs/benchmarks.md` and the
+  sipmuc-family adapters (bounded `lockfreequeues_sipmuc` and
+  unbounded `lockfreequeues_unbounded_sipmuc`) are rerouted from
+  the MPMC panel to the new SPMC panel, with `spmc` /
+  `spmc_unbounded` slug roots replacing the prior `mpmc` /
+  `mpmc_unbounded` roots for those adapters.
+- Topology-based adapter dispatcher (Option C). Each bench binary
+  (`bench_spsc`, `bench_mpsc`, `bench_mpmc`, `bench_spmc`,
+  `bench_unbounded`) now owns a `seq[Adapter]` registry whose
+  per-adapter `topologiesSupported: set[Topology]` field declares
+  which topologies that adapter participates in. The harness
+  iterates the registry and dispatches by topology rather than by
+  the prior name-based `case variant of "X":` ladder. The bench
+  binaries take `<topology>` as `argv[1]` (e.g.
+  `./bench_mpmc spmc 1p2c`) instead of the legacy variant name.
+- `HarnessBackoff` in `benchmarks/nim/bench_common.nim`: a
+  schedYield-escalating consumer-wait backoff for unbounded
+  shapes. Initial spins use `cpuPause`; once the spin budget
+  exhausts, the backoff escalates to `schedYield` to release the
+  scheduler and break consumer-livelock on oversubscribed runners.
+  Tunable via `-d:HarnessSpinBudget=N` /
+  `-d:HarnessYieldThreshold=N` (defaults 128 / 1024).
+- uPlot bars for the per-topology throughput panels (categorical
+  X axis instead of a pseudo-continuous numeric axis), and a
+  canvas-rendered hero panel paired with an offscreen `<table>`
+  ARIA companion so screen readers can read the same data the
+  canvas renders visually.
+- Dark-mode-aware uPlot canvases. New `themeStroke()` /
+  `themeFont()` helpers in `docs/assets/bench-charts.js` resolve
+  axis stroke and font color from the active mkdocs theme, and a
+  `MutationObserver` on `<html data-md-color-scheme>` reflows
+  every chart when the user toggles the theme switch.
+- Inline `## Glossary` (32 entries) and
+  `## Why MPMC is harder than SPSC` (cache-line contention; ABA
+  and reclamation; ordering and asymmetry) sections in
+  `docs/benchmarks.md`, surfacing the methodology vocabulary and
+  the "why is this metric hard" intuition immediately above the
+  chart panels.
+- Per-library smoke-step `--path:` flag propagation in
+  `bench.yml`. The smoke-compile step now captures
+  `nimble path <pkg>` for any installed package adapter and
+  threads the resulting `--path:` flag through to the bench
+  compile step. Previously, libraries that passed install but
+  required an installed-package path on the bench compile would
+  fail silently and get omitted from the BMF as a soft-skipped
+  slug accompanied only by a yellow PR warning. The new flag
+  propagation closes that false-negative path.
+- Guard test
+  `benchmarks/tests/test_smoke_compiles.py`: a fixture-pinned
+  floor of expected comparison-library slugs in
+  `latest.json`. Gated on
+  `LOCKFREEQUEUES_BENCH_STRICT_FLOOR=1` until the post-merge
+  `bench.yml` run regenerates `latest.json` with the restored
+  boost / loony / threading_channels / crossbeam slugs; the
+  env-var gate retirement (make strict mode default) is a
+  v4.3.0 follow-up.
 
 ### Changed
 
@@ -174,10 +499,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `bench.yml` snapshot-commit message now carries `[skip ci]` (third
   loop-prevention layer alongside the existing `paths-ignore` filter
   and the bot-actor guard on the bench / bench-upload jobs).
-- `bench.yml` `Track base branch benchmarks with Bencher` step marked
-  `continue-on-error: true` as a release-day band-aid for an upstream
-  Bencher CLI threshold-model validation quirk; threshold gating remains
-  dormant pending the Track 6 calibration soak.
+- `bench.yml` `Track base branch benchmarks with Bencher` step now binds
+  both per-measure boundaries correctly. The Bencher CLI's
+  `CliReportThresholds` parser zips the `--threshold-{upper,lower}-boundary`
+  flags with `--threshold-measure` element-wise via `.next()`; supplying one
+  boundary value per measure when there are two measures sent both bound
+  values to the first measure and left the second with none, which Bencher
+  rejected with "Invalid threshold model: Invalid model, no boundary
+  provided". The fix uses the CLI's documented `_` `ElidedOption`
+  convention to align the boundary arrays with the measure array (latency
+  gets `--threshold-upper-boundary 0.99 --threshold-lower-boundary _`;
+  throughput gets the inverse). `continue-on-error: true` removed; the
+  step is now a hard gate again.
 - `README.md` BENCHMARKS markers now hold a hand-curated four-row
   summary table (Sipsic / Sipmuc / Mupsic / Mupmuc bounded at one
   representative shape each) plus a link line to the live chart page
@@ -186,6 +519,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fills them in. The chart page absorbs run-to-run noise; the README
   intentionally captures only the most recent release's headline
   numbers.
+- Bumped minimum `debra` from `>= 0.7.0` to `>= 0.7.1` to pull in
+  the upstream signal-handler stride fix in cross-slot reclamation.
+- `bench-comparison.yml` retired. The Crossbeam (Rust) adapters
+  now run inside `bench.yml`'s regular matrix, consolidated
+  alongside flume + kanal in a single Rust cdylib at
+  `benchmarks/rust/comparison/` (`libbench_ffi_comparison.{so,dylib}`).
+  Strict prefix-per-crate symbol naming
+  (`cb_*` / `flume_*` / `kanal_*`) prevents collision across the
+  consolidated FFI surface.
+- Log-scale axes (throughput + latency) now suppress null and
+  minor-tick labels — only major (power-of-10) ticks render. Cleans
+  up the prior axis clutter where uPlot's default minor-tick density
+  produced overlapping labels at small chart heights.
+- Bench harness binaries take `<topology>` as `argv[1]`
+  (e.g. `./bench_mpmc spmc 1p2c`) instead of the legacy
+  `<variant_name>`. The Matrix Run step in `bench.yml` was
+  updated to pass topology arguments.
 
 ### Removed
 
@@ -196,6 +546,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in their tagged tree; deleting on devel does not mutate those
   tags. No CI workflow, nimble task, or test runner referenced the
   renderer.
+
+- `.github/workflows/bench-comparison.yml`. The Crossbeam comparison
+  job folded into `bench.yml`'s regular matrix as part of the Rust
+  cdylib consolidation; a separate workflow is no longer needed.
+- Name-based `case variant of "X":` dispatch in the bench binaries.
+  Replaced by the topology-based `seq[Adapter]` registry described
+  in `### Added` above.
+- `-d:BenchSkipOversubscribed` removed from `bench.yml`'s
+  compile-flag list. The Nim-side `when not defined(...):` guards
+  remain in the source so the gate can be re-engaged by re-adding
+  the YAML line if a future regression demands it.
 
 - Legacy `nim doc`-generated HTML output (`json/` directory, 17
   files) and the `nimdoc.cfg` config that drove it. The mkdocs +
@@ -411,6 +772,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `unbounded_mupmuc`) allocate via `allocAligned[Segment[S, T]]()`
   instead of `c_calloc`. Verified by `tests/t_unbounded_padding.nim`
   (8 assertions across 4 variants, green under c/cpp/arc/refc).
+- Boost lockfree adapters (`boost_lockfree_queue_adapter`,
+  `boost_lockfree_spsc_adapter`) compile under CI again. The smoke
+  step's `nim cpp` invocation gained `--path:src` so the
+  `--noNimblePath` setting in the project's `nim.cfg` no longer
+  hides the project's own `srcDir` from the smoke compile. Without
+  the flag, the smoke step compiled clean against an empty path
+  list and the bench compile then failed with module-not-found,
+  flipping the slugs into the soft-skipped omit set.
+- loony / `threading.Chan` smoke compiles surface their
+  installed-package paths via `nimble path <pkg>` capture and feed
+  the resulting `--path:` flag into the bench compile step. Both
+  libraries are now restored in `latest.json` instead of being
+  silently omitted.
+- Oversubscribed unbounded shapes (e.g. `mpmc_unbounded 4p4c` on a
+  4-vCPU runner) no longer stall the bench. `HarnessBackoff`
+  escalates from `cpuPause` to `schedYield` after the spin budget
+  exhausts, breaking the consumer-livelock that the strict-FIFO
+  consumer-claim path plus a spin-only backoff produced under
+  scheduler pressure.
 
 ### Changed
 
@@ -492,6 +872,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed (typestates 0.7 uplift)
 
 - 22 read-only typestate accessors across `src/lockfreequeues/typestates/` now carry `{.notATransition.}`. typestates' verifier flagged these once `typestates verify -W` was wired into CI; the procs are pure data extraction and were never transitions.
+
+### Known Limitations
+
+- Queue-side `backoffOnPeerWait` does not yet escalate to
+  `schedYield` — only the harness-side `HarnessBackoff` wrapper
+  does. The canonical fix (queue-side schedYield plus relaxation of
+  the strict-FIFO consumer-claim path) is deferred to v4.3.0 to
+  keep this release's blast radius bounded;
+  `src/lockfreequeues/backoff.nim` is read-only this release
+  (Constraint #7).
+- **Strict-floor breach**: `folly_pcq` was DROPPED from the
+  comparison-library set. The transitive-include closure (15 unique
+  folly headers) exceeds the 6-header threshold, and folly main
+  additionally requires C++20 vs the repo's C++17. Final floor is
+  16/17. Revisit in v4.3.0+ once folly stabilizes a thinner-include
+  header export OR the repo upgrades to C++20.
+- The `LOCKFREEQUEUES_BENCH_STRICT_FLOOR=1` env-var gate on
+  `benchmarks/tests/test_smoke_compiles.py` remains in place until
+  the post-merge `bench.yml` run regenerates
+  `docs/assets/bench-results/latest.json` with the restored
+  boost / loony / threading_channels / crossbeam slugs. Retiring
+  the gate (making strict-mode the default) is a v4.3.0
+  follow-up.
+- **Bencher.dev threshold reset for sipmuc slugs**:
+  `lockfreequeues_*sipmuc/mpmc*` slug threshold history is
+  intentionally reset starting v4.2.0 because the sipmuc family
+  moved from MPMC to SPMC. The old slug history is retained on
+  Bencher.dev as a record but is not carried forward into the new
+  SPMC slug roots. The new slugs (`lockfreequeues_sipmuc/spmc/...`
+  and `lockfreequeues_unbounded_sipmuc/spmc_unbounded/...`) start
+  fresh.
 
 ## [4.1.0] - 2026-05-01
 

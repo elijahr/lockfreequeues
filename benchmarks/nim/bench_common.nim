@@ -20,7 +20,78 @@
 ## while the implementation lands behind them.
 
 import std/[algorithm, atomics, heapqueue, json, math, monotimes, options,
-            random, tables, times]
+            os, random, tables, times]
+import debra/atomics/backoff  # cpuPause, schedYield directly from debra
+
+# ---------- Harness backoff runtime toggle (Task 02, v4.3) ----------
+#
+# When `LFQ_BENCH_HARNESS_BACKOFF=0` is set in the environment at process
+# start, `HarnessBackoff.backoff` early-returns immediately, exposing
+# the queue's CAS-retry path end-to-end without the harness's
+# spin-then-yield safety net. Default behavior (env var unset or `=1`)
+# is unchanged.
+#
+# The env var is read **once** at module init via this top-level `let`
+# binding so there is zero `getEnv` cost in the bench hot path. In-process
+# `putEnv` after import will NOT exercise the cache; the toggle is
+# tested out-of-process by the `benchToggleSmoke` nimble task.
+#
+# Exported so tests can assert the default-case value.
+let disableHarnessBackoff* = getEnv("LFQ_BENCH_HARNESS_BACKOFF", "1") == "0"
+
+# ---------- Harness backoff (consumer-side, oversubscription stopgap) ----------
+#
+# Per-consumer backoff state machine used by the unbounded bench harness.
+# Spins via `cpuPause` for the first `HarnessSpinBudget` iterations of an
+# empty-pop streak, then escalates to `schedYield` once cumulative spin
+# count crosses `HarnessYieldThreshold`. This gives oversubscribed bench
+# shapes (e.g. 4p4c on a 4-vCPU CI runner) a way to release the CPU
+# quantum back to peers instead of livelocking on a strict-FIFO consumer
+# claim with spin-only queue-side backoff.
+#
+# Both knobs are `intdefine` (defaults 128 / 1024); tune at compile time
+# via `-d:HarnessSpinBudget=N` / `-d:HarnessYieldThreshold=N`.
+#
+# This is a stopgap. The canonical fix — schedYield in queue-side
+# `backoffOnPeerWait` + relaxation of the strict-FIFO consumer claim —
+# is deferred to v4.3 to keep this PR's blast radius bounded. The
+# wrapper is intentionally NOT named `backoffOnPeerWait` to avoid
+# shadowing the queue-side helper for v4.3 import discipline.
+
+const
+  HarnessSpinBudget* {.intdefine.} = 128
+  HarnessYieldThreshold* {.intdefine.} = 1024
+
+type HarnessBackoff* = object
+  spinsRemaining: int
+  spinsConsumed: int
+
+proc initHarnessBackoff*(): HarnessBackoff =
+  result.spinsRemaining = HarnessSpinBudget
+  result.spinsConsumed = 0
+
+proc backoff*(b: var HarnessBackoff) {.inline.} =
+  # Task 02 (v4.3): runtime kill-switch. When the cached toggle is on
+  # (LFQ_BENCH_HARNESS_BACKOFF=0 at process start), exit before any
+  # cpuPause / schedYield so the bench observes the queue's behavior
+  # end-to-end without the harness backoff smoothing CAS-retry
+  # latency cliffs. Default path (toggle false) is unchanged.
+  if disableHarnessBackoff: return
+  # Restructured so every call that does NOT escalate to a scheduler
+  # yield issues exactly one `cpuPause` (preserves a uniform pause
+  # cadence). The previous shape skipped the pause whenever the spin
+  # budget was reset, even though a reset without yield is just a
+  # bookkeeping step between two pause-emitting iterations.
+  if b.spinsRemaining <= 0:
+    if b.spinsConsumed >= HarnessYieldThreshold:
+      schedYield()
+      b.spinsConsumed = 0
+      b.spinsRemaining = HarnessSpinBudget
+      return
+    b.spinsRemaining = HarnessSpinBudget
+  cpuPause()
+  dec b.spinsRemaining
+  inc b.spinsConsumed
 
 # ---------- Topology ----------
 
@@ -29,9 +100,29 @@ type
     tSpsc
     tMpsc
     tMpmc
+    tSpmc
     tSpscUnbounded
     tMpscUnbounded
+    tSpmcUnbounded
     tMpmcUnbounded
+
+proc parseTopology*(s: string): Topology =
+  ## Parse a topology slug (e.g. "spsc", "mpmc_unbounded") into a
+  ## `Topology` enum value. Used by the per-binary topology dispatcher
+  ## introduced with the topology-based `Adapter` registry.
+  ##
+  ## Raises `ValueError` on an unrecognized slug — callers (typically a
+  ## bench binary's `main`) decide whether to exit nonzero or propagate.
+  case s
+  of "spsc": tSpsc
+  of "mpsc": tMpsc
+  of "mpmc": tMpmc
+  of "spmc": tSpmc
+  of "spsc_unbounded": tSpscUnbounded
+  of "mpsc_unbounded": tMpscUnbounded
+  of "spmc_unbounded": tSpmcUnbounded
+  of "mpmc_unbounded": tMpmcUnbounded
+  else: raise newException(ValueError, "unknown topology: " & s)
 
 # ---------- Adapter primitives ----------
 
@@ -99,6 +190,24 @@ proc addMeasure*(
     lower: toBound(lower),
     upper: toBound(upper),
   )
+
+# ---------- Adapter registry (topology-based dispatch) ----------
+#
+# Each bench binary owns a `seq[Adapter]` registry. The dispatcher loops
+# over the registry and invokes every adapter whose `topologiesSupported`
+# set contains the requested topology. Adapter procs hardcode their slug
+# emission (queue family + topology + shape grid) — the `topology`
+# argument passed to `Adapter.run` is informational metadata, not a
+# branch input. Slug emission inside an adapter is invariant across
+# `Topology` arguments; the registry's `topologiesSupported` declares
+# which topologies the adapter expects to be invoked under.
+
+type
+  AdapterRunProc* = proc(em: var BMFEmitter, topology: Topology) {.nimcall.}
+  Adapter* = object
+    name*: string
+    topologiesSupported*: set[Topology]
+    run*: AdapterRunProc
 
 proc emit*(em: BMFEmitter, path: string) =
   ## Write the accumulated BMF data to `path`. Slugs alpha-sorted; within
@@ -399,7 +508,8 @@ type
     fwd: ptr Q
     rev: ptr Q
     count: int
-    histogram: ptr Histogram
+    chan: ptr Channel[float]
+    debugMode: bool
 
   PongerCtx[Q] = object
     fwd: ptr Q
@@ -410,7 +520,14 @@ proc pingerThreadBody[Q](ctx: ptr PingerCtx[Q]) {.thread.} =
   ## Send a monotonic-ns timestamp via the forward queue, spin on the
   ## reverse queue until the ponger echoes it back, record RTT.
   ## `mixin push / pop` defers symbol resolution to the call site.
+  ##
+  ## Histogram lives entirely on this thread's local heap; after the
+  ## measurement loop finishes we drain its classified state to
+  ## `ctx.chan` so the main thread can reconstruct a fresh Histogram
+  ## without touching this thread's seqs (which refc tears down at
+  ## thread exit).
   mixin push, pop
+  var hist = initHistogram(ctx.debugMode)
   for _ in 0 ..< ctx.count:
     let t0 = getMonoTime()
     let payload = uint64(inNanoseconds(t0 - MonoTime()))
@@ -422,8 +539,31 @@ proc pingerThreadBody[Q](ctx: ptr PingerCtx[Q]) {.thread.} =
         let t1 = getMonoTime()
         let rtt = float(inNanoseconds(t1 - t0))
         if rtt > 0.0:
-          ctx.histogram[].record(rtt)
+          hist.record(rtt)
         break
+
+  # Drain classified Histogram state to the main thread. The 5-counter
+  # prefix is always sent (regardless of debugMode); the main thread
+  # sizes its own Histogram from `ctx.debugMode` and ignores the
+  # debugAll length when not in debug mode. `joinThread` provides the
+  # happens-before edge that makes blocking recv() with known counts
+  # safe.
+  ctx.chan[].send(float(hist.seenAll))
+  ctx.chan[].send(float(hist.seenBody))
+  ctx.chan[].send(float(hist.topKHeap.len))
+  ctx.chan[].send(float(hist.reservoir.len))
+  ctx.chan[].send(float(hist.debugAll.len))
+  # HeapQueue's `items` iterator was added in 2.1.1 but isn't picked up
+  # consistently across mm modes here, so go through the indexer (which
+  # is plain `lent T` access into the underlying seq — heap order, but
+  # the main thread re-pushes through `topKHeap.push` so order doesn't
+  # matter on the wire).
+  for i in 0 ..< hist.topKHeap.len:
+    ctx.chan[].send(hist.topKHeap[i])
+  for v in hist.reservoir:
+    ctx.chan[].send(v)
+  for v in hist.debugAll:
+    ctx.chan[].send(v)
 
 proc pongerThreadBody[Q](ctx: ptr PongerCtx[Q]) {.thread.} =
   mixin push, pop
@@ -453,12 +593,24 @@ proc runOneLatencyRun[Q](
   ## p50 / p99 measurements in PR 1 hinge on.
   var fwd = queueInit()
   var rev = queueInit()
-  var hist = initHistogram()
+
+  # Per-run channel for draining the pinger's classified Histogram state
+  # across the refc thread-heap boundary. The Channel struct itself is
+  # main-thread-allocated (alloc/dealloc both happen here on the main
+  # thread); the channel's internal message buffer goes through Nim's
+  # shared-heap allocator, so floats sent by the pinger survive its
+  # local-heap teardown.
+  var chan = create(Channel[float])
+  chan[].open(0)  # unbounded
+  defer:
+    chan[].close()
+    dealloc(chan)
 
   var pingerCtx = PingerCtx[Q](
     fwd: addr fwd, rev: addr rev,
     count: messageCount,
-    histogram: addr hist,
+    chan: chan,
+    debugMode: false,  # latency harness never enables debugMode today
   )
   var pongerCtx = PongerCtx[Q](
     fwd: addr fwd, rev: addr rev,
@@ -472,6 +624,34 @@ proc runOneLatencyRun[Q](
   createThread(pongerThread, pongerThreadBody[Q], addr pongerCtx)
   joinThread(pingerThread)
   joinThread(pongerThread)
+
+  # Drain the pinger's classified Histogram state into a fresh
+  # main-thread Histogram. joinThread above provides the happens-before
+  # edge, and the pinger sent a fixed 5-counter prefix followed by the
+  # exact number of floats those counters describe — so blocking recv()
+  # cannot deadlock here.
+  var hist = initHistogram(pingerCtx.debugMode)
+  let seenAll       = int(chan[].recv())
+  let seenBody      = int(chan[].recv())
+  let topKLen       = int(chan[].recv())
+  let reservoirLen  = int(chan[].recv())
+  let debugAllLen   = int(chan[].recv())
+  for _ in 0 ..< topKLen:
+    hist.topKHeap.push(chan[].recv())
+  for _ in 0 ..< reservoirLen:
+    hist.reservoir.add(chan[].recv())
+  if pingerCtx.debugMode:
+    for _ in 0 ..< debugAllLen:
+      hist.debugAll.add(chan[].recv())
+  else:
+    # Drain (and discard) any debugAll values the pinger sent so the
+    # channel is empty when we close it. Today this branch never fires
+    # because debugMode is hard-coded false in the ctx above, but we
+    # honor the on-wire protocol so future debug-mode use doesn't leak.
+    for _ in 0 ..< debugAllLen:
+      discard chan[].recv()
+  hist.seenAll  = seenAll
+  hist.seenBody = seenBody
 
   # Bulk-percentile so the reservoir/top-K snapshot is sorted once per
   # run rather than five times. Order MUST match the LatencyMetrics

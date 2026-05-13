@@ -1,25 +1,26 @@
 ## Tests for unbounded SPMC pop typestate.
 ##
 ## These tests verify the typestate structure and transitions work correctly.
-## Multiple consumers use CAS on prevConsumerIdx to coordinate.
+## Multiple consumers use CAS on consumerHead to coordinate.
 
 import unittest2
 import lockfreequeues/atomic_dsl
 import debra
 
+import lockfreequeues/typestates/unbounded_spmc_push
 import lockfreequeues/typestates/unbounded_spmc_pop
 
 # Type aliases for our test types
 type
   TestQueue = UnboundedSipmucBase[64, int, 4]
-  TestSegment = SPMCSegment[64, int]
+  TestSegment = Segment[64, int]
 
 # Test segment allocation
 proc newTestSegment(): ptr TestSegment =
   result = cast[ptr TestSegment](alloc0(sizeof(TestSegment)))
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
-  result.prevConsumerIdx.store(-1, moRelaxed)
+  result.consumerHead.store(-1, moRelaxed)
 
 proc freeTestSegment(seg: ptr TestSegment) =
   dealloc(seg)
@@ -35,51 +36,61 @@ suite "SPMC Pop Typestate":
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment = seg
     queue.itemCount.store(1, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
     let loaded = startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
 
-    check loaded.tail >= loaded.prevConsumerIdx
+    check loaded.tail >= loaded.consumerHead
     check loaded.segment != nil
     check loaded.segment.data[0] == 99
 
-    let claimResult = loaded.tryClaimSlot()
-    discard claimResult.spmcpopslotclaimed.readItem().extractPinned().unpin()
+    var claimResult = loaded.tryClaimSlot()
+    match claimResult:
+      USPMCPopSlotClaimed(c):
+        discard c.readItem().extractPinned().unpin()
+      USPMCPopSegmentExhausted(_):
+        check false
+      USPMCPopReady(_):
+        check false
     freeTestSegment(seg)
 
-  test "loadSegment loads head segment and prevConsumerIdx":
+  test "loadSegment loads head segment and consumerHead":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(4, moRelaxed)
+    seg.consumerHead.store(4, moRelaxed)
     seg.tail.store(10, moRelaxed)
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment = seg
     queue.itemCount.store(5, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
     let loaded = startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
 
-    check loaded.prevConsumerIdx == 4
+    check loaded.consumerHead == 4
     check loaded.tail == 10
     check loaded.segment == seg
 
     check loaded.segment.next.load(moRelaxed) == nil
 
     seg.data[5] = 77
-    let claimResult = loaded.tryClaimSlot()
-    check claimResult.kind == sSPMCPopSlotClaimed
-
-    let complete = claimResult.spmcpopslotclaimed.readItem()
-    check complete.value == 77
-    discard complete.extractPinned().unpin()
+    var claimResult = loaded.tryClaimSlot()
+    match claimResult:
+      USPMCPopSlotClaimed(c):
+        let complete = c.readItem()
+        check complete.value == 77
+        discard complete.extractPinned().unpin()
+      USPMCPopSegmentExhausted(_):
+        check false
+      USPMCPopReady(_):
+        check false
 
     freeTestSegment(seg)
 
@@ -88,28 +99,33 @@ suite "SPMC Pop Typestate":
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(-1, moRelaxed)
+    seg.consumerHead.store(-1, moRelaxed)
     seg.tail.store(5, moRelaxed)
     seg.data[0] = 42
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment = seg
     queue.itemCount.store(5, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let claimResult = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
+    var claimResult = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
       .loadSegment()
       .tryClaimSlot()
 
-    check claimResult.kind == sSPMCPopSlotClaimed
-    check claimResult.spmcpopslotclaimed.slot == 0
+    match claimResult:
+      USPMCPopSlotClaimed(c):
+        check c.slot == 0
 
-    let complete = claimResult.spmcpopslotclaimed.readItem()
-    check complete.value == 42
-    check seg.prevConsumerIdx.load(moRelaxed) == 0
-    discard complete.extractPinned().unpin()
+        let complete = c.readItem()
+        check complete.value == 42
+        check seg.consumerHead.load(moRelaxed) == 0
+        discard complete.extractPinned().unpin()
+      USPMCPopSegmentExhausted(_):
+        check false
+      USPMCPopReady(_):
+        check false
 
     freeTestSegment(seg)
 
@@ -118,27 +134,33 @@ suite "SPMC Pop Typestate":
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(4, moRelaxed)
+    seg.consumerHead.store(4, moRelaxed)
     seg.tail.store(5, moRelaxed)
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment = seg
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let claimResult = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
+    var claimResult = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
       .loadSegment()
       .tryClaimSlot()
 
-    check claimResult.kind == sSPMCPopSegmentExhausted
+    match claimResult:
+      USPMCPopSegmentExhausted(f):
+        var advanceResult = f.advanceSegment()
 
-    let advanceResult = claimResult.spmcpopsegmentexhausted.advanceSegment()
-
-    check advanceResult.kind == sSPMCPopEmpty
-
-    discard advanceResult.spmcpopempty.extractPinned().unpin()
+        match advanceResult:
+          USPMCPopEmpty(e):
+            discard e.extractPinned().unpin()
+          USPMCPopReady(_):
+            check false
+      USPMCPopSlotClaimed(_):
+        check false
+      USPMCPopReady(_):
+        check false
 
     freeTestSegment(seg)
 
@@ -147,32 +169,41 @@ suite "SPMC Pop Typestate":
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(2, moRelaxed)
+    seg.consumerHead.store(2, moRelaxed)
     seg.tail.store(10, moRelaxed)
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment = seg
     queue.itemCount.store(5, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
     let loaded = startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
 
-    check loaded.prevConsumerIdx == 2
+    check loaded.consumerHead == 2
 
-    # Simulate another thread advancing prevConsumerIdx
-    discard seg.prevConsumerIdx.fetchAdd(1, moRelaxed) # Now 3
+    # Simulate another thread advancing consumerHead
+    discard seg.consumerHead.fetchAdd(1, moRelaxed) # Now 3
 
     # tryClaimSlot should detect CAS failure and return Ready
-    let claimResult = loaded.tryClaimSlot()
-    check claimResult.kind == sSPMCPopReady
-
-    # Clean up - do a successful operation
-    seg.data[4] = 99
-    let claimResult2 = claimResult.spmcpopready.loadSegment().tryClaimSlot()
-    check claimResult2.kind == sSPMCPopSlotClaimed
-    discard claimResult2.spmcpopslotclaimed.readItem().extractPinned().unpin()
+    var claimResult = loaded.tryClaimSlot()
+    match claimResult:
+      USPMCPopReady(r):
+        # Clean up - do a successful operation
+        seg.data[4] = 99
+        var claimResult2 = r.loadSegment().tryClaimSlot()
+        match claimResult2:
+          USPMCPopSlotClaimed(c):
+            discard c.readItem().extractPinned().unpin()
+          USPMCPopSegmentExhausted(_):
+            check false
+          USPMCPopReady(_):
+            check false
+      USPMCPopSlotClaimed(_):
+        check false
+      USPMCPopSegmentExhausted(_):
+        check false
 
     freeTestSegment(seg)
 
@@ -181,7 +212,7 @@ suite "SPMC Pop Typestate":
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.prevConsumerIdx.store(-1, moRelaxed)
+    seg.consumerHead.store(-1, moRelaxed)
     seg.tail.store(3, moRelaxed)
     seg.data[0] = 42
     seg.data[1] = 43
@@ -189,22 +220,28 @@ suite "SPMC Pop Typestate":
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg
+    queue.headSegment.store(seg, moRelaxed)
     queue.tailSegment = seg
     queue.itemCount.store(3, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let claimResult = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
+    var claimResult = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
       .loadSegment()
       .tryClaimSlot()
 
-    let complete = claimResult.spmcpopslotclaimed.readItem()
+    match claimResult:
+      USPMCPopSlotClaimed(c):
+        let complete = c.readItem()
 
-    check complete.value == 42
-    check seg.prevConsumerIdx.load(moRelaxed) == 0
-    check queue.itemCount.load(moRelaxed) == 2
+        check complete.value == 42
+        check seg.consumerHead.load(moRelaxed) == 0
+        check queue.itemCount.load(moRelaxed) == 2
 
-    discard complete.extractPinned().unpin()
+        discard complete.extractPinned().unpin()
+      USPMCPopSegmentExhausted(_):
+        check false
+      USPMCPopReady(_):
+        check false
 
     freeTestSegment(seg)
 
@@ -214,33 +251,40 @@ suite "SPMC Pop Typestate":
 
     var seg1 = newTestSegment()
     var seg2 = newTestSegment()
-    seg1.prevConsumerIdx.store(63, moRelaxed)
+    seg1.consumerHead.store(63, moRelaxed)
     seg1.tail.store(64, moRelaxed)
     seg1.next.store(seg2, moRelease)
-    seg2.prevConsumerIdx.store(-1, moRelaxed)
+    seg2.consumerHead.store(-1, moRelaxed)
     seg2.tail.store(3, moRelaxed)
     seg2.data[0] = 100
 
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment = seg1
+    queue.headSegment.store(seg1, moRelaxed)
     queue.tailSegment = seg2
     queue.itemCount.store(3, moRelaxed)
     queue.segments.store(2, moRelaxed)
 
-    let claimResult = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
+    var claimResult = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
       .loadSegment()
       .tryClaimSlot()
 
-    check claimResult.kind == sSPMCPopSegmentExhausted
+    match claimResult:
+      USPMCPopSegmentExhausted(f):
+        var advanceResult = f.advanceSegment()
 
-    let advanceResult = claimResult.spmcpopsegmentexhausted.advanceSegment()
-
-    check advanceResult.kind == sSPMCPopReady
-
-    # Note: Unlike MPSC, SPMC doesn't update headSegment during advanceSegment
-    # The consumer needs to coordinate segment advancement at a higher level
-    # This test just verifies the typestate transition works correctly
+        match advanceResult:
+          USPMCPopReady(_):
+            # Note: Unlike MPSC, SPMC doesn't update headSegment during advanceSegment
+            # The consumer needs to coordinate segment advancement at a higher level
+            # This test just verifies the typestate transition works correctly
+            discard
+          USPMCPopEmpty(_):
+            check false
+      USPMCPopSlotClaimed(_):
+        check false
+      USPMCPopReady(_):
+        check false
 
     freeTestSegment(seg1)
     freeTestSegment(seg2)

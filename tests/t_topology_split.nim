@@ -139,9 +139,11 @@ suite "topology split: bench_mpmc (Task 2.5)":
         check node.hasKey(slug)
         check node[slug]["throughput_ops_ms"]["value"].getFloat() > 0.0
     check node.hasKey("lockfreequeues_mupmuc/mpmc/8p8c")
-    # Sipmuc — single producer, multi consumer, lives under mpmc per design 2.4.
+    # Sipmuc — single producer, multi consumer. v4.2.0 reclassified
+    # sipmuc onto the first-class SPMC topology axis (`tSpmc`) so the
+    # slug shape changed from `.../mpmc/1pXc` to `.../spmc/1pXc`.
     for c in [1, 2, 4]:
-      let slug = "lockfreequeues_sipmuc/mpmc/1p" & $c & "c"
+      let slug = "lockfreequeues_sipmuc/spmc/1p" & $c & "c"
       check node.hasKey(slug)
       check node[slug]["throughput_ops_ms"]["value"].getFloat() > 0.0
     # Channels (Nim system Channel) — full {1,2,4}p{1,2,4}c grid.
@@ -175,10 +177,12 @@ suite "topology split: bench_unbounded (Task 2.6)":
     let node = parseBmf(bmf)
     # Sipsic unbounded: spsc only, 1p1c.
     check node.hasKey("lockfreequeues_unbounded_sipsic/spsc_unbounded/1p1c")
-    # Sipmuc unbounded: 1 producer × {1,2,4} consumers.
+    # Sipmuc unbounded: 1 producer × {1,2,4} consumers. v4.2.0 moved
+    # the topology axis from `mpmc_unbounded` to `spmc_unbounded` to
+    # match the bounded sipmuc reclassification (Decision A1).
     for c in [1, 2, 4]:
       check node.hasKey(
-        "lockfreequeues_unbounded_sipmuc/mpmc_unbounded/1p" & $c & "c")
+        "lockfreequeues_unbounded_sipmuc/spmc_unbounded/1p" & $c & "c")
     # Mupsic unbounded: {1,2,4} producers × 1 consumer.
     for p in [1, 2, 4]:
       check node.hasKey(

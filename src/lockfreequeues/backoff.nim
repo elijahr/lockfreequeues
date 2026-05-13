@@ -1,29 +1,50 @@
 ## lockfreequeues/backoff
 ##
 ## CAS-retry backoff policy for lockfreequeues' typestate retry loops.
-## Built on debra's `cpuPause` and `schedYield` primitives. Two helpers:
+## Built on debra's `cpuPause` and `schedYield` primitives. Three helpers:
 ##
-##   * `backoffOnRetry`     - exponential backoff on CAS-failure retry.
-##                            Doubles spin count each call up to MaxSpin;
-##                            once spins reach YieldThreshold, also calls
-##                            `schedYield` to release the CPU quantum.
-##                            Use at every `continue` after a failed
-##                            `tryClaim` / `compareExchange` in a
-##                            retry-until-success loop.
+##   * `backoffOnRetry`         - exponential backoff on CAS-failure retry.
+##                                Doubles spin count each call up to
+##                                MaxSpin; once spins reach YieldThreshold,
+##                                also calls `schedYield` to release the
+##                                CPU quantum. Use at every `continue`
+##                                after a failed `tryClaim` /
+##                                `compareExchange` in a retry-until-
+##                                success loop where the contended
+##                                resource is "the typestate's own CAS"
+##                                AND the wait may be unbounded under
+##                                pathological contention.
 ##
-##   * `backoffOnPeerWait`  - cpuPause-only stateless backoff for short
-##                            peer-completion waits (e.g. spinning on a
-##                            committed flag set by a peer thread). No
-##                            syscall, no state: peer publication latency
-##                            is typically shorter than `sched_yield`'s
-##                            ~200ns-1us cost on Linux.
+##   * `backoffOnPeerWait`      - cpuPause-only stateless backoff for
+##                                short peer-completion waits (e.g.
+##                                spinning on a committed flag set by a
+##                                peer thread). No syscall, no state: peer
+##                                publication latency is typically shorter
+##                                than `sched_yield`'s ~200ns-1us cost on
+##                                Linux.
+##
+##   * `backoffOnCASLossRetry`  - cpuPause-only stateless backoff for
+##                                CAS-loss-retry sites: the caller
+##                                attempted its own CAS, lost, and will
+##                                immediately retry on the next iteration.
+##                                The peer that won is making progress, so
+##                                releasing the OS quantum costs more than
+##                                it saves. Today implemented identically
+##                                to `backoffOnPeerWait` (both call
+##                                `cpuPause()` once); the two helpers are
+##                                deliberately split by call-site
+##                                semantics so they can be tuned
+##                                independently in the future without
+##                                churning every caller. Each call site
+##                                carries a one-line classification
+##                                comment to make the intent grep-able.
 ##
 ## State-passing pattern: `backoffOnRetry` callers declare
 ## `var spins = InitialSpin` BEFORE entering the retry loop and pass it
 ## by `var` reference; the helper mutates in place. `backoffOnPeerWait`
-## takes no arguments (stateless). The caller's success path adds zero
-## instructions (helpers are only called on the failure edge, not per
-## loop iteration unconditionally).
+## and `backoffOnCASLossRetry` take no arguments (stateless). The
+## caller's success path adds zero instructions (helpers are only called
+## on the failure edge, not per loop iteration unconditionally).
 ##
 ## Constants are tunable via `-d:LockfreeQueuesInitialSpin=N` etc. if a
 ## downstream user needs to retune for a specific workload, but defaults
@@ -85,4 +106,24 @@ proc backoffOnPeerWait*() {.inline.} =
   ## Caller pattern (e.g. unbounded segment-local committed flag):
   ##   while not seg.committed[i].load(moAcquire):
   ##     backoffOnPeerWait()
+  cpuPause()
+
+proc backoffOnCASLossRetry*() {.inline.} =
+  ## Called on the failure path of a self-CAS-retry loop where the
+  ## caller lost its own CAS to a peer that is itself making progress.
+  ## Single cpuPause per call (no syscall, no state, no exponential
+  ## growth): yielding the OS quantum here delays our own retry without
+  ## helping the peer, so cpuPause-only is strictly cheaper.
+  ##
+  ## Byte-identical to `backoffOnPeerWait` today; kept distinct so each
+  ## call site is grep-able by intent and so the two helpers can be
+  ## tuned independently in future without re-attributing call sites.
+  ##
+  ## Caller pattern:
+  ##   while true:
+  ##     ...
+  ##     if not someAtomic.compareExchange(...):
+  ##       backoffOnCASLossRetry()
+  ##       continue
+  ##     ...
   cpuPause()

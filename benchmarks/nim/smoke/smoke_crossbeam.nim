@@ -1,14 +1,16 @@
 ## Compile-and-run smoke for the Crossbeam adapters.
 ##
-## Used by ``bench-comparison.yml`` (Track 3 §3.13) as a sanity check that
-## the cdylib is on the search path before the full bench binaries run.
+## Used by ``bench.yml`` (v4.2.0 Stage 1, originally Track 3 §3.13 in
+## the retired separate crossbeam comparison workflow) as a sanity
+## check that the cdylib is on the search path before the full bench
+## binaries run.
 ##
 ## Build:
 ##   cargo build --release --manifest-path \
-##     benchmarks/rust/bench-ffi-crossbeam/Cargo.toml
+##     benchmarks/rust/comparison/Cargo.toml
 ##   nim c -d:adapter_crossbeam_array_queue_available \
 ##         -d:adapter_crossbeam_seg_queue_available \
-##         --passL:-Wl,-rpath,benchmarks/rust/bench-ffi-crossbeam/target/release \
+##         --passL:-Wl,-rpath,benchmarks/rust/comparison/target/release \
 ##         benchmarks/nim/smoke/smoke_crossbeam.nim
 ##
 ## (the ``-rpath`` is only needed for run-time dlopen on Linux; on macOS

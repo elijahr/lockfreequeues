@@ -71,8 +71,11 @@ proc loadSegment*[T; S: static int](
     ready: sink USPSCPopReady[T, S]
 ): USPSCPopSegmentLoaded[T, S] {.transition.} =
   ## Load current head segment and positions.
+  ## Mirrors production memory ordering: SPSC consumer is the only writer
+  ## to headSegment, but acquire load picks up the producer's release stores
+  ## to seg.next when the consumer crosses segments.
   let ctx = USPSCPopContext[T, S](ready)
-  let seg = ctx.queue.headSegment
+  let seg = ctx.queue.headSegment.load(moAcquire)
   let head = seg.head.load(moRelaxed)
   let tail = seg.tail.load(moAcquire)
 
@@ -89,8 +92,18 @@ proc checkSlot*[T; S: static int](
         queue: loaded.queue, segment: loaded.segment, slot: loaded.head
       )
   else:
-    USPSCSlotCheck[T, S] ->
-      USPSCPopSegmentExhausted[T, S](queue: loaded.queue, segment: loaded.segment)
+    # F1 (Window A close, mirrors bb50bc9 in unbounded_spmc_pop.nim:168):
+    # re-load tail with moAcquire so a stale loadSegment snapshot doesn't
+    # cause us to advance past slots the producer just published.
+    let freshTail = loaded.segment.tail.load(moAcquire)
+    if loaded.head < freshTail:
+      USPSCSlotCheck[T, S] ->
+        USPSCPopSlotAvailable[T, S](
+          queue: loaded.queue, segment: loaded.segment, slot: loaded.head
+        )
+    else:
+      USPSCSlotCheck[T, S] ->
+        USPSCPopSegmentExhausted[T, S](queue: loaded.queue, segment: loaded.segment)
 
 # Advance segment transition
 proc advanceSegment*[T; S: static int](
@@ -98,14 +111,31 @@ proc advanceSegment*[T; S: static int](
 ): USPSCAdvanceResult[T, S] {.transition.} =
   ## Try to advance to next segment.
   ## Returns Ready if next segment exists, Empty otherwise.
-  ## Note: Caller is responsible for freeing the old segment (returned in oldSegment field).
+  ## Note: Caller is responsible for freeing the old segment (the facade
+  ## tracks this via oldSegment lifetime; this verb only updates queue state).
+  ## Mirrors production memory ordering: publish the head-segment advance
+  ## via release store so any future readers see the up-to-date head.
   let nextSeg = exhausted.segment.next.load(moAcquire)
+
+  # F1' (Window B close): re-confirm exhaustion before committing the head-
+  # segment advance. moAcquire on .next above synchronises-with producer's
+  # release-store on .next, transitively ordering all prior producer writes
+  # including tail.store on this segment. If the producer published more
+  # items between checkSlot and now, abort the advance and let the caller
+  # retry on the same segment. Architectural mirror of bb50bc9's commit-
+  # point defense (which lives in the SPMC facade because SPMC's commit is
+  # a CAS in the facade); SPSC's commit is a plain store inside this verb.
+  let freshTail = exhausted.segment.tail.load(moAcquire)
+  let head = exhausted.segment.head.load(moRelaxed)
+  if freshTail > head:
+    return USPSCAdvanceResult[T, S] ->
+      USPSCPopReady[T, S](USPSCPopContext[T, S](queue: exhausted.queue))
 
   if nextSeg == nil:
     return USPSCAdvanceResult[T, S] -> USPSCPopEmpty[T, S](queue: exhausted.queue)
 
   # Advance head segment (caller should dealloc old segment)
-  exhausted.queue.headSegment = nextSeg
+  exhausted.queue.headSegment.store(nextSeg, moRelease)
   discard exhausted.queue.segments.fetchSub(1, moRelaxed)
 
   USPSCAdvanceResult[T, S] ->

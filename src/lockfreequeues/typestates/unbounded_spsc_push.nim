@@ -7,17 +7,21 @@ import ../atomic_dsl
 import typestates
 
 type
-  # Forward declare Segment type (matches parent module)
+  # Forward declare Segment type (matches parent module). Field set, types,
+  # and {.align: CacheLineBytes.} pragmas mirror production exactly so the
+  # facade's per-Segment-field offsetOf static-asserts pass.
   Segment*[S: static int, T] = object
     data*: array[S, T]
-    next*: Atomic[ptr Segment[S, T]]
-    head*: Atomic[int]
-    tail*: Atomic[int]
+    next* {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
+    head* {.align: CacheLineBytes.}: Atomic[int]
+    tail* {.align: CacheLineBytes.}: Atomic[int]
 
-  # Forward declare queue type (no DEBRA for SPSC)
+  # Forward declare queue type (no DEBRA for SPSC). Atomic[ptr Segment] on
+  # both head/tail Segment pointers per design §3 Item 2 (SPSC row); align
+  # pragmas mirror production for facade offsetOf-equivalence.
   UnboundedSipsicBase*[S: static int, T] = object
-    headSegment*: ptr Segment[S, T]
-    tailSegment*: ptr Segment[S, T]
+    headSegment* {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
+    tailSegment* {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
     itemCount*: Atomic[int]
     segments*: Atomic[int]
 
@@ -72,8 +76,10 @@ proc loadSegment*[T; S: static int](
     ready: sink SPSCPushReady[T, S]
 ): SPSCPushSegmentLoaded[T, S] {.transition.} =
   ## Load current tail segment and tail position.
+  ## Mirrors production memory ordering: tailSegment is consumed by the
+  ## producer (only mutator), so a relaxed load is sufficient.
   let ctx = SPSCPushContext[T, S](ready)
-  let seg = ctx.queue.tailSegment
+  let seg = ctx.queue.tailSegment.load(moRelaxed)
   let tail = seg.tail.load(moRelaxed)
 
   SPSCPushSegmentLoaded[T, S](queue: ctx.queue, segment: seg, tail: tail)
@@ -97,8 +103,12 @@ proc allocateNewSegment*[T; S: static int](
     full: sink SPSCPushSegmentFull[T, S], newSegment: ptr Segment[S, T]
 ): SPSCPushReady[T, S] {.transition.} =
   ## Link new segment and return to Ready state to retry.
+  ## Mirrors production memory ordering: publish the new segment via
+  ## seg.next first (release) so a concurrent consumer that observes the
+  ## new next pointer also sees the segment's initialized fields, then
+  ## publish via tailSegment with release semantics.
   full.segment.next.store(newSegment, moRelease)
-  full.queue.tailSegment = newSegment
+  full.queue.tailSegment.store(newSegment, moRelease)
   discard full.queue.segments.fetchAdd(1, moRelaxed)
 
   SPSCPushReady[T, S](SPSCPushContext[T, S](queue: full.queue))

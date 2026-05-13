@@ -99,8 +99,10 @@
     spsc: 'SPSC',
     mpsc: 'MPSC',
     mpmc: 'MPMC',
+    spmc: 'SPMC',
     spsc_unbounded: 'SPSC (unbounded)',
     mpsc_unbounded: 'MPSC (unbounded)',
+    spmc_unbounded: 'SPMC (unbounded)',
     mpmc_unbounded: 'MPMC (unbounded)',
   });
 
@@ -129,6 +131,9 @@
     { id: 'bench-throughput-mpsc',           label: 'MPSC',
       includes: (topology) => topology === 'mpsc'
                               || topology === 'mpsc_unbounded' },
+    { id: 'bench-throughput-spmc',           label: 'SPMC',
+      includes: (topology) => topology === 'spmc'
+                              || topology === 'spmc_unbounded' },
     { id: 'bench-throughput-mpmc-bounded',   label: 'MPMC (bounded)',
       includes: (topology) => topology === 'mpmc' },
     { id: 'bench-throughput-mpmc-unbounded', label: 'MPMC (unbounded)',
@@ -166,6 +171,64 @@
   }
   function displayLabel(library) {
     return library + (isBlocking(library) ? ' *' : '');
+  }
+
+  // ── module: theme helpers ───────────────────────────────────────────
+
+  // Read the live computed text color from the Material content area.
+  // Material's theme picker swaps the `data-md-color-scheme` attribute
+  // on `<html>`, which cascades into the content area's CSS custom
+  // properties; reading via `getComputedStyle` therefore picks up the
+  // current scheme automatically. The fallback `'#000'` covers test
+  // environments where `getComputedStyle` returns an empty color.
+  function themeStroke() {
+    const probe = document.querySelector('.md-content') || document.body;
+    if (!probe) return '#000';
+    const c = getComputedStyle(probe).color;
+    return c || '#000';
+  }
+
+  function themeFont() {
+    const probe = document.querySelector('.md-content') || document.body;
+    if (!probe) return 'system-ui, sans-serif';
+    const f = getComputedStyle(probe).fontFamily;
+    return f || 'system-ui, sans-serif';
+  }
+
+  // Theme-aware axis config injected into every uPlot axis. Grid stroke
+  // is a neutral mid-gray that reads in both light and dark schemes;
+  // axis stroke + font follow Material's content typography.
+  function themedAxisDefaults() {
+    return {
+      stroke: themeStroke(),
+      font: themeFont(),
+      grid: { stroke: 'rgba(127,127,127,0.15)' },
+    };
+  }
+
+  // Module-scoped registry of panel rebuilders. Each `render*Panel`
+  // function pushes its `rebuild` closure here so the theme observer
+  // can rebuild every active uPlot canvas in response to a Material
+  // theme toggle. Reset at the top of `render()` to avoid stacking
+  // stale closures across re-renders.
+  let panelRebuilds = [];
+
+  let __themeObserverInstalled = false;
+  function installThemeObserver(rebuildAll) {
+    if (__themeObserverInstalled) return;
+    if (typeof MutationObserver === 'undefined') return;
+    __themeObserverInstalled = true;
+    const obs = new MutationObserver(() => rebuildAll());
+    obs.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-md-color-scheme', 'data-md-color-primary'],
+    });
+  }
+
+  function rebuildAllPanels() {
+    for (const fn of panelRebuilds) {
+      try { fn(); } catch (_) { /* swallow per-panel errors */ }
+    }
   }
 
   // ── module: helpers ─────────────────────────────────────────────────
@@ -332,6 +395,36 @@
     return line;
   }
 
+  // Build the offscreen ARIA companion table for the hero canvas. Screen
+  // readers consume the rows via `aria-describedby`; the table is
+  // visually offscreen but kept in the accessibility tree.
+  function buildHeroAriaTable(rows) {
+    const table = el('table', {
+      id: 'bench-hero-aria-table',
+      class: 'bench-hero-aria-table',
+      'aria-hidden': 'false',
+      style: 'position: absolute; left: -9999px; top: auto; ' +
+        'width: 1px; height: 1px; overflow: hidden;',
+    });
+    const thead = el('thead', null,
+      el('tr', null,
+        el('th', null, 'Library'),
+        el('th', null, 'Throughput (ops/ms)')));
+    const tbody = el('tbody');
+    for (const r of rows) {
+      tbody.appendChild(el('tr', null,
+        el('td', null, r.library),
+        el('td', null, r.value.toFixed(1))));
+    }
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    return table;
+  }
+
+  // Hero panel renderer: canvas-rendered uPlot vertical bars when the
+  // library is available, with an offscreen ARIA companion table for
+  // screen-reader consumers. Falls back to DOM `<ol>` bars (the
+  // pre-canvas rendering) when uPlot or `paths.bars` is unavailable.
   function renderHero(host, byTopology) {
     host.innerHTML = '';
     const pick = pickHeroShape(byTopology);
@@ -371,24 +464,47 @@
       return;
     }
 
-    // Order: lockfreequeues bars first (descending value within the
-    // family), then alternatives sorted by descending value so the
-    // strongest non-lockfreequeues entry sits next to the lockfreequeues
-    // block for easy visual comparison.
-    rows.sort((a, b) => {
-      const aLfq = isLockfreequeues(a.library) ? 0 : 1;
-      const bLfq = isLockfreequeues(b.library) ? 0 : 1;
-      if (aLfq !== bLfq) return aLfq - bLfq;
-      return b.value - a.value;
-    });
-    const max = Math.max.apply(null, rows.map((r) => r.value));
+    // Sort descending by mean throughput so the strongest library sits
+    // leftmost. Ties are broken alphabetically for determinism.
+    rows.sort((a, b) => (b.value - a.value)
+      || a.library.localeCompare(b.library));
+    const sawBlocking = rows.some((r) => isBlocking(r.library));
 
+    const canBars =
+      typeof window.uPlot === 'function'
+      && window.uPlot.paths
+      && typeof window.uPlot.paths.bars === 'function';
+
+    if (canBars) {
+      renderHeroCanvas(host, rows, pick);
+    } else {
+      // Escape hatch (impl plan line 338): keep the legacy DOM
+      // `<ol>`-bar renderer when uPlot bars are unavailable.
+      renderHeroDomBars(host, rows, pick);
+    }
+
+    // Y-axis equivalent: a small caption under the bars naming the
+    // unit. Matches the throughput panels' "throughput (ops/ms)" label.
+    host.appendChild(el('p', { class: 'bench-hero-axis-caption' },
+      'throughput (ops/ms)'));
+
+    // Always emit the legend with a stable structure, regardless of
+    // whether a blocking library appears. Blocking rows carry a
+    // "(blocking)" badge; the legend itself documents what the dotted
+    // bar means, so there is no inline footnote.
+    host.appendChild(buildHeroLegend(rows, sawBlocking));
+
+    // Offscreen ARIA table: every render path gets one so screen
+    // readers can read the values regardless of canvas vs. DOM bars.
+    host.appendChild(buildHeroAriaTable(rows));
+  }
+
+  function renderHeroDomBars(host, rows, pick) {
+    const max = Math.max.apply(null, rows.map((r) => r.value));
     const list = el('ol', { class: 'bench-hero-bars' });
-    let sawBlocking = false;
     for (const r of rows) {
       const pct = max > 0 ? (r.value / max * 100) : 0;
       const blocking = isBlocking(r.library);
-      if (blocking) sawBlocking = true;
       const color = getColor(r.library);
       const barClass = 'bench-hero-bar' +
         (blocking ? ' bench-hero-bar-blocking' : '');
@@ -411,18 +527,129 @@
       list.appendChild(li);
     }
     host.appendChild(list);
+  }
 
-    // Y-axis equivalent for a horizontal-bar layout: a small caption
-    // under the bars naming the unit. Matches the throughput panels'
-    // "throughput (ops/ms)" Y-axis label.
-    host.appendChild(el('p', { class: 'bench-hero-axis-caption' },
-      'throughput (ops/ms)'));
+  // Tooltip plugin for the hero canvas: indexes back into the rows to
+  // surface "<library>: <value> ops/ms (±stddev) — <topology shape>".
+  function heroTooltipPlugin(rows, pick) {
+    let tip;
+    return {
+      hooks: {
+        init: (u) => {
+          tip = el('div', { class: 'bench-chart-tooltip' });
+          tip.style.display = 'none';
+          u.over.appendChild(tip);
+        },
+        setCursor: (u) => {
+          const { idx, left, top } = u.cursor;
+          if (idx == null || left < 0 || top < 0) {
+            if (tip) tip.style.display = 'none';
+            return;
+          }
+          const r = rows[idx];
+          if (!r) { tip.style.display = 'none'; return; }
+          tip.innerHTML = '<strong>' + escapeHtml(r.library) + '</strong><br>' +
+            escapeHtml(heroRowTitle(r.library, r, pick.topology, pick.shape));
+          tip.style.display = 'block';
+          tip.style.left = left + 12 + 'px';
+          tip.style.top = top + 12 + 'px';
+        },
+      },
+    };
+  }
 
-    // Always emit the legend with a stable structure, regardless of
-    // whether a blocking library appears. Blocking rows carry a
-    // "(blocking)" badge; the legend itself documents what the dotted
-    // bar means, so there is no inline footnote.
-    host.appendChild(buildHeroLegend(rows, sawBlocking));
+  // Render the hero panel as a uPlot canvas with one series per
+  // library (each carrying a single non-null value at its own x slot)
+  // so each bar can pick up its own stroke/fill color and dashed-stroke
+  // for blocking libraries.
+  function renderHeroCanvas(host, rows, pick) {
+    const wrap = el('div', { class: 'bench-hero-canvas-wrap' });
+    const plotMount = el('div', {
+      class: 'bench-chart-plot bench-hero-plot',
+      role: 'img',
+      'aria-describedby': 'bench-hero-aria-table',
+      'aria-label': 'Hero throughput chart, ' + rows.length +
+        ' libraries, see offscreen table for values',
+    });
+    wrap.appendChild(plotMount);
+    host.appendChild(wrap);
+
+    const xLabels = rows.map((r) => r.library);
+    const xs = rows.map((_, i) => i + 1);
+    // One series per library: each series carries a single non-null
+    // value at its own slot so it can render its own colored bar.
+    const seriesData = rows.map((r, i) =>
+      rows.map((_, j) => (i === j ? r.value : null))
+    );
+    const data = [xs, ...seriesData];
+
+    let plot;
+    const buildOpts = () => {
+      const bars = barsPath({ size: [0.85, 60, 1], gap: 4 });
+      const series = [{ label: 'library' }].concat(
+        rows.map((r) => {
+          const blocking = isBlocking(r.library);
+          const stroke = getColor(r.library);
+          const opt = {
+            label: displayLabel(r.library),
+            stroke,
+            width: 2,
+            points: { show: false },
+            spanGaps: false,
+            fill: blocking ? 'transparent' : stroke,
+          };
+          if (bars) opt.paths = bars;
+          if (blocking) opt.dash = [6, 4];
+          return opt;
+        })
+      );
+      return {
+        width: plotMount.clientWidth || (host.clientWidth || 800),
+        height: 320,
+        series,
+        scales: {
+          x: { time: false },
+          y: { distr: 1 },
+        },
+        axes: [
+          Object.assign({}, themedAxisDefaults(), {
+            values: (_, ticks) => ticks.map((t) => xLabels[t - 1] || ''),
+            label: 'library',
+          }),
+          Object.assign({}, themedAxisDefaults(), {
+            label: 'throughput (ops/ms)',
+            values: (_, ticks) =>
+              ticks.map((v) => (v >= 1000 ? v.toExponential(1) : '' + v)),
+          }),
+        ],
+        cursor: { drag: { x: false, y: false } },
+        legend: { show: false },
+        plugins: [heroTooltipPlugin(rows, pick)],
+      };
+    };
+
+    const rebuild = () => {
+      if (plot) plot.destroy();
+      plotMount.innerHTML = '';
+      plot = new window.uPlot(buildOpts(), data, plotMount);
+    };
+    rebuild();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => {
+        if (plot) {
+          plot.setSize({
+            width: plotMount.clientWidth || (host.clientWidth || 800),
+            height: 320,
+          });
+        }
+      });
+      ro.observe(plotMount);
+    }
+
+    // Register hero rebuild with the module-scoped panel registry so
+    // the theme observer can refresh axis stroke/font on theme toggle.
+    panelRebuilds.push(rebuild);
   }
 
   function buildHeroLegend(rows, sawBlocking) {
@@ -560,17 +787,39 @@
     };
   }
 
+  // Build a uPlot vertical-bar paths function. Categorical X axis pairs
+  // with a (log or linear) Y axis; non-blocking libraries render as
+  // filled bars, blocking libraries get a stroked-but-transparent bar
+  // (with the dashed stroke applied at the series level) so they read
+  // as outlined rather than solid.
+  function barsPath(opts) {
+    if (!window.uPlot || !window.uPlot.paths || !window.uPlot.paths.bars) {
+      return null;
+    }
+    return window.uPlot.paths.bars(opts || { size: [0.6, 60, 1], gap: 2 });
+  }
+
   function makeThroughputOpts(host, libraries, xLabels, logScale, panelLabel) {
+    const bars = barsPath({ size: [0.6, 60, 1], gap: 2 });
     const series = [{ label: 'shape' }].concat(
       libraries.map((lib) => {
+        const stroke = getColor(lib.library);
+        const blocking = isBlocking(lib.library);
         const opt = {
           label: displayLabel(lib.library),
-          stroke: getColor(lib.library),
+          stroke,
           width: 2,
-          points: { show: true, size: 6 },
+          // Bars carry their own footprint; per-point dots add visual
+          // noise on a categorical bar chart, so disable them.
+          points: { show: false },
           spanGaps: false,
+          // Blocking libraries get a transparent fill so the dashed
+          // stroke reads as an outlined bar; non-blocking libraries
+          // fill with the same hue as the stroke for solid bars.
+          fill: blocking ? 'transparent' : stroke,
         };
-        if (isBlocking(lib.library)) opt.dash = [6, 4];
+        if (bars) opt.paths = bars;
+        if (blocking) opt.dash = [6, 4];
         return opt;
       })
     );
@@ -584,15 +833,24 @@
         y: { distr: logScale ? 3 : 1 },
       },
       axes: [
-        {
+        Object.assign({}, themedAxisDefaults(), {
           values: (_, ticks) => ticks.map((t) => xLabels[t - 1] || ''),
           label: 'producer/consumer shape (P×C)',
-        },
-        {
+        }),
+        Object.assign({}, themedAxisDefaults(), {
           label: 'throughput (ops/ms)' + (logScale ? ' — log scale' : ''),
+          // On log-scale axes, only major (power-of-10) tick labels
+          // render. Null/non-finite values and minor ticks (e.g.
+          // 2e3, 5e3 between 1e3 and 1e4) collapse to empty strings
+          // so the axis stays clean and readable.
           values: (_, ticks) =>
-            ticks.map((v) => (v >= 1000 ? v.toExponential(1) : '' + v)),
-        },
+            ticks.map((v) => {
+              if (v == null || !Number.isFinite(v)) return '';
+              const log = Math.log10(v);
+              if (Math.abs(log - Math.round(log)) > 1e-9) return '';
+              return v >= 1000 ? v.toExponential(1) : '' + v;
+            }),
+        }),
       ],
       cursor: { drag: { x: false, y: false } },
       legend: { show: false },
@@ -696,6 +954,10 @@
     host.appendChild(legend);
     rebuild();
     attachResizeObserver(plotMount, () => plot);
+    // Register the rebuild closure with the module-scoped panel
+    // registry so the theme observer can reflow this panel when the
+    // user toggles Material's color scheme.
+    panelRebuilds.push(rebuild);
   }
 
   // ── module: latency panel (uPlot stepped ladder) ────────────────────
@@ -835,15 +1097,23 @@
         y: { distr: 3 },
       },
       axes: [
-        {
+        Object.assign({}, themedAxisDefaults(), {
           values: (_, ticks) => ticks.map((t) => xLabels[t - 1] || ''),
           label: 'percentile',
-        },
-        {
+        }),
+        Object.assign({}, themedAxisDefaults(), {
           label: 'latency (ns) [log]',
+          // On log-scale axes, only major (power-of-10) tick labels
+          // render. See `makeThroughputOpts` for the same suppression
+          // logic — keeps the axis clean across both panel types.
           values: (_, ticks) =>
-            ticks.map((v) => (v >= 1000 ? v.toExponential(1) : '' + v)),
-        },
+            ticks.map((v) => {
+              if (v == null || !Number.isFinite(v)) return '';
+              const log = Math.log10(v);
+              if (Math.abs(log - Math.round(log)) > 1e-9) return '';
+              return v >= 1000 ? v.toExponential(1) : '' + v;
+            }),
+        }),
       ],
       cursor: { drag: { x: false, y: false } },
       legend: { show: false },
@@ -946,6 +1216,10 @@
 
     rebuild();
     attachResizeObserver(plotMount, () => plot);
+    // Register the rebuild closure with the module-scoped panel
+    // registry so the theme observer can reflow this panel when the
+    // user toggles Material's color scheme.
+    panelRebuilds.push(rebuild);
   }
 
   // ── module: fallback chain ──────────────────────────────────────────
@@ -1046,6 +1320,10 @@
       document.getElementById('bench-latency');
     if (!hasAnyHost) return;
 
+    // Reset the panel registry on every render so re-renders don't
+    // accumulate stale closures pointing at destroyed plots.
+    panelRebuilds = [];
+
     // Pre-paint the latency panel with the empty-state message so the
     // section isn't blank during fetch (or if fetch fails entirely).
     renderLatencyPanel(document.getElementById('bench-latency'), null);
@@ -1086,6 +1364,11 @@
       document.getElementById('bench-latency'),
       result.data || null
     );
+
+    // Wire the Material theme observer once the panels are mounted
+    // and their rebuild closures are registered. Idempotent — guarded
+    // by a module-scoped flag so re-renders don't multiply observers.
+    installThemeObserver(rebuildAllPanels);
 
     // Hash routing: native scroll-to-id is enough because the IDs match
     // the URL fragments. We just nudge the browser to re-evaluate the

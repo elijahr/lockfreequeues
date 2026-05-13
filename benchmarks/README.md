@@ -28,10 +28,15 @@ regression gate via [Bencher.dev](https://bencher.dev).
   (`smoke_boost.nim`, `smoke_crossbeam.nim`). Each is a 32-item push/pop
   round-trip used by CI to fail fast when a system library or cdylib
   is unavailable, before paying the cost of a full bench compile.
-- `rust/bench-ffi-crossbeam/` - C-ABI cdylib wrapping
-  `crossbeam_queue::ArrayQueue<u64>` and `crossbeam_queue::SegQueue<u64>`.
-  Built with `cargo build --release`; consumed by the Nim Crossbeam
-  adapters via `importc`.
+- `rust/comparison/` - C-ABI cdylib wrapping `crossbeam_queue::ArrayQueue<u64>`,
+  `crossbeam_queue::SegQueue<u64>`, `flume::{bounded,unbounded}::<u64>`, and
+  `kanal::{bounded,unbounded}::<u64>` under strict per-crate symbol prefixes
+  (`crossbeam_*`, `flume_*`, `kanal_*`). Built with
+  `cargo build --release --manifest-path benchmarks/rust/comparison/Cargo.toml`;
+  consumed by the corresponding Nim adapters via `importc`. The crate path
+  was renamed from `bench-ffi-crossbeam` in v4.2.0 Stage 5.2 when flume +
+  kanal were folded into the same shared object so the bench binary only
+  links one cdylib.
 - `merge_bmf.py` - Stateless union of per-binary BMF JSON fragments
   into a single `merged.json` for `bencher run`. Exits 1 on
   `(slug, measure)` collisions naming the colliding inputs.
@@ -170,8 +175,10 @@ are unchanged.
 | Loony | `LoonyQueue` | `mpmc_unbounded` | `-d:adapter_loony_available` | `nimble install loony` |
 | Boost.LockFree | `boost::lockfree::queue` | `mpmc` (bounded) | `-d:adapter_boost_lockfree_queue_available` | `apt install libboost-dev` (requires `nim cpp`) |
 | Boost.LockFree | `boost::lockfree::spsc_queue` | `spsc` (bounded) | `-d:adapter_boost_lockfree_spsc_available` | same as above |
-| Crossbeam | `crossbeam_queue::ArrayQueue` | `mpmc` (bounded) | `-d:adapter_crossbeam_array_queue_available` | `cargo build --release --manifest-path benchmarks/rust/bench-ffi-crossbeam/Cargo.toml` |
+| Crossbeam | `crossbeam_queue::ArrayQueue` | `mpmc` (bounded) | `-d:adapter_crossbeam_array_queue_available` | `cargo build --release --manifest-path benchmarks/rust/comparison/Cargo.toml` |
 | Crossbeam | `crossbeam_queue::SegQueue` | `mpmc_unbounded` | `-d:adapter_crossbeam_seg_queue_available` | same as above |
+| flume | `flume::bounded` / `flume::unbounded` | `mpmc` + `mpmc_unbounded` | `-d:adapter_flume_available` | same as above (consolidated cdylib) |
+| kanal | `kanal::bounded` / `kanal::unbounded` | `spsc` + `mpmc` + `mpmc_unbounded` | `-d:adapter_kanal_available` | same as above (consolidated cdylib) |
 | MoodyCamel | `concurrentqueue::ConcurrentQueue` | `mpmc_unbounded` | `-d:adapter_moodycamel_available` | vendored at `benchmarks/vendor/concurrentqueue/` (requires `nim cpp`) |
 | nimble `threading` | `threading.Chan` | `mpmc` (bounded) | `-d:adapter_threading_channels_available` | `nimble install threading` |
 | Nim `system.Channel` | `system/channels.Channel` | `mpsc` (bounded, blocking-on-full producer\*) | `-d:adapter_nim_channel_available` | none (Nim stdlib) |
@@ -197,19 +204,18 @@ compiler). Per-library obligations are tracked in
 
 ### CI integration
 
-- **`bench.yml`** runs every adapter on every PR using the soft-skip
-  pattern (design §2.6): each library has install → smoke → set-flag
-  stages with `continue-on-error: true`; if install or smoke fails
-  the binary compiles without that adapter and the workflow emits a
-  `::warning title=Adapter skipped::...` annotation. The
-  `workflow_dispatch` event accepts `force_skip_boost` /
+- **`bench.yml`** runs every adapter (including Crossbeam, the only
+  adapter with a Rust toolchain dependency — folded in from the
+  retired comparison workflow in v4.2.0 Stage 1) on every PR using
+  the soft-skip pattern (design §2.6): each library has install →
+  smoke → set-flag stages with `continue-on-error: true`; if install
+  or smoke fails the binary compiles without that adapter and the
+  workflow emits a `::warning title=Adapter skipped::...` annotation.
+  The `workflow_dispatch` event accepts `force_skip_boost` /
   `force_skip_loony` / `force_skip_moodycamel` /
-  `force_skip_threading_channels` / `force_skip_nim_channel`
-  boolean inputs to exercise the skip path manually.
-- **`bench-comparison.yml`** runs Crossbeam (the only adapter with a
-  Rust toolchain dependency) on a nightly cron + `workflow_dispatch`
-  + targeted path pushes to `devel`. It produces a separate Bencher
-  Report dedicated to crossbeam slugs.
+  `force_skip_threading_channels` / `force_skip_nim_channel` /
+  `force_skip_crossbeam` boolean inputs to exercise the skip path
+  manually.
 
 ### Running comparison adapters locally
 
@@ -227,12 +233,12 @@ nim cpp -r -d:release -d:danger --threads:on \
   -d:BenchMpmcMessageCount=100000 -d:BenchMpmcRuns=3 \
   benchmarks/nim/bench_mpmc.nim boost_lockfree_queue
 
-# Crossbeam (Rust cdylib):
+# Crossbeam / flume / kanal (consolidated Rust cdylib):
 cargo build --release \
-  --manifest-path benchmarks/rust/bench-ffi-crossbeam/Cargo.toml
+  --manifest-path benchmarks/rust/comparison/Cargo.toml
 nim c -r -d:release -d:danger --threads:on \
   -d:adapter_crossbeam_array_queue_available \
-  --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
+  --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/comparison/target/release" \
   -d:BenchMpmcMessageCount=100000 -d:BenchMpmcRuns=3 \
   benchmarks/nim/bench_mpmc.nim crossbeam_array_queue
 
@@ -299,13 +305,16 @@ policy). To regenerate:
    `docs/assets/bench-results/example.json` and commit with a message
    that records the source workflow run id, head sha, and run date.
 
-Bench-comparison adapters (Crossbeam, Loony, Boost, MoodyCamel,
-threading.Chan, Nim system.Channel) only run on
-`bench-comparison.yml` (nightly cron); if their slugs are absent from
-the chosen `bench.yml` run, the fixture will not include them and the
-chart will render only the in-house lockfreequeues + nim_channels
-slugs. That is acceptable for the fallback rendering — the live
-`latest.json` carries the full set once snapshots resume.
+Comparison adapters (Crossbeam, Loony, Boost, MoodyCamel,
+threading.Chan, Nim system.Channel) all run on `bench.yml` since
+v4.2.0 Stage 1 consolidated the historical separate crossbeam
+comparison workflow into the regular bench matrix. If any of their
+slugs are absent from the chosen `bench.yml` run (because the
+adapter's install or smoke step soft-skipped), the fixture will not
+include them and the chart will render only the in-house
+lockfreequeues + nim_channels slugs. That is acceptable for the
+fallback rendering — the live `latest.json` carries the full set
+once snapshots resume.
 
 ## Updating the README summary
 

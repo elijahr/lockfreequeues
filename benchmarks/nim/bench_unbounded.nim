@@ -5,7 +5,7 @@
 ## variants at their natural shapes:
 ##
 ##   - UnboundedSipsic (spsc_unbounded): 1p1c only.
-##   - UnboundedSipmuc (mpmc_unbounded, single producer + N consumers):
+##   - UnboundedSipmuc (spmc_unbounded, single producer + N consumers):
 ##     1p{1,2,4}c.
 ##   - UnboundedMupsic (mpsc_unbounded, N producers + 1 consumer):
 ##     {1,2,4}p1c.
@@ -29,11 +29,11 @@
 ##
 ## Slug shapes:
 ##   lockfreequeues_unbounded_sipsic/spsc_unbounded/1p1c
-##   lockfreequeues_unbounded_sipmuc/mpmc_unbounded/1p{1,2,4}c
+##   lockfreequeues_unbounded_sipmuc/spmc_unbounded/1p{1,2,4}c
 ##   lockfreequeues_unbounded_mupsic/mpsc_unbounded/{1,2,4}p1c
 ##   lockfreequeues_unbounded_mupmuc/mpmc_unbounded/{1,2,4}p{1,2,4}c
 
-import std/[atomics, monotimes, options, os, parseopt, sets, strformat,
+import std/[atomics, monotimes, options, os, parseopt, strformat,
             syncio, times]
 import ./bench_common
 import ./adapters/lockfreequeues_unbounded_mupsic_adapter
@@ -57,6 +57,14 @@ when defined(adapter_crossbeam_seg_queue_available):
 # wrapper; nim cpp only.
 when defined(adapter_moodycamel_available):
   import ./adapters/moodycamel_adapter
+
+# v4.2.0 Stage 5.2 Tier 2 Rust comparison adapters: flume + kanal
+# unbounded MPMC channels via the consolidated cdylib.
+when defined(adapter_flume_available):
+  import ./adapters/flume_adapter
+
+when defined(adapter_kanal_available):
+  import ./adapters/kanal_adapter
 
 const
   UnboundedSipsicRuns* {.intdefine.} = 3
@@ -105,12 +113,17 @@ proc usipsicConsumerThread[S: static int; T](
     ctx: ptr USipsicConsumerCtx[S, T]
 ) {.thread.} =
   var local = 0
+  var hb = initHarnessBackoff()
   while local < ctx.count:
     let r = ctx.queue[].pop()
     if r.isSome:
       inc local
+      # Reset the harness-side backoff after each successful pop so
+      # accumulated `spinsConsumed` from a prior empty-pop streak does
+      # not bias the next contention window into yielding too early.
+      hb = initHarnessBackoff()
     else:
-      backoffOnPeerWait()
+      hb.backoff()
 
 proc runOneUSipsicRun[S: static int; T](
     queue: ptr UnboundedSipsic[S, T], messageCount: int
@@ -174,12 +187,16 @@ proc usipmucConsumerThread[S: static int; T; MaxT: static int](
     let handle = registerThread(ctx.manager[])
     var consumer = ctx.queue[].getConsumer(handle)
     var local = 0
+    var hb = initHarnessBackoff()
     while local < ctx.count:
       let r = consumer.pop()
       if r.isSome:
         inc local
+        # See `usipsicConsumerThread`: reset the sticky backoff window
+        # after each successful pop.
+        hb = initHarnessBackoff()
       else:
-        backoffOnPeerWait()
+        hb.backoff()
 
 proc runOneUSipmucRun[S: static int; T; MaxT: static int; C: static int](
     queue: ptr UnboundedSipmuc[S, T, MaxT],
@@ -219,7 +236,7 @@ proc runUSipmucShape[C: static int](
     em: var BMFEmitter,
     runs, warmup, messageCount: int,
 ) =
-  let slug = "lockfreequeues_unbounded_sipmuc/mpmc_unbounded/1p" & $C & "c"
+  let slug = "lockfreequeues_unbounded_sipmuc/spmc_unbounded/1p" & $C & "c"
   echo fmt"UnboundedSipmuc 1p{C}c ({slug}):"
   # Per-iteration teardown order (applies to both warmup and timed loops):
   #
@@ -316,12 +333,16 @@ proc runOneUMupsicRun[S: static int; T; MaxT: static int; P: static int](
       addr producerCtxs[i],
     )
   var local = 0
+  var hb = initHarnessBackoff()
   while local < messageCount:
     let r = queue[].pop()
     if r.isSome:
       inc local
+      # See `usipsicConsumerThread`: reset the sticky backoff window
+      # after each successful pop.
+      hb = initHarnessBackoff()
     else:
-      backoffOnPeerWait()
+      hb.backoff()
   for i in 0 ..< P: joinThread(producerThreads[i])
   let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
   if elapsedNs <= 0.0: return 0.0
@@ -382,12 +403,16 @@ proc umupmucConsumerThread[S: static int; T; MaxT: static int](
     let handle = registerThread(ctx.manager[])
     var consumer = ctx.queue[].getConsumer(handle)
     var local = 0
+    var hb = initHarnessBackoff()
     while local < ctx.count:
       let r = consumer.pop()
       if r.isSome:
         inc local
+        # See `usipsicConsumerThread`: reset the sticky backoff window
+        # after each successful pop.
+        hb = initHarnessBackoff()
       else:
-        backoffOnPeerWait()
+        hb.backoff()
 
 proc runOneUMupmucRun[S: static int; T; MaxT: static int;
                       P: static int; C: static int](
@@ -495,6 +520,16 @@ when defined(adapter_moodycamel_available):
     # convention for unbounded adapters that accept a hint).
     makeMoodycamelAdapter[uint64](capacity)
 
+when defined(adapter_flume_available):
+  proc initFlumeUnboundedQ(capacity: int): FlumeUnboundedAdapter[uint64] =
+    discard capacity
+    makeFlumeUnboundedAdapter[uint64]()
+
+when defined(adapter_kanal_available):
+  proc initKanalUnboundedQ(capacity: int): KanalUnboundedAdapter[uint64] =
+    discard capacity
+    makeKanalUnboundedAdapter[uint64]()
+
 proc runMvpUnboundedShape[A](
     em: var BMFEmitter,
     slugPrefix: string,
@@ -524,102 +559,194 @@ proc runMvpUnboundedShape[A](
     metrics.ops_ms_mean + metrics.ops_ms_stddev,
   )
 
-# ---------- Variant dispatch ----------
+# ---------- Adapter procs (topology-based dispatch) ----------
 
-proc supportedVariantsList(): seq[string] {.compileTime.} =
-  result = @["unbounded_sipsic", "unbounded_sipmuc",
-             "unbounded_mupsic", "unbounded_mupmuc"]
+proc runUnboundedSipsic(em: var BMFEmitter,
+                       topology: Topology) {.nimcall.} =
+  discard topology  # informational only; slug grid hardcoded
+  runUSipsicShape(em,
+    UnboundedSipsicRuns, BenchUnboundedWarmup,
+    UnboundedSipsicMessageCount)
+
+proc runUnboundedSipmuc(em: var BMFEmitter,
+                       topology: Topology) {.nimcall.} =
+  discard topology
+  runUSipmucShape[1](em, UnboundedSipmucRuns, BenchUnboundedWarmup,
+    UnboundedSipmucMessageCount)
+  runUSipmucShape[2](em, UnboundedSipmucRuns, BenchUnboundedWarmup,
+    UnboundedSipmucMessageCount)
+  when not defined(BenchSkipOversubscribed):
+    runUSipmucShape[4](em, UnboundedSipmucRuns, BenchUnboundedWarmup,
+      UnboundedSipmucMessageCount)
+
+proc runUnboundedMupsic(em: var BMFEmitter,
+                       topology: Topology) {.nimcall.} =
+  discard topology
+  # mupsic shapes are kept under BenchSkipOversubscribed: a single
+  # consumer cannot trigger the round-robin starvation that hangs
+  # sipmuc/mupmuc with C >= 4, and `mpsc_unbounded/4p1c` is in the
+  # pre-split deletion-safety fixture.
+  runUMupsicShape[1](em, UnboundedMupsicRuns, BenchUnboundedWarmup,
+    UnboundedMupsicMessageCount)
+  runUMupsicShape[2](em, UnboundedMupsicRuns, BenchUnboundedWarmup,
+    UnboundedMupsicMessageCount)
+  runUMupsicShape[4](em, UnboundedMupsicRuns, BenchUnboundedWarmup,
+    UnboundedMupsicMessageCount)
+
+proc runUnboundedMupmuc(em: var BMFEmitter,
+                       topology: Topology) {.nimcall.} =
+  discard topology
+  # {1,2,4} P x {1,2,4} C grid (9 shapes). Shapes with P + C > 4
+  # hang under 4-vCPU oversubscription: the round-robin consumer
+  # ordering in unbounded_sipmuc/mupmuc forces strict per-shape
+  # turn-taking, so a single descheduled consumer blocks every
+  # other consumer. `-d:BenchSkipOversubscribed` (set in PR CI)
+  # drops the offending shapes; the full grid runs locally on
+  # workstations or on `workflow_dispatch` runs of `bench.yml`
+  # where a beefier runner / no `BenchSkipOversubscribed` flag is
+  # in play (the historical separate comparison cron workflow was
+  # retired in v4.2.0 Stage 1 when crossbeam consolidated into
+  # `bench.yml`).
+  runUMupmucShape[1, 1](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
+    UnboundedMupmucMessageCount)
+  runUMupmucShape[1, 2](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
+    UnboundedMupmucMessageCount)
+  runUMupmucShape[2, 1](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
+    UnboundedMupmucMessageCount)
+  runUMupmucShape[2, 2](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
+    UnboundedMupmucMessageCount)
+  when not defined(BenchSkipOversubscribed):
+    runUMupmucShape[1, 4](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
+      UnboundedMupmucMessageCount)
+    runUMupmucShape[2, 4](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
+      UnboundedMupmucMessageCount)
+    runUMupmucShape[4, 1](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
+      UnboundedMupmucMessageCount)
+    runUMupmucShape[4, 2](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
+      UnboundedMupmucMessageCount)
+    runUMupmucShape[4, 4](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
+      UnboundedMupmucMessageCount)
+
+when declared(initLoonyQ):
+  proc runLoony(em: var BMFEmitter, topology: Topology) {.nimcall.} =
+    discard topology
+    for p in [1, 2, 4]:
+      for c in [1, 2, 4]:
+        runMvpUnboundedShape[LoonyAdapter[uint64]](
+          em, "loony", initLoonyQ,
+          p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
+          UnboundedMupmucMessageCount)
+
+when declared(initCrossbeamSegQ):
+  proc runCrossbeamSegQueue(em: var BMFEmitter,
+                            topology: Topology) {.nimcall.} =
+    discard topology
+    for p in [1, 2, 4]:
+      for c in [1, 2, 4]:
+        runMvpUnboundedShape[CrossbeamSegQueueAdapter[uint64]](
+          em, "crossbeam_seg_queue", initCrossbeamSegQ,
+          p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
+          UnboundedMupmucMessageCount)
+
+when declared(initMoodycamelQ):
+  proc runMoodycamel(em: var BMFEmitter,
+                     topology: Topology) {.nimcall.} =
+    discard topology
+    for p in [1, 2, 4]:
+      for c in [1, 2, 4]:
+        runMvpUnboundedShape[MoodycamelAdapter[uint64]](
+          em, "moodycamel", initMoodycamelQ,
+          p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
+          UnboundedMupmucMessageCount)
+
+when declared(initFlumeUnboundedQ):
+  proc runFlumeUnbounded(em: var BMFEmitter,
+                         topology: Topology) {.nimcall.} =
+    discard topology
+    # 3x3 grid for parity with the other unbounded MPMC adapters
+    # (loony, crossbeam_seg_queue, moodycamel, lockfreequeues
+    # unbounded_mupmuc). The 4-thread shapes are the oversubscribed
+    # cell on a 4-vCPU CI runner; peers run them unconditionally so
+    # we do too.
+    for p in [1, 2, 4]:
+      for c in [1, 2, 4]:
+        runMvpUnboundedShape[FlumeUnboundedAdapter[uint64]](
+          em, "flume_unbounded", initFlumeUnboundedQ,
+          p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
+          UnboundedMupmucMessageCount)
+
+when declared(initKanalUnboundedQ):
+  proc runKanalUnbounded(em: var BMFEmitter,
+                         topology: Topology) {.nimcall.} =
+    discard topology
+    # 3x3 grid for parity with peer unbounded MPMC adapters; see
+    # `runFlumeUnbounded` above for the rationale.
+    for p in [1, 2, 4]:
+      for c in [1, 2, 4]:
+        runMvpUnboundedShape[KanalUnboundedAdapter[uint64]](
+          em, "kanal_unbounded", initKanalUnboundedQ,
+          p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
+          UnboundedMupmucMessageCount)
+
+# ---------- Adapter registry ----------
+
+proc buildAdapters(): seq[Adapter] =
+  result.add(Adapter(
+    name: "unbounded_sipsic",
+    topologiesSupported: {tSpscUnbounded},
+    run: runUnboundedSipsic,
+  ))
+  result.add(Adapter(
+    name: "unbounded_sipmuc",
+    # Sipmuc unbounded lives on the first-class SPMC topology axis
+    # (tSpmcUnbounded) introduced by the v4.2.0 schema change; slug
+    # emission uses `lockfreequeues_unbounded_sipmuc/spmc_unbounded/
+    # 1pNc` so the chart routes these series to the SPMC panel.
+    topologiesSupported: {tSpmcUnbounded},
+    run: runUnboundedSipmuc,
+  ))
+  result.add(Adapter(
+    name: "unbounded_mupsic",
+    topologiesSupported: {tMpscUnbounded},
+    run: runUnboundedMupsic,
+  ))
+  result.add(Adapter(
+    name: "unbounded_mupmuc",
+    topologiesSupported: {tMpmcUnbounded},
+    run: runUnboundedMupmuc,
+  ))
   when declared(initLoonyQ):
-    result.add("loony")
+    result.add(Adapter(
+      name: "loony",
+      topologiesSupported: {tMpmcUnbounded},
+      run: runLoony,
+    ))
   when declared(initCrossbeamSegQ):
-    result.add("crossbeam_seg_queue")
+    result.add(Adapter(
+      name: "crossbeam_seg_queue",
+      topologiesSupported: {tMpmcUnbounded},
+      run: runCrossbeamSegQueue,
+    ))
   when declared(initMoodycamelQ):
-    result.add("moodycamel")
+    result.add(Adapter(
+      name: "moodycamel",
+      topologiesSupported: {tMpmcUnbounded},
+      run: runMoodycamel,
+    ))
+  when declared(initFlumeUnboundedQ):
+    result.add(Adapter(
+      name: "flume_unbounded",
+      topologiesSupported: {tMpmcUnbounded},
+      run: runFlumeUnbounded,
+    ))
+  when declared(initKanalUnboundedQ):
+    result.add(Adapter(
+      name: "kanal_unbounded",
+      topologiesSupported: {tMpmcUnbounded},
+      run: runKanalUnbounded,
+    ))
 
-const SupportedVariants = supportedVariantsList()
-
-proc runVariant(variant: string, em: var BMFEmitter) =
-  case variant
-  of "unbounded_sipsic":
-    runUSipsicShape(em,
-      UnboundedSipsicRuns, BenchUnboundedWarmup,
-      UnboundedSipsicMessageCount)
-  of "unbounded_sipmuc":
-    runUSipmucShape[1](em, UnboundedSipmucRuns, BenchUnboundedWarmup,
-      UnboundedSipmucMessageCount)
-    runUSipmucShape[2](em, UnboundedSipmucRuns, BenchUnboundedWarmup,
-      UnboundedSipmucMessageCount)
-    when not defined(BenchSkipOversubscribed):
-      runUSipmucShape[4](em, UnboundedSipmucRuns, BenchUnboundedWarmup,
-        UnboundedSipmucMessageCount)
-  of "unbounded_mupsic":
-    # mupsic shapes are kept under BenchSkipOversubscribed: a single
-    # consumer cannot trigger the round-robin starvation that hangs
-    # sipmuc/mupmuc with C >= 4, and `mpsc_unbounded/4p1c` is in the
-    # pre-split deletion-safety fixture.
-    runUMupsicShape[1](em, UnboundedMupsicRuns, BenchUnboundedWarmup,
-      UnboundedMupsicMessageCount)
-    runUMupsicShape[2](em, UnboundedMupsicRuns, BenchUnboundedWarmup,
-      UnboundedMupsicMessageCount)
-    runUMupsicShape[4](em, UnboundedMupsicRuns, BenchUnboundedWarmup,
-      UnboundedMupsicMessageCount)
-  of "unbounded_mupmuc":
-    # {1,2,4} P x {1,2,4} C grid (9 shapes). Shapes with P + C > 4
-    # hang under 4-vCPU oversubscription: the round-robin consumer
-    # ordering in unbounded_sipmuc/mupmuc forces strict per-shape
-    # turn-taking, so a single descheduled consumer blocks every
-    # other consumer. `-d:BenchSkipOversubscribed` (set in PR CI)
-    # drops the offending shapes; the full grid still runs in
-    # `bench-comparison.yml` nightly cron / on workflow_dispatch
-    # where a beefier runner is available.
-    runUMupmucShape[1, 1](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
-      UnboundedMupmucMessageCount)
-    runUMupmucShape[1, 2](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
-      UnboundedMupmucMessageCount)
-    runUMupmucShape[2, 1](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
-      UnboundedMupmucMessageCount)
-    runUMupmucShape[2, 2](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
-      UnboundedMupmucMessageCount)
-    when not defined(BenchSkipOversubscribed):
-      runUMupmucShape[1, 4](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
-        UnboundedMupmucMessageCount)
-      runUMupmucShape[2, 4](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
-        UnboundedMupmucMessageCount)
-      runUMupmucShape[4, 1](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
-        UnboundedMupmucMessageCount)
-      runUMupmucShape[4, 2](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
-        UnboundedMupmucMessageCount)
-      runUMupmucShape[4, 4](em, UnboundedMupmucRuns, BenchUnboundedWarmup,
-        UnboundedMupmucMessageCount)
-  else:
-    when declared(initLoonyQ):
-      if variant == "loony":
-        for p in [1, 2, 4]:
-          for c in [1, 2, 4]:
-            runMvpUnboundedShape[LoonyAdapter[uint64]](
-              em, "loony", initLoonyQ,
-              p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
-              UnboundedMupmucMessageCount)
-        return
-    when declared(initCrossbeamSegQ):
-      if variant == "crossbeam_seg_queue":
-        for p in [1, 2, 4]:
-          for c in [1, 2, 4]:
-            runMvpUnboundedShape[CrossbeamSegQueueAdapter[uint64]](
-              em, "crossbeam_seg_queue", initCrossbeamSegQ,
-              p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
-              UnboundedMupmucMessageCount)
-        return
-    when declared(initMoodycamelQ):
-      if variant == "moodycamel":
-        for p in [1, 2, 4]:
-          for c in [1, 2, 4]:
-            runMvpUnboundedShape[MoodycamelAdapter[uint64]](
-              em, "moodycamel", initMoodycamelQ,
-              p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
-              UnboundedMupmucMessageCount)
-        return
-    raise newException(ValueError, "unknown variant: " & variant)
+let adapters: seq[Adapter] = buildAdapters()
 
 when isMainModule:
   setStdIoUnbuffered()
@@ -645,28 +772,27 @@ when isMainModule:
       of cmdArgument:
         positional.add(p.key)
 
-  let supported = SupportedVariants.toHashSet
-  let runVariants =
-    if positional.len == 0:
-      supported
-    else:
-      var groups = initHashSet[string]()
-      for arg in positional:
-        if arg notin supported:
-          echo "Unknown variant: ", arg
-          echo "Supported: ", SupportedVariants
-          quit 1
-        groups.incl arg
-      groups
+  # Topology filter: see bench_spsc.nim for the rationale.
+  var topologyFilter: Option[Topology] = none(Topology)
+  if positional.len >= 1:
+    try:
+      topologyFilter = some(parseTopology(positional[0]))
+    except ValueError as e:
+      echo "Unknown topology: ", positional[0]
+      echo "Reason: ", e.msg
+      quit 1
 
   echo "Unbounded Throughput Benchmark"
   echo "=============================="
   echo ""
 
   var emitter = initBMFEmitter()
-  for v in SupportedVariants:
-    if v in runVariants:
-      runVariant(v, emitter)
+  for adapter in adapters:
+    if topologyFilter.isNone:
+      for t in adapter.topologiesSupported:
+        adapter.run(emitter, t)
+    elif topologyFilter.get in adapter.topologiesSupported:
+      adapter.run(emitter, topologyFilter.get)
 
   if bmfOutPath.len > 0:
     emitter.emit(bmfOutPath)

@@ -181,6 +181,39 @@ catastrophic in production. The CI matrix runs both
 For local performance work, run without sanitisers; turn them on
 separately to confirm the result is also clean under sanitiser.
 
+### Cache-line width (`-d:CacheLineBytes=N`)
+
+The `CacheLineBytes` constant — re-exported from `debra/atomics` —
+controls per-Segment field padding (`{.align: CacheLineBytes.}`) and
+the segment-base alignment lifted via `posix_memalign`. The default
+is 64 (x86_64 and aarch64-Linux); the queue infers 128 on PowerPC
+where cache lines are double-width. Apple Silicon (M1 / M2 / M3) uses
+128-byte effective cache lines despite a 64-byte L1 line because the
+prefetcher pulls adjacent lines as a pair, which is enough to recreate
+the false-sharing pattern padding aims to eliminate.
+
+If you are targeting Apple Silicon (or any platform where the default
+does not match the hardware), override at compile time with
+`-d:CacheLineBytes=128`. The padding assertions in
+`tests/t_unbounded_padding.nim` validate the override; you can run
+them as a one-shot gate via:
+
+```sh
+nimble testApplePadding
+```
+
+or manually (equivalent):
+
+```sh
+nim c --mm:atomicArc -d:CacheLineBytes=128 --threads:on \
+      -r tests/t_unbounded_padding.nim
+```
+
+This task is opt-in (not part of `nimble test`) because CI runs on
+`ubuntu-latest`, which uses the 64-byte default. Run it before
+tagging a release if you want explicit coverage of the 128-byte
+alignment surface.
+
 ### MM choice (`orc` / `arc` / `atomicArc`)
 
 The Nim memory manager affects two things: how `ref` items are

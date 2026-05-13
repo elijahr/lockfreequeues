@@ -282,6 +282,7 @@ class ChartContractTests(unittest.TestCase):
             "bench-hero",
             "bench-throughput-spsc",
             "bench-throughput-mpsc",
+            "bench-throughput-spmc",
             "bench-throughput-mpmc-bounded",
             "bench-throughput-mpmc-unbounded",
             "bench-latency",
@@ -457,8 +458,8 @@ class ChartContractTests(unittest.TestCase):
         )
         entries = entry_re.findall(block)
         self.assertEqual(
-            len(entries), 4,
-            f"expected 4 throughput panels, got {len(entries)}: {entries}",
+            len(entries), 5,
+            f"expected 5 throughput panels, got {len(entries)}: {entries}",
         )
 
         # The agreed routing intent. Source of truth for what the
@@ -470,6 +471,8 @@ class ChartContractTests(unittest.TestCase):
             "spsc_unbounded":  "bench-throughput-spsc",
             "mpsc":            "bench-throughput-mpsc",
             "mpsc_unbounded":  "bench-throughput-mpsc",
+            "spmc":            "bench-throughput-spmc",
+            "spmc_unbounded":  "bench-throughput-spmc",
             "mpmc":            "bench-throughput-mpmc-bounded",
             "mpmc_unbounded":  "bench-throughput-mpmc-unbounded",
         }

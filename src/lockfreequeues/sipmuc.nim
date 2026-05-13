@@ -103,7 +103,6 @@ proc push*[N, C: static int, T](self: var Sipmuc[N, C, T], item: T): bool =
   var queueBase = cast[ptr SipmucPushBase[N, C, T]](addr self)
 
   var op = spmc_push.start[N]()
-  var spins = InitialSpin
   while true:
     var claim = op.tryClaim(queueBase[])
     match claim:
@@ -113,7 +112,8 @@ proc push*[N, C: static int, T](self: var Sipmuc[N, C, T], item: T): bool =
         return slotClaimed.complete(queueBase[], item)
       SPMCPushStart(restart):
         op = restart # CAS race or producer raced ahead: retry
-        backoffOnRetry(spins)
+        # CAS-loss-retry on tail-claim CAS (peer producer won; cpuPause sufficient).
+        backoffOnCASLossRetry()
         continue
 
 proc push*[N, C: static int, T](
@@ -181,7 +181,6 @@ proc pop*[N, C: static int, T](self: Consumer[N, C, T]): Option[T] =
   var queueBase = cast[ptr SipmucBase[N, C, T]](self.queue)
 
   var op = spmc_pop.start[N]()
-  var spins = InitialSpin
   while true:
     var claim = op.tryClaim(queueBase[])
     match claim:
@@ -191,7 +190,8 @@ proc pop*[N, C: static int, T](self: Consumer[N, C, T]): Option[T] =
         return some(slotClaimed.complete(queueBase[]))
       SPMCPopStart(restart):
         op = restart # CAS race or consumer raced ahead: retry
-        backoffOnRetry(spins)
+        # CAS-loss-retry on head-claim CAS (peer consumer won).
+        backoffOnCASLossRetry()
         continue
 
 proc pop*[N, C: static int, T](self: Consumer[N, C, T], count: int): Option[seq[T]] =

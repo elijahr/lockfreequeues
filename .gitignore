@@ -2,6 +2,15 @@
 .vscode/
 .DS_Store
 
+# mise tool-version pin (per-developer; canonical Nim version is in lockfreequeues.nimble)
+mise.toml
+
+# local nim.cfg overrides (e.g. for worktree-specific deps paths)
+nim.cfg
+
+# claude config
+.claude/
+
 # Local PR description scratch file (do not commit)
 .pr-description.md
 
@@ -51,6 +60,11 @@ benchmarks/nim/tests/t_*
 # Compiled stress-test binaries (extensionless executables)
 stress-tests/[a-z_]*
 !stress-tests/*.nim
+
+# Compiled test binaries (extensionless executables) and macOS dSYM bundles
+tests/[a-z_]*
+!tests/*.nim
+*.dSYM/
 
 # Rust crate build artifacts (FFI bench bridges)
 benchmarks/rust/*/target/

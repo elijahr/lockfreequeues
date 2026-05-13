@@ -15,7 +15,7 @@
 ## Slug shape: `lockfreequeues_mupsic/mpsc/<P>p1c`. Emitted measure:
 ## `throughput_ops_ms` (mean, lower=mean-1σ, upper=mean+1σ).
 
-import std/[monotimes, options, os, parseopt, sets, strformat, syncio, times]
+import std/[monotimes, options, os, parseopt, strformat, syncio, times]
 import ./bench_common
 import lockfreequeues/backoff
 import lockfreequeues/mupsic
@@ -184,32 +184,40 @@ when defined(adapter_nim_channel_available):
       metrics.ops_ms_mean + metrics.ops_ms_stddev,
     )
 
-# ---------- Variant dispatch ----------
+# ---------- Adapter procs (topology-based dispatch) ----------
 
-proc supportedVariantsList(): seq[string] {.compileTime.} =
-  result = @["mupsic"]
+proc runMupsic(em: var BMFEmitter, topology: Topology) {.nimcall.} =
+  discard topology  # informational only; slug grid hardcoded below
+  runMupsicShape[MupsicCapacity, 1, uint64](
+    em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount)
+  runMupsicShape[MupsicCapacity, 2, uint64](
+    em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount)
+  runMupsicShape[MupsicCapacity, 4, uint64](
+    em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount)
+
+when declared(initNimChannelQ):
+  proc runNimChannel(em: var BMFEmitter, topology: Topology) {.nimcall.} =
+    discard topology
+    for p in [1, 2, 4]:
+      runNimChannelShape(em, p, BenchMpscRuns, BenchMpscWarmup,
+                         BenchMpscMessageCount)
+
+# ---------- Adapter registry ----------
+
+proc buildAdapters(): seq[Adapter] =
+  result.add(Adapter(
+    name: "mupsic",
+    topologiesSupported: {tMpsc},
+    run: runMupsic,
+  ))
   when declared(initNimChannelQ):
-    result.add("nim_channel")
+    result.add(Adapter(
+      name: "nim_channel",
+      topologiesSupported: {tMpsc},
+      run: runNimChannel,
+    ))
 
-const SupportedVariants = supportedVariantsList()
-
-proc runVariant(variant: string, em: var BMFEmitter) =
-  case variant
-  of "mupsic":
-    runMupsicShape[MupsicCapacity, 1, uint64](
-      em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount)
-    runMupsicShape[MupsicCapacity, 2, uint64](
-      em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount)
-    runMupsicShape[MupsicCapacity, 4, uint64](
-      em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount)
-  else:
-    when declared(initNimChannelQ):
-      if variant == "nim_channel":
-        for p in [1, 2, 4]:
-          runNimChannelShape(em, p, BenchMpscRuns, BenchMpscWarmup,
-                             BenchMpscMessageCount)
-        return
-    raise newException(ValueError, "unknown variant: " & variant)
+let adapters: seq[Adapter] = buildAdapters()
 
 when isMainModule:
   setStdIoUnbuffered()
@@ -235,28 +243,29 @@ when isMainModule:
       of cmdArgument:
         positional.add(p.key)
 
-  let supported = SupportedVariants.toHashSet
-  let runVariants =
-    if positional.len == 0:
-      supported
-    else:
-      var groups = initHashSet[string]()
-      for arg in positional:
-        if arg notin supported:
-          echo "Unknown variant: ", arg
-          echo "Supported: ", SupportedVariants
-          quit 1
-        groups.incl arg
-      groups
+  # Topology filter: see bench_spsc.nim for the rationale on optional
+  # positional[0] = topology, ignored extras for the design example's
+  # `<topology> <shape>` invocation.
+  var topologyFilter: Option[Topology] = none(Topology)
+  if positional.len >= 1:
+    try:
+      topologyFilter = some(parseTopology(positional[0]))
+    except ValueError as e:
+      echo "Unknown topology: ", positional[0]
+      echo "Reason: ", e.msg
+      quit 1
 
   echo "MPSC Throughput Benchmark"
   echo "========================="
   echo ""
 
   var emitter = initBMFEmitter()
-  for v in SupportedVariants:
-    if v in runVariants:
-      runVariant(v, emitter)
+  for adapter in adapters:
+    if topologyFilter.isNone:
+      for t in adapter.topologiesSupported:
+        adapter.run(emitter, t)
+    elif topologyFilter.get in adapter.topologiesSupported:
+      adapter.run(emitter, topologyFilter.get)
 
   if bmfOutPath.len > 0:
     emitter.emit(bmfOutPath)
