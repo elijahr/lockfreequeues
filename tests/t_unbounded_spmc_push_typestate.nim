@@ -205,3 +205,11 @@ suite "SPMC Push Typestate":
         check false
 
     freeTestSegment(seg)
+
+suite "Task 11 LCRQ cell-state constants":
+  test "CellEmpty/CellFilled/CellClosed are distinct uint8 literals":
+    check CellEmpty == 0'u8
+    check CellFilled == 1'u8
+    check CellClosed == 2'u8
+    check CellEmpty != CellFilled
+    check CellFilled != CellClosed

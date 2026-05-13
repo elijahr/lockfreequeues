@@ -13,6 +13,14 @@ import ../atomic_dsl
 import typestates
 import debra
 
+const
+  ## LCRQ per-slot tri-state cell encoding (Task 11, design §3 D1).
+  ## CellEmpty matches Nim's default-init of array[S, Atomic[uint8]], so
+  ## Segment.new does not need an explicit init loop for cellState.
+  CellEmpty*: uint8 = 0
+  CellFilled*: uint8 = 1
+  CellClosed*: uint8 = 2
+
 # `DeallocationStrategy` is declared canonically in `../unbounded_sipmuc`,
 # but production imports this typestate, so `from ../unbounded_sipmuc import`
 # would cycle. We declare a structurally-identical enum locally so the Base
