@@ -31,11 +31,31 @@ when defined(stressDebug):
 
 const
   ItemCount = 10000
+  ProducerCount = 1
+    ## SIPMUC topology: single producer. Kept as a named constant so the
+    ## per-producer FIFO (R7) machinery below (``lastSeenSeq`` array sized
+    ## by producer count) reads identically to the out-of-suite analog at
+    ## ``stress-tests/t_unbounded_sipmuc_threaded.nim``.
   ConsumerCount = 4
   MaxThreads = 8
   StressIterations = 50
     ## Outer iteration count when ``-d:stress`` is set. Sized to make a
     ## 1/30-frequency intermittent regression near-certain to fire.
+
+# Encode ``(producerId, seq)`` into a single int payload. producerId in
+# the high 32 bits, seq in the low 32 bits. seq is 1-indexed so 0 cannot
+# alias an uninitialised slot. Mirrors
+# ``stress-tests/t_unbounded_sipmuc_threaded.nim:55-65``; the encoding is
+# what lets the R7 per-producer FIFO assertion below decode provenance on
+# each pop.
+proc encodeItem(producerId: int, seq: int): int =
+  result = ((producerId.uint64 shl 32) or seq.uint64).int
+
+proc decodeProducerId(item: int): int =
+  result = int((item.uint64 shr 32) and 0xFFFFFFFF'u64)
+
+proc decodeSeq(item: int): int =
+  result = int(item.uint64 and 0xFFFFFFFF'u64)
 
 when defined(stressDebug):
   var logLock: Lock
@@ -62,6 +82,11 @@ type
     duplicateFound: ptr Atomic[bool]
     producerDone: ptr Atomic[bool]
     totalConsumed: ptr Atomic[int]
+    fifoViolation: ptr Atomic[bool]
+      ## R7 per-producer FIFO: set if a consumer observes a seq for some
+      ## producer that is not strictly greater than the prior seq it saw
+      ## for that same producer. Mirrors
+      ## ``stress-tests/t_unbounded_sipmuc_threaded.nim:81``.
 
   HeartbeatContext[S: static int] = object
     queue: ptr UnboundedSipmuc[S, int, MaxThreads]
@@ -73,7 +98,9 @@ proc producer[S: static int](ctx: ptr ProducerContext[S]) {.thread.} =
   {.cast(gcsafe).}:
     dlog("producer started")
     for i in 1 .. ItemCount:
-      ctx.queue[].push(i)
+      # Items encode ``(producerId=0, seq=i)`` so each consumer can decode
+      # provenance for the R7 per-producer FIFO assertion.
+      ctx.queue[].push(encodeItem(0, i))
       when defined(stressDebug):
         if i mod 1000 == 0:
           dlog("producer pushed " & $i)
@@ -87,14 +114,30 @@ proc consumer[S: static int](ctx: ptr ConsumerContext[S]) {.thread.} =
     let handle = registerThread(ctx.manager[])
     var c = ctx.queue[].getConsumer(handle)
     var popCount = 0
+    # R7 per-producer FIFO state: ``lastSeenSeq[pid]`` is the highest seq
+    # this consumer has observed from producer ``pid``. SPMC fans the
+    # producer's push order out across consumers, so an all-consumer
+    # global ordering is NOT a correctness property in v4.3 — but THIS
+    # consumer's pop order, restricted to a single producer, must be
+    # strictly increasing in seq. Name avoids shadowing Nim's ``seq[T]``
+    # type. Mirrors ``stress-tests/t_unbounded_sipmuc_threaded.nim:105``.
+    var lastSeenSeq: array[ProducerCount, int]
     when defined(stressDebug):
       var observedDone = false
     while true:
       let item = c.pop()
       if item.isSome:
-        let val = item.get - 1 # Items are 1-indexed
+        let pid = decodeProducerId(item.get)
+        let s = decodeSeq(item.get)
+        let val = s - 1 # seq is 1-indexed
         if ctx.received[val].exchange(true, moRelaxed):
           ctx.duplicateFound[].store(true, moRelaxed)
+        # R7 (per-producer FIFO, online): each pop within this consumer's
+        # sub-stream for producer ``pid`` must have a strictly greater
+        # seq than the prior pop from the same producer.
+        if s <= lastSeenSeq[pid]:
+          ctx.fifoViolation[].store(true, moRelaxed)
+        lastSeenSeq[pid] = s
         let total = ctx.totalConsumed[].fetchAdd(1, moRelaxed) + 1
         inc popCount
         when defined(stressDebug):
@@ -144,6 +187,8 @@ suite "UnboundedSipmuc threaded stress":
     producerDone: Atomic[bool]
     totalConsumed: Atomic[int]
     heartbeatDone: Atomic[bool]
+    fifoViolation: Atomic[bool]
+      ## R7 per-producer FIFO violation flag, shared across consumers.
 
   template resetState() =
     for i in 0 ..< ItemCount:
@@ -152,6 +197,7 @@ suite "UnboundedSipmuc threaded stress":
     producerDone.store(false, moRelaxed)
     totalConsumed.store(0, moRelaxed)
     heartbeatDone.store(false, moRelaxed)
+    fifoViolation.store(false, moRelaxed)
 
   setup:
     resetState()
@@ -176,6 +222,7 @@ suite "UnboundedSipmuc threaded stress":
             duplicateFound: addr duplicateFound,
             producerDone: addr producerDone,
             totalConsumed: addr totalConsumed,
+            fifoViolation: addr fifoViolation,
           )
 
         var prodThread: Thread[ptr ProducerContext[8]]
@@ -205,6 +252,12 @@ suite "UnboundedSipmuc threaded stress":
         dlog("main: ALL JOINED (run=" & $run & ")")
 
         check(not duplicateFound.load(moRelaxed))
+        # R7 per-producer FIFO assertion (additive; mirrors
+        # ``stress-tests/t_unbounded_sipmuc_threaded.nim:204``). Set by any
+        # consumer that observed a non-strictly-monotonic seq for a given
+        # producer. moAcquire pairs with consumers' moRelaxed stores plus
+        # the join barrier; the joins synchronise-with this load.
+        check(not fifoViolation.load(moAcquire))
         for i in 0 ..< ItemCount:
           check(received[i].load(moRelaxed))
         dlog("=== TEST high segment turnover run=" & $run & " END ===")
