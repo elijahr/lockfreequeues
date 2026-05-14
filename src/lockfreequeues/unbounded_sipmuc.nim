@@ -53,6 +53,12 @@ import typestates
 import ./typestates/unbounded_spmc_push as ts_spmc_push
 import ./typestates/unbounded_spmc_pop as ts_spmc_pop
 
+when defined(awaitingTailTestHook):
+  # Test-only: gated synchronization channels for the awaitingTail-strand
+  # regression test. See `private/awaiting_tail_test_hook.nim` for the
+  # purity contract. DO NOT enable in production builds.
+  import private/awaiting_tail_test_hook
+
 const LockFreeQueuesAdvanceEvery {.intdefine.}: int = 64
   ## Cadence for `advanceEvery` calls in this file's Eager reclamation path.
   ## Override at compile time with `-d:LockFreeQueuesAdvanceEvery=N`.
@@ -169,7 +175,7 @@ proc newSegment[S: static int, T](): ptr Segment[S, T] =
   result = allocAligned[Segment[S, T]]()
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
-  result.consumerHead.store(-1, moRelaxed) # No consumer yet
+  result.consumerHead.store(0, moRelaxed) # Next-claimable index: 0
 
 proc newUnboundedSipmuc*[S: static int, T; MaxThreads: static int](
     manager: ptr DebraManager[MaxThreads],
@@ -398,6 +404,21 @@ proc pop*[S: static int, T; MaxThreads: static int](
       )
       var loaded =
         ts_spmc_pop.startPop[T, S, MaxThreads](pinned, queueBase).loadSegment()
+      when defined(awaitingTailTestHook):
+        # Test-only Hook C: gate C1 between snapshot-capture (loadSegment)
+        # and snapshot-use (tryClaimSlot). The thread-local
+        # `c1IsTheTargetThread` flag is set ONLY by C1's thread proc in
+        # the awaitingTail-strand regression test; for every other thread
+        # (producer, C2, main-thread driver), the flag is false and the
+        # hook is a no-op. Pure wait: Channel.send + Channel.recv only,
+        # no algorithm-observable state mutation. The flag itself is
+        # test-driver-owned state, never read or written by algorithm
+        # code paths, and is elided in production builds along with the
+        # rest of this `when defined(...)` block. See
+        # `stress-tests/t_unbounded_spmc_awaiting_tail_strand.nim`.
+        if c1IsTheTargetThread:
+          c1LoadedChan.send(1)
+          discard c1ProceedChan.recv()
       var claim = loaded.tryClaimSlot()
       match claim:
         USPMCPopSlotClaimed(slotClaimed):
@@ -407,84 +428,115 @@ proc pop*[S: static int, T; MaxThreads: static int](
           let complete = slotClaimed.readItem()
           result = some(complete.value)
           break
-        USPMCPopReady(_):
-          # CAS-loss on `consumerHead` claim — another consumer raced
-          # us. Loop back to re-load the segment and retry.
-          continue
         USPMCPopSegmentExhausted(exhausted):
-          # Capture the old segment pointer BEFORE the typestate consumes
-          # the state — the facade owns segment lifetime and DEBRA-retires
-          # the old segment when it wins the headSegment CAS.
-          let oldSeg = cast[ptr Segment[S, T]](exhausted.segment)
-          var advance = exhausted.advanceSegment()
-          match advance:
-            USPMCPopEmpty(_):
-              # Transient miss: when oldSeg.next == nil at the load below but
-              # the producer publishes immediately after, this pop returns none
-              # for one call. The outer pop()/getConsumer() loop re-enters and
-              # observes the new state on the next iteration. Working as designed
-              # for non-blocking SPMC; not a livelock.
-              break
-            USPMCPopReady(_):
-              # Item-loss livelock fix: before CAS-advancing past oldSeg,
-              # verify there are no unclaimed items remaining. The
-              # producer's invariant is that
-              # `oldSeg.next.store(newSeg, moRelease)` happens AFTER
-              # `oldSeg.tail` reaches `S` (the segment is full). The
-              # acquire-load on `oldSeg.next` (already performed inside
-              # `advanceSegment`) establishes happens-before with that
-              # release-store, so a fresh acquire-load of
-              # `consumerHead` here observes the latest CAS state.
-              # If `consumerHead < S - 1`, items remain unclaimed in
-              # `oldSeg`. We MUST NOT advance past it — the items would
-              # become unreachable when `oldSeg` is retired and pop
-              # would return `none` while items still exist, manifesting
-              # as a consumer hot-spin at end-of-run when the producer
-              # filled the final segment after a consumer's stale tail
-              # snapshot.
-              #
-              # Without this check, the snapshot of `tail` taken in
-              # `loadSegment` (and the subsequent `tryClaimSlot`-time
-              # re-load of `tail`) can race the producer's release-store:
-              # the consumer concludes "exhausted" with `mySlot >= tail`
-              # for some `tail < S`, then advances past `oldSeg` while
-              # the producer is still publishing slots `tail..S-1`. Even
-              # though `tryClaimSlot` re-loads `tail`, the producer can
-              # publish more slots between that re-load and the head
-              # CAS. The `consumerHead` re-check here closes that
-              # window: if any slot < S - 1 has not been claimed via
-              # CAS, we restart the claim loop instead of advancing.
-              let freshPrevIdx = oldSeg.consumerHead.load(moAcquire)
-              if freshPrevIdx < S - 1:
-                # Unclaimed slots remain in oldSeg. Skip the head CAS
-                # and retire — loop back to re-load and try to claim.
+          # Task 11: SegmentExhausted now carries `awaitingTail: bool` to
+          # disambiguate two cases (per design §12 R2). When the producer
+          # has not yet released `tail` past our reserved slot
+          # (awaitingTail=true), we MUST NOT advance headSegment — the
+          # producer will publish in due course and a subsequent pop()
+          # call re-enters on the SAME segment to find the slot. When
+          # consumerHead is saturated (>= S) OR a snapshot confirms the
+          # segment is truly drained (awaitingTail=false), advancing is
+          # safe.
+          # NOTE on `if/else` shape: the two branches BOTH consume `exhausted`
+          # (a sink-only typestate value): the awaitingTail path via
+          # `extractPinned()`, the fall-through via `advanceSegment()` after
+          # `exhausted.segment` is read. An `if ... break` + fall-through
+          # would compile-fail under `--mm:atomicArc` because Nim's move
+          # analyzer does not narrow consumption sites across `break` — it
+          # would see both reads as live and demand a `=copy` hook the
+          # typestate intentionally lacks. An explicit `else:` makes the
+          # paths CFG-disjoint and the move analyzer is happy.
+          if exhausted.awaitingTail:
+            # Non-blocking pop contract: producer hasn't published past
+            # our reserved slot yet. Drop pin via extractPinned() (per
+            # T2's new overload) and report empty for this call. The
+            # consumer's next pop() call re-enters on the same headSegment.
+            #
+            # MUST `break`, not `return`: this code path is inside the
+            # `withPin:` scope opened above. `return` short-circuits the
+            # scope and skips the implicit unpin, leaking a DEBRA pin
+            # per call. Pins accumulate, the epoch can never advance,
+            # and consumers livelock spinning inside `unpin`. `break`
+            # exits the inner while-loop, allowing the withPin scope to
+            # terminate naturally; `result` defaults to `none(T)`.
+            when defined(awaitingTailTestHook):
+              # Test-only: signal the test driver that this consumer has
+              # reached the awaitingTail discard path with a still-pinned
+              # segment, then block until the driver has orchestrated the
+              # producer's slot-1 publish. Pure wait: Channel.send +
+              # Channel.recv only, no algorithm-observable state mutation.
+              # See `stress-tests/t_unbounded_spmc_awaiting_tail_strand.nim`.
+              awaitingTailReachedChan.send(1)
+              discard awaitingTailGoChan.recv()
+            discard exhausted.extractPinned()
+            break
+          else:
+            # Capture the old segment pointer BEFORE the typestate consumes
+            # the state — the facade owns segment lifetime and DEBRA-retires
+            # the old segment when it wins the headSegment CAS.
+            let oldSeg = cast[ptr Segment[S, T]](exhausted.segment)
+            var advance = exhausted.advanceSegment()
+            match advance:
+              USPMCPopEmpty(_):
+                # Transient miss: when oldSeg.next == nil at the load below but
+                # the producer publishes immediately after, this pop returns none
+                # for one call. The outer pop()/getConsumer() loop re-enters and
+                # observes the new state on the next iteration. Working as designed
+                # for non-blocking SPMC; not a livelock.
+                break
+              USPMCPopReady(_):
+                # F1' RESHAPED (Task 11, D2 = DEBRA pin-based retirement
+                # gating).
+                #
+                # Correctness is OWNED BY the DEBRA Pin–Claim Ordering
+                # Invariant documented above the verb-loop `withPin:` scope.
+                # The check below is a PERFORMANCE OPTIMIZATION — it avoids
+                # a wasted CAS-retire when unclaimed slots may remain on
+                # oldSeg. It is NOT a TOCTOU defense.
+                #
+                # Background: the producer's invariant is that
+                # `oldSeg.next.store(newSeg, moRelease)` happens AFTER
+                # `oldSeg.tail` reaches `S` (the segment is full). The
+                # acquire-load on `oldSeg.next` (already performed inside
+                # `advanceSegment`) establishes happens-before with that
+                # release-store, so a fresh acquire-load of `consumerHead`
+                # here observes the latest fetchAdd state. Under the new
+                # next-claimable semantics, `consumerHead < S` means at
+                # least one slot has not yet been claimed (free-claim).
+                # Spinning on this segment instead of advancing avoids a
+                # head-CAS-then-retire race against still-pending consumers.
+                let freshConsumerHead = oldSeg.consumerHead.load(moAcquire)
+                if freshConsumerHead < S:
+                  # Unclaimed slots remain in oldSeg. Skip the head CAS
+                  # and retire — loop back to re-load and try to claim.
+                  backoffOnCASLossRetry()
+                  continue
+                # Try to be the thread that retires this segment by CAS-
+                # advancing headSegment from oldSeg to the next segment.
+                # The winner retires; the loser observes that another
+                # consumer already advanced and continues. Mirrors the
+                # consumer-vs-consumer coordination the previous direct
+                # production code performed at the head-advance site.
+                let nextSeg = cast[ptr Segment[S, T]](oldSeg.next.load(moAcquire))
+                var expected = oldSeg
+                if self.queue.headSegment.compareExchange(
+                  expected, nextSeg, moAcquireRelease, moAcquire
+                ):
+                  # Always retire so DEBRA owns the detached segment: Manual
+                  # leaves it in limbo for `tryReclaim` (or
+                  # `manager.=destroy` at scope exit) to drain; Eager
+                  # reclaims it shortly via the `reclaimNow` call after the
+                  # pin block. Without retiring, the segment is detached
+                  # from the head chain but reachable from no root, and
+                  # leaks at process exit.
+                  it.retire(cast[pointer](oldSeg), segmentDestructor[S, T])
+                  if self.queue.strategy != Manual:
+                    discard self.queue.segments.fetchSub(1, moRelaxed)
+                # CAS-loss-retry on segment-advance (consumer-vs-consumer
+                # headSegment CAS).
                 backoffOnCASLossRetry()
                 continue
-              # Try to be the thread that retires this segment by CAS-
-              # advancing headSegment from oldSeg to the next segment.
-              # The winner retires; the loser observes that another
-              # consumer already advanced and continues. Mirrors the
-              # consumer-vs-consumer coordination the previous direct
-              # production code performed at the head-advance site.
-              let nextSeg = cast[ptr Segment[S, T]](oldSeg.next.load(moAcquire))
-              var expected = oldSeg
-              if self.queue.headSegment.compareExchange(
-                expected, nextSeg, moAcquireRelease, moAcquire
-              ):
-                # Always retire so DEBRA owns the detached segment: Manual
-                # leaves it in limbo for `tryReclaim` (or
-                # `manager.=destroy` at scope exit) to drain; Eager
-                # reclaims it shortly via the `reclaimNow` call after the
-                # pin block. Without retiring, the segment is detached
-                # from the head chain but reachable from no root, and
-                # leaks at process exit.
-                it.retire(cast[pointer](oldSeg), segmentDestructor[S, T])
-                if self.queue.strategy != Manual:
-                  discard self.queue.segments.fetchSub(1, moRelaxed)
-              # CAS-loss-retry on segment-advance (consumer-vs-consumer
-              # headSegment CAS).
-              backoffOnCASLossRetry()
-              continue
 
   if self.queue.strategy == Eager:
     if self.handle.advanceEvery(LockFreeQueuesAdvanceEvery):

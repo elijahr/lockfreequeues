@@ -216,3 +216,18 @@ task stresstests, "Runs the stress test suite (multi-threaded)":
   if getEnv("SANITIZE_ADDRESS") != "no":
     # C (with address sanitization)
     exec "nim c --cc:clang --path:src --passC:\"-fsanitize=address\" --passL:\"-fsanitize=address\" --threads:on -r -f stress-tests/stress_test.nim"
+
+  # Task 1.7 awaitingTail-strand regression. Runs as part of the stress
+  # bundle so CI exercises it by default. Compiled with the test-only
+  # `-d:awaitingTailTestHook` define which gates the production hooks
+  # in unbounded_sipmuc.nim and typestates/unbounded_spmc_push.nim.
+  exec "nimble strandRegression"
+
+
+task strandRegression, "Run Task 11 awaitingTail-strand regression test (deterministic, single iteration)":
+  # Audit-trail (papaya watchlist #9): emit compiler version FIRST so
+  # any captured output bundle is self-identifying. Required by
+  # coordinator 4c.
+  exec "nim --version"
+  exec "nim c --mm:atomicArc --threads:on -d:awaitingTailTestHook " &
+       "--path:src -r -f stress-tests/t_unbounded_spmc_awaiting_tail_strand.nim"

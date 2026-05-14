@@ -13,6 +13,12 @@ import ../atomic_dsl
 import typestates
 import debra
 
+when defined(awaitingTailTestHook):
+  # Test-only: gated synchronization channels for the awaitingTail-strand
+  # regression test. See `../private/awaiting_tail_test_hook.nim` for the
+  # purity contract. DO NOT enable in production builds.
+  import ../private/awaiting_tail_test_hook
+
 const
   ## LCRQ per-slot tri-state cell encoding (Task 11, design §3 D1).
   ## CellEmpty matches Nim's default-init of array[S, Atomic[uint8]], so
@@ -212,6 +218,12 @@ proc writeItem*[T; S, MT: static int](
   ## SPMC has no `committed` array — the release store on `tail` is the
   ## publication signal that consumers acquire-load before reading.
   slotReady.segment.data[slotReady.slot] = item
+  when defined(awaitingTailTestHook):
+    # Test-only: block the producer's release-store on `tail` until the
+    # test driver releases the gate. Pure wait: Channel.recv only, no
+    # algorithm-observable state mutation. See
+    # `stress-tests/t_unbounded_spmc_awaiting_tail_strand.nim`.
+    discard producerPublishGoChan.recv()
   slotReady.segment.tail.store(slotReady.slot + 1, moRelease)
   discard slotReady.queue.itemCount.fetchAdd(1, moRelaxed)
 
