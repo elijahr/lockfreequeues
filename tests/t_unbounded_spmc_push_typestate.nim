@@ -213,3 +213,27 @@ suite "Task 11 LCRQ cell-state constants":
     check CellClosed == 2'u8
     check CellEmpty != CellFilled
     check CellFilled != CellClosed
+
+suite "Task 11 LCRQ SPMC Segment cellState + closed fields":
+  test "cellState defaults to CellEmpty for every slot (S=8)":
+    type TestSeg8 = Segment[8, int]
+    var seg = cast[ptr TestSeg8](alloc0(sizeof(TestSeg8)))
+    # alloc0 zero-initializes; CellEmpty is uint8 0, so every cellState
+    # slot must equal CellEmpty after zero-init.
+    check seg.cellState[0].load(moRelaxed) == CellEmpty
+    check seg.cellState[1].load(moRelaxed) == CellEmpty
+    check seg.cellState[2].load(moRelaxed) == CellEmpty
+    check seg.cellState[3].load(moRelaxed) == CellEmpty
+    check seg.cellState[4].load(moRelaxed) == CellEmpty
+    check seg.cellState[5].load(moRelaxed) == CellEmpty
+    check seg.cellState[6].load(moRelaxed) == CellEmpty
+    check seg.cellState[7].load(moRelaxed) == CellEmpty
+    # Array length is exactly S (8).
+    check seg.cellState.len == 8
+    dealloc(seg)
+
+  test "closed defaults to false":
+    type TestSeg8 = Segment[8, int]
+    var seg = cast[ptr TestSeg8](alloc0(sizeof(TestSeg8)))
+    check seg.closed.load(moRelaxed) == false
+    dealloc(seg)

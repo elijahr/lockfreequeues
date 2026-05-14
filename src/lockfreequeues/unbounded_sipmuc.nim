@@ -88,6 +88,10 @@ type
       # Producer write position within segment
     consumerHead {.align: CacheLineBytes.}: Atomic[int]
       # CAS coordination for consumers
+    cellState {.align: CacheLineBytes.}: array[S, Atomic[uint8]]
+      # LCRQ per-slot tri-state (CellEmpty/CellFilled/CellClosed); Task 11 C1.
+    closed {.align: CacheLineBytes.}: Atomic[bool]
+      # Segment-level closed flag (LCRQ adaptation); Task 11 C1.
 
   UnboundedSipmuc*[S: static int, T; MaxThreads: static int] = object
     ## Unbounded SPMC queue using linked segments.

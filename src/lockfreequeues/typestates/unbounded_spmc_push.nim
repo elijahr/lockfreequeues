@@ -51,6 +51,10 @@ type
       # Producer write position within segment
     consumerHead* {.align: CacheLineBytes.}: Atomic[int]
       # CAS coordination for consumers
+    cellState* {.align: CacheLineBytes.}: array[S, Atomic[uint8]]
+      # LCRQ per-slot tri-state (CellEmpty/CellFilled/CellClosed); Task 11 C1.
+    closed* {.align: CacheLineBytes.}: Atomic[bool]
+      # Segment-level closed flag (LCRQ adaptation); Task 11 C1.
 
   # Base queue type for SPMC. 8-field shape per design §2.2 (SPMC row,
   # post-Item-5 dead-array removal). `headSegment` is `Atomic[ptr]`
