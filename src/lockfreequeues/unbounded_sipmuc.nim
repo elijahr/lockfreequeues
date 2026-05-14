@@ -260,7 +260,7 @@ proc len*[S: static int, T; MaxThreads: static int](
   result = self.itemCount.load(moRelaxed)
 
 proc push*[S: static int, T; MaxThreads: static int](
-    self: var UnboundedSipmuc[S, T, MaxThreads], item: T
+    self: var UnboundedSipmuc[S, T, MaxThreads], item: sink T
 ) =
   ## Push a single item. Never blocks or fails (unbounded).
   ##

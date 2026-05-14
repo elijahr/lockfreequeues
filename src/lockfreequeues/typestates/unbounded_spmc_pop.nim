@@ -248,7 +248,7 @@ proc readItem*[T; S, MT: static int](
   ## Read item from claimed slot.
   let queue = claimed.queue
   let seg = claimed.segment
-  let value = seg.data[claimed.slot]
+  let value = move(seg.data[claimed.slot])
   discard queue.itemCount.fetchSub(1, moRelaxed)
 
   USPMCPopComplete[T, S, MT](

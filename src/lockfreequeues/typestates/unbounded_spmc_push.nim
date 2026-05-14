@@ -216,7 +216,7 @@ proc allocateNewSegment*[T; S, MT: static int](
 
 # Write item transition
 proc writeItem*[T; S, MT: static int](
-    slotReady: sink USPMCPushSlotReady[T, S, MT], item: T
+    slotReady: sink USPMCPushSlotReady[T, S, MT], item: sink T
 ): USPMCPushComplete[T, S, MT] {.transition.} =
   ## Write item to slot and publish via `tail.store(moRelease)`.
   ## SPMC has no `committed` array — the release store on `tail` is the
