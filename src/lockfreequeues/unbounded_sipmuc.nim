@@ -578,10 +578,11 @@ when defined(testing):
 
   proc segmentHeadOffsetForTest*[S: static int, T; MaxThreads: static int](
       _: typedesc[UnboundedSipmuc[S, T, MaxThreads]]
-  ): tuple[tail: int, consumerHead: int] =
+  ): tuple[tail: int, consumerHead: int, cellState: int, closed: int] =
     ## Test-only accessor: returns offsets of cache-line-padded fields within
     ## the unbounded sipmuc Segment for the cache-line padding audit.
-    result = (offsetOf(Segment[S, T], tail), offsetOf(Segment[S, T], consumerHead))
+    result = (offsetOf(Segment[S, T], tail), offsetOf(Segment[S, T], consumerHead),
+              offsetOf(Segment[S, T], cellState), offsetOf(Segment[S, T], closed))
 
 proc `=destroy`*[S: static int, T; MaxThreads: static int](
     self: var UnboundedSipmuc[S, T, MaxThreads]

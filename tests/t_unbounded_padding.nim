@@ -37,6 +37,8 @@ suite "Unbounded queue Segment cache-line padding":
     let off = segmentHeadOffsetForTest(UnboundedSipmuc[64, uint64, 4])
     check off.tail mod Cl == 0
     check off.consumerHead mod Cl == 0
+    check off.cellState mod Cl == 0
+    check off.closed mod Cl == 0
 
   test "Segment field offsets are CacheLineBytes-aligned (mupsic)":
     let off = segmentHeadOffsetForTest(UnboundedMupsic[64, uint64, 4])
