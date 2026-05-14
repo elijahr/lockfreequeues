@@ -20,6 +20,14 @@ import lockfreequeues/unbounded_sipsic
 import lockfreequeues/unbounded_sipmuc
 import lockfreequeues/unbounded_mupsic
 import lockfreequeues/unbounded_mupmuc
+# For Task 11 LCRQ SPMC Segment init invariant test: cast head-segment pointer
+# (production Segment is unexported) into the typestate-local Segment view,
+# whose layout matches production per the static asserts at the top of
+# `unbounded_sipmuc.nim` (sizeof + per-field offsetOf for data/next/tail/
+# consumerHead). The {.align: CacheLineBytes.} pragmas on `cellState` and
+# `closed` are byte-for-byte identical between the two declarations, so the
+# cast is sound for reading those fields.
+import lockfreequeues/typestates/unbounded_spmc_push as ts_spmc_push
 import debra
 import unittest2
 
@@ -79,3 +87,32 @@ suite "Unbounded queue Segment cache-line padding":
     let segPtr = headSegmentForTest(q)
     check segPtr != nil
     check (cast[uint](segPtr) mod Cl.uint) == 0
+
+suite "Task 11 LCRQ SPMC Segment init invariants":
+  test "freshly-allocated sipmuc Segment has cellState[] == CellEmpty and closed == false":
+    # Verifies that `newUnboundedSipmuc` produces a head Segment whose new
+    # LCRQ fields (`cellState[]` array of Atomic[uint8] and `closed` Atomic[bool])
+    # are zero-initialized — i.e. every cellState slot equals `CellEmpty` (0'u8)
+    # and `closed` equals `false`. Today this holds because `allocAligned[T]`
+    # in `internal/aligned_alloc.nim` calls `zeroMem(p, sizeof(T))` after
+    # `posix_memalign`/`_aligned_malloc`. If that contract regresses, this
+    # test catches it before the LCRQ verbs (which assume CellEmpty as the
+    # neutral state per typestate `unbounded_spmc_push.nim`:24-26) can
+    # observe a garbage initial state.
+    var manager = initDebraManager[4]()
+    var q = newUnboundedSipmuc[8, uint64, 4](addr manager)
+    let segPtrRaw = headSegmentForTest(q)
+    check segPtrRaw != nil
+    # Cast into the typestate Segment view (layout-identical per the
+    # offsetOf/sizeof static asserts in unbounded_sipmuc.nim:166-174).
+    let seg = cast[ptr ts_spmc_push.Segment[8, uint64]](segPtrRaw)
+    check seg.cellState[0].load(moRelaxed) == 0'u8
+    check seg.cellState[1].load(moRelaxed) == 0'u8
+    check seg.cellState[2].load(moRelaxed) == 0'u8
+    check seg.cellState[3].load(moRelaxed) == 0'u8
+    check seg.cellState[4].load(moRelaxed) == 0'u8
+    check seg.cellState[5].load(moRelaxed) == 0'u8
+    check seg.cellState[6].load(moRelaxed) == 0'u8
+    check seg.cellState[7].load(moRelaxed) == 0'u8
+    check seg.cellState.len == 8
+    check seg.closed.load(moRelaxed) == false
