@@ -19,7 +19,7 @@ proc newTestSegment(): ptr TestSegment =
   result = cast[ptr TestSegment](alloc0(sizeof(TestSegment)))
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
-  result.consumerHead.store(-1, moRelaxed)
+  result.consumerHead.store(0, moRelaxed)
 
 proc freeTestSegment(seg: ptr TestSegment) =
   dealloc(seg)
@@ -48,15 +48,24 @@ suite "SPMC Push Typestate":
     # Verify fields are accessible and have valid values
     check loaded.tail >= 0
     check loaded.segment != nil
-    check loaded.segment.consumerHead.load(moRelaxed) == -1
+    check loaded.segment.consumerHead.load(moRelaxed) == 0
     check loaded.segment.next.load(moRelaxed) == nil
 
-    # Clean up. Task 6 / C-1: writeItem takes (slot, item) explicitly now;
-    # the slot field is gone, so the facade computes slot — here, slot=0.
+    # Clean up. Task 7 / C5: writeItem now takes only the typestate (no
+    # slot/item args) and returns a variant USPMCPushCommitResult. Slot is
+    # obtained internally via seg.tail.fetchAdd; item travels in pendingItem.
     var checkResult = loaded.checkFull()
     match checkResult:
       USPMCPushSlotReady(s):
-        discard s.writeItem(0, 0).extractPinned().unpin()
+        var commitResult = s.writeItem()
+        match commitResult:
+          USPMCPushComplete(c):
+            discard c.extractPinned().unpin()
+          USPMCPushSegmentLoaded(_):
+            # Reserved-for-future arm (Task 11 §799); not emitted by current body.
+            check false
+          USPMCPushSegmentClosed(cl):
+            discard cl.extractPinned().unpin()
       USPMCPushSegmentFull(_):
         check false
     freeTestSegment(seg)
@@ -86,19 +95,27 @@ suite "SPMC Push Typestate":
     check loaded.segment == seg
 
     # Verify segment structure is accessible and intact
-    check loaded.segment.consumerHead.load(moRelaxed) == -1
+    check loaded.segment.consumerHead.load(moRelaxed) == 0
     check loaded.segment.next.load(moRelaxed) == nil
 
-    # Complete operation. Task 6 / C-1: writeItem now takes (slot, item).
-    # Slot at this point is the loaded tail (10).
+    # Complete operation. Task 7 / C-1+C5: writeItem now takes only the
+    # typestate. Slot is obtained via seg.tail.fetchAdd internally — tail
+    # is pre-set to 10 here, so the entry fetchAdd lands on slot 10.
     var checkResult = loaded.checkFull()
     match checkResult:
       USPMCPushSlotReady(s):
-        # Write item and VERIFY the value was written
-        let complete = s.writeItem(10, 42)
+        var commitResult = s.writeItem()
         check seg.data[10] == 42 # Consume: verify write to correct slot
         check seg.tail.load(moRelaxed) == 11 # Verify tail advanced
-        discard complete.extractPinned().unpin()
+        match commitResult:
+          USPMCPushComplete(c):
+            discard c.extractPinned().unpin()
+          USPMCPushSegmentLoaded(_):
+            # Reserved-for-future arm (Task 11 §799); not emitted by current body.
+            check false
+          USPMCPushSegmentClosed(cl):
+            check false
+            discard cl.extractPinned().unpin()
       USPMCPushSegmentFull(_):
         check false
 
@@ -125,16 +142,25 @@ suite "SPMC Push Typestate":
     match checkResult:
       USPMCPushSlotReady(s):
         # Task 6 / C-1: `slot` field removed from USPMCPushSlotReady.
-        # Verify slot via segment.tail load (which is what the facade
-        # uses to compute the slot for writeItem).
+        # Verify slot via segment.tail load (entry fetchAdd inside writeItem
+        # advances it).
         check s.segment.tail.load(moRelaxed) == 0
 
-        # Write item and VERIFY the value was written. Task 6: writeItem
-        # takes explicit (slot, item).
-        discard s.writeItem(0, 42).extractPinned().unpin()
+        # Write item and VERIFY the value was written. Task 7: writeItem
+        # takes only the typestate; pendingItem (42) carried from startPush.
+        var commitResult = s.writeItem()
+        match commitResult:
+          USPMCPushComplete(c):
+            discard c.extractPinned().unpin()
+          USPMCPushSegmentLoaded(_):
+            # Reserved-for-future arm (Task 11 §799); not emitted by current body.
+            check false
+          USPMCPushSegmentClosed(cl):
+            check false
+            discard cl.extractPinned().unpin()
 
         check seg.data[0] == 42 # Consume: verify write happened
-        check seg.tail.load(moRelaxed) == 1 # Verify tail advanced
+        check seg.tail.load(moRelaxed) == 1 # Verify tail advanced (entry fetchAdd)
       USPMCPushSegmentFull(_):
         check false
 
@@ -171,8 +197,15 @@ suite "SPMC Push Typestate":
 
         match checkResult2:
           USPMCPushSlotReady(s):
-            # Task 6: writeItem takes (slot, item); slot=0 on the fresh segment.
-            discard s.writeItem(0, 42).extractPinned().unpin()
+            # Task 7: writeItem takes only the typestate; pendingItem carried
+            # from startPush. Entry fetchAdd lands at slot 0 on fresh segment.
+            var commitResult = s.writeItem()
+            match commitResult:
+              USPMCPushComplete(c):
+                discard c.extractPinned().unpin()
+              USPMCPushSegmentClosed(cl):
+                check false
+                discard cl.extractPinned().unpin()
 
             # Consume: verify write went to NEW segment, not old one
             check newSeg.data[0] == 42 # Value written to new segment
@@ -207,8 +240,18 @@ suite "SPMC Push Typestate":
 
     match checkResult:
       USPMCPushSlotReady(s):
-        # Task 6: writeItem takes (slot, item); slot=0 on a fresh segment.
-        discard s.writeItem(0, 42).extractPinned().unpin()
+        # Task 7: writeItem takes only the typestate; pendingItem (42) from
+        # startPush. Entry fetchAdd lands at slot 0 on the fresh segment.
+        var commitResult = s.writeItem()
+        match commitResult:
+          USPMCPushComplete(c):
+            discard c.extractPinned().unpin()
+          USPMCPushSegmentLoaded(_):
+            # Reserved-for-future arm (Task 11 §799); not emitted by current body.
+            check false
+          USPMCPushSegmentClosed(cl):
+            check false
+            discard cl.extractPinned().unpin()
 
         check seg.data[0] == 42
         check seg.tail.load(moRelaxed) == 1
@@ -313,3 +356,24 @@ suite "Task 11 USPMCPushSegmentClosed state + pendingItem propagation (Task 6)":
           discard extractPinned(c)
       )
     )
+
+suite "Task 11 SPMC writeItem publish-CAS + Shape A retry":
+  test "writeItem on empty cell publishes and transitions to Complete":
+    var manager = initDebraManager[4]()
+    var q = newUnboundedSipmuc[8, int, 4](addr manager)
+    q.push(42)  # writeItem -> publish-CAS -> Complete
+    check q.pop().get == 42
+
+  test "writeItem on closed cell retries via Shape A fetchAdd":
+    var manager = initDebraManager[4]()
+    var q = newUnboundedSipmuc[8, int, 4](addr manager)
+    let segPtr = cast[ptr Segment[8, int]](headSegmentForTest(q))
+    # Close cell 0 directly (simulates a consumer's prior close-CAS).
+    segPtr.cellState[0].store(CellClosed, moRelaxed)
+    q.push(99)
+    # writeItem's entry fetchAdd lands on slot 0 (CellClosed pre-staged).
+    # Publish-CAS at slot 0 fails; Shape A fetchAdd advances to slot 1.
+    # Publish-CAS at slot 1 wins. Final state: tail == 2 (entry + Shape A retry).
+    check segPtr.cellState[1].load(moRelaxed) == CellFilled
+    check segPtr.data[1] == 99
+    check segPtr.tail.load(moRelaxed) == 2  # entry fetchAdd → 1; retry fetchAdd → 2

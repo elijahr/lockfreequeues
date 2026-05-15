@@ -153,7 +153,10 @@ typestate USPMCPushContext[T, S: static int, MT: static int]:
       USPMCSegmentCheck[T, S, MT]
     USPMCPushSegmentFull[T, S, MT] -> USPMCPushReady[T, S, MT]
     USPMCPushSegmentClosed[T, S, MT] -> USPMCPushSegmentFull[T, S, MT]
-    USPMCPushSlotReady[T, S, MT] -> USPMCPushComplete[T, S, MT]
+    USPMCPushSlotReady[T, S, MT] ->
+      (USPMCPushComplete[T, S, MT] | USPMCPushSegmentLoaded[T, S, MT] |
+        USPMCPushSegmentClosed[T, S, MT]) as
+      USPMCPushCommitResult[T, S, MT]
 
 # Factory: Create push typestate context from DEBRA's Pinned state.
 #
@@ -299,30 +302,94 @@ proc closeSegmentDone*[T; S, MT: static int](
     pendingItem: closed.pendingItem,
   )
 
-# Write item transition
+# Write item transition (Task 11 LCRQ).
+#
+# Publish-CAS on seg.cellState[myTailSlot]; on CAS-failure (CellClosed),
+# Shape A retry: seg.tail.fetchAdd(1, moRelaxed) to obtain a fresh
+# myTailSlot, re-attempt publish-CAS. Bounded by StarvingThreshold = S
+# per design §3 D5 + §8.
 proc writeItem*[T; S, MT: static int](
-    slotReady: sink USPMCPushSlotReady[T, S, MT], slot: int, item: sink T
-): USPMCPushComplete[T, S, MT] {.transition.} =
-  ## Write item to slot and publish via `tail.store(moRelease)`.
-  ## SPMC has no `committed` array — the release store on `tail` is the
-  ## publication signal that consumers acquire-load before reading.
-  ##
-  ## Task 6 / C-1: `slot` is now a parameter (the slot index previously
-  ## carried in `USPMCPushSlotReady.slot`, removed when the state grew its
-  ## `pendingItem` field). The facade (Task 7) computes the slot via the
-  ## segment's `tail` fetch and passes it explicitly.
-  slotReady.segment.data[slot] = item
-  when defined(awaitingTailTestHook):
-    # Test-only: block the producer's release-store on `tail` until the
-    # test driver releases the gate. Pure wait: Channel.recv only, no
-    # algorithm-observable state mutation. See
-    # `stress-tests/t_unbounded_spmc_awaiting_tail_strand.nim`.
-    discard producerPublishGoChan.recv()
-  slotReady.segment.tail.store(slot + 1, moRelease)
-  discard slotReady.queue.itemCount.fetchAdd(1, moRelaxed)
-
-  USPMCPushComplete[T, S, MT](
-    pinnedHandle: slotReady.pinnedHandle,
-    pinnedEpoch: slotReady.pinnedEpoch,
-    queue: slotReady.queue,
-  )
+    slotReady: sink USPMCPushSlotReady[T, S, MT]
+): USPMCPushCommitResult[T, S, MT] {.transition.} =
+  const StarvingThreshold = S  # I2: per-call const bound to generic S
+  let seg = slotReady.segment
+  var pending = slotReady.pendingItem  # sink-bound, move-friendly
+  # C-1: entry fetchAdd on seg.tail (writeItem is the sole writer; SlotReady
+  # carries no slot field). Design §2.3 line 78: "first fetchAdd at writeItem
+  # entry (SPMC)". Without this, seg.tail never advances and every push
+  # targets slot 0.
+  var myTailSlot = seg.tail.fetchAdd(1, moRelaxed)
+  if myTailSlot >= S:
+    # Segment was already saturated when we arrived; T&S and escalate.
+    var expectedClosed: bool = false
+    discard seg.closed.compareExchange(
+        expectedClosed, true, moAcquireRelease, moAcquire)
+    return USPMCPushCommitResult[T, S, MT] ->
+      USPMCPushSegmentClosed[T, S, MT](
+        pinnedHandle: slotReady.pinnedHandle,
+        pinnedEpoch: slotReady.pinnedEpoch,
+        queue: slotReady.queue,
+        segment: seg,
+        pendingItem: move(pending),
+      )
+  var closureRetryCount = 0
+  while true:
+    # Publish-CAS attempt.
+    seg.data[myTailSlot] = pending
+    var expected: uint8 = CellEmpty
+    let publishWon = seg.cellState[myTailSlot].compareExchange(
+        expected, CellFilled, moAcquireRelease, moAcquire)
+    if publishWon:
+      # Hook B (Task 7 amendment 2026-05-14): re-anchored from old
+      # `tail.store(moRelease)` to new publish-CAS-win site so the
+      # awaitingTail-strand stress test still has a deterministic
+      # producer-publish gate. See plan §698-784 amended block.
+      when defined(awaitingTailTestHook):
+        discard producerPublishGoChan.recv()
+      discard slotReady.queue.itemCount.fetchAdd(1, moRelaxed)
+      return USPMCPushCommitResult[T, S, MT] ->
+        USPMCPushComplete[T, S, MT](
+          pinnedHandle: slotReady.pinnedHandle,
+          pinnedEpoch: slotReady.pinnedEpoch,
+          queue: slotReady.queue,
+        )
+    # CAS failure: cell must be CellClosed. CellFilled is impossible because
+    # SPMC has a single producer; the producer's prior writeItem on this slot
+    # would have won and exited, never re-entering this slot.
+    doAssert expected == CellClosed,
+      "SPMC writeItem: cell observed unexpected state on publish-CAS failure"
+    # I4: assert bound INSIDE increment branch, BEFORE threshold compare.
+    closureRetryCount += 1
+    doAssert closureRetryCount <= StarvingThreshold,
+      "SPMC writeItem: closureRetryCount exceeded StarvingThreshold = S (design §8)"
+    let observedTail = seg.tail.load(moRelaxed)
+    if closureRetryCount >= StarvingThreshold or observedTail >= S:
+      # Starvation: T&S seg.closed and transition to SegmentClosed.
+      var expectedClosed: bool = false
+      discard seg.closed.compareExchange(
+          expectedClosed, true, moAcquireRelease, moAcquire)
+      return USPMCPushCommitResult[T, S, MT] ->
+        USPMCPushSegmentClosed[T, S, MT](
+          pinnedHandle: slotReady.pinnedHandle,
+          pinnedEpoch: slotReady.pinnedEpoch,
+          queue: slotReady.queue,
+          segment: seg,
+          pendingItem: move(pending),
+        )
+    # C5 Shape A retry: fetchAdd seg.tail, adopt new myTailSlot.
+    let nextSlot = seg.tail.fetchAdd(1, moRelaxed)
+    if nextSlot >= S:
+      # Segment saturated mid-retry; T&S and escalate.
+      var expectedClosed: bool = false
+      discard seg.closed.compareExchange(
+          expectedClosed, true, moAcquireRelease, moAcquire)
+      return USPMCPushCommitResult[T, S, MT] ->
+        USPMCPushSegmentClosed[T, S, MT](
+          pinnedHandle: slotReady.pinnedHandle,
+          pinnedEpoch: slotReady.pinnedEpoch,
+          queue: slotReady.queue,
+          segment: seg,
+          pendingItem: move(pending),
+        )
+    myTailSlot = nextSlot
+    # Loop to top: publish-CAS at new slot.
