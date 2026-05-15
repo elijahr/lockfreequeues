@@ -177,8 +177,8 @@ proc extractPinned*[T; S, MT: static int](
 ##    `withPin:` scope. Single-producer immunity — no peer producer can
 ##    retire the segment under us (we are the only producer). Design §9
 ##    line 719 notes that pin coverage is not required for retire-
-##    correctness, though the design recommends keeping it for consistency
-##    — a recommendation the shipped sipmuc.nim push proc actively rejects,
+##    correctness, though the design recommends keeping it for consistency.
+##    The shipped sipmuc.nim push proc actively rejects that recommendation,
 ##    prioritizing single-producer immunity over design symmetry.
 ##    Implementation: unbounded_sipmuc.nim push proc explicitly opts out of
 ##    `withPin:` on the push path; the publish-CAS at unbounded_spmc_push.nim
@@ -188,9 +188,9 @@ proc extractPinned*[T; S, MT: static int](
 ##
 ##    MPMC topology (forward reference): this 6-item form scopes to SPMC's
 ##    shipped LCRQ cellState protocol. MPMC currently uses the v4.0
-##    committed[] flag protocol (mpmc_pop.nim acquire-loads `committed[
-##    mySlot]`; mpmc_push.nim release-stores via `markCommitted`). Pin
-##    coverage of `committed[].load` and `committed[].store` falls under
+##    committed[] flag protocol (mpmc_pop.nim acquire-loads
+##    `committed[mySlot]`; mpmc_push.nim release-stores via `markCommitted`).
+##    Pin coverage of `committed[].load` and `committed[].store` falls under
 ##    items 1-5 (segment-level pin invariants apply equally to either
 ##    publication protocol). MPMC LCRQ migration is tracked as Tasks 14-22
 ##    of this plan; Task 22.5 will re-extend this doc-comment + add the
