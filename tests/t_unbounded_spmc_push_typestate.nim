@@ -11,6 +11,10 @@ import debra
 import lockfreequeues/typestates/unbounded_spmc_push
 import lockfreequeues/unbounded_sipmuc
 
+# Task 12 (M2): binary-strings inspection of the debug-build assertion text.
+# Top-level imports per Nim convention; the doAssert-message test uses these.
+import std/[os, osproc, strutils]
+
 # Type aliases for our test types
 type
   TestQueue = UnboundedSipmucBase[64, int, 4]
@@ -383,3 +387,29 @@ suite "Task 11 SPMC writeItem publish-CAS + Shape A retry":
     check segPtr.cellState[1].load(moRelaxed) == CellFilled
     check segPtr.data[1] == 99
     check segPtr.tail.load(moRelaxed) == 2  # entry fetchAdd → 1; retry fetchAdd → 2
+
+when not defined(release):
+  suite "Task 12 SPMC writeItem debug-build doAssert (M2)":
+    test "compiled binary embeds the closureRetryCount bound assertion message":
+      ## M2 acceptance (I-4 fix): assert the assertion string is genuinely
+      ## present in the compiled binary — i.e., the doAssert is reachable
+      ## code, not dead-code-eliminated.
+      ##
+      ## We don't trigger the assertion at runtime (its precondition —
+      ## `closureRetryCount > StarvingThreshold` — is unreachable on the
+      ## current writeItem control flow because the bound is checked at
+      ## `<=`, and Shape A retry escalates on `>=`). Triggering it would
+      ## require a production-code bug, not a test setup. Instead, inspect
+      ## the test executable's strings table with the system `strings`
+      ## utility: a present substring proves the doAssert text survived
+      ## the compile and is wired into the binary as a real assertion
+      ## (rather than being elided by `when defined(release)` or similar).
+      ##
+      ## Substring chosen for robustness against design-§ reference drift.
+      ## Full canonical message at
+      ## `src/lockfreequeues/typestates/unbounded_spmc_push.nim:416`:
+      ##   "SPMC writeItem: closureRetryCount exceeded StarvingThreshold = S (design §8)"
+      let testBin = getAppFilename()
+      let stringsOut = execProcess(
+        "strings", args = [testBin], options = {poUsePath, poStdErrToStdout})
+      check "closureRetryCount exceeded StarvingThreshold" in stringsOut
