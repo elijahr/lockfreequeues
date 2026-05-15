@@ -39,24 +39,25 @@ import debra/atomics/backoff  # cpuPause, schedYield directly from debra
 # Exported so tests can assert the default-case value.
 let disableHarnessBackoff* = getEnv("LFQ_BENCH_HARNESS_BACKOFF", "1") == "0"
 
-# ---------- Harness backoff (consumer-side, oversubscription stopgap) ----------
+# ---------- Harness backoff (consumer-side, oversubscription defense-in-depth) ----------
 #
 # Per-consumer backoff state machine used by the unbounded bench harness.
 # Spins via `cpuPause` for the first `HarnessSpinBudget` iterations of an
 # empty-pop streak, then escalates to `schedYield` once cumulative spin
 # count crosses `HarnessYieldThreshold`. This gives oversubscribed bench
 # shapes (e.g. 4p4c on a 4-vCPU CI runner) a way to release the CPU
-# quantum back to peers instead of livelocking on a strict-FIFO consumer
-# claim with spin-only queue-side backoff.
+# quantum back to peers instead of starving on contended pops.
 #
 # Both knobs are `intdefine` (defaults 128 / 1024); tune at compile time
 # via `-d:HarnessSpinBudget=N` / `-d:HarnessYieldThreshold=N`.
 #
-# This is a stopgap. The canonical fix — schedYield in queue-side
-# `backoffOnPeerWait` + relaxation of the strict-FIFO consumer claim —
-# is deferred to v4.3 to keep this PR's blast radius bounded. The
-# wrapper is intentionally NOT named `backoffOnPeerWait` to avoid
-# shadowing the queue-side helper for v4.3 import discipline.
+# Task 11 (shipped in v4.3) relaxed the strict-FIFO consumer claim via a
+# wait-free fetchAdd-based head advance, which is the canonical fix for
+# the original livelock shape. The harness backoff is retained as
+# defense-in-depth for oversubscribed runners where the queue-side
+# pop path can still burn CPU under heavy contention. The wrapper is
+# intentionally NOT named `backoffOnPeerWait` to avoid shadowing the
+# queue-side helper for import discipline.
 
 const
   HarnessSpinBudget* {.intdefine.} = 128
