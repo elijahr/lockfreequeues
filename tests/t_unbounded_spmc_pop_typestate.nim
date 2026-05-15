@@ -1,7 +1,8 @@
 ## Tests for unbounded SPMC pop typestate.
 ##
 ## These tests verify the typestate structure and transitions work correctly.
-## Multiple consumers use CAS on consumerHead to coordinate.
+## Multiple consumers use wait-free fetchAdd on `consumerHead` to coordinate
+## (Task 11 framing-flip: counter is now next-claimable, starts at 0).
 
 import unittest2
 import lockfreequeues/atomic_dsl
@@ -20,7 +21,7 @@ proc newTestSegment(): ptr TestSegment =
   result = cast[ptr TestSegment](alloc0(sizeof(TestSegment)))
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
-  result.consumerHead.store(-1, moRelaxed)
+  result.consumerHead.store(0, moRelaxed)
 
 proc freeTestSegment(seg: ptr TestSegment) =
   dealloc(seg)
@@ -65,7 +66,7 @@ suite "SPMC Pop Typestate":
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.consumerHead.store(4, moRelaxed)
+    seg.consumerHead.store(5, moRelaxed)
     seg.tail.store(10, moRelaxed)
 
     var queue: TestQueue
@@ -77,7 +78,7 @@ suite "SPMC Pop Typestate":
 
     let loaded = startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
 
-    check loaded.consumerHead == 4
+    check loaded.consumerHead == 5
     check loaded.tail == 10
     check loaded.segment == seg
 
@@ -92,6 +93,7 @@ suite "SPMC Pop Typestate":
       USPMCPopSlotClaimed(c):
         let complete = c.readItem()
         check complete.value == 77
+        check complete.slot == 5
         discard complete.extractPinned().unpin()
       USPMCPopClosedSlot(_):
         check false
@@ -100,12 +102,12 @@ suite "SPMC Pop Typestate":
 
     freeTestSegment(seg)
 
-  test "tryClaimSlot returns SlotClaimed when CAS succeeds":
+  test "tryClaimSlot returns SlotClaimed when fetchAdd succeeds":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.consumerHead.store(-1, moRelaxed)
+    seg.consumerHead.store(0, moRelaxed)
     seg.tail.store(5, moRelaxed)
     seg.data[0] = 42
     # Task 10a: cellState[0] must be CellFilled for tryClaimSlot's
@@ -129,7 +131,9 @@ suite "SPMC Pop Typestate":
 
         let complete = c.readItem()
         check complete.value == 42
-        check seg.consumerHead.load(moRelaxed) == 0
+        # consumerHead is next-claimable: after a successful fetchAdd(1) at 0,
+        # the value is 1 (the slot the next claimant will reserve).
+        check seg.consumerHead.load(moRelaxed) == 1
         discard complete.extractPinned().unpin()
       USPMCPopClosedSlot(_):
         check false
@@ -191,7 +195,7 @@ suite "SPMC Pop Typestate":
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.consumerHead.store(-1, moRelaxed)
+    seg.consumerHead.store(0, moRelaxed)
     seg.tail.store(3, moRelaxed)
     seg.data[0] = 42
     seg.data[1] = 43
@@ -218,7 +222,8 @@ suite "SPMC Pop Typestate":
         let complete = c.readItem()
 
         check complete.value == 42
-        check seg.consumerHead.load(moRelaxed) == 0
+        check complete.slot == 0
+        check seg.consumerHead.load(moRelaxed) == 1
         check queue.itemCount.load(moRelaxed) == 2
 
         discard complete.extractPinned().unpin()
@@ -235,10 +240,11 @@ suite "SPMC Pop Typestate":
 
     var seg1 = newTestSegment()
     var seg2 = newTestSegment()
-    seg1.consumerHead.store(63, moRelaxed)
+    # seg1 fully consumed: consumerHead == tail == 64.
+    seg1.consumerHead.store(64, moRelaxed)
     seg1.tail.store(64, moRelaxed)
     seg1.next.store(seg2, moRelease)
-    seg2.consumerHead.store(-1, moRelaxed)
+    seg2.consumerHead.store(0, moRelaxed)
     seg2.tail.store(3, moRelaxed)
     seg2.data[0] = 100
 
