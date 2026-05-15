@@ -87,7 +87,7 @@ type
     tail {.align: CacheLineBytes.}: Atomic[int]
       # Producer write position within segment
     consumerHead {.align: CacheLineBytes.}: Atomic[int]
-      # CAS coordination for consumers
+      # Next-claimable index — wait-free fetchAdd coordination for consumers
     cellState {.align: CacheLineBytes.}: array[S, Atomic[uint8]]
       # LCRQ per-slot tri-state (CellEmpty/CellFilled/CellClosed); Task 11 C1.
     closed {.align: CacheLineBytes.}: Atomic[bool]
@@ -432,6 +432,15 @@ proc pop*[S: static int, T; MaxThreads: static int](
   # retired segments — the facade owns segment lifetime via DEBRA so
   # consumers never observe a freed pointer until every pinned thread
   # has rotated past the retirement epoch.
+  #
+  # DEBRA Pin–Claim Ordering Invariant (Task 11):
+  #   1. Pin opens BEFORE headSegment.load (this withPin: scope).
+  #   2. Pin covers fetchAdd(consumerHead) → read(data[mySlot]) window.
+  #   3. Segment under pin == segment under claim (typestate linearity).
+  #   4. headSegment.compareExchange retires oldSeg via DEBRA; oldSeg is
+  #      not freed until all pins in its retire-epoch rotate.
+  #   5. Bulk variant (L504+) acquires per-iteration pin satisfying 1-4.
+  # DO NOT alter withPin scope without re-establishing this invariant.
   self.handle.withPin:
     while true:
       # Project the active pin (held by `it: RetireReady`) into a Pinned
