@@ -3,11 +3,13 @@
 ## These tests verify the typestate structure and transitions work correctly.
 ## We use the high-level DEBRA API (registerThread) for setup.
 
+import options
 import unittest2
 import lockfreequeues/atomic_dsl
 import debra
 
 import lockfreequeues/typestates/unbounded_spmc_push
+import lockfreequeues/unbounded_sipmuc
 
 # Type aliases for our test types
 type
@@ -203,6 +205,9 @@ suite "SPMC Push Typestate":
             match commitResult:
               USPMCPushComplete(c):
                 discard c.extractPinned().unpin()
+              USPMCPushSegmentLoaded(_):
+                # Reserved-for-future arm (Task 11 §799); not emitted by current body.
+                check false
               USPMCPushSegmentClosed(cl):
                 check false
                 discard cl.extractPinned().unpin()
@@ -362,7 +367,8 @@ suite "Task 11 SPMC writeItem publish-CAS + Shape A retry":
     var manager = initDebraManager[4]()
     var q = newUnboundedSipmuc[8, int, 4](addr manager)
     q.push(42)  # writeItem -> publish-CAS -> Complete
-    check q.pop().get == 42
+    var c = q.getConsumer()
+    check c.pop().get == 42
 
   test "writeItem on closed cell retries via Shape A fetchAdd":
     var manager = initDebraManager[4]()

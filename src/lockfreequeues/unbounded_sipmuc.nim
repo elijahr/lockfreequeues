@@ -293,29 +293,65 @@ proc push*[S: static int, T; MaxThreads: static int](
   # signature. This avoids requiring a real DEBRA registration on the
   # producer thread (callers may not have one).
   #
-  # Granular pipeline: startPush -> loadSegment -> checkFull
-  #   -> { writeItem (publish via tail.store(moRelease))
-  #      | allocateNewSegment then retry }
+  # Granular pipeline (Task 11 LCRQ shape):
+  #   startPush(pinned, queueBase, move item)  # item threaded as pendingItem
+  #     -> loadSegment -> checkFull
+  #        -> SegmentFull -> allocateNewSegment -> Ready (continue)
+  #        -> SlotReady   -> writeItem -> USPMCPushCommitResult variant
+  #             | Complete         : push done, return
+  #             | SegmentLoaded    : reserved-future arm; rebuild Ready and
+  #                                  re-loop (writeItem body does not emit
+  #                                  this today, see typestate §305-388;
+  #                                  arm is required for match exhaustiveness).
+  #             | SegmentClosed    : starvation/saturation escalation;
+  #                                  closeSegmentDone -> SegmentFull ->
+  #                                  allocateNewSegment -> Ready (continue).
+  #
+  # Synthesised un-pinned `Pinned[MT]`: handle 0, epoch 0. The push verbs
+  # treat the pin as opaque payload — they neither pin nor unpin anything
+  # because SPMC has no producer-side reclamation. Synthesised once; rebuilt
+  # from typestate fields on every loop iteration via `startPush`.
+  let pinned = Pinned[MaxThreads](
+    EpochGuardContext[MaxThreads](handle: ThreadHandle[MaxThreads](), epoch: 0)
+  )
+  var ready =
+    ts_spmc_push.startPush[T, S, MaxThreads](pinned, queueBase, move item)
   while true:
-    # Synthesised un-pinned `Pinned[MT]`: handle 0, epoch 0. The push
-    # verbs treat the pin as opaque payload — they neither pin nor unpin
-    # anything because SPMC has no producer-side reclamation.
-    let pinned = Pinned[MaxThreads](
-      EpochGuardContext[MaxThreads](handle: ThreadHandle[MaxThreads](), epoch: 0)
-    )
-    var loaded =
-      ts_spmc_push.startPush[T, S, MaxThreads](pinned, queueBase).loadSegment()
+    let loaded = ready.loadSegment()
     var check = loaded.checkFull()
     match check:
-      USPMCPushSlotReady(slotReady):
-        discard slotReady.writeItem(item).extractPinned()
-        return
       USPMCPushSegmentFull(full):
         let newSeg = cast[ptr ts_spmc_push.Segment[S, T]](newSegment[S, T]())
-        discard full.allocateNewSegment(newSeg)
-        # Loop back to retry: loadSegment will pick up the freshly published
-        # tailSegment via the next-iteration direct read.
+        ready = full.allocateNewSegment(newSeg)
         continue
+      USPMCPushSlotReady(slotReady):
+        var commit = slotReady.writeItem()
+        match commit:
+          USPMCPushComplete(completeState):
+            discard completeState.extractPinned()
+            return
+          USPMCPushSegmentLoaded(reLoaded):
+            # Reserved-future arm (plan §799 / typestate §305-388 do not
+            # currently emit this from writeItem). Rebuild a Ready from
+            # the carried pin/queue/pendingItem and re-enter the loop so
+            # the next iteration reissues loadSegment -> checkFull. The
+            # `match` arm bind is immutable, so copy `pendingItem` to a
+            # mutable local before moving it into the rebuilt state.
+            var pending = reLoaded.pendingItem
+            ready = USPMCPushReady[T, S, MaxThreads](
+              pinnedHandle: reLoaded.pinnedHandle,
+              pinnedEpoch: reLoaded.pinnedEpoch,
+              queue: reLoaded.queue,
+              pendingItem: move(pending),
+            )
+            continue
+          USPMCPushSegmentClosed(closedState):
+            # Starvation escalation: bridge SegmentClosed -> SegmentFull via
+            # closeSegmentDone, then allocate a fresh segment and retry.
+            let full = closedState.closeSegmentDone()
+            let newSeg = cast[ptr ts_spmc_push.Segment[S, T]](newSegment[S, T]())
+            ready = full.allocateNewSegment(newSeg)
+            continue
 
 proc push*[S: static int, T; MaxThreads: static int](
     self: var UnboundedSipmuc[S, T, MaxThreads], items: openArray[T]

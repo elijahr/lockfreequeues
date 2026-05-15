@@ -335,7 +335,20 @@ proc writeItem*[T; S, MT: static int](
   var closureRetryCount = 0
   while true:
     # Publish-CAS attempt.
-    seg.data[myTailSlot] = pending
+    # Move-only-T restructure: write the value into the cell with `move`
+    # so types lacking copy hooks (e.g. `MoveOnly` in the move-analyzer
+    # baseline) compile. The publish-CAS release-fence carries the data
+    # write to consumers (design brief §2.4), and the cell value is
+    # private to the producer until the CAS wins. On CAS-failure the
+    # cell is `CellClosed`; we recover the value back into `pending` via
+    # `move(seg.data[myTailSlot])` immediately after the CAS-fail check,
+    # leaving the cell in a moved-from state. Soundness today rests on
+    # the fact that no consumer writes `CellClosed` (it is set only by
+    # this proc's SegmentClosed-escalation T&S CAS on `seg.closed`, which
+    # closes the segment, not individual cells). This keeps `pending`
+    # valid for both the next loop iteration's data-write and the
+    # escalation-branch `pendingItem: move(pending)` transitions.
+    seg.data[myTailSlot] = move(pending)
     var expected: uint8 = CellEmpty
     let publishWon = seg.cellState[myTailSlot].compareExchange(
         expected, CellFilled, moAcquireRelease, moAcquire)
@@ -358,6 +371,23 @@ proc writeItem*[T; S, MT: static int](
     # would have won and exited, never re-entering this slot.
     doAssert expected == CellClosed,
       "SPMC writeItem: cell observed unexpected state on publish-CAS failure"
+    # Recover `pending` from the just-failed cell. The cell is `CellClosed`.
+    # The CAS-fail recovery path is exercise-dormant in the current code:
+    # no consumer writes `CellClosed` today (it is set only by writeItem
+    # itself in the SegmentClosed escalation T&S CAS on `seg.closed`,
+    # which closes the segment, not individual cells), so the producer is
+    # the sole writer to `seg.data[myTailSlot]` and leaving the cell in a
+    # moved-from state is sound. Task 9 (per impl plan §904+) introduces
+    # consumer-side close-CAS for the awaitingTail-strand bug fix; when
+    # that lands, the consumer's `readItem` (currently
+    # `unbounded_spmc_pop.nim:251`, tail-bound via `tryClaimSlot`) MUST
+    # add a `CellFilled` gate before reading `data[i]`, otherwise this
+    # recovery path becomes unsound (a consumer could read a moved-from
+    # cell). This pre-condition is a Task 9 design dependency. Recovering
+    # here keeps `pending` valid for the next loop iteration's
+    # `seg.data[newSlot] = move(pending)` write AND for the
+    # escalation-branch transitions below.
+    pending = move(seg.data[myTailSlot])
     # I4: assert bound INSIDE increment branch, BEFORE threshold compare.
     closureRetryCount += 1
     doAssert closureRetryCount <= StarvingThreshold,
