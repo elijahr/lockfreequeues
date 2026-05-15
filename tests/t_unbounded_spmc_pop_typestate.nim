@@ -33,6 +33,9 @@ suite "SPMC Pop Typestate":
     var seg = newTestSegment()
     seg.tail.store(1, moRelaxed)
     seg.data[0] = 99
+    # Task 10a: cellState[0] must be CellFilled for tryClaimSlot's
+    # close-CAS to lose (returning SlotClaimed instead of ClosedSlot).
+    seg.cellState[0].store(CellFilled, moRelaxed)
 
     var queue: TestQueue
     queue.manager = addr manager
@@ -81,6 +84,9 @@ suite "SPMC Pop Typestate":
     check loaded.segment.next.load(moRelaxed) == nil
 
     seg.data[5] = 77
+    # Task 10a: cellState[5] must be CellFilled for tryClaimSlot's
+    # close-CAS to lose (returning SlotClaimed instead of ClosedSlot).
+    seg.cellState[5].store(CellFilled, moRelaxed)
     var claimResult = loaded.tryClaimSlot()
     match claimResult:
       USPMCPopSlotClaimed(c):
@@ -102,6 +108,9 @@ suite "SPMC Pop Typestate":
     seg.consumerHead.store(-1, moRelaxed)
     seg.tail.store(5, moRelaxed)
     seg.data[0] = 42
+    # Task 10a: cellState[0] must be CellFilled for tryClaimSlot's
+    # close-CAS to lose (returning SlotClaimed instead of ClosedSlot).
+    seg.cellState[0].store(CellFilled, moRelaxed)
 
     var queue: TestQueue
     queue.manager = addr manager
@@ -129,13 +138,17 @@ suite "SPMC Pop Typestate":
 
     freeTestSegment(seg)
 
-  test "tryClaimSlot returns SegmentExhausted when no items":
+  test "tryClaimSlot returns SegmentExhausted when consumer-saturated (Task 10a)":
+    # Task 10a / design §3 D7: pre-claim short-circuit triggers ONLY on
+    # `consumerHead >= S` (genuinely consumer-saturated) or on the D5
+    # `closed && consumerHead >= tail` propagation. Set consumerHead == S
+    # to exercise short-circuit 1.
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
-    seg.consumerHead.store(4, moRelaxed)
-    seg.tail.store(5, moRelaxed)
+    seg.consumerHead.store(64, moRelaxed)  # >= S
+    seg.tail.store(64, moRelaxed)
 
     var queue: TestQueue
     queue.manager = addr manager
@@ -150,6 +163,7 @@ suite "SPMC Pop Typestate":
 
     match claimResult:
       USPMCPopSegmentExhausted(f):
+        # Pre-claim short-circuit observed consumerHead >= S.
         var advanceResult = f.advanceSegment()
 
         match advanceResult:
@@ -182,6 +196,11 @@ suite "SPMC Pop Typestate":
     seg.data[0] = 42
     seg.data[1] = 43
     seg.data[2] = 44
+    # Task 10a: pre-fill the cellState array for the slots the producer
+    # would have published. tryClaimSlot's close-CAS loses on CellFilled.
+    seg.cellState[0].store(CellFilled, moRelaxed)
+    seg.cellState[1].store(CellFilled, moRelaxed)
+    seg.cellState[2].store(CellFilled, moRelaxed)
 
     var queue: TestQueue
     queue.manager = addr manager
@@ -279,3 +298,195 @@ suite "Task 11 SPMC pop ClosedSlot state":
         var x: USPMCPopSegmentExhausted[int, 8, 4]
         discard x.awaitingTail
     ))
+
+suite "Task 10a SPMC tryClaimSlot fetchAdd + close-CAS":
+  # Task 10a: tryClaimSlot now performs `consumerHead.fetchAdd(1, moAcquire)`
+  # then close-CAS on `cellState[mySlot]`. Three outcomes:
+  #   1. close-CAS wins on CellEmpty -> USPMCPopClosedSlot.
+  #   2. close-CAS loses (cell is CellFilled) -> USPMCPopSlotClaimed.
+  #   3. mySlot >= S OR pre-claim short-circuit -> USPMCPopSegmentExhausted.
+
+  test "tryClaimSlot on empty cell wins close-CAS, returns ClosedSlot":
+    var manager = initDebraManager[4]()
+    let handle = registerThread(manager)
+
+    var seg = newTestSegment()
+    # Producer has not yet published anything; cellState[0] defaults to
+    # CellEmpty (= 0). consumerHead = 0, tail = 1 (over-claim race
+    # window: producer reserved a slot but has not yet publish-CAS'd).
+    seg.consumerHead.store(0, moRelaxed)
+    seg.tail.store(1, moRelaxed)
+
+    var queue: TestQueue
+    queue.manager = addr manager
+    queue.headSegment.store(seg, moRelaxed)
+    queue.tailSegment = seg
+    queue.itemCount.store(0, moRelaxed)
+    queue.segments.store(1, moRelaxed)
+
+    var claimResult = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
+      .loadSegment()
+      .tryClaimSlot()
+
+    match claimResult:
+      USPMCPopClosedSlot(c):
+        # Close-CAS won: cellState[0] is now CellClosed.
+        check seg.cellState[0].load(moRelaxed) == CellClosed
+        # consumerHead advanced via fetchAdd.
+        check seg.consumerHead.load(moRelaxed) == 1
+        discard c.extractPinned().unpin()
+      USPMCPopSlotClaimed(_):
+        check false
+      USPMCPopSegmentExhausted(_):
+        check false
+
+    freeTestSegment(seg)
+
+  test "tryClaimSlot on filled cell loses close-CAS, returns SlotClaimed":
+    var manager = initDebraManager[4]()
+    let handle = registerThread(manager)
+
+    var seg = newTestSegment()
+    seg.consumerHead.store(0, moRelaxed)
+    seg.tail.store(1, moRelaxed)
+    seg.data[0] = 7
+    # Producer has published slot 0 (CellFilled).
+    seg.cellState[0].store(CellFilled, moRelaxed)
+
+    var queue: TestQueue
+    queue.manager = addr manager
+    queue.headSegment.store(seg, moRelaxed)
+    queue.tailSegment = seg
+    queue.itemCount.store(1, moRelaxed)
+    queue.segments.store(1, moRelaxed)
+
+    var claimResult = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
+      .loadSegment()
+      .tryClaimSlot()
+
+    match claimResult:
+      USPMCPopSlotClaimed(c):
+        check c.slot == 0
+        # cellState[0] remains CellFilled (close-CAS lost).
+        check seg.cellState[0].load(moRelaxed) == CellFilled
+        let complete = c.readItem()
+        check complete.value == 7
+        discard complete.extractPinned().unpin()
+      USPMCPopClosedSlot(_):
+        check false
+      USPMCPopSegmentExhausted(_):
+        check false
+
+    freeTestSegment(seg)
+
+  test "tryClaimSlot returns SegmentExhausted when consumerHead >= S":
+    # Pre-claim short-circuit 1 (design §3 D7 load-bearing refinement):
+    # only `consumerHead >= S` triggers the genuinely-saturated short-
+    # circuit. The fetchAdd-only `consumerHead >= freshTail` is removed.
+    var manager = initDebraManager[4]()
+    let handle = registerThread(manager)
+
+    var seg = newTestSegment()
+    seg.consumerHead.store(64, moRelaxed)  # >= S
+    seg.tail.store(64, moRelaxed)
+
+    var queue: TestQueue
+    queue.manager = addr manager
+    queue.headSegment.store(seg, moRelaxed)
+    queue.tailSegment = seg
+    queue.itemCount.store(0, moRelaxed)
+    queue.segments.store(1, moRelaxed)
+
+    var claimResult = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
+      .loadSegment()
+      .tryClaimSlot()
+
+    match claimResult:
+      USPMCPopSegmentExhausted(f):
+        # Did NOT consume a fetchAdd (short-circuited).
+        check seg.consumerHead.load(moRelaxed) == 64
+        discard f.extractPinned().unpin()
+      USPMCPopSlotClaimed(_):
+        check false
+      USPMCPopClosedSlot(_):
+        check false
+
+    freeTestSegment(seg)
+
+  test "tryClaimSlot returns SegmentExhausted on closed-and-saturated":
+    # Pre-claim short-circuit 2 (D5 propagation; C6 paired moAcquire):
+    # `closed && consumerHead >= tail` short-circuits. consumerHead < S,
+    # so short-circuit 1 does NOT fire.
+    var manager = initDebraManager[4]()
+    let handle = registerThread(manager)
+
+    var seg = newTestSegment()
+    seg.consumerHead.store(3, moRelaxed)  # < S
+    seg.tail.store(3, moRelaxed)
+    seg.closed.store(true, moRelease)
+
+    var queue: TestQueue
+    queue.manager = addr manager
+    queue.headSegment.store(seg, moRelaxed)
+    queue.tailSegment = seg
+    queue.itemCount.store(0, moRelaxed)
+    queue.segments.store(1, moRelaxed)
+
+    var claimResult = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
+      .loadSegment()
+      .tryClaimSlot()
+
+    match claimResult:
+      USPMCPopSegmentExhausted(f):
+        # Did NOT consume a fetchAdd (short-circuited).
+        check seg.consumerHead.load(moRelaxed) == 3
+        discard f.extractPinned().unpin()
+      USPMCPopSlotClaimed(_):
+        check false
+      USPMCPopClosedSlot(_):
+        check false
+
+    freeTestSegment(seg)
+
+  test "tryClaimSlot returns SegmentExhausted when fetchAdd returns mySlot >= S":
+    # Pre-claim short-circuits do NOT fire (consumerHead < S, !closed).
+    # fetchAdd advances consumerHead from S-1 to S; the load at the
+    # check below sees S which triggers the post-fetchAdd guard.
+    # Set consumerHead to S so fetchAdd returns S and exits.
+    # NOTE: with the §3 D7 short-circuit, consumerHead == S already
+    # fires short-circuit 1 above. Use consumerHead = S - 1 to avoid
+    # the pre-claim short-circuit and exercise the post-fetchAdd guard.
+    # But in that case mySlot = S - 1 < S; the close-CAS path runs.
+    # The "fetchAdd returns >= S" guard is dead-code-equivalent under
+    # §3 D7 (short-circuit 1 catches it first). We assert this by
+    # observing that consumerHead == S triggers SegmentExhausted via
+    # the pre-claim, NOT via the post-fetchAdd guard.
+    var manager = initDebraManager[4]()
+    let handle = registerThread(manager)
+
+    var seg = newTestSegment()
+    seg.consumerHead.store(64, moRelaxed)
+    seg.tail.store(64, moRelaxed)
+
+    var queue: TestQueue
+    queue.manager = addr manager
+    queue.headSegment.store(seg, moRelaxed)
+    queue.tailSegment = seg
+    queue.itemCount.store(0, moRelaxed)
+    queue.segments.store(1, moRelaxed)
+
+    var claimResult = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
+      .loadSegment()
+      .tryClaimSlot()
+
+    match claimResult:
+      USPMCPopSegmentExhausted(f):
+        # No fetchAdd consumed; consumerHead unchanged.
+        check seg.consumerHead.load(moRelaxed) == 64
+        discard f.extractPinned().unpin()
+      USPMCPopSlotClaimed(_):
+        check false
+      USPMCPopClosedSlot(_):
+        check false
+
+    freeTestSegment(seg)

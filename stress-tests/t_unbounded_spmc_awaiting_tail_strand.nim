@@ -16,22 +16,26 @@
 ##      because c1IsTheTargetThread is false on its thread.
 ##   4. Driver sends c1ProceedChan; C1 enters tryClaimSlot with its
 ##      stale snapshot. Pre-claim short-circuit (loaded.consumerHead=0
-##      < loaded.tail=1) is bypassed. fetchAdd returns mySlot=1;
-##      consumerHead -> 2. Post-claim re-check: mySlot(1) >=
-##      seg.tail(1) -> awaitingTail=true. Hook A fires.
-##   5. Driver releases producer's slot-1 publish (token 2), joins
-##      producer-then-allocates-seg2-and-publishes-slot-0-of-seg2 path
-##      after a third token (token 3) for seg2 slot 0. Then releases
-##      C1 via awaitingTailGoChan to break out.
-##   6. Main thread (C3-role) attempts to drain seg1 slot 1. Under HEAD,
-##      its fetchAdd returns mySlot=2 >= S=2 -> awaitingTail=false.
-##      advanceSegment sees seg1.next == seg2 (non-nil), F1' guard
-##      passes (freshConsumerHead=2 NOT < S=2), headSegment CAS wins,
-##      seg1 is DEBRA-retired. The loop continues: loadSegment on seg2
-##      returns the seg2-slot-0 item (seq 3). seg1 slot 1's payload
-##      (seq 2) is orphaned. Under post-Task-11 LCRQ cellState, slot 1's
-##      CellFilled state is observable; seq 2 is drained by some
-##      consumer; received[1] == true; totalConsumed == 3.
+##      < loaded.tail=1) is bypassed. C1's fetchAdd returns mySlot=1;
+##      close-CAS on cellState[1] (still CellEmpty because Hook B holds
+##      the producer between data-write and publish-CAS) WINS -> emits
+##      USPMCPopClosedSlot -> Hook A fires.
+##   5. Driver releases producer's slot-1 publish (token 2). Under
+##      post-Task-11 LCRQ cellState, C1's close-CAS already won -> the
+##      producer's publish-CAS on seg1 slot 1 FAILS (cellState=CellClosed),
+##      recovery restores pending=seq2, the facade escalates SegmentClosed
+##      -> allocateNewSegment(seg2) -> writeItem RETRY on seg2 slot 0.
+##      Token 3 releases that retry (pending=seq2 lands at seg2 slot 0).
+##      Token 4 releases the producer's third push(seq3) on seg2 slot 1.
+##      Then releases C1 via awaitingTailGoChan to break out.
+##   6. Under post-Task-11 LCRQ cellState, C1's close-CAS wins -> ClosedSlot
+##      -> seq 2 has NOT yet been published; producer's publish-CAS will
+##      FAIL (cellState=CellClosed), recovery restores pending=seq2,
+##      escalates SegmentClosed, allocates seg2, retries writeItem on
+##      seg2 slot 0 -> pending=seq2 lands there. Producer's third
+##      push(seq3) writes seg2 slot 1. C3 (main thread) drains seg2:
+##      seq 2 from slot 0, seq 3 from slot 1. received[1]==true,
+##      received[2]==true, totalConsumed==3.
 ##
 ## Determinism is established by stdlib `Channel[T]` send/recv across
 ## five channels (Hook A pair, Hook B, Hook C pair). The thread-local
@@ -96,14 +100,21 @@ type
 
 proc producerThreadProc(ctx: ptr ProducerCtx) {.thread.} =
   {.cast(gcsafe).}:
-    # Three publishes. Each writeItem call in unbounded_spmc_push.nim's
-    # Hook B blocks on producerPublishGoChan.recv() before the
-    # tail.store(moRelease). Driver pre-loads token 1 (slot 0 of seg1);
-    # token 2 is sent after C1 reaches Hook A (slot 1 of seg1); token 3
-    # is sent after the producer's seg2 allocation completes (slot 0 of
-    # seg2). The third push triggers checkFull -> SegmentFull ->
-    # allocateNewSegment -> retry, which links seg2 via
-    # seg1.next.store(seg2, moRelease).
+    # Three push() calls, FOUR writeItem invocations under LCRQ semantics.
+    # Each writeItem call in unbounded_spmc_push.nim's Hook B blocks on
+    # producerPublishGoChan.recv() between data-write and publish-CAS.
+    #   - writeItem(seq1) on seg1 slot 0 — consumes token 1 (Phase 0 pre-load);
+    #     publish-CAS WINS (cellState=CellEmpty -> CellFilled).
+    #   - writeItem(seq2) on seg1 slot 1 — consumes token 2 (Phase 7); under
+    #     post-Task-11 LCRQ, C1's close-CAS has already flipped cellState[1]
+    #     to CellClosed, so this publish-CAS FAILS. The pop()-side recovery
+    #     restores pending=seq2 and the facade escalates SegmentClosed ->
+    #     allocateNewSegment(seg2) -> seg1.next.store(seg2, moRelease) ->
+    #     writeItem RETRY.
+    #   - writeItem(seq2) RETRY on seg2 slot 0 — consumes token 3 (Phase 8
+    #     first send); publish-CAS WINS; pending=seq2 lands at seg2 slot 0.
+    #   - writeItem(seq3) on seg2 slot 1 — consumes token 4 (Phase 8 second
+    #     send); publish-CAS WINS.
     ctx.queue[].push(encodeItem(0, 1))
     ctx.queue[].push(encodeItem(0, 2))
     ctx.queue[].push(encodeItem(0, 3))
@@ -259,17 +270,24 @@ suite "UnboundedSipmuc awaitingTail-strand regression":
     # Phase 6 — wait for C1's Hook A signal.
     discard awaitingTailReachedChan.recv()
 
-    # Phase 7 — release producer's slot-1 publish (token 2). Producer
-    # publishes seg1 slot 1 (data[1] was written before Hook B blocked;
-    # tail.store(2, moRelease) runs now). Producer's loop retries:
-    # checkFull sees tail=2 >= S=2 -> SegmentFull -> allocateNewSegment
-    # -> seg1.next.store(seg2, moRelease). Loop loadSegment on seg2,
-    # checkFull SlotReady for seg2 slot 0. Producer's third writeItem
-    # writes data[0]=seq3 and blocks on producerPublishGoChan.recv().
+    # Phase 7 — release producer's seg1 slot-1 publish attempt (token 2).
+    # Under post-Task-11 LCRQ cellState, C1's close-CAS has already
+    # flipped cellState[1] to CellClosed. Producer's publish-CAS therefore
+    # FAILS: writeItem returns SegmentClosed, recovery restores
+    # pending=seq2, the facade escalates -> allocateNewSegment(seg2) ->
+    # seg1.next.store(seg2, moRelease) -> writeItem RETRY on seg2 slot 0.
+    # The retry writes data[0]=seq2 and blocks on producerPublishGoChan.recv().
     producerPublishGoChan.send(1)
 
-    # Phase 8 — release producer's seg2 slot-0 publish (token 3).
-    # Producer publishes seg2 slot 0, exits push loop, returns. Join.
+    # Phase 8 — release producer's seg2 slot-0 publish RETRY (token 3).
+    # writeItem(seq2) on seg2 slot 0 succeeds (publish-CAS wins).
+    # push(seq2) returns. Producer's next push(seq3) writes data[1]=seq3
+    # on seg2 slot 1 and blocks on producerPublishGoChan.recv().
+    producerPublishGoChan.send(1)
+
+    # Phase 8b — release producer's seg2 slot-1 publish (token 4).
+    # writeItem(seq3) on seg2 slot 1 succeeds, producer exits push loop,
+    # returns. Join.
     producerPublishGoChan.send(1)
     joinThread(prodThread)
 

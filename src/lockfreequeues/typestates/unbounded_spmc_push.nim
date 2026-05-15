@@ -333,6 +333,12 @@ proc writeItem*[T; S, MT: static int](
         pendingItem: move(pending),
       )
   var closureRetryCount = 0
+  when defined(awaitingTailTestHook):
+    # Hook B fires ONCE per writeItem call (not per Shape A retry
+    # iteration). The strand stress test sends N tokens for N writeItem
+    # calls; gating each Shape A retry would consume extra tokens and
+    # deadlock. See plan §698-797 amendment 2026-05-15.
+    var hookBFired = false
   while true:
     # Publish-CAS attempt.
     # Move-only-T restructure: write the value into the cell with `move`
@@ -342,23 +348,40 @@ proc writeItem*[T; S, MT: static int](
     # private to the producer until the CAS wins. On CAS-failure the
     # cell is `CellClosed`; we recover the value back into `pending` via
     # `move(seg.data[myTailSlot])` immediately after the CAS-fail check,
-    # leaving the cell in a moved-from state. Soundness today rests on
-    # the fact that no consumer writes `CellClosed` (it is set only by
-    # this proc's SegmentClosed-escalation T&S CAS on `seg.closed`, which
-    # closes the segment, not individual cells). This keeps `pending`
+    # leaving the cell in a moved-from state. Under Task 10a LCRQ
+    # cellState, `CellClosed` is also written by consumers — the
+    # close-CAS-on-empty in `unbounded_spmc_pop.nim:284-285`
+    # (`tryClaimSlot`) transitions `CellEmpty -> CellClosed`. Soundness
+    # of the recovery still holds: the consumer's
+    # `consumerHead.fetchAdd(1, moAcquire)` returns a UNIQUE `mySlot`
+    # per consumer (design §6 D3 / §7.1 E2), so no peer consumer can
+    # close OUR slot; and the producer itself writes only `CellFilled`
+    # to individual cells via this publish-CAS — the
+    # SegmentClosed-escalation T&S targets `seg.closed` (a
+    # segment-level bool), not `cellState[i]`. Therefore, if our
+    # publish-CAS fails, the observed state MUST be `CellClosed` written
+    # by some consumer's close-CAS — and that consumer cannot have been
+    # us (single producer, single writer of this cell's data) nor a peer
+    # consumer (fetchAdd uniqueness), so it was the over-claiming
+    # consumer paired with our exact `mySlot`. Recovery leaves `pending`
     # valid for both the next loop iteration's data-write and the
     # escalation-branch `pendingItem: move(pending)` transitions.
     seg.data[myTailSlot] = move(pending)
+    # Hook B (Task 7 amendment 2026-05-15, bundled into Task 10a):
+    # re-placed from the publish-CAS-win site into the strand-observable
+    # window between the per-iteration data-write and the publish-CAS.
+    # Here `cellState[myTailSlot]` is still `CellEmpty`, so a consumer's
+    # close-CAS can win deterministically while Hook B blocks. The
+    # `hookBFired` guard ensures one token consumption per writeItem
+    # call. See plan §698-797 amended block (2026-05-15).
+    when defined(awaitingTailTestHook):
+      if not hookBFired:
+        hookBFired = true
+        discard producerPublishGoChan.recv()
     var expected: uint8 = CellEmpty
     let publishWon = seg.cellState[myTailSlot].compareExchange(
         expected, CellFilled, moAcquireRelease, moAcquire)
     if publishWon:
-      # Hook B (Task 7 amendment 2026-05-14): re-anchored from old
-      # `tail.store(moRelease)` to new publish-CAS-win site so the
-      # awaitingTail-strand stress test still has a deterministic
-      # producer-publish gate. See plan §698-784 amended block.
-      when defined(awaitingTailTestHook):
-        discard producerPublishGoChan.recv()
       discard slotReady.queue.itemCount.fetchAdd(1, moRelaxed)
       return USPMCPushCommitResult[T, S, MT] ->
         USPMCPushComplete[T, S, MT](
@@ -372,19 +395,18 @@ proc writeItem*[T; S, MT: static int](
     doAssert expected == CellClosed,
       "SPMC writeItem: cell observed unexpected state on publish-CAS failure"
     # Recover `pending` from the just-failed cell. The cell is `CellClosed`.
-    # The CAS-fail recovery path is exercise-dormant in the current code:
-    # no consumer writes `CellClosed` today (it is set only by writeItem
-    # itself in the SegmentClosed escalation T&S CAS on `seg.closed`,
-    # which closes the segment, not individual cells), so the producer is
-    # the sole writer to `seg.data[myTailSlot]` and leaving the cell in a
-    # moved-from state is sound. Task 9 (per impl plan §904+) introduces
-    # consumer-side close-CAS for the awaitingTail-strand bug fix; when
-    # that lands, the consumer's `readItem` (currently
-    # `unbounded_spmc_pop.nim:251`, tail-bound via `tryClaimSlot`) MUST
-    # add a `CellFilled` gate before reading `data[i]`, otherwise this
-    # recovery path becomes unsound (a consumer could read a moved-from
-    # cell). This pre-condition is a Task 9 design dependency. Recovering
-    # here keeps `pending` valid for the next loop iteration's
+    # Task 10a introduces consumer-side close-CAS in `tryClaimSlot` (per
+    # impl plan §1108+; close-CAS-on-empty in
+    # `unbounded_spmc_pop.nim`). With Task 10a landed, the consumer's
+    # `readItem` MUST observe `CellFilled` before reading `data[i]`,
+    # otherwise this recovery path is unsound (a consumer could read a
+    # moved-from cell). Task 10a satisfies the `CellFilled` pre-condition
+    # via the close-CAS HB chain: `USPMCPopSlotClaimed` is emitted only
+    # after `tryClaimSlot`'s failed close-CAS observes `CellFilled` with
+    # `moAcquire` ordering, which pairs with this proc's publish-CAS
+    # `moAcquireRelease` (design §7.1 E1). `readItem` also asserts the
+    # invariant defensively in debug builds. Recovering here keeps
+    # `pending` valid for the next loop iteration's
     # `seg.data[newSlot] = move(pending)` write AND for the
     # escalation-branch transitions below.
     pending = move(seg.data[myTailSlot])

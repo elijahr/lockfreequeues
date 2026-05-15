@@ -469,14 +469,25 @@ proc pop*[S: static int, T; MaxThreads: static int](
           result = some(complete.value)
           break
         USPMCPopClosedSlot(closedSlot):
-          # Task 9 (TYPE-ONLY, 2026-05-15): the ClosedSlot arm is wired
-          # but UNREACHABLE in production — `tryClaimSlot` does not yet
-          # emit USPMCPopClosedSlot. Task 10a introduces the close-CAS
-          # in `tryClaimSlot` that produces this state; once that lands,
-          # this arm becomes the over-claim resolution path
-          # (consumer wins close-CAS on an empty cell, `pop()` returns
-          # `none(T)` without advancing headSegment).
+          # Task 10a (LIVE, 2026-05-15): consumer's close-CAS in
+          # `tryClaimSlot` won on an empty cell — the over-claim
+          # resolution path. `pop()` returns `none(T)` without
+          # advancing headSegment; the producer's later publish on
+          # this slot will fail its CAS, recover its `pending` value,
+          # and retry on the next slot (see
+          # `unbounded_spmc_push.nim:392-412`).
           #
+          # Hook A re-anchor (Task 10a amendment 2026-05-15): this is
+          # the new awaitingTail-strand deterministic interleave site.
+          # Task 9 deleted the prior `if exhausted.awaitingTail:` site;
+          # under LCRQ, the close-CAS-wins branch is the natural
+          # observation point for "C1 has reached the strand site with
+          # its pin still held". The hook is a pure wait
+          # (Channel.send + Channel.recv only); no algorithm-observable
+          # state mutation. Compile-gated by `-d:awaitingTailTestHook`.
+          when defined(awaitingTailTestHook):
+            awaitingTailReachedChan.send(1)
+            discard awaitingTailGoChan.recv()
           # I-1 (Pin-leak preservation): MUST `break`, not `return`.
           # This arm sits inside the `withPin:` scope opened above;
           # `return` short-circuits the scope and skips the implicit
