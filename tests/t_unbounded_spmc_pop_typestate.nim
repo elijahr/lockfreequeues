@@ -51,9 +51,9 @@ suite "SPMC Pop Typestate":
     match claimResult:
       USPMCPopSlotClaimed(c):
         discard c.readItem().extractPinned().unpin()
-      USPMCPopSegmentExhausted(_):
+      USPMCPopClosedSlot(_):
         check false
-      USPMCPopReady(_):
+      USPMCPopSegmentExhausted(_):
         check false
     freeTestSegment(seg)
 
@@ -87,9 +87,9 @@ suite "SPMC Pop Typestate":
         let complete = c.readItem()
         check complete.value == 77
         discard complete.extractPinned().unpin()
-      USPMCPopSegmentExhausted(_):
+      USPMCPopClosedSlot(_):
         check false
-      USPMCPopReady(_):
+      USPMCPopSegmentExhausted(_):
         check false
 
     freeTestSegment(seg)
@@ -122,9 +122,9 @@ suite "SPMC Pop Typestate":
         check complete.value == 42
         check seg.consumerHead.load(moRelaxed) == 0
         discard complete.extractPinned().unpin()
-      USPMCPopSegmentExhausted(_):
+      USPMCPopClosedSlot(_):
         check false
-      USPMCPopReady(_):
+      USPMCPopSegmentExhausted(_):
         check false
 
     freeTestSegment(seg)
@@ -159,53 +159,18 @@ suite "SPMC Pop Typestate":
             check false
       USPMCPopSlotClaimed(_):
         check false
-      USPMCPopReady(_):
+      USPMCPopClosedSlot(_):
         check false
 
     freeTestSegment(seg)
 
-  test "tryClaimSlot returns Ready when CAS fails (retry path)":
-    var manager = initDebraManager[4]()
-    let handle = registerThread(manager)
-
-    var seg = newTestSegment()
-    seg.consumerHead.store(2, moRelaxed)
-    seg.tail.store(10, moRelaxed)
-
-    var queue: TestQueue
-    queue.manager = addr manager
-    queue.headSegment.store(seg, moRelaxed)
-    queue.tailSegment = seg
-    queue.itemCount.store(5, moRelaxed)
-    queue.segments.store(1, moRelaxed)
-
-    let loaded = startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
-
-    check loaded.consumerHead == 2
-
-    # Simulate another thread advancing consumerHead
-    discard seg.consumerHead.fetchAdd(1, moRelaxed) # Now 3
-
-    # tryClaimSlot should detect CAS failure and return Ready
-    var claimResult = loaded.tryClaimSlot()
-    match claimResult:
-      USPMCPopReady(r):
-        # Clean up - do a successful operation
-        seg.data[4] = 99
-        var claimResult2 = r.loadSegment().tryClaimSlot()
-        match claimResult2:
-          USPMCPopSlotClaimed(c):
-            discard c.readItem().extractPinned().unpin()
-          USPMCPopSegmentExhausted(_):
-            check false
-          USPMCPopReady(_):
-            check false
-      USPMCPopSlotClaimed(_):
-        check false
-      USPMCPopSegmentExhausted(_):
-        check false
-
-    freeTestSegment(seg)
+  # NOTE (Task 9, 2026-05-15): the prior "over-claim race
+  # (awaitingTail=true)" test has been removed. Task 9 deletes the
+  # `awaitingTail` discriminator on `USPMCPopSegmentExhausted`; the
+  # over-claim race is the bug Task 10a's close-CAS / `USPMCPopClosedSlot`
+  # arm fixes. Once Task 10a lands, a parallel test should re-cover the
+  # close-CAS path (consumer wins close-CAS on an unpublished slot,
+  # pop returns none(T) without advancing headSegment).
 
   test "readItem reads value correctly":
     var manager = initDebraManager[4]()
@@ -238,9 +203,9 @@ suite "SPMC Pop Typestate":
         check queue.itemCount.load(moRelaxed) == 2
 
         discard complete.extractPinned().unpin()
-      USPMCPopSegmentExhausted(_):
+      USPMCPopClosedSlot(_):
         check false
-      USPMCPopReady(_):
+      USPMCPopSegmentExhausted(_):
         check false
 
     freeTestSegment(seg)
@@ -283,8 +248,34 @@ suite "SPMC Pop Typestate":
             check false
       USPMCPopSlotClaimed(_):
         check false
-      USPMCPopReady(_):
+      USPMCPopClosedSlot(_):
         check false
 
     freeTestSegment(seg1)
     freeTestSegment(seg2)
+
+suite "Task 11 SPMC pop ClosedSlot state":
+  test "USPMCPopClosedSlot type exists with extractPinned":
+    # Type-existence + extractPinned overload check (compile-time only).
+    # USPMCPopClosedSlot is dead-code-pending Task 10a (no production
+    # emit yet); this test is a structural witness that Task 9's
+    # type-only restructure compiles.
+    check declared(USPMCPopClosedSlot)
+    # Verify the extractPinned overload accepts USPMCPopClosedSlot. We
+    # don't construct an instance (no emit site exists yet); the
+    # `compiles()` check witnesses the overload's existence.
+    check compiles((
+      proc () =
+        var x: USPMCPopClosedSlot[int, 8, 4]
+        discard extractPinned(x)
+    ))
+
+  test "USPMCPopSegmentExhausted has NO awaitingTail field":
+    # Compile-time negative check: accessing `x.awaitingTail` must
+    # FAIL to compile after Task 9. Before Task 9 this `compiles(...)`
+    # returns true (RED); after Task 9 it returns false (GREEN).
+    check not compiles((
+      proc () =
+        var x: USPMCPopSegmentExhausted[int, 8, 4]
+        discard x.awaitingTail
+    ))

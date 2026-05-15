@@ -41,17 +41,32 @@ type
     slot*: int
 
   USPMCPopSegmentExhausted*[T; S, MT: static int] = object
+    ## Consumer-saturated segment: pre-claim short-circuit observed
+    ## consumerHead >= freshTail OR fetchAdd returned a slot index >= S.
+    ## Facade advances headSegment on this state. Task 9 removed the
+    ## prior `awaitingTail: bool` discriminator; the over-claim race
+    ## (formerly `awaitingTail=true`) is resolved at Task 10a via the
+    ## `USPMCPopClosedSlot` arm produced by the close-CAS in
+    ## `tryClaimSlot`.
     pinnedHandle*: ThreadHandle[MT]
     pinnedEpoch*: uint64
     queue*: ptr UnboundedSipmucBase[S, T, MT]
     segment*: ptr Segment[S, T]
-    # awaitingTail: distinguishes "segment is consumer-saturated, advance
-    # headSegment" (false) from "we reserved a slot via fetchAdd but the
-    # producer has not yet released tail past that slot, retry without
-    # advancing" (true). The facade dispatches on this field. See design
-    # §12 R2 for why this is a bool on SegmentExhausted rather than a
-    # separate enum or facade-side re-check.
-    awaitingTail*: bool
+
+  USPMCPopClosedSlot*[T; S, MT: static int] = object
+    ## Task 11 LCRQ: consumer's close-CAS won on an empty cell. Terminal:
+    ## facade extracts pin and returns `none(T)`. Carries no segment
+    ## pointer (the close-CAS already resolved this slot's race;
+    ## headSegment is NOT advanced — the next pop() call re-enters on
+    ## the same headSegment).
+    ##
+    ## Status (Task 9, 2026-05-15): TYPE-ONLY. The state is declared and
+    ## wired into the typestate macro / facade match arm but no
+    ## production code path emits it yet. Task 10a introduces the
+    ## close-CAS in `tryClaimSlot` that produces this state.
+    pinnedHandle*: ThreadHandle[MT]
+    pinnedEpoch*: uint64
+    queue*: ptr UnboundedSipmucBase[S, T, MT]
 
   USPMCPopEmpty*[T; S, MT: static int] = object
     pinnedHandle*: ThreadHandle[MT]
@@ -72,16 +87,19 @@ typestate USPMCPopContext[T, S: static int, MT: static int]:
   states USPMCPopReady[T, S, MT],
     USPMCPopSegmentLoaded[T, S, MT],
     USPMCPopSlotClaimed[T, S, MT],
+    USPMCPopClosedSlot[T, S, MT],
     USPMCPopSegmentExhausted[T, S, MT],
-    USPMCPopEmpty[T, S, MT],
-    USPMCPopComplete[T, S, MT]
+    USPMCPopComplete[T, S, MT],
+    USPMCPopEmpty[T, S, MT]
   transitions:
     USPMCPopReady[T, S, MT] -> USPMCPopSegmentLoaded[T, S, MT]
     USPMCPopSegmentLoaded[T, S, MT] ->
       (
-        USPMCPopSlotClaimed[T, S, MT] | USPMCPopSegmentExhausted[T, S, MT]
+        USPMCPopSlotClaimed[T, S, MT] | USPMCPopClosedSlot[T, S, MT] |
+          USPMCPopSegmentExhausted[T, S, MT]
       ) as USPMCSlotClaimResult[T, S, MT]
     USPMCPopSlotClaimed[T, S, MT] -> USPMCPopComplete[T, S, MT]
+    USPMCPopClosedSlot[T, S, MT] -> USPMCPopEmpty[T, S, MT]
     USPMCPopSegmentExhausted[T, S, MT] ->
       (USPMCPopReady[T, S, MT] | USPMCPopEmpty[T, S, MT]) as
       USPMCAdvanceResult[T, S, MT]
@@ -117,11 +135,25 @@ proc extractPinned*[T; S, MT: static int](
 proc extractPinned*[T; S, MT: static int](
     exhausted: sink USPMCPopSegmentExhausted[T, S, MT]
 ): Pinned[MT] =
-  ## Extract DEBRA's Pinned state for unpinning when an over-claim race
-  ## (awaitingTail=true) forces an early bail without advancing.
+  ## Extract DEBRA's Pinned state for unpinning when the facade
+  ## terminates without advancing the head segment (e.g., the bulk-pop
+  ## path bails after observing the segment is consumer-saturated but
+  ## elects not to retire).
   Pinned[MT](
     EpochGuardContext[MT](
       handle: exhausted.pinnedHandle, epoch: exhausted.pinnedEpoch
+    )
+  )
+
+proc extractPinned*[T; S, MT: static int](
+    closedSlot: sink USPMCPopClosedSlot[T, S, MT]
+): Pinned[MT] =
+  ## Extract DEBRA's Pinned state for unpinning when a consumer wins
+  ## the close-CAS on an empty cell (Task 10a). Terminal: facade
+  ## returns `none(T)` without advancing headSegment.
+  Pinned[MT](
+    EpochGuardContext[MT](
+      handle: closedSlot.pinnedHandle, epoch: closedSlot.pinnedEpoch
     )
   )
 
@@ -167,12 +199,13 @@ proc tryClaimSlot*[T; S, MT: static int](
   ## Claim a slot wait-free using `fetchAdd` on `consumerHead`. Returns:
   ## - SlotClaimed: our fetchAdd returned an in-range slot whose data is
   ##   already published (tail re-check passed).
-  ## - SegmentExhausted(awaitingTail=false): segment is consumer-saturated
-  ##   (mySlot >= S, or pre-claim short-circuit fired). Facade should
-  ##   advance headSegment.
-  ## - SegmentExhausted(awaitingTail=true): we burned a slot via fetchAdd
-  ##   but the producer has not yet released `tail` past it. Facade
-  ##   must retry against the SAME segment, NOT advance headSegment.
+  ## - SegmentExhausted: segment is consumer-saturated (mySlot >= S, or
+  ##   pre-claim short-circuit fired). Facade advances headSegment.
+  ## - ClosedSlot: (Task 10a, NOT YET EMITTED) — consumer's close-CAS
+  ##   wins on an empty cell. Currently the over-claim race
+  ##   (mySlot >= freshTail post-claim) still emits SegmentExhausted as a
+  ##   placeholder; Task 10a replaces that emit with the close-CAS path
+  ##   producing ClosedSlot.
   ##
   ## The wait-free `fetchAdd` primitive replaces the prior CAS-loop (which
   ## under contention could observe a stale snapshot and lose); see design
@@ -194,7 +227,6 @@ proc tryClaimSlot*[T; S, MT: static int](
           pinnedEpoch: loaded.pinnedEpoch,
           queue: loaded.queue,
           segment: loaded.segment,
-          awaitingTail: false,
         )
 
   # Wait-free claim primitive (D1 = fetchAdd). Acquire ordering pairs with
@@ -203,7 +235,7 @@ proc tryClaimSlot*[T; S, MT: static int](
   let mySlot = seg.consumerHead.fetchAdd(1, moAcquire)
 
   # Slot-index past segment end — segment is consumer-saturated. The facade
-  # advances headSegment when it sees this (awaitingTail=false).
+  # advances headSegment when it sees this.
   if mySlot >= S:
     return
       USPMCSlotClaimResult[T, S, MT] ->
@@ -212,14 +244,15 @@ proc tryClaimSlot*[T; S, MT: static int](
         pinnedEpoch: loaded.pinnedEpoch,
         queue: loaded.queue,
         segment: loaded.segment,
-        awaitingTail: false,
       )
 
   # Post-claim tail re-check (REQUIRED — placement is load-bearing per
   # design §6 D3). The acquire here pairs with the producer's release-store
-  # on seg.tail. If the producer has not yet published mySlot, we must
-  # report awaitingTail=true so the facade retries against this segment
-  # rather than advancing headSegment (which would orphan the slot).
+  # on seg.tail. If the producer has not yet published mySlot, the slot is
+  # in the over-claim race window. Task 9 emits SegmentExhausted here as a
+  # placeholder (preserving prior advance-headSegment behavior); Task 10a
+  # replaces this branch with the close-CAS that produces USPMCPopClosedSlot
+  # (no headSegment advance, single-pop returns none(T)).
   if mySlot >= seg.tail.load(moAcquire):
     return
       USPMCSlotClaimResult[T, S, MT] ->
@@ -228,7 +261,6 @@ proc tryClaimSlot*[T; S, MT: static int](
         pinnedEpoch: loaded.pinnedEpoch,
         queue: loaded.queue,
         segment: loaded.segment,
-        awaitingTail: true,
       )
 
   return
@@ -270,9 +302,7 @@ proc advanceSegment*[T; S, MT: static int](
   ## (consumer-vs-consumer CAS coordination on `headSegment.compareExchange`
   ## happens at the call site, not here, so the typestate stays single-CAS-
   ## free for the verb pipeline). The facade also retires the old segment
-  ## via DEBRA when it wins the headSegment CAS. The facade MUST inspect
-  ## `awaitingTail` before invoking this proc — if true, it should retry
-  ## against the same segment instead.
+  ## via DEBRA when it wins the headSegment CAS.
   let seg = exhausted.segment
   let nextSeg = seg.next.load(moAcquire)
 
