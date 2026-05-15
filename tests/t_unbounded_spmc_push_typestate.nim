@@ -40,8 +40,10 @@ suite "SPMC Push Typestate":
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
 
-    # Actually use the types with real data
-    let loaded = startPush[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
+    # Actually use the types with real data. Task 6: startPush carries
+    # pendingItem into the typestate chain (3rd arg).
+    let loaded =
+      startPush[int, 64, 4](unpinned(handle).pin(), addr queue, 0).loadSegment()
 
     # Verify fields are accessible and have valid values
     check loaded.tail >= 0
@@ -49,11 +51,12 @@ suite "SPMC Push Typestate":
     check loaded.segment.consumerHead.load(moRelaxed) == -1
     check loaded.segment.next.load(moRelaxed) == nil
 
-    # Clean up
+    # Clean up. Task 6 / C-1: writeItem takes (slot, item) explicitly now;
+    # the slot field is gone, so the facade computes slot — here, slot=0.
     var checkResult = loaded.checkFull()
     match checkResult:
       USPMCPushSlotReady(s):
-        discard s.writeItem(0).extractPinned().unpin()
+        discard s.writeItem(0, 0).extractPinned().unpin()
       USPMCPushSegmentFull(_):
         check false
     freeTestSegment(seg)
@@ -74,8 +77,10 @@ suite "SPMC Push Typestate":
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
 
-    # Use unpinned/pin from debra - chain to avoid copy issues
-    let loaded = startPush[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
+    # Use unpinned/pin from debra - chain to avoid copy issues. Task 6:
+    # startPush threads pendingItem into the chain.
+    let loaded =
+      startPush[int, 64, 4](unpinned(handle).pin(), addr queue, 42).loadSegment()
 
     check loaded.tail == 10
     check loaded.segment == seg
@@ -84,12 +89,13 @@ suite "SPMC Push Typestate":
     check loaded.segment.consumerHead.load(moRelaxed) == -1
     check loaded.segment.next.load(moRelaxed) == nil
 
-    # Complete operation
+    # Complete operation. Task 6 / C-1: writeItem now takes (slot, item).
+    # Slot at this point is the loaded tail (10).
     var checkResult = loaded.checkFull()
     match checkResult:
       USPMCPushSlotReady(s):
         # Write item and VERIFY the value was written
-        let complete = s.writeItem(42)
+        let complete = s.writeItem(10, 42)
         check seg.data[10] == 42 # Consume: verify write to correct slot
         check seg.tail.load(moRelaxed) == 11 # Verify tail advanced
         discard complete.extractPinned().unpin()
@@ -112,16 +118,20 @@ suite "SPMC Push Typestate":
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
 
-    var checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    var checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue, 42)
       .loadSegment()
       .checkFull()
 
     match checkResult:
       USPMCPushSlotReady(s):
-        check s.slot == 0
+        # Task 6 / C-1: `slot` field removed from USPMCPushSlotReady.
+        # Verify slot via segment.tail load (which is what the facade
+        # uses to compute the slot for writeItem).
+        check s.segment.tail.load(moRelaxed) == 0
 
-        # Write item and VERIFY the value was written
-        discard s.writeItem(42).extractPinned().unpin()
+        # Write item and VERIFY the value was written. Task 6: writeItem
+        # takes explicit (slot, item).
+        discard s.writeItem(0, 42).extractPinned().unpin()
 
         check seg.data[0] == 42 # Consume: verify write happened
         check seg.tail.load(moRelaxed) == 1 # Verify tail advanced
@@ -146,7 +156,7 @@ suite "SPMC Push Typestate":
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
 
-    var checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    var checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue, 42)
       .loadSegment()
       .checkFull()
 
@@ -161,7 +171,8 @@ suite "SPMC Push Typestate":
 
         match checkResult2:
           USPMCPushSlotReady(s):
-            discard s.writeItem(42).extractPinned().unpin()
+            # Task 6: writeItem takes (slot, item); slot=0 on the fresh segment.
+            discard s.writeItem(0, 42).extractPinned().unpin()
 
             # Consume: verify write went to NEW segment, not old one
             check newSeg.data[0] == 42 # Value written to new segment
@@ -190,13 +201,14 @@ suite "SPMC Push Typestate":
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
 
-    var checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    var checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue, 42)
       .loadSegment()
       .checkFull()
 
     match checkResult:
       USPMCPushSlotReady(s):
-        discard s.writeItem(42).extractPinned().unpin()
+        # Task 6: writeItem takes (slot, item); slot=0 on a fresh segment.
+        discard s.writeItem(0, 42).extractPinned().unpin()
 
         check seg.data[0] == 42
         check seg.tail.load(moRelaxed) == 1
@@ -237,3 +249,67 @@ suite "Task 11 LCRQ SPMC Segment cellState + closed fields":
     var seg = cast[ptr TestSeg8](alloc0(sizeof(TestSeg8)))
     check seg.closed.load(moRelaxed) == false
     dealloc(seg)
+
+suite "Task 11 USPMCPushSegmentClosed state + pendingItem propagation (Task 6)":
+  test "USPMCPushSegmentClosed state declared":
+    check declared(USPMCPushSegmentClosed)
+
+  test "Ready/SegmentLoaded/SegmentFull/SlotReady/SegmentClosed all carry pendingItem: T":
+    # compile-time field-presence check via doesCompile.
+    check compiles(
+      (
+        block:
+          var r: USPMCPushReady[int, 8, 4]
+          r.pendingItem
+      )
+    )
+    check compiles(
+      (
+        block:
+          var l: USPMCPushSegmentLoaded[int, 8, 4]
+          l.pendingItem
+      )
+    )
+    check compiles(
+      (
+        block:
+          var f: USPMCPushSegmentFull[int, 8, 4]
+          f.pendingItem
+      )
+    )
+    check compiles(
+      (
+        block:
+          var s: USPMCPushSlotReady[int, 8, 4]
+          s.pendingItem
+      )
+    )
+    check compiles(
+      (
+        block:
+          var c: USPMCPushSegmentClosed[int, 8, 4]
+          c.pendingItem
+      )
+    )
+
+  test "SlotReady has NO slot: int field (C-1 fix)":
+    check not compiles(
+      (
+        block:
+          var s: USPMCPushSlotReady[int, 8, 4]
+          s.slot
+      )
+    )
+
+  test "closeSegmentDone verb exists":
+    check declared(closeSegmentDone)
+
+  test "extractPinned for SegmentClosed exists":
+    # extractPinned is overloaded; verify a SegmentClosed-typed call compiles.
+    check compiles(
+      (
+        block:
+          var c: USPMCPushSegmentClosed[int, 8, 4]
+          discard extractPinned(c)
+      )
+    )

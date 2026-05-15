@@ -82,7 +82,20 @@ type
 
   # States (U-prefix per overlay #5: typestates 0.8.0 registry collision
   # with bounded SPMC* graph).
-  USPMCPushReady*[T; S, MT: static int] = distinct USPMCPushContext[T, S, MT]
+  #
+  # Task 6 / C-1 fix: every push state carries a `pendingItem: T` field so
+  # the item-to-publish travels with the typestate from `startPush` through
+  # to `writeItem` (instead of being passed as a separate parameter to the
+  # terminal verb). This means the `slot: int` field is REMOVED from
+  # `USPMCPushSlotReady` (the slot index is recoverable from the segment's
+  # `tail` at the moment of writeItem) and `USPMCPushReady` becomes a plain
+  # object so it can carry `pendingItem` (the prior `distinct` shape had no
+  # field of its own to extend).
+  USPMCPushReady*[T; S, MT: static int] = object
+    pinnedHandle*: ThreadHandle[MT]
+    pinnedEpoch*: uint64
+    queue*: ptr UnboundedSipmucBase[S, T, MT]
+    pendingItem*: T
 
   USPMCPushSegmentLoaded*[T; S, MT: static int] = object
     pinnedHandle*: ThreadHandle[MT]
@@ -90,19 +103,34 @@ type
     queue*: ptr UnboundedSipmucBase[S, T, MT]
     segment*: ptr Segment[S, T]
     tail*: int
+    pendingItem*: T
 
   USPMCPushSegmentFull*[T; S, MT: static int] = object
     pinnedHandle*: ThreadHandle[MT]
     pinnedEpoch*: uint64
     queue*: ptr UnboundedSipmucBase[S, T, MT]
     segment*: ptr Segment[S, T]
+    pendingItem*: T
 
   USPMCPushSlotReady*[T; S, MT: static int] = object
     pinnedHandle*: ThreadHandle[MT]
     pinnedEpoch*: uint64
     queue*: ptr UnboundedSipmucBase[S, T, MT]
     segment*: ptr Segment[S, T]
-    slot*: int
+    pendingItem*: T
+
+  # New state: the segment we were about to write into got closed (via the
+  # LCRQ tri-state cellState protocol or by a peer thread completing the
+  # close handshake) between `loadSegment` and the producer's commit. The
+  # producer must observe the rotation, retire the closed segment, and
+  # try again on the new tail segment. Carries `pendingItem` so the retry
+  # loop does not re-evaluate the source expression.
+  USPMCPushSegmentClosed*[T; S, MT: static int] = object
+    pinnedHandle*: ThreadHandle[MT]
+    pinnedEpoch*: uint64
+    queue*: ptr UnboundedSipmucBase[S, T, MT]
+    segment*: ptr Segment[S, T]
+    pendingItem*: T
 
   USPMCPushComplete*[T; S, MT: static int] = object
     pinnedHandle*: ThreadHandle[MT]
@@ -116,6 +144,7 @@ typestate USPMCPushContext[T, S: static int, MT: static int]:
     USPMCPushSegmentLoaded[T, S, MT],
     USPMCPushSegmentFull[T, S, MT],
     USPMCPushSlotReady[T, S, MT],
+    USPMCPushSegmentClosed[T, S, MT],
     USPMCPushComplete[T, S, MT]
   transitions:
     USPMCPushReady[T, S, MT] -> USPMCPushSegmentLoaded[T, S, MT]
@@ -123,17 +152,27 @@ typestate USPMCPushContext[T, S: static int, MT: static int]:
       (USPMCPushSlotReady[T, S, MT] | USPMCPushSegmentFull[T, S, MT]) as
       USPMCSegmentCheck[T, S, MT]
     USPMCPushSegmentFull[T, S, MT] -> USPMCPushReady[T, S, MT]
+    USPMCPushSegmentClosed[T, S, MT] -> USPMCPushSegmentFull[T, S, MT]
     USPMCPushSlotReady[T, S, MT] -> USPMCPushComplete[T, S, MT]
 
-# Factory: Create push typestate context from DEBRA's Pinned state
+# Factory: Create push typestate context from DEBRA's Pinned state.
+#
+# Task 6 / C-1 fix: `pendingItem: sink T` enters the typestate chain here
+# and is threaded through every state until `writeItem` consumes it. This
+# keeps the source expression evaluated exactly once (per push) regardless
+# of how many SegmentFull / SegmentClosed retry rounds occur.
 proc startPush*[T; S, MT: static int](
-    pinned: sink Pinned[MT], queue: ptr UnboundedSipmucBase[S, T, MT]
+    pinned: sink Pinned[MT],
+    queue: ptr UnboundedSipmucBase[S, T, MT],
+    pendingItem: sink T,
 ): USPMCPushReady[T, S, MT] =
-  ## Create push context from DEBRA's Pinned state.
+  ## Create push context from DEBRA's Pinned state, carrying the item to
+  ## publish into the typestate chain.
   USPMCPushReady[T, S, MT](
-    USPMCPushContext[T, S, MT](
-      pinnedHandle: pinned.handle, pinnedEpoch: pinned.epoch, queue: queue
-    )
+    pinnedHandle: pinned.handle,
+    pinnedEpoch: pinned.epoch,
+    queue: queue,
+    pendingItem: pendingItem,
   )
 
 # Extract Pinned state from USPMCPushComplete for unpinning
@@ -145,32 +184,52 @@ proc extractPinned*[T; S, MT: static int](
     EpochGuardContext[MT](handle: complete.pinnedHandle, epoch: complete.pinnedEpoch)
   )
 
+# Extract Pinned state from USPMCPushSegmentClosed for unpinning.
+#
+# Task 6: SegmentClosed is a non-terminal state in the happy path (the
+# producer normally transitions back to Ready and retries). However the
+# caller may choose to abandon the push — for example, if the close is
+# observed during a shutdown drain — in which case it needs to recover
+# the Pinned[MT] handle to call `unpin`. The pendingItem is dropped on
+# the floor when this proc consumes the state; that is intentional and
+# documented in the facade-level abort path.
+proc extractPinned*[T; S, MT: static int](
+    closed: sink USPMCPushSegmentClosed[T, S, MT]
+): Pinned[MT] =
+  ## Extract DEBRA's Pinned state for unpinning from a SegmentClosed
+  ## state (caller-initiated abort path). The pendingItem is dropped.
+  Pinned[MT](
+    EpochGuardContext[MT](handle: closed.pinnedHandle, epoch: closed.pinnedEpoch)
+  )
+
 # Load segment transition
 proc loadSegment*[T; S, MT: static int](
     ready: sink USPMCPushReady[T, S, MT]
 ): USPMCPushSegmentLoaded[T, S, MT] {.transition.} =
-  ## Load current tail segment and tail position.
+  ## Load current tail segment and tail position, threading `pendingItem`
+  ## forward into SegmentLoaded.
   ## Mirrors production memory ordering: SPMC has a single producer that
   ## owns `tailSegment` (plain ptr), so a relaxed-equivalent direct read
   ## is sufficient. The current segment's `tail` is also producer-only
   ## except for consumer reads that pair with `tail.store(moRelease)`.
-  let ctx = USPMCPushContext[T, S, MT](ready)
-  let seg = ctx.queue.tailSegment
+  let seg = ready.queue.tailSegment
   let tail = seg.tail.load(moRelaxed)
 
   USPMCPushSegmentLoaded[T, S, MT](
-    pinnedHandle: ctx.pinnedHandle,
-    pinnedEpoch: ctx.pinnedEpoch,
-    queue: ctx.queue,
+    pinnedHandle: ready.pinnedHandle,
+    pinnedEpoch: ready.pinnedEpoch,
+    queue: ready.queue,
     segment: seg,
     tail: tail,
+    pendingItem: ready.pendingItem,
   )
 
 # Check full transition
 proc checkFull*[T; S, MT: static int](
     loaded: sink USPMCPushSegmentLoaded[T, S, MT]
 ): USPMCSegmentCheck[T, S, MT] {.transition.} =
-  ## Check if segment is full. Returns SlotReady or SegmentFull.
+  ## Check if segment is full. Returns SlotReady or SegmentFull, threading
+  ## `pendingItem` forward into either branch.
   if loaded.tail >= S:
     USPMCSegmentCheck[T, S, MT] ->
       USPMCPushSegmentFull[T, S, MT](
@@ -178,6 +237,7 @@ proc checkFull*[T; S, MT: static int](
         pinnedEpoch: loaded.pinnedEpoch,
         queue: loaded.queue,
         segment: loaded.segment,
+        pendingItem: loaded.pendingItem,
       )
   else:
     USPMCSegmentCheck[T, S, MT] ->
@@ -186,7 +246,7 @@ proc checkFull*[T; S, MT: static int](
         pinnedEpoch: loaded.pinnedEpoch,
         queue: loaded.queue,
         segment: loaded.segment,
-        slot: loaded.tail,
+        pendingItem: loaded.pendingItem,
       )
 
 # Allocate new segment transition
@@ -198,7 +258,8 @@ proc checkFull*[T; S, MT: static int](
 proc allocateNewSegment*[T; S, MT: static int](
     full: sink USPMCPushSegmentFull[T, S, MT], newSegment: ptr Segment[S, T]
 ): USPMCPushReady[T, S, MT] {.transition.} =
-  ## Link new segment and return to Ready state to retry.
+  ## Link new segment and return to Ready state to retry, threading
+  ## `pendingItem` forward.
   ## Mirrors production memory ordering: publish the new segment via
   ## `seg.next` (release) so a concurrent consumer that observes the
   ## new next pointer also sees the segment's initialized fields. The
@@ -209,26 +270,55 @@ proc allocateNewSegment*[T; S, MT: static int](
   discard full.queue.segments.fetchAdd(1, moRelaxed)
 
   USPMCPushReady[T, S, MT](
-    USPMCPushContext[T, S, MT](
-      pinnedHandle: full.pinnedHandle, pinnedEpoch: full.pinnedEpoch, queue: full.queue
-    )
+    pinnedHandle: full.pinnedHandle,
+    pinnedEpoch: full.pinnedEpoch,
+    queue: full.queue,
+    pendingItem: full.pendingItem,
+  )
+
+# Close-observed transition.
+#
+# Task 6: New verb (registered in the typestate macro per plan §602 as
+# `USPMCPushSegmentClosed -> USPMCPushSegmentFull`). Consumes a
+# SegmentClosed surfaced by the facade (Task 7) and yields a SegmentFull
+# so the producer's existing SegmentFull -> Ready retry path can rotate
+# to a fresh segment via `allocateNewSegment`. The transition does not
+# mutate cellState here — that mutation is the responsibility of the
+# facade-level close handshake.
+proc closeSegmentDone*[T; S, MT: static int](
+    closed: sink USPMCPushSegmentClosed[T, S, MT]
+): USPMCPushSegmentFull[T, S, MT] {.transition.} =
+  ## Bridge SegmentClosed back into the SegmentFull lane so the existing
+  ## allocate-and-retry path can rotate to a fresh segment. Threads
+  ## `pendingItem` forward to keep the source expression evaluated once.
+  USPMCPushSegmentFull[T, S, MT](
+    pinnedHandle: closed.pinnedHandle,
+    pinnedEpoch: closed.pinnedEpoch,
+    queue: closed.queue,
+    segment: closed.segment,
+    pendingItem: closed.pendingItem,
   )
 
 # Write item transition
 proc writeItem*[T; S, MT: static int](
-    slotReady: sink USPMCPushSlotReady[T, S, MT], item: sink T
+    slotReady: sink USPMCPushSlotReady[T, S, MT], slot: int, item: sink T
 ): USPMCPushComplete[T, S, MT] {.transition.} =
   ## Write item to slot and publish via `tail.store(moRelease)`.
   ## SPMC has no `committed` array — the release store on `tail` is the
   ## publication signal that consumers acquire-load before reading.
-  slotReady.segment.data[slotReady.slot] = item
+  ##
+  ## Task 6 / C-1: `slot` is now a parameter (the slot index previously
+  ## carried in `USPMCPushSlotReady.slot`, removed when the state grew its
+  ## `pendingItem` field). The facade (Task 7) computes the slot via the
+  ## segment's `tail` fetch and passes it explicitly.
+  slotReady.segment.data[slot] = item
   when defined(awaitingTailTestHook):
     # Test-only: block the producer's release-store on `tail` until the
     # test driver releases the gate. Pure wait: Channel.recv only, no
     # algorithm-observable state mutation. See
     # `stress-tests/t_unbounded_spmc_awaiting_tail_strand.nim`.
     discard producerPublishGoChan.recv()
-  slotReady.segment.tail.store(slotReady.slot + 1, moRelease)
+  slotReady.segment.tail.store(slot + 1, moRelease)
   discard slotReady.queue.itemCount.fetchAdd(1, moRelaxed)
 
   USPMCPushComplete[T, S, MT](
