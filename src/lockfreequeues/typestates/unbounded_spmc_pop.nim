@@ -157,7 +157,7 @@ proc extractPinned*[T; S, MT: static int](
     )
   )
 
-## DEBRA Pin–Claim Ordering Invariant (Task 11 / LCRQ — SPMC scope):
+## DEBRA Pin–Claim Ordering Invariant (Tasks 11+22.5 / LCRQ — both topologies):
 ##
 ## 1. Pin opens BEFORE headSegment.load (this `withPin:` scope).
 ## 2. Pin covers fetchAdd(consumerHead) → readItem(data[mySlot]) window.
@@ -166,42 +166,28 @@ proc extractPinned*[T; S, MT: static int](
 ##    not freed until all pins in its retire-epoch rotate.
 ## 5. Bulk variant (sipmuc bulk pop site) acquires per-iteration pin
 ##    satisfying (1)–(4).
-## 6. Closure-CAS pin coverage (SPMC). The pin opens BEFORE the consumer's
-##    `cellState.CAS(CellEmpty -> CellClosed)` in `tryClaimSlot`, and
-##    remains open THROUGH the CAS completion AND the subsequent transition
-##    to `USPMCPopClosedSlot`. Same `withPin:` scope as the `loadSegment`
-##    that produced the segment pointer. (Design §9 lines 687–719 /
-##    §7.1 E1.)
+## 6. Closure-CAS pin coverage (topology-conditional after Task 22):
 ##
-##    SPMC producer scope: writeItem's publish-CAS does NOT require
-##    `withPin:` scope. Single-producer immunity — no peer producer can
-##    retire the segment under us (we are the only producer). Design §9
-##    line 719 notes that pin coverage is not required for retire-
-##    correctness, though the design recommends keeping it for consistency
-##    — a recommendation the shipped sipmuc.nim push proc actively rejects,
-##    prioritizing single-producer immunity over design symmetry.
-##    Implementation: unbounded_sipmuc.nim push proc explicitly opts out of
-##    `withPin:` on the push path; the publish-CAS at unbounded_spmc_push.nim
-##    runs unpinned. The producer's failed publish-CAS followed by Shape A
-##    retry (fetchAdd tail, re-enter) stays in the same single-producer
-##    execution context, where pin coverage adds no safety.
+##    a. Consumer (both SPMC and MPMC): pin opens BEFORE the consumer's
+##       `cellState.CAS(CellEmpty -> CellClosed)` in `tryClaimSlot`, and
+##       remains open THROUGH the CAS completion AND the subsequent
+##       transition to `{USPMCPopClosedSlot | UMPMCPopClosedSlot}`. Same
+##       `withPin:` scope as the `loadSegment` that produced the segment
+##       pointer. (Design §9 lines 687–719 / §7.1 E1.)
 ##
-##    MPMC topology (forward reference): this 6-item form scopes to SPMC's
-##    shipped LCRQ cellState protocol. MPMC currently uses the v4.0
-##    committed[] flag protocol (mpmc_pop.nim acquire-loads `committed[
-##    mySlot]`; mpmc_push.nim release-stores via `markCommitted`). Pin
-##    coverage of `committed[].load` and `committed[].store` falls under
-##    items 1-5 (segment-level pin invariants apply equally to either
-##    publication protocol). MPMC LCRQ migration is tracked as Tasks 14-22
-##    of this plan; Task 22.5 will re-extend this doc-comment + add the
-##    MPMC equivalent in unbounded_mpmc_pop.nim post-MPMC-migration.
+##    b. MPMC producer: writeItem's `cellState.CAS(CellEmpty -> CellFilled)`
+##       publish-CAS must occur within the same `withPin:` scope as the
+##       `loadSegment(tailSegment)` that produced the segment pointer.
+##       Required because peer producers can retire the segment under us
+##       via headSegment-advance (peer-producer retire race per design §9
+##       line 720). Implementation: unbounded_mupmuc.nim push proc wraps
+##       the verb loop in `self.handle.withPin:`.
 ##
-## DO NOT alter withPin scope without re-establishing this invariant. In
-## particular, do NOT introduce a `withPin:` scope around the SPMC push
-## path "for consistency with MPMC" — the SPMC producer's no-pin design is
-## load-bearing per design §9 line 719 (the producer doesn't reclaim
-## segments and isn't racing other producers, so pin coverage adds no
-## safety on the push path).
+##    c. SPMC producer: writeItem's publish-CAS does NOT require `withPin:`
+##       scope. Single-producer immunity per design §9 line 719.
+##       Implementation: unbounded_sipmuc.nim push proc opts out.
+##
+## DO NOT alter withPin scope without re-establishing this invariant.
 
 # Load segment transition
 proc loadSegment*[T; S, MT: static int](

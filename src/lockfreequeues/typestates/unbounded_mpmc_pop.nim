@@ -147,14 +147,36 @@ proc extractPinned*[T; S, MT: static int](
     )
   )
 
-## DEBRA Pin–Claim Ordering Invariant (Task 11):
+## DEBRA Pin–Claim Ordering Invariant (Tasks 11+22.5 / LCRQ — both topologies):
+##
 ## 1. Pin opens BEFORE headSegment.load (this `withPin:` scope).
 ## 2. Pin covers fetchAdd(consumerHead) → readItem(data[mySlot]) window.
 ## 3. Segment under pin == segment under claim (typestate linearity).
 ## 4. headSegment.compareExchange retires oldSeg via DEBRA; oldSeg is
 ##    not freed until all pins in its retire-epoch rotate.
-## 5. Bulk variant (mupmuc:bulk pop site) acquires per-iteration pin
-##    satisfying (1)-(4).
+## 5. Bulk variant (mupmuc bulk pop site) acquires per-iteration pin
+##    satisfying (1)–(4).
+## 6. Closure-CAS pin coverage (topology-conditional after Task 22):
+##
+##    a. Consumer (both SPMC and MPMC): pin opens BEFORE the consumer's
+##       `cellState.CAS(CellEmpty -> CellClosed)` in `tryClaimSlot`, and
+##       remains open THROUGH the CAS completion AND the subsequent
+##       transition to `{USPMCPopClosedSlot | UMPMCPopClosedSlot}`. Same
+##       `withPin:` scope as the `loadSegment` that produced the segment
+##       pointer. (Design §9 lines 687–719 / §7.1 E1.)
+##
+##    b. MPMC producer: writeItem's `cellState.CAS(CellEmpty -> CellFilled)`
+##       publish-CAS must occur within the same `withPin:` scope as the
+##       `loadSegment(tailSegment)` that produced the segment pointer.
+##       Required because peer producers can retire the segment under us
+##       via headSegment-advance (peer-producer retire race per design §9
+##       line 720). Implementation: unbounded_mupmuc.nim push proc wraps
+##       the verb loop in `self.handle.withPin:`.
+##
+##    c. SPMC producer: writeItem's publish-CAS does NOT require `withPin:`
+##       scope. Single-producer immunity per design §9 line 719.
+##       Implementation: unbounded_sipmuc.nim push proc opts out.
+##
 ## DO NOT alter withPin scope without re-establishing this invariant.
 
 # Load segment transition
