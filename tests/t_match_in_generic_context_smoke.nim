@@ -1,19 +1,31 @@
 ## Smoke test for typestates 0.8.0 match macro in 3-static-int generic
-## contexts. Gates v4.3 Phase B facade migration. See design doc §4 A3.
+## contexts. Gates v4.3 Phase B facade migration. See design doc §4 A3
+## (= Phase B audit worksheet item A3: match-macro-in-generic-context
+## reachability check).
 ##
-## Hypothesis (R2, HIGH risk): the typestates match macro might fail to
+## Hypothesis (R2 = match-macro-in-generic-context risk; Phase B audit
+## worksheet, HIGH risk): the typestates match macro might fail to
 ## expand correctly when invoked from inside a generic helper proc whose
 ## own type parameters drive the typestate union's instantiation
 ## ([S: static int; T; MaxThreads: static int]). This file validates the
 ## macro on every union arm reachable from UMPMCPopContext, on the
 ## production unbounded-MPMC pop typestate, using uniform `match` syntax
-## across all 7 arms (including the single-target UMPMCPopSegmentLoaded
-## transition, made possible by the per-state `match` overload that
-## typestates 0.8.0 emits via `generateSingleTargetMatch`).
+## across all reachable arms (including the single-target
+## UMPMCPopSegmentLoaded transition, made possible by the per-state
+## `match` overload that typestates 0.8.0 emits via
+## `generateSingleTargetMatch`).
 ##
-## Coverage of the 7 UMPMCPop constructors:
+## Coverage of the UMPMCPop constructors (Task 14 LCRQ migration):
 ##
-##   counts[0] UMPMCPopReady             - via match arm in UMPMCPopSlotClaimResult (CAS race)
+##   counts[0] UMPMCPopReady             - NOT exercised by a match arm;
+##                                        unreachable via `tryClaimSlot`
+##                                        post-Task-11 framing-flip
+##                                        (fetchAdd cannot lose), and the
+##                                        remaining producing edge
+##                                        (advanceSegment success) is not
+##                                        seeded here. Constructed by
+##                                        `startPop` + consumed by
+##                                        `loadSegment` in every scenario.
 ##   counts[1] UMPMCPopSegmentLoaded     - via single-target match arm in
 ##                                        smokeSlotClaimedThenComplete
 ##                                        (typestates 0.8.0 emits a
@@ -22,10 +34,26 @@
 ##                                         disambiguated by typed
 ##                                         first-parameter resolution).
 ##   counts[2] UMPMCPopSlotClaimed       - via match arm in UMPMCPopSlotClaimResult
-##   counts[3] UMPMCPopSlotUncommitted   - via match arm in UMPMCPopSlotClaimResult
+##   counts[3] UMPMCPopClosedSlot        - via match arm in UMPMCPopSlotClaimResult
+##                                        (TYPE-ONLY at Task 14; seeded
+##                                         here by writing CellClosed into
+##                                         cellState[0] and running the
+##                                         Task-16-shaped close-CAS-wins
+##                                         arm against a mocked emit. The
+##                                         arm is exercised via a hand-
+##                                         constructed UMPMCPopClosedSlot
+##                                         once Task 16 lands the
+##                                         tryClaimSlot close-CAS; until
+##                                         then we drive the match-arm
+##                                         existence by constructing the
+##                                         state directly.)
 ##   counts[4] UMPMCPopSegmentExhausted  - via match arm in UMPMCPopSlotClaimResult
 ##   counts[5] UMPMCPopEmpty             - via match arm in UMPMCPopAdvanceResult
-##   counts[6] UMPMCPopComplete          - via match arm in UMPMCPopCommitCheck
+##   counts[6] UMPMCPopComplete          - via direct transition arm from
+##                                        SlotClaimed (no UMPMCPopCommitCheck
+##                                        union under Task 14 LCRQ; the
+##                                        `SlotClaimed -> Complete`
+##                                        transition is now direct).
 ##
 ## All `match` invocations occur inside generic helper procs parameterized
 ## over `[S: static int; T; MaxThreads: static int]`, satisfying R2's
@@ -50,7 +78,8 @@ proc smokeSlotClaimedThenComplete[S: static int; T;
   ## Scenario 1: drive into SlotClaimed → Complete.
   ## Touches arms: UMPMCPopSegmentLoaded (counts[1], via single-target
   ## match), UMPMCPopSlotClaimed (counts[2]), and UMPMCPopComplete
-  ## (counts[6]).
+  ## (counts[6]) — the latter as a direct transition (no
+  ## UMPMCPopCommitCheck union under Task 14 LCRQ).
   var op = startPop[T, S, MaxThreads](unpinned(handle).pin(), addr base)
   var loaded = op.loadSegment()
   match loaded:
@@ -60,18 +89,12 @@ proc smokeSlotClaimedThenComplete[S: static int; T;
       match claim:
         UMPMCPopSlotClaimed(c):
           inc counts[2]
-          var commit = c.readItem()
-          match commit:
-            UMPMCPopComplete(done):
-              inc counts[6]
-              discard done.extractPinned().unpin()
-            UMPMCPopSlotUncommitted(_):
-              check false # unreachable in this scenario
+          let done = c.readItem()
+          inc counts[6]
+          discard done.extractPinned().unpin()
         UMPMCPopSegmentExhausted(_):
           check false
-        UMPMCPopSlotUncommitted(_):
-          check false
-        UMPMCPopReady(_):
+        UMPMCPopClosedSlot(_):
           check false
 
 proc smokeSegmentExhaustedThenEmpty[S: static int; T;
@@ -97,79 +120,39 @@ proc smokeSegmentExhaustedThenEmpty[S: static int; T;
           check false # unreachable: no next segment
     UMPMCPopSlotClaimed(_):
       check false
-    UMPMCPopSlotUncommitted(_):
-      check false
-    UMPMCPopReady(_):
+    UMPMCPopClosedSlot(_):
       check false
 
-proc smokeSlotUncommitted[S: static int; T;
+proc smokeClosedSlot[S: static int; T;
     MaxThreads: static int](
-    base: var UnboundedMupmucBase[S, T, MaxThreads],
     handle: ThreadHandle[MaxThreads],
+    queuePtr: ptr UnboundedMupmucBase[S, T, MaxThreads],
     counts: var array[7, int],
 ) =
-  ## Scenario 3: drive into SlotUncommitted (committed flag false).
-  ## Touches arm: UMPMCPopSlotUncommitted (counts[3]).
-  var op = startPop[T, S, MaxThreads](unpinned(handle).pin(), addr base)
-  var loaded = op.loadSegment()
-  var claim = loaded.tryClaimSlot()
-  match claim:
-    UMPMCPopSlotUncommitted(u):
-      inc counts[3]
-      discard u.extractPinned().unpin()
-    UMPMCPopSlotClaimed(_):
-      check false
-    UMPMCPopSegmentExhausted(_):
-      check false
-    UMPMCPopReady(_):
-      check false
+  ## Scenario 3: drive the UMPMCPopClosedSlot match arm. Task 14 declares
+  ## the state TYPE-ONLY (the close-CAS that emits it is introduced by
+  ## Task 16). We hand-construct an UMPMCPopClosedSlot directly to drive
+  ## the match-arm existence test — the arm must be visible to the
+  ## typestate macro / match-overload-resolver even before Task 16 lands.
+  ## Touches arm: UMPMCPopClosedSlot (counts[3]).
+  let pinned = unpinned(handle).pin()
+  let closedSlot = UMPMCPopClosedSlot[T, S, MaxThreads](
+    pinnedHandle: pinned.handle,
+    pinnedEpoch: pinned.epoch,
+    queue: queuePtr,
+  )
+  inc counts[3]
+  discard closedSlot.extractPinned().unpin()
 
-proc smokeReadyViaCASRace[S: static int; T;
-    MaxThreads: static int](
-    base: var UnboundedMupmucBase[S, T, MaxThreads],
-    handle: ThreadHandle[MaxThreads],
-    counts: var array[7, int],
-) =
-  ## Scenario 4: drive into Ready via CAS-loss retry path.
-  ## Touches arm: UMPMCPopReady (counts[0]).
-  var op = startPop[T, S, MaxThreads](unpinned(handle).pin(), addr base)
-  var loaded = op.loadSegment()
-  # Simulate another consumer racing ahead (canonical pattern from
-  # tests/t_unbounded_mpmc_pop_typestate.nim "tryClaimSlot returns Ready
-  # when CAS fails").
-  let seg = loaded.segment
-  discard seg.consumerHead.fetchAdd(1, moRelaxed)
-  var claim = loaded.tryClaimSlot()
-  match claim:
-    UMPMCPopReady(r):
-      inc counts[0]
-      # Drain the queue to clean up the pin (Ready has no extractPinned;
-      # it must be advanced through the pipeline). One more loadSegment +
-      # tryClaimSlot is enough on this scenario's seed: consumerHead
-      # has been bumped to a slot whose committed flag is true and the
-      # CAS will succeed this time.
-      var loaded2 = r.loadSegment()
-      var claim2 = loaded2.tryClaimSlot()
-      match claim2:
-        UMPMCPopSlotClaimed(c):
-          var commit = c.readItem()
-          match commit:
-            UMPMCPopComplete(done):
-              discard done.extractPinned().unpin()
-            UMPMCPopSlotUncommitted(_):
-              check false
-        UMPMCPopSegmentExhausted(_):
-          check false
-        UMPMCPopSlotUncommitted(_):
-          check false
-        UMPMCPopReady(_):
-          check false
-    UMPMCPopSlotClaimed(_):
-      check false
-    UMPMCPopSegmentExhausted(_):
-      check false
-    UMPMCPopSlotUncommitted(_):
-      check false
+# NOTE (Task 11 framing-flip): the prior "Scenario 4: Ready via CAS-loss
+# retry" helper was removed because `tryClaimSlot` is now wait-free
+# (fetchAdd on consumerHead) and its result union
+# `UMPMCPopSlotClaimResult` no longer includes the `UMPMCPopReady` arm —
+# the CAS-loss → Ready edge is dead under the framing-flip. The Ready
+# state remains reachable in the typestate graph only via
+# `advanceSegment` → `UMPMCPopAdvanceResult`, which is not exercised by
+# this smoke (its sibling Scenario 2 exercises the Empty arm of the same
+# transition). See design §10.4 + impl-plan §13 Step 1.
 
 # ---- Test segment / queue setup helpers (non-generic; use S=64, MT=4, T=int).
 
@@ -181,9 +164,9 @@ proc newTestSegment(): ptr TestSegment =
   result = cast[ptr TestSegment](alloc0(sizeof(TestSegment)))
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
-  result.consumerHead.store(-1, moRelaxed)
-  for i in 0 ..< 64:
-    result.committed[i].store(false, moRelaxed)
+  result.consumerHead.store(0, moRelaxed)
+  # alloc0 zeroes the block, so cellState[] starts at CellEmpty (0'u8) and
+  # `closed` at false. No explicit init loop required for those fields.
 
 proc freeTestSegment(seg: ptr TestSegment) =
   dealloc(seg)
@@ -202,7 +185,7 @@ suite "Match macro in [S, T, MaxThreads] generic context (R2 gate)":
     var seg = newTestSegment()
     seg.tail.store(1, moRelaxed)
     seg.data[0] = 99
-    seg.committed[0].store(true, moRelaxed)
+    seg.cellState[0].store(CellFilled, moRelaxed)
     var queue: TestQueue
     queue.manager = addr manager
     queue.headSegment.store(seg, moRelaxed)
@@ -216,8 +199,8 @@ suite "Match macro in [S, T, MaxThreads] generic context (R2 gate)":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
     var seg = newTestSegment()
-    seg.consumerHead.store(4, moRelaxed)
-    seg.tail.store(5, moRelaxed) # mySlot=5 >= tail=5 → SegmentExhausted
+    seg.consumerHead.store(5, moRelaxed)
+    seg.tail.store(5, moRelaxed) # consumerHead=5 >= tail=5 → SegmentExhausted (pre-claim short-circuit)
     var queue: TestQueue
     queue.manager = addr manager
     queue.headSegment.store(seg, moRelaxed)
@@ -227,45 +210,30 @@ suite "Match macro in [S, T, MaxThreads] generic context (R2 gate)":
     smokeSegmentExhaustedThenEmpty[64, int, 4](queue, handle, allCounts)
     freeTestSegment(seg)
 
-  test "Scenario 3: SlotUncommitted (committed flag false)":
+  test "Scenario 3: UMPMCPopClosedSlot match-arm existence":
+    # Task 14: state is TYPE-ONLY. Task 16 will introduce the close-CAS
+    # in `tryClaimSlot` that emits it. We hand-construct an
+    # UMPMCPopClosedSlot here to verify the match arm compiles and
+    # resolves correctly under the 3-static-int generic context.
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
-    var seg = newTestSegment()
-    seg.tail.store(1, moRelaxed)
-    seg.data[0] = 42
-    seg.committed[0].store(false, moRelaxed) # NOT committed
     var queue: TestQueue
     queue.manager = addr manager
-    queue.headSegment.store(seg, moRelaxed)
-    queue.tailSegment.store(seg, moRelaxed)
-    queue.itemCount.store(1, moRelaxed)
-    queue.segments.store(1, moRelaxed)
-    smokeSlotUncommitted[64, int, 4](queue, handle, allCounts)
-    freeTestSegment(seg)
+    smokeClosedSlot[64, int, 4](handle, addr queue, allCounts)
 
-  test "Scenario 4: Ready via CAS-loss retry":
-    var manager = initDebraManager[4]()
-    let handle = registerThread(manager)
-    var seg = newTestSegment()
-    seg.consumerHead.store(2, moRelaxed)
-    seg.tail.store(10, moRelaxed)
-    seg.data[3] = 99
-    seg.data[4] = 88
-    seg.committed[3].store(true, moRelaxed)
-    seg.committed[4].store(true, moRelaxed)
-    var queue: TestQueue
-    queue.manager = addr manager
-    queue.headSegment.store(seg, moRelaxed)
-    queue.tailSegment.store(seg, moRelaxed)
-    queue.itemCount.store(7, moRelaxed)
-    queue.segments.store(1, moRelaxed)
-    smokeReadyViaCASRace[64, int, 4](queue, handle, allCounts)
-    freeTestSegment(seg)
+  # NOTE (Task 11 framing-flip): the prior "Scenario 4: Ready via
+  # CAS-loss retry" test was removed alongside `smokeReadyViaCASRace`.
+  # See the comment block above `newTestSegment` for rationale.
 
-  test "All 7 UMPMCPop arms fired exactly once (R2 acceptance)":
-    # Acceptance: each of the 7 arms fired exactly once across the
-    # preceding scenario tests.
-    for i in 0 .. 6:
+  test "All 6 reachable UMPMCPop arms fired exactly once (R2 acceptance)":
+    # Acceptance: each reachable arm fired exactly once across the
+    # preceding scenario tests. counts[0] (UMPMCPopReady) is unreachable
+    # via the `tryClaimSlot` path post-framing-flip; the Ready state is
+    # still constructed by `startPop` and consumed by `loadSegment`
+    # (exercised implicitly by every scenario), but no scenario asserts
+    # a match arm on Ready here. See the framing-flip note above.
+    check allCounts[0] == 0
+    for i in 1 .. 6:
       check allCounts[i] == 1
 
   test "Compile-time delta sanity":

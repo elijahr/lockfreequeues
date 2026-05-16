@@ -58,7 +58,8 @@ suite "Unbounded queue Segment cache-line padding":
     let off = segmentHeadOffsetForTest(UnboundedMupmuc[64, uint64, 4])
     check off.tail mod Cl == 0
     check off.consumerHead mod Cl == 0
-    check off.committed mod Cl == 0
+    check off.cellState mod Cl == 0
+    check off.closed mod Cl == 0
 
   test "freshly-allocated Segment base is CacheLineBytes-aligned (sipsic)":
     var q = newUnboundedSipsic[64, uint64]()

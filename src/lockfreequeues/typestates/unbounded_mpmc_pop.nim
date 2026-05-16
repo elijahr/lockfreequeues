@@ -1,8 +1,17 @@
 ## Typestate for unbounded MPMC pop operations.
 ##
-## Bridges from DEBRA's Pinned[MT] state, performs pop with CAS coordination
-## and committed flag check, bridges back. Multiple consumers coordinate via
-## CAS on `consumerHead`, and must check `committed` flag before reading.
+## Multiple consumers coordinate via wait-free `fetchAdd` on `consumerHead`
+## (Task 11 framing-flip: counter is next-claimable, starts at 0) plus the
+## LCRQ per-slot tri-state `cellState[]` (Task 14 migration; replaces the
+## prior per-slot `committed[]` flag). The post-claim cellState check
+## pairs with the producer's release publish-CAS on `cellState[slot]`
+## (CellEmpty -> CellFilled) to establish the publication HB edge.
+##
+## Task 14 scope: type-only declaration of `UMPMCPopClosedSlot` (mirrors
+## SPMC Task 9). The close-CAS that emits this state is introduced by
+## Task 16 in `tryClaimSlot`. Until Task 16 lands, the close-CAS arm is
+## unreachable from production code paths; the state is wired into the
+## typestate macro graph and the facade match arm only.
 ##
 ## State names are U-prefixed (Unbounded) to avoid registry collision with
 ## the bounded MPMC* graph (typestates 0.8.0 keys by base state name).
@@ -39,9 +48,18 @@ type
     segment*: ptr UMPMCSegment[S, T]
     slot*: int
 
-  UMPMCPopSlotUncommitted*[T; S, MT: static int] = object
-    ## Producer claimed slot but hasn't finished writing yet (committed
-    ## flag still false). Pop returns `none(T)` per design §1.
+  UMPMCPopClosedSlot*[T; S, MT: static int] = object
+    ## Task 11 LCRQ: consumer's close-CAS won on an empty cell. Terminal:
+    ## facade extracts pin and returns `none(T)`. Carries no segment
+    ## pointer (the close-CAS already resolved this slot's race;
+    ## headSegment is NOT advanced — the next pop() call re-enters on
+    ## the same headSegment).
+    ##
+    ## Status (Task 14, 2026-05-15): TYPE-ONLY. The state is declared and
+    ## wired into the typestate macro / facade match arm but no
+    ## production code path emits it yet. Task 16 introduces the
+    ## close-CAS in `tryClaimSlot` that produces this state. Mirror of
+    ## SPMC `unbounded_spmc_pop.nim:56-69` (pre-Task-10a TYPE-ONLY shape).
     pinnedHandle*: ThreadHandle[MT]
     pinnedEpoch*: uint64
     queue*: ptr UnboundedMupmucBase[S, T, MT]
@@ -71,7 +89,7 @@ typestate UMPMCPopContext[T, S: static int, MT: static int]:
   states UMPMCPopReady[T, S, MT],
     UMPMCPopSegmentLoaded[T, S, MT],
     UMPMCPopSlotClaimed[T, S, MT],
-    UMPMCPopSlotUncommitted[T, S, MT],
+    UMPMCPopClosedSlot[T, S, MT],
     UMPMCPopSegmentExhausted[T, S, MT],
     UMPMCPopEmpty[T, S, MT],
     UMPMCPopComplete[T, S, MT]
@@ -80,11 +98,10 @@ typestate UMPMCPopContext[T, S: static int, MT: static int]:
     UMPMCPopSegmentLoaded[T, S, MT] ->
       (
         UMPMCPopSlotClaimed[T, S, MT] | UMPMCPopSegmentExhausted[T, S, MT] |
-        UMPMCPopSlotUncommitted[T, S, MT] | UMPMCPopReady[T, S, MT]
+        UMPMCPopClosedSlot[T, S, MT]
       ) as UMPMCPopSlotClaimResult[T, S, MT]
-    UMPMCPopSlotClaimed[T, S, MT] ->
-      (UMPMCPopComplete[T, S, MT] | UMPMCPopSlotUncommitted[T, S, MT]) as
-      UMPMCPopCommitCheck[T, S, MT]
+    UMPMCPopSlotClaimed[T, S, MT] -> UMPMCPopComplete[T, S, MT]
+    UMPMCPopClosedSlot[T, S, MT] -> UMPMCPopEmpty[T, S, MT]
     UMPMCPopSegmentExhausted[T, S, MT] ->
       (UMPMCPopReady[T, S, MT] | UMPMCPopEmpty[T, S, MT]) as
       UMPMCPopAdvanceResult[T, S, MT]
@@ -118,31 +135,44 @@ proc extractPinned*[T; S, MT: static int](
   )
 
 proc extractPinned*[T; S, MT: static int](
-    uncommitted: sink UMPMCPopSlotUncommitted[T, S, MT]
+    closedSlot: sink UMPMCPopClosedSlot[T, S, MT]
 ): Pinned[MT] =
-  ## Extract DEBRA's Pinned state for unpinning.
+  ## Extract DEBRA's Pinned state for unpinning when a consumer wins the
+  ## close-CAS on an empty cell (Task 16, type-only at Task 14). Terminal:
+  ## facade returns `none(T)` without advancing headSegment. Mirror of
+  ## SPMC `unbounded_spmc_pop.nim:148-158`.
   Pinned[MT](
     EpochGuardContext[MT](
-      handle: uncommitted.pinnedHandle, epoch: uncommitted.pinnedEpoch
+      handle: closedSlot.pinnedHandle, epoch: closedSlot.pinnedEpoch
     )
   )
+
+## DEBRA Pin–Claim Ordering Invariant (Task 11):
+## 1. Pin opens BEFORE headSegment.load (this `withPin:` scope).
+## 2. Pin covers fetchAdd(consumerHead) → readItem(data[mySlot]) window.
+## 3. Segment under pin == segment under claim (typestate linearity).
+## 4. headSegment.compareExchange retires oldSeg via DEBRA; oldSeg is
+##    not freed until all pins in its retire-epoch rotate.
+## 5. Bulk variant (mupmuc:bulk pop site) acquires per-iteration pin
+##    satisfying (1)-(4).
+## DO NOT alter withPin scope without re-establishing this invariant.
 
 # Load segment transition
 proc loadSegment*[T; S, MT: static int](
     ready: sink UMPMCPopReady[T, S, MT]
 ): UMPMCPopSegmentLoaded[T, S, MT] {.transition.} =
   ## Load current head segment and positions.
-  ## Mirrors production memory ordering at `unbounded_mupmuc.nim:355-359`:
-  ## acquire-load the headSegment (so a peer consumer's release-store on
-  ## `headSegment.compareExchange` happens-before this load), then
-  ## acquire-load `tail` and `consumerHead`. The `tail` load pairs with
-  ## producers' `committed[slot].store(moRelease)` via the `seg.tail`
-  ## release-edges; the `consumerHead` load pairs with peer consumers'
-  ## successful CAS releases.
+  ## Mirrors production memory ordering: acquire-load the headSegment (so
+  ## a peer consumer's release-store on `headSegment.compareExchange`
+  ## happens-before this load), then acquire-load `tail` and
+  ## `consumerHead`. The `tail` load pairs with producers' release-stores
+  ## from `seg.tail` reservation CAS edges; the `consumerHead` load pairs
+  ## with peer consumers' successful fetchAdd releases. (consumerHead is
+  ## next-claimable under the Task 11 framing-flip.)
   let ctx = UMPMCPopContext[T, S, MT](ready)
   let seg = ctx.queue.headSegment.load(moAcquire)
   let tail = seg.tail.load(moAcquire)
-  let prevIdx = seg.consumerHead.load(moAcquire)
+  let head = seg.consumerHead.load(moAcquire)
 
   UMPMCPopSegmentLoaded[T, S, MT](
     pinnedHandle: ctx.pinnedHandle,
@@ -150,57 +180,40 @@ proc loadSegment*[T; S, MT: static int](
     queue: ctx.queue,
     segment: seg,
     tail: tail,
-    consumerHead: prevIdx,
+    consumerHead: head,
   )
 
-# Try to claim slot with CAS
+# Try to claim slot wait-free via fetchAdd on consumerHead.
+#
+# Task 14 scope: pure fetchAdd-then-emit. The close-CAS that produces
+# `UMPMCPopClosedSlot` is introduced by Task 16. Until then, the
+# emission path is: in-range fetchAdd -> SlotClaimed; OOR slot or
+# pre-claim short-circuit -> SegmentExhausted. The `UMPMCPopClosedSlot`
+# arm is declared in the result union (typestate macro) for type-graph
+# completeness but is unreachable from this proc body at Task 14.
 proc tryClaimSlot*[T; S, MT: static int](
     loaded: sink UMPMCPopSegmentLoaded[T, S, MT]
 ): UMPMCPopSlotClaimResult[T, S, MT] {.transition.} =
-  ## Try to claim a slot with CAS coordination on `consumerHead`.
-  ## Returns SlotClaimed, SegmentExhausted, SlotUncommitted, or Ready.
+  ## Claim a slot wait-free using `fetchAdd` on `consumerHead`. Returns:
+  ## - SlotClaimed: our fetchAdd returned an in-range slot (mySlot < S).
+  ## - SegmentExhausted: segment is consumer-saturated (mySlot >= S, or
+  ##   pre-claim short-circuit fired).
+  ## - ClosedSlot: TYPE-ONLY at Task 14. Task 16 will introduce the
+  ##   close-CAS-on-empty branch that emits this state.
   ##
-  ## Item-loss livelock fix (preempted from sipmuc bb50bc9): MPMC pop has
-  ## the same SHAPE as sipmuc pop (snapshot tail in `loadSegment` +
-  ## advance segment + CAS-advance head). When the snapshotted
-  ## `loaded.tail` says we are exhausted, we MUST re-read `seg.tail` with
-  ## acquire ordering before committing to that conclusion. Producers'
-  ## CAS on `seg.tail` (the success edge of `tryClaimSlot` in the push
-  ## verb) may have advanced past the snapshot taken in `loadSegment`,
-  ## reserving slots that producers will then publish via
-  ## `committed[slot].store(moRelease)`. If we trust the stale snapshot
-  ## and propagate to `advanceSegment`, the facade will CAS-advance
-  ## `headSegment` past a segment that still has unclaimed (or
-  ## about-to-be-claimable) items — those items become unreachable when
-  ## the segment is retired. The fresh acquire-load synchronises with the
-  ## producers' release-edges, so newly reserved slots in this segment
-  ## are observed before we decide to advance.
-  ##
-  ## In MPMC the bug is somewhat narrower than in SPMC because the
-  ## consumer also gates on the per-slot `committed` flag (which the
-  ## producer release-stores AFTER reserving the slot). However the same
-  ## shape applies on the segment-advance path: the facade's Ready arm
-  ## CAS-advances `headSegment` based on the consumer's exhausted
-  ## conclusion; if that conclusion was made on stale `tail`, we can
-  ## still skip past slots whose committed flag has not yet been
-  ## observed, stranding items in the retired segment. The combined
-  ## (typestate-side tail re-load) + (facade-side consumerHead
-  ## re-check) defense matches the SPMC fix.
+  ## The wait-free `fetchAdd` primitive replaces the prior CAS-loop (which
+  ## under contention could observe a stale snapshot and lose the CAS);
+  ## see design §3 / §7.2 / §8.N1 for the framing-flip rationale.
   let seg = loaded.segment
-  # Note: loaded.consumerHead is a snapshot. A consumer that races
-  # with another consumer's CAS will see a stale value here, but the
-  # resulting CAS attempt simply fails (expected != actual) and the loop
-  # re-iterates via the Ready arm. Benign; not a livelock.
-  let mySlot = loaded.consumerHead + 1
 
-  if mySlot >= loaded.tail:
-    # Re-load tail with acquire to pair with the producers' release-store
-    # on `seg.tail` (CAS success edge). If a producer reserved more slots
-    # since `loadSegment`, fall through to the committed-check + CAS path.
-    # If the segment really is exhausted, the fresh load returns the same
-    # value and we transition to Exhausted as before.
+  # Optional advisory pre-claim short-circuit (reduces wasted fetchAdds).
+  # Per design §3 MPMC pseudocode + §7.2 row L145: MPMC retains the advisory
+  # short-circuit. F1 verb-side defense, retained shape; correctness owned by
+  # the close-CAS HB chain in Task 16 (once landed); this is OPTIMIZATION,
+  # not a TOCTOU defense.
+  if loaded.consumerHead >= loaded.tail:
     let freshTail = seg.tail.load(moAcquire)
-    if mySlot >= freshTail:
+    if loaded.consumerHead >= freshTail:
       return
         UMPMCPopSlotClaimResult[T, S, MT] ->
         UMPMCPopSegmentExhausted[T, S, MT](
@@ -210,83 +223,75 @@ proc tryClaimSlot*[T; S, MT: static int](
           segment: loaded.segment,
         )
 
-  # Check if slot is committed before trying to claim. If a producer has
-  # reserved the slot (advancing `seg.tail` past `mySlot`) but has not
-  # yet release-stored `committed[mySlot]`, we report Uncommitted and
-  # the facade returns `none(T)` per design §1 — non-blocking pop
-  # contract.
-  if not seg.committed[mySlot].load(moAcquire):
-    return
-      UMPMCPopSlotClaimResult[T, S, MT] ->
-      UMPMCPopSlotUncommitted[T, S, MT](
-        pinnedHandle: loaded.pinnedHandle,
-        pinnedEpoch: loaded.pinnedEpoch,
-        queue: loaded.queue,
-      )
+  # Wait-free claim primitive (D1 = fetchAdd). Acquire ordering on the
+  # fetchAdd RMW serializes claim attempts among consumers. The HB chain
+  # that carries the producer's `seg.data[slot]` write into our subsequent
+  # read goes through `cellState[slot]` publish-CAS (E1, design §7.1) —
+  # established at the close-CAS / CellFilled gate in `readItem` /
+  # `tryClaimSlot`, not at this fetchAdd.
+  let mySlot = seg.consumerHead.fetchAdd(1, moAcquire)
 
-  # CAS to claim slot via consumerHead. Free-running counter-CAS, NOT a
-  # wait-chain (per design §1 / production line :409).
-  var expected = loaded.consumerHead
-  if seg.consumerHead.compareExchange(expected, mySlot, moAcquire, moRelaxed):
+  # Slot-index past segment end — segment is consumer-saturated. The facade
+  # advances headSegment when it sees this.
+  if mySlot >= S:
     return
       UMPMCPopSlotClaimResult[T, S, MT] ->
-      UMPMCPopSlotClaimed[T, S, MT](
+      UMPMCPopSegmentExhausted[T, S, MT](
         pinnedHandle: loaded.pinnedHandle,
         pinnedEpoch: loaded.pinnedEpoch,
         queue: loaded.queue,
         segment: loaded.segment,
-        slot: mySlot,
-      )
-  else:
-    # CAS failed - peer consumer already finished this iteration. Loop
-    # back to retry from Ready. The facade's Ready arm uses
-    # `backoffOnCASLossRetry()` here (production line :371 classification
-    # per Decision §2.1).
-    return
-      UMPMCPopSlotClaimResult[T, S, MT] ->
-      UMPMCPopReady[T, S, MT](
-        UMPMCPopContext[T, S, MT](
-          pinnedHandle: loaded.pinnedHandle,
-          pinnedEpoch: loaded.pinnedEpoch,
-          queue: loaded.queue,
-        )
       )
 
-# Read item from claimed slot
+  # Task 14: emit SlotClaimed directly. The close-CAS-on-empty branch that
+  # would emit `UMPMCPopClosedSlot` is introduced by Task 16. The post-claim
+  # cellState check that establishes the HB chain with the producer's
+  # publish-CAS lives in `readItem` (defensive debug-mode gate, mirror of
+  # SPMC `unbounded_spmc_pop.nim:371-375`).
+  return
+    UMPMCPopSlotClaimResult[T, S, MT] ->
+    UMPMCPopSlotClaimed[T, S, MT](
+      pinnedHandle: loaded.pinnedHandle,
+      pinnedEpoch: loaded.pinnedEpoch,
+      queue: loaded.queue,
+      segment: loaded.segment,
+      slot: mySlot,
+    )
+
+# Read item from claimed slot.
 proc readItem*[T; S, MT: static int](
     claimed: sink UMPMCPopSlotClaimed[T, S, MT]
-): UMPMCPopCommitCheck[T, S, MT] {.transition.} =
-  ## Double-check committed flag and read item if ready. The slot
-  ## was committed at `tryClaimSlot` time, but a paranoid re-check here
-  ## means a consumer that lost a CAS race and re-entered cannot read
-  ## from a slot whose committed flag was somehow rolled back. (Producers
-  ## never roll back committed[]; this branch is structurally
-  ## unreachable, but the typestate transition table includes it as a
-  ## defensive arm — design §1 not-committed semantics.)
+): UMPMCPopComplete[T, S, MT] {.transition.} =
+  ## Read item from claimed slot.
+  ##
+  ## CellFilled gate (Task 14 / Task 16, design §7.1 E1 + §7.4): once
+  ## Task 16 lands the close-CAS in `tryClaimSlot`, `UMPMCPopSlotClaimed`
+  ## will be emitted only after the failed close-CAS observed
+  ## `CellFilled` (with `moAcquire` ordering), establishing HB with the
+  ## producer's `moAcquireRelease` publish-CAS on the same
+  ## `cellState[slot]`. Until Task 16, this debug-mode gate asserts the
+  ## eventual invariant but does not yet have the close-CAS HB edge —
+  ## tryClaimSlot at Task 14 simply fetchAdds and emits SlotClaimed
+  ## (relying on producer ordering and the existing seg.tail acquire
+  ## load for visibility).
   let queue = claimed.queue
   let seg = claimed.segment
-
-  if not seg.committed[claimed.slot].load(moAcquire):
-    return
-      UMPMCPopCommitCheck[T, S, MT] ->
-      UMPMCPopSlotUncommitted[T, S, MT](
-        pinnedHandle: claimed.pinnedHandle,
-        pinnedEpoch: claimed.pinnedEpoch,
-        queue: claimed.queue,
-      )
-
-  let value = seg.data[claimed.slot]
+  when not defined(release):
+    doAssert seg.cellState[claimed.slot].load(moAcquire) == CellFilled,
+      "MPMC readItem: cellState invariant violated — slot must be " &
+      "CellFilled when UMPMCPopSlotClaimed is emitted (see tryClaimSlot " &
+      "close-CAS HB chain, design §7.1 E1)"
+  let value = move(seg.data[claimed.slot])
   discard queue.itemCount.fetchSub(1, moRelaxed)
 
-  UMPMCPopCommitCheck[T, S, MT] ->
-    UMPMCPopComplete[T, S, MT](
-      pinnedHandle: claimed.pinnedHandle,
-      pinnedEpoch: claimed.pinnedEpoch,
-      queue: claimed.queue,
-      value: value,
-      slot: claimed.slot,
-      isLastSlot: claimed.slot == S - 1,
-    )
+  UMPMCPopComplete[T, S, MT](
+    pinnedHandle: claimed.pinnedHandle,
+    pinnedEpoch: claimed.pinnedEpoch,
+    queue: claimed.queue,
+    value: value,
+    slot: claimed.slot,
+    isLastSlot: claimed.slot == S - 1,
+  )
 
 # Advance segment transition
 proc advanceSegment*[T; S, MT: static int](
@@ -302,6 +307,7 @@ proc advanceSegment*[T; S, MT: static int](
   ## headSegment CAS. The facade's Ready arm additionally re-checks
   ## `oldSeg.consumerHead` before advancing — see the bb50bc9
   ## livelock fix pattern applied to sipmuc and preempted here for MPMC.
+  ## (consumerHead is next-claimable under the Task 11 framing-flip.)
   let seg = exhausted.segment
   let nextSeg = seg.next.load(moAcquire)
 

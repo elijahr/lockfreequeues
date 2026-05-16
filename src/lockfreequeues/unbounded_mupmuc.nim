@@ -77,9 +77,15 @@ type
     tail {.align: CacheLineBytes.}: Atomic[int]
       # CAS coordination for producers
     consumerHead {.align: CacheLineBytes.}: Atomic[int]
-      # CAS coordination for consumers
-    committed {.align: CacheLineBytes.}: array[S, Atomic[bool]]
-      # Track which slots are ready to read
+      # CAS coordination for consumers (next-claimable index; Task 11
+      # framing-flip — semantic mirror of producer-side `tail`).
+    cellState {.align: CacheLineBytes.}: array[S, Atomic[uint8]]
+      # LCRQ per-slot tri-state (Task 11/14 migration; replaces the
+      # prior v4.0 per-slot bool publication-flag array). Encoding:
+      # CellEmpty=0, CellFilled=1, CellClosed=2 — see
+      # typestates/unbounded_mpmc_push.nim:35-46.
+    closed {.align: CacheLineBytes.}: Atomic[bool]
+      # LCRQ segment-level starvation-escalation flag (Task 11/14).
 
   UnboundedMupmuc*[S: static int, T; MaxThreads: static int] = object
     ## Unbounded MPMC queue using linked segments.
@@ -156,7 +162,7 @@ static:
   doAssert sizeof(UnboundedMupmuc[64, int, 4]) ==
     sizeof(ts_mpmc_push.UnboundedMupmucBase[64, int, 4])
   # Per-Segment-field equivalence (MPMC Segment fields: data, next, tail,
-  # consumerHead, committed).
+  # consumerHead, cellState, closed).
   doAssert sizeof(Segment[64, int]) == sizeof(ts_mpmc_push.UMPMCSegment[64, int])
   doAssert offsetOf(Segment[64, int], data) ==
     offsetOf(ts_mpmc_push.UMPMCSegment[64, int], data)
@@ -166,18 +172,27 @@ static:
     offsetOf(ts_mpmc_push.UMPMCSegment[64, int], tail)
   doAssert offsetOf(Segment[64, int], consumerHead) ==
     offsetOf(ts_mpmc_push.UMPMCSegment[64, int], consumerHead)
-  doAssert offsetOf(Segment[64, int], committed) ==
-    offsetOf(ts_mpmc_push.UMPMCSegment[64, int], committed)
+  doAssert offsetOf(Segment[64, int], cellState) ==
+    offsetOf(ts_mpmc_push.UMPMCSegment[64, int], cellState)
+  doAssert offsetOf(Segment[64, int], closed) ==
+    offsetOf(ts_mpmc_push.UMPMCSegment[64, int], closed)
 
 proc newSegment[S: static int, T](): ptr Segment[S, T] =
   ## Allocate a new segment on a CacheLineBytes boundary so the
   ## ``{.align.}`` pragmas above land on distinct physical cache lines.
+  ##
+  ## `allocAligned[T]` zeroes the segment block after alignment
+  ## (`internal/aligned_alloc.nim`), so the LCRQ tri-state cellState[]
+  ## array is already CellEmpty (0'u8) for every slot, and the segment-
+  ## level `closed` flag is already false. No explicit init loop is
+  ## required for those fields — t_unbounded_padding.nim's "freshly-
+  ## allocated sipmuc Segment has cellState[] == CellEmpty and closed
+  ## == false" suite verifies the same invariant for SPMC and would catch
+  ## any regression in `allocAligned`'s zero-init contract here too.
   result = allocAligned[Segment[S, T]]()
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
-  result.consumerHead.store(-1, moRelaxed)
-  for i in 0 ..< S:
-    result.committed[i].store(false, moRelaxed)
+  result.consumerHead.store(0, moRelaxed)
 
 proc newUnboundedMupmuc*[S: static int, T; MaxThreads: static int](
     manager: ptr DebraManager[MaxThreads],
@@ -310,9 +325,19 @@ proc getConsumer*[S: static int, T; MaxThreads: static int](
   self.getConsumer(handle)
 
 proc push*[S: static int, T; MaxThreads: static int](
-    self: var Producer[S, T, MaxThreads], item: T
+    self: var Producer[S, T, MaxThreads], item: sink T
 ) =
   ## Push a single item. Never blocks or fails (unbounded).
+  ##
+  ## Task 14 LCRQ: `item` is `sink T` so the value can be moved into the
+  ## typestate's `pendingItem` field at `startPush` time, threaded
+  ## through every retry round (C4), and consumed by `writeItem`'s
+  ## publish-CAS. Behavior preservation: callers passing by value
+  ## (`q.push(42)`, `q.push(myObj)`) work unchanged; callers passing a
+  ## variable they want to keep using afterwards (`var x = ...; q.push(x)
+  ## ; use(x)`) will now see `x` moved-from after the call. SPMC's
+  ## `unbounded_sipmuc.nim` push made the identical signature change at
+  ## Task 7.
 
   # Compile-time lock-free check
   when not defined(allowNonLockFreeQueueItems):
@@ -339,39 +364,94 @@ proc push*[S: static int, T; MaxThreads: static int](
   # `startPush` consumes a `Pinned[MT]`, which we project from `it`
   # (same handle+epoch — the slot's `pinned` flag is unchanged, this is
   # a typestate rebrand symmetric to `pinnedFromRetired`).
+  #
+  # Task 14/15 LCRQ migration: the push pipeline is now
+  #   startPush(pinned, queueBase, move item)  # item threaded as pendingItem
+  #     -> loadSegment -> tryClaimSlot (reservation CAS on seg.tail)
+  #        -> SlotClaimed -> writeItem -> UMPMCPushCommitResult variant
+  #             | Complete         : push done, return
+  #             | SegmentLoaded    : reserved-future arm; rebuild Ready and
+  #                                  re-loop (writeItem body does not emit
+  #                                  this today, kept for match exhaustiveness).
+  #             | SegmentClosed    : starvation/saturation escalation;
+  #                                  closeSegmentDone -> SegmentFull ->
+  #                                  tryAllocateNewSegment -> Ready (continue).
+  #        -> SegmentFull   -> tryAllocateNewSegment -> Ready (continue).
+  #        -> Ready (CAS-lost) : producer-vs-producer slot-claim CAS lost;
+  #                              rebuild Ready (pendingItem preserved per
+  #                              I-5) and re-loop.
   self.handle.withPin:
+    let itCtx = RetireContext[MaxThreads](it)
+    let pinned = Pinned[MaxThreads](
+      EpochGuardContext[MaxThreads](handle: itCtx.handle, epoch: itCtx.epoch)
+    )
+    var ready =
+      ts_mpmc_push.startPush[T, S, MaxThreads](pinned, queueBase, move item)
     while true:
-      # Project the active pin (held by `it: RetireReady`) into a Pinned
-      # value for the typestate to consume. This is a typestate rebrand
-      # (same handle+epoch); the slot's `pinned` flag is unchanged. It
-      # mirrors `pinnedFromRetired` from `debra/typestates/retire`.
-      let itCtx = RetireContext[MaxThreads](it)
-      let pinned = Pinned[MaxThreads](
-        EpochGuardContext[MaxThreads](handle: itCtx.handle, epoch: itCtx.epoch)
-      )
-      var ready = ts_mpmc_push.startPush[T, S, MaxThreads](pinned, queueBase)
-      var loaded = ready.loadSegment()
+      let loaded = ready.loadSegment()
       var claim = loaded.tryClaimSlot()
       match claim:
         UMPMCPushSlotClaimed(slotClaimed):
-          discard slotClaimed.writeItem(item).markCommitted()
-          break
+          var commit = slotClaimed.writeItem()
+          match commit:
+            UMPMCPushComplete(completeState):
+              discard completeState.extractPinned()
+              break
+            UMPMCPushSegmentLoaded(reLoaded):
+              # Reserved-future arm: writeItem body does not currently
+              # emit SegmentLoaded (only Complete and SegmentClosed). The
+              # arm is kept in the result-union for match exhaustiveness
+              # and forward compatibility. Rebuild Ready from the carried
+              # pin/queue/pendingItem and re-enter the loop. The `match`
+              # arm bind is immutable, so copy `pendingItem` to a mutable
+              # local before moving it into the rebuilt state.
+              var pending = reLoaded.pendingItem
+              ready = ts_mpmc_push.UMPMCPushReady[T, S, MaxThreads](
+                pinnedHandle: reLoaded.pinnedHandle,
+                pinnedEpoch: reLoaded.pinnedEpoch,
+                queue: reLoaded.queue,
+                pendingItem: move(pending),
+              )
+              continue
+            UMPMCPushSegmentClosed(closedState):
+              # Starvation escalation: bridge SegmentClosed -> SegmentFull
+              # via closeSegmentDone, then allocate a fresh segment via
+              # tryAllocateNewSegment (handling the producer-vs-producer
+              # alloc race the same way as the SegmentFull arm below).
+              let full = closedState.closeSegmentDone()
+              let newSeg = cast[ptr ts_mpmc_push.UMPMCSegment[S, T]](newSegment[S, T]())
+              var (nextReady, allocated) = full.tryAllocateNewSegment(newSeg)
+              if not allocated:
+                freeAligned(cast[ptr Segment[S, T]](newSeg))
+                backoffOnCASLossRetry()
+              ready = move(nextReady)
+              continue
         UMPMCPushSegmentFull(full):
           # Need a new segment. Allocate first, then link via CAS; if a
           # concurrent producer wins the alloc race, free our orphan and
           # back off (mirrors production at `:294`).
           let newSeg = cast[ptr ts_mpmc_push.UMPMCSegment[S, T]](newSegment[S, T]())
-          let (_, allocated) = full.tryAllocateNewSegment(newSeg)
+          var (nextReady, allocated) = full.tryAllocateNewSegment(newSeg)
           if not allocated:
             freeAligned(cast[ptr Segment[S, T]](newSeg))
             # CAS-loss-retry on segment-alloc race (producer-vs-producer).
             backoffOnCASLossRetry()
+          ready = move(nextReady)
           continue
-        UMPMCPushReady(_):
+        UMPMCPushReady(retry):
           # Lost slot-claim CAS to a peer producer; loop to retry from
-          # Ready. No backoff: the production code does not backoff at
-          # this site (production line :308 is a CAS in a tight retry
-          # loop without intervening backoff).
+          # Ready. The retry state already carries pendingItem (I-5: the
+          # Ready arm of tryClaimSlot propagates pendingItem into the
+          # rebuilt Ready). No backoff: production code does not backoff
+          # at this site (tight CAS retry loop without intervening
+          # backoff).
+          var pending = retry.pendingItem
+          ready = ts_mpmc_push.UMPMCPushReady[T, S, MaxThreads](
+            pinnedHandle: retry.pinnedHandle,
+            pinnedEpoch: retry.pinnedEpoch,
+            queue: retry.queue,
+            pendingItem: move(pending),
+          )
           continue
 
 proc push*[S: static int, T; MaxThreads: static int](
@@ -420,6 +500,15 @@ proc pop*[S: static int, T; MaxThreads: static int](
   # retired segments — the facade owns segment lifetime via DEBRA so
   # consumers never observe a freed pointer until every pinned thread
   # has rotated past the retirement epoch.
+  #
+  # DEBRA Pin–Claim Ordering Invariant (Task 11):
+  #   1. Pin opens BEFORE headSegment.load (this withPin: scope).
+  #   2. Pin covers fetchAdd(consumerHead) → read(data[mySlot]) window.
+  #   3. Segment under pin == segment under claim (typestate linearity).
+  #   4. headSegment.compareExchange retires oldSeg via DEBRA; oldSeg is
+  #      not freed until all pins in its retire-epoch rotate.
+  #   5. Bulk variant (L546+) acquires per-iteration pin satisfying 1-4.
+  # DO NOT alter withPin scope without re-establishing this invariant.
   self.handle.withPin:
     while true:
       # Project the active pin (held by `it: RetireReady`) into a Pinned
@@ -435,34 +524,44 @@ proc pop*[S: static int, T; MaxThreads: static int](
       var claim = loaded.tryClaimSlot()
       match claim:
         UMPMCPopSlotClaimed(slotClaimed):
-          # Slot was committed at tryClaimSlot time; readItem performs a
-          # paranoid double-check (structurally always succeeds for
-          # well-formed producers — see typestate readItem comment).
-          var commitCheck = slotClaimed.readItem()
-          match commitCheck:
-            UMPMCPopComplete(popDone):
-              # A3: read the public `value*` field directly. The prior
-              # `ts_mpmc_pop.getValue` wrapper added one generic verb-proc
-              # instantiation per (T, S, MT, mm-mode) for no behavioral
-              # benefit; the field is already public on `UMPMCPopComplete`.
-              result = some(popDone.value)
-              break
-            UMPMCPopSlotUncommitted(_):
-              # Defensive arm: producer rolled back committed[]
-              # (structurally unreachable). Return none(T) per design §1
-              # not-committed semantics — production line :405-406 break.
-              break
-        UMPMCPopSlotUncommitted(_):
-          # Slot reserved but not yet committed (producer still writing).
-          # Return none(T) per design §1 — non-blocking pop contract.
-          # Mirrors production line :405-407 break.
+          # Task 14/15: SlotClaimed -> Complete is now a DIRECT transition
+          # (no intermediate CommitCheck union; the prior publication-
+          # flag double-check arm is replaced by the LCRQ cellState
+          # protocol).
+          # A3: read the public `value*` field directly.
+          let complete = slotClaimed.readItem()
+          result = some(complete.value)
           break
-        UMPMCPopReady(_):
-          # Lost consumerHead CAS to a peer consumer; loop back to
-          # re-load and retry. CAS-loss-retry on the consumer-vs-consumer
-          # CAS (production line :371 classification per Decision §2.1).
-          backoffOnCASLossRetry()
-          continue
+        UMPMCPopClosedSlot(closedSlot):
+          # Task 14 LCRQ: consumer's close-CAS won on an empty cell
+          # (TYPE-ONLY at Task 14; Task 16 introduces the close-CAS in
+          # `tryClaimSlot` that emits this state). `pop()` returns
+          # `none(T)` without advancing headSegment; the producer's later
+          # publish on this slot will fail its CAS, recover its `pending`
+          # value, and retry on the next slot (see
+          # `typestates/unbounded_mpmc_push.nim` writeItem body).
+          #
+          # I-1 (Pin-leak preservation): MUST `break`, not `return`.
+          # This arm sits inside the `withPin:` scope opened above;
+          # `return` short-circuits the scope and skips the implicit
+          # unpin, leaking a DEBRA pin per call. `break` exits the inner
+          # while-loop, allowing the withPin scope to terminate
+          # naturally; `result` stays at its default `none(T)`.
+          discard closedSlot.extractPinned()
+          result = none(T)
+          break
+        # Task 11/14: dead-arm removal. The prior `UMPMCPopReady(_):` arm
+        # (CAS-loss-retry on consumer-vs-consumer CAS) is unreachable
+        # under the fetchAdd claim path: `tryClaimSlot` is wait-free and
+        # never returns Ready as part of `UMPMCPopSlotClaimResult`. The
+        # `UMPMCPopReady` state itself remains in the graph — it is
+        # produced by `advanceSegment` below (UMPMCPopAdvanceResult) — but
+        # the outer-match arm here would never fire. The prior
+        # "SlotUncommitted" arm (and its readItem-nested twin) is also
+        # gone: the v4.0 per-slot publication-flag protocol that
+        # motivated it has been replaced by the LCRQ cellState protocol,
+        # and the SlotClaimed-side commit-check result union has been
+        # collapsed (SlotClaimed -> Complete is now direct).
         UMPMCPopSegmentExhausted(exhausted):
           # Capture the old segment pointer BEFORE the typestate consumes
           # the state — the facade owns segment lifetime and DEBRA-retires
@@ -479,35 +578,33 @@ proc pop*[S: static int, T; MaxThreads: static int](
               # a livelock.
               break
             UMPMCPopReady(_):
-              # Item-loss livelock fix (preempted from sipmuc bb50bc9):
-              # before CAS-advancing past oldSeg, verify there are no
-              # unclaimed items remaining. The producer's invariant is
-              # that `oldSeg.next.store(newSeg, moRelease)` happens AFTER
-              # `oldSeg.tail` reaches `S` (the segment is full), and
-              # producers release-store `committed[slot]` AFTER the CAS
-              # on `seg.tail`. The acquire-load on `oldSeg.next`
-              # (already performed inside `advanceSegment`) establishes
-              # happens-before with the producer's release-store on
-              # `next`, so a fresh acquire-load of `consumerHead`
-              # here observes the latest CAS state.
-              # If `consumerHead < S - 1`, items remain unclaimed in
-              # `oldSeg`. We MUST NOT advance past it — the items would
-              # become unreachable when `oldSeg` is retired and pop
-              # would return `none` while items still exist, manifesting
-              # as a consumer hot-spin at end-of-run when producers
-              # filled the final segment after a consumer's stale tail
-              # snapshot.
+              # F1' RESHAPED (Task 11, D2 = DEBRA pin-based retirement
+              # gating).
               #
-              # The combined defense — typestate-side `tryClaimSlot`
-              # re-loads `seg.tail` before transitioning to Exhausted,
-              # plus this facade-side `consumerHead` re-check before
-              # advancing — closes the same TOCTOU window that affected
-              # SPMC pop. MPMC has the same SHAPE (snapshot tail +
-              # advance segment + CAS-advance head) and is preempted
-              # here so Phase C's TSAN×100 doesn't surface the bug a
-              # second time.
-              let freshPrevIdx = oldSeg.consumerHead.load(moAcquire)
-              if freshPrevIdx < S - 1:
+              # Correctness is OWNED BY the DEBRA Pin–Claim Ordering
+              # Invariant documented above the verb-loop `withPin:` scope.
+              # The check below is a PERFORMANCE OPTIMIZATION — it avoids
+              # a wasted CAS-retire when unclaimed slots may remain on
+              # oldSeg. It is NOT a TOCTOU defense.
+              #
+              # Background: the producer's invariant is that
+              # `oldSeg.next.store(newSeg, moRelease)` happens AFTER
+              # `oldSeg.tail` reaches `S` (the segment is full), and
+              # producers publish via `cellState` publish-CAS
+              # (Task 14 LCRQ; replaces the prior v4.0 per-slot
+              # publication-flag release-store) AFTER the reservation
+              # CAS on `seg.tail`. The acquire-load on `oldSeg.next`
+              # (already
+              # performed inside `advanceSegment`) establishes
+              # happens-before with the producer's release-store on
+              # `next`, so a fresh acquire-load of `consumerHead` here
+              # observes the latest fetchAdd state. Under the new
+              # next-claimable semantics, `consumerHead < S` means at
+              # least one slot has not yet been claimed (free-claim).
+              # Spinning on this segment instead of advancing avoids a
+              # head-CAS-then-retire race against still-pending consumers.
+              let freshConsumerHead = oldSeg.consumerHead.load(moAcquire)
+              if freshConsumerHead < S:
                 # Unclaimed slots remain in oldSeg. Skip the head CAS
                 # and retire — loop back to re-load and try to claim.
                 backoffOnCASLossRetry()
@@ -576,13 +673,15 @@ when defined(testing):
 
   proc segmentHeadOffsetForTest*[S: static int, T; MaxThreads: static int](
       _: typedesc[UnboundedMupmuc[S, T, MaxThreads]]
-  ): tuple[tail: int, consumerHead: int, committed: int] =
+  ): tuple[tail: int, consumerHead: int, cellState: int, closed: int] =
     ## Test-only accessor: returns offsets of cache-line-padded fields within
     ## the unbounded mupmuc Segment for the cache-line padding audit.
+    ## Task 14 LCRQ: `committed` renamed to `cellState`; `closed` appended.
     result = (
       offsetOf(Segment[S, T], tail),
       offsetOf(Segment[S, T], consumerHead),
-      offsetOf(Segment[S, T], committed),
+      offsetOf(Segment[S, T], cellState),
+      offsetOf(Segment[S, T], closed),
     )
 
 proc `=destroy`*[S: static int, T; MaxThreads: static int](
