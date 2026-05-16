@@ -290,9 +290,11 @@ proc tryClaimSlot*[T; S, MT: static int](
         segment: loaded.segment,
       )
 
-  # Wait-free claim primitive (D1 = fetchAdd). Acquire ordering pairs with
-  # other consumers' release on consumerHead (RMW) so subsequent reads of
-  # seg.data are ordered after any consumer's prior writes.
+  # Wait-free claim primitive (D1 = fetchAdd). Acquire ordering on this
+  # fetchAdd-RMW is documentation-only for SPMC (single-consumer topology;
+  # the RMW is uncontended and there is no peer consumer to pair with).
+  # The HB chain for seg.data publication is independent — it rides on
+  # the cellState CAS chain (E1, design §7.1), not on consumerHead.
   let mySlot = seg.consumerHead.fetchAdd(1, moAcquire)
 
   # Slot-index past segment end — segment is consumer-saturated. The facade
