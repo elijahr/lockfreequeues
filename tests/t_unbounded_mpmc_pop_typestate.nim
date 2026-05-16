@@ -1,15 +1,13 @@
 ## Tests for unbounded MPMC pop typestate.
 ##
-## Task 14 LCRQ migration: these tests verify the typestate structure
-## and transitions work correctly after the `committed[] -> cellState[]`
-## rename, the addition of segment-level `closed: Atomic[bool]`, and the
-## state-graph reshape (removal of UMPMCPopSlotUncommitted and the
-## UMPMCPopCommitCheck union; addition of UMPMCPopClosedSlot as a
-## TYPE-ONLY state). MPMC pop uses wait-free fetchAdd on `consumerHead`
-## (Task 11 framing-flip: counter is next-claimable, starts at 0); Task
-## 16 will introduce the close-CAS-on-empty branch in `tryClaimSlot`
-## that emits `UMPMCPopClosedSlot`. At Task 14, tryClaimSlot emits only
-## SlotClaimed (in-range fetchAdd) or SegmentExhausted (saturated).
+## These tests verify the typestate structure and transitions for the
+## MPMC pop pipeline: per-cell `cellState[]` publication protocol,
+## segment-level `closed: Atomic[bool]`, and `UMPMCPopClosedSlot` live
+## emission from `tryClaimSlot`'s close-CAS-on-empty branch. MPMC pop
+## uses wait-free fetchAdd on `consumerHead` (the counter is next-
+## claimable and starts at 0). `tryClaimSlot` emits SlotClaimed (in-
+## range fetchAdd), SegmentExhausted (saturated), or UMPMCPopClosedSlot
+## (close-CAS won against an empty cell after producer abandonment).
 
 import unittest2
 import lockfreequeues/atomic_dsl
@@ -199,11 +197,10 @@ suite "MPMC Pop Typestate":
     freeTestSegment(seg)
 
   test "readItem reads value from claimed slot":
-    # Task 14 LCRQ: SlotClaimed -> Complete is now a DIRECT transition
-    # (no UMPMCPopCommitCheck union). The defensive cellState double-
-    # check in readItem becomes load-bearing once Task 16 lands the
-    # close-CAS HB chain in tryClaimSlot; at Task 14 readItem simply
-    # reads `seg.data[slot]` and emits Complete.
+    # SlotClaimed -> Complete is a direct transition. readItem reads
+    # `seg.data[slot]` and emits Complete; its defensive cellState
+    # double-check is load-bearing for the close-CAS HB chain in
+    # tryClaimSlot.
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
 

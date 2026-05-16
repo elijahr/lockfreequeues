@@ -50,10 +50,7 @@
 ##   counts[4] UMPMCPopSegmentExhausted  - via match arm in UMPMCPopSlotClaimResult
 ##   counts[5] UMPMCPopEmpty             - via match arm in UMPMCPopAdvanceResult
 ##   counts[6] UMPMCPopComplete          - via direct transition arm from
-##                                        SlotClaimed (no UMPMCPopCommitCheck
-##                                        union under Task 14 LCRQ; the
-##                                        `SlotClaimed -> Complete`
-##                                        transition is now direct).
+##                                        SlotClaimed.
 ##
 ## All `match` invocations occur inside generic helper procs parameterized
 ## over `[S: static int; T; MaxThreads: static int]`, satisfying R2's
@@ -78,8 +75,7 @@ proc smokeSlotClaimedThenComplete[S: static int; T;
   ## Scenario 1: drive into SlotClaimed → Complete.
   ## Touches arms: UMPMCPopSegmentLoaded (counts[1], via single-target
   ## match), UMPMCPopSlotClaimed (counts[2]), and UMPMCPopComplete
-  ## (counts[6]) — the latter as a direct transition (no
-  ## UMPMCPopCommitCheck union under Task 14 LCRQ).
+  ## (counts[6]) — the latter as a direct transition.
   var op = startPop[T, S, MaxThreads](unpinned(handle).pin(), addr base)
   var loaded = op.loadSegment()
   match loaded:

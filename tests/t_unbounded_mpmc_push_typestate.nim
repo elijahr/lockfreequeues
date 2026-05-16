@@ -353,11 +353,8 @@ suite "MPMC Push Typestate":
     freeTestSegment(seg3)
 
   test "writeItem writes data and publishes via cellState publish-CAS":
-    # Task 14 LCRQ: writeItem performs the publish-CAS itself
-    # (CellEmpty -> CellFilled) and emits UMPMCPushComplete on success.
-    # The prior two-step (writeItem -> ItemWritten -> markCommitted ->
-    # Complete) pipeline is gone; there is no intermediate ItemWritten
-    # state.
+    # writeItem performs the publish-CAS itself (CellEmpty -> CellFilled)
+    # and emits UMPMCPushComplete on success in a single step.
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
 
