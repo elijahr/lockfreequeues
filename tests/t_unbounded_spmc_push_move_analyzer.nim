@@ -23,7 +23,19 @@ import options
 import unittest2
 
 import debra
+import lockfreequeues/atomic_dsl
 import lockfreequeues/unbounded_sipmuc
+
+template checkPinNotLeaked[MT: static int](
+    mgr: var DebraManager[MT], handleIdx: int
+) =
+  ## I-1: explicit pin-leak assertion. After a facade push/pop or
+  ## typestate verb chain completes, the thread's pinned flag MUST be
+  ## back to false. DEBRA's =destroy panic-on-leak is an indirect
+  ## backstop that only fires at process shutdown; this template fires
+  ## the assertion at the test site so a regression surfaces immediately.
+  check mgr.threads[handleIdx].pinned.load(moAcquire) == false
+  check mgr.threads[handleIdx].neutralized.load(moAcquire) == false
 
 type
   ## Move-only payload. `=copy` is disabled with `{.error.}`, the idiomatic
@@ -61,9 +73,14 @@ suite "Task 11 LCRQ SPMC move-analyzer baseline (I1)":
     # Construct, then push. `item` is at its last use on the `push` line,
     # so under arc/atomicArc the move analyzer must turn the parameter
     # bind into a sink. If it cannot, this line fails to compile.
+    # I-1: probe handle for push-side pin introspection (SPMC push has
+    # no withPin: scope; this is a regression guard).
+    let probeHandle = registerThread(manager)
     var item = makeMovePayload(7, [10, 20, 30])
     queue.push(item)
     check queue.len == 1
+    # I-1: SPMC push must not have set this thread's pin flag.
+    checkPinNotLeaked(manager, probeHandle.idx)
 
     let handle = registerThread(manager)
     var consumer = queue.getConsumer(handle)
@@ -81,16 +98,23 @@ suite "Task 11 LCRQ SPMC move-analyzer baseline (I1)":
     check popped.get.tag == 7
     check popped.get.payload == @[10, 20, 30]
     check queue.len == 0
+    # I-1: consumer pop's withPin: scope must have released the pin.
+    checkPinNotLeaked(manager, handle.idx)
 
   test "two sequential pushes/pops preserve FIFO with non-copyable T":
     var manager = initDebraManager[4]()
     var queue = newUnboundedSipmuc[16, MovePayload, 4](addr manager)
 
+    # I-1: probe handle for push-side pin introspection (SPMC push has
+    # no withPin: scope; regression guard).
+    let probeHandle = registerThread(manager)
     var first = makeMovePayload(1, [100, 101])
     var second = makeMovePayload(2, [200, 201, 202])
     queue.push(first)
     queue.push(second)
     check queue.len == 2
+    # I-1: neither push opened a pin scope.
+    checkPinNotLeaked(manager, probeHandle.idx)
 
     let handle = registerThread(manager)
     var consumer = queue.getConsumer(handle)
@@ -99,6 +123,8 @@ suite "Task 11 LCRQ SPMC move-analyzer baseline (I1)":
     check popped1.isSome
     check popped1.get.tag == 1
     check popped1.get.payload == @[100, 101]
+    # I-1: pop's withPin: scope released after first pop.
+    checkPinNotLeaked(manager, handle.idx)
 
     var popped2 = consumer.pop()
     check popped2.isSome
@@ -107,3 +133,5 @@ suite "Task 11 LCRQ SPMC move-analyzer baseline (I1)":
 
     check queue.len == 0
     check consumer.pop().isNone
+    # I-1: pin released after both Some and None pop paths.
+    checkPinNotLeaked(manager, handle.idx)

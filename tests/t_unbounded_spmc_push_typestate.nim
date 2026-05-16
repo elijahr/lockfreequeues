@@ -11,6 +11,23 @@ import debra
 import lockfreequeues/typestates/unbounded_spmc_push
 import lockfreequeues/unbounded_sipmuc
 
+template checkPinNotLeaked[MT: static int](
+    mgr: var DebraManager[MT], handleIdx: int
+) =
+  ## I-1: explicit pin-leak assertion. After a facade push/pop or
+  ## typestate verb chain completes, the thread's pinned flag MUST be
+  ## back to false. DEBRA's =destroy panic-on-leak is an indirect
+  ## backstop that only fires at process shutdown; this template fires
+  ## the assertion at the test site so a regression surfaces immediately.
+  ##
+  ## SPMC push side: this is a forward-looking regression guard. SPMC's
+  ## push has NO withPin: scope (single-producer immunity, design §9
+  ## line 719). The assertion proves the pre-existing invariant — pin
+  ## was never opened. If SPMC push ever erroneously gains a withPin:
+  ## and leaks, this check catches it.
+  check mgr.threads[handleIdx].pinned.load(moAcquire) == false
+  check mgr.threads[handleIdx].neutralized.load(moAcquire) == false
+
 # Type aliases for our test types
 type
   TestQueue = UnboundedSipmucBase[64, int, 4]
@@ -376,6 +393,11 @@ suite "Task 11 SPMC writeItem publish-CAS + Shape A retry":
     let segPtr = cast[ptr Segment[8, int]](headSegmentForTest(q))
     # Close cell 0 directly (simulates a consumer's prior close-CAS).
     segPtr.cellState[0].store(CellClosed, moRelaxed)
+    # I-1: register a probe handle solely so we can introspect the
+    # per-thread pin flag after the push. SPMC push has no withPin:
+    # scope, so the probe verifies the invariant that no pin was opened
+    # (forward-looking regression guard — see helper docstring).
+    let probeHandle = registerThread(manager)
     q.push(99)
     # writeItem's entry fetchAdd lands on slot 0 (CellClosed pre-staged).
     # Publish-CAS at slot 0 fails; Shape A fetchAdd advances to slot 1.
@@ -383,3 +405,5 @@ suite "Task 11 SPMC writeItem publish-CAS + Shape A retry":
     check segPtr.cellState[1].load(moRelaxed) == CellFilled
     check segPtr.data[1] == 99
     check segPtr.tail.load(moRelaxed) == 2  # entry fetchAdd → 1; retry fetchAdd → 2
+    # I-1: probe handle's pin flag was never set by the SPMC push path.
+    checkPinNotLeaked(manager, probeHandle.idx)

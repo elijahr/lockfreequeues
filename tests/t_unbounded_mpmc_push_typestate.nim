@@ -26,6 +26,17 @@ import debra
 import lockfreequeues/typestates/unbounded_mpmc_push
 import lockfreequeues/unbounded_mupmuc
 
+template checkPinNotLeaked[MT: static int](
+    mgr: var DebraManager[MT], handleIdx: int
+) =
+  ## I-1: explicit pin-leak assertion. After a facade push/pop or
+  ## typestate verb chain completes, the thread's pinned flag MUST be
+  ## back to false. DEBRA's =destroy panic-on-leak is an indirect
+  ## backstop that only fires at process shutdown; this template fires
+  ## the assertion at the test site so a regression surfaces immediately.
+  check mgr.threads[handleIdx].pinned.load(moAcquire) == false
+  check mgr.threads[handleIdx].neutralized.load(moAcquire) == false
+
 # Type aliases for our test types
 type
   TestQueue = UnboundedMupmucBase[64, int, 4]
@@ -450,7 +461,9 @@ suite "Task 18 MPMC closure-storm: writeItem Shape A retry + SegmentClosed escal
     let segPtr = cast[ptr UMPMCSegment[8, int]](headSegmentForTest(q))
     # Close cell 0 directly (simulates a consumer's prior close-CAS).
     segPtr.cellState[0].store(CellClosed, moRelaxed)
-    var producer = q.getProducer()
+    # I-1: explicit handle so we can introspect post-push pin state.
+    let producerHandle = registerThread(manager)
+    var producer = q.getProducer(producerHandle)
     producer.push(99)
     # tail moved 0 → 1 (reservation CAS) → 2 (Shape A fetchAdd).
     check segPtr.tail.load(moRelaxed) == 2
@@ -459,6 +472,8 @@ suite "Task 18 MPMC closure-storm: writeItem Shape A retry + SegmentClosed escal
     check segPtr.data[1] == 99
     check segPtr.closed.load(moRelaxed) == false
     check q.segmentCount == 1  # no rotation; Shape A retry stayed in-segment
+    # I-1: pin must be released by the push's withPin: scope.
+    checkPinNotLeaked(manager, producerHandle.idx)
 
   test "writeItem on fully-closed segment escalates to UMPMCPushSegmentClosed":
     # Typestate-level direct test: drive writeItem against a segment
@@ -518,6 +533,9 @@ suite "Task 18 MPMC closure-storm: writeItem Shape A retry + SegmentClosed escal
     # fetchAdd of that iteration, so tail advances exactly S-1 times
     # via Shape A before escalation: tail == 1 + (S-1) == S.
     check seg.tail.load(moRelaxed) == 64
+    # I-1: explicit unpin() ran in the SegmentClosed arm above; pin
+    # state must be clear.
+    checkPinNotLeaked(manager, handle.idx)
     freeTestSegment(seg)
 
   test "facade push on fully-closed segment dispatches SegmentClosed arm and rotates":
@@ -552,7 +570,10 @@ suite "Task 18 MPMC closure-storm: writeItem Shape A retry + SegmentClosed escal
     check q.segmentCount == 1
     check oldSegPtr.closed.load(moRelaxed) == false
 
-    var producer = q.getProducer()
+    # I-1: explicit handles so we can introspect post-op pin state on
+    # both producer and consumer paths.
+    let producerHandle = registerThread(manager)
+    var producer = q.getProducer(producerHandle)
     producer.push(42)
 
     # SegmentClosed arm executed: facade rotated to a new segment.
@@ -565,12 +586,19 @@ suite "Task 18 MPMC closure-storm: writeItem Shape A retry + SegmentClosed escal
     # publish-CAS landed at slot 0 of the new segment (CellEmpty start).
     check newSegPtr.cellState[0].load(moRelaxed) == CellFilled
     check newSegPtr.data[0] == 42
+    # I-1: producer push (including SegmentClosed arm + rotation) must
+    # leave pin state clear.
+    checkPinNotLeaked(manager, producerHandle.idx)
 
     # Item is observable via pop (round-trip across SegmentClosed
     # dispatch + new-segment rotation).
-    var consumer = q.getConsumer()
+    let consumerHandle = registerThread(manager)
+    var consumer = q.getConsumer(consumerHandle)
     let got = consumer.pop()
     check got.isSome
     check got.get == 42
     # Queue drained.
     check consumer.pop().isNone
+    # I-1: consumer pop (both Some and None paths) must leave pin state
+    # clear.
+    checkPinNotLeaked(manager, consumerHandle.idx)

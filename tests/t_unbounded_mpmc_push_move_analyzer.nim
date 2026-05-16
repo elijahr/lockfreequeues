@@ -44,7 +44,19 @@ import options
 import unittest2
 
 import debra
+import lockfreequeues/atomic_dsl
 import lockfreequeues/unbounded_mupmuc
+
+template checkPinNotLeaked[MT: static int](
+    mgr: var DebraManager[MT], handleIdx: int
+) =
+  ## I-1: explicit pin-leak assertion. After a facade push/pop or
+  ## typestate verb chain completes, the thread's pinned flag MUST be
+  ## back to false. DEBRA's =destroy panic-on-leak is an indirect
+  ## backstop that only fires at process shutdown; this template fires
+  ## the assertion at the test site so a regression surfaces immediately.
+  check mgr.threads[handleIdx].pinned.load(moAcquire) == false
+  check mgr.threads[handleIdx].neutralized.load(moAcquire) == false
 
 type
   ## Move-only payload. `=copy` is disabled with `{.error.}`, the idiomatic
@@ -108,6 +120,10 @@ suite "Task 19 LCRQ MPMC move-analyzer baseline (β3)":
     check popped.get.tag == 7
     check popped.get.payload == @[10, 20, 30]
     check queue.len == 0
+    # I-1: producer push and consumer pop withPin: scopes must have
+    # released their pins.
+    checkPinNotLeaked(manager, producerHandle.idx)
+    checkPinNotLeaked(manager, consumerHandle.idx)
 
   test "two sequential pushes/pops preserve FIFO with non-copyable T":
     var manager = initDebraManager[4]()
@@ -136,6 +152,10 @@ suite "Task 19 LCRQ MPMC move-analyzer baseline (β3)":
 
     check queue.len == 0
     check consumer.pop().isNone
+    # I-1: producer and consumer withPin: scopes released across all
+    # pushes/pops (including the trailing None pop).
+    checkPinNotLeaked(manager, producerHandle.idx)
+    checkPinNotLeaked(manager, consumerHandle.idx)
 
   test "pendingItem threads through MPMC SegmentFull escalation with non-copyable T":
     # Segment size S=2 forces a SegmentFull escalation on the third push:
@@ -191,3 +211,8 @@ suite "Task 19 LCRQ MPMC move-analyzer baseline (β3)":
 
     check queue.len == 0
     check consumer.pop().isNone
+    # I-1: producer push (including SegmentFull escalation +
+    # tryAllocateNewSegment + fresh-segment retry) and consumer pop
+    # must leave their withPin: scopes closed.
+    checkPinNotLeaked(manager, producerHandle.idx)
+    checkPinNotLeaked(manager, consumerHandle.idx)
