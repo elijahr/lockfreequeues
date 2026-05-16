@@ -199,8 +199,14 @@ suite "Match macro in [S, T, MaxThreads] generic context (R2 gate)":
     var manager = initDebraManager[4]()
     let handle = registerThread(manager)
     var seg = newTestSegment()
-    seg.consumerHead.store(5, moRelaxed)
-    seg.tail.store(5, moRelaxed) # consumerHead=5 >= tail=5 → SegmentExhausted (pre-claim short-circuit)
+    # Drive SegmentExhausted via SC1 (design §3 D7, load-bearing refinement):
+    # `consumerHead >= S` triggers the genuinely-saturated pre-claim short-circuit.
+    # The earlier `consumerHead >= freshTail` SC was removed under LCRQ
+    # (e60d504 / 3f4c779) because producer closure-skip retries advance `tail`
+    # past closed cells, making `tail` an unreliable saturation indicator.
+    # See unbounded_mpmc_pop.nim `tryClaimSlot` and design §3 D7.
+    seg.consumerHead.store(64, moRelaxed) # = S → SC1 fires (SegmentExhausted)
+    seg.tail.store(64, moRelaxed) # consistent with a fully-saturated segment
     var queue: TestQueue
     queue.manager = addr manager
     queue.headSegment.store(seg, moRelaxed)
