@@ -183,52 +183,76 @@ proc loadSegment*[T; S, MT: static int](
     consumerHead: head,
   )
 
-# Try to claim slot wait-free via fetchAdd on consumerHead.
-#
-# Task 14 scope: pure fetchAdd-then-emit. The close-CAS that produces
-# `UMPMCPopClosedSlot` is introduced by Task 16. Until then, the
-# emission path is: in-range fetchAdd -> SlotClaimed; OOR slot or
-# pre-claim short-circuit -> SegmentExhausted. The `UMPMCPopClosedSlot`
-# arm is declared in the result union (typestate macro) for type-graph
-# completeness but is unreachable from this proc body at Task 14.
+# Try to claim slot wait-free via fetchAdd on consumerHead, then close-CAS
+# the cell (Task 16, mirror of SPMC Task 10).
 proc tryClaimSlot*[T; S, MT: static int](
     loaded: sink UMPMCPopSegmentLoaded[T, S, MT]
 ): UMPMCPopSlotClaimResult[T, S, MT] {.transition.} =
-  ## Claim a slot wait-free using `fetchAdd` on `consumerHead`. Returns:
-  ## - SlotClaimed: our fetchAdd returned an in-range slot (mySlot < S).
-  ## - SegmentExhausted: segment is consumer-saturated (mySlot >= S, or
-  ##   pre-claim short-circuit fired).
-  ## - ClosedSlot: TYPE-ONLY at Task 14. Task 16 will introduce the
-  ##   close-CAS-on-empty branch that emits this state.
+  ## Task 11 LCRQ (Task 16): fetchAdd consumerHead, then close-CAS the cell.
+  ## Returns:
+  ## - SlotClaimed: our fetchAdd returned an in-range slot AND the close-CAS
+  ##   on `cellState[mySlot]` lost to the producer's publish-CAS — the cell
+  ##   is `CellFilled` and `data[mySlot]` is published (HB via the failed
+  ##   close-CAS pairing with the producer's publish-CAS, design §7.1 E1).
+  ## - ClosedSlot: our close-CAS won — the cell was `CellEmpty`, we wrote
+  ##   `CellClosed`. Terminal: facade returns `none(T)` without advancing
+  ##   headSegment. The producer's later publish on this slot will fail
+  ##   its CAS, recover its `pending` value, and retry on the next slot.
+  ## - SegmentExhausted: segment is consumer-saturated. Pre-claim
+  ##   short-circuits per design §3 D7 + D5 + C6 (§7.4):
+  ##     1. `consumerHead >= S` (genuinely saturated; design §3 D7
+  ##        load-bearing refinement).
+  ##     2. `closed AND consumerHead >= tail` (early-close propagation;
+  ##        BOTH loads `moAcquire` per design §3 D5 C6 + §7.4).
+  ##   Also emitted when our fetchAdd returns `mySlot >= S`.
   ##
-  ## The wait-free `fetchAdd` primitive replaces the prior CAS-loop (which
-  ## under contention could observe a stale snapshot and lose the CAS);
-  ## see design §3 / §7.2 / §8.N1 for the framing-flip rationale.
+  ## Pre-Task-16, the over-claim race emitted SegmentExhausted as a
+  ## placeholder via the `consumerHead >= freshTail` SC. Under LCRQ the
+  ## producer's closure-skip retries advance `tail` past closed cells, so
+  ## `tail` is no longer a reliable indicator of the number of filled
+  ## cells; that SC is removed and replaced by the close-CAS-on-empty
+  ## path that emits `UMPMCPopClosedSlot`.
   let seg = loaded.segment
 
-  # Optional advisory pre-claim short-circuit (reduces wasted fetchAdds).
-  # Per design §3 MPMC pseudocode + §7.2 row L145: MPMC retains the advisory
-  # short-circuit. F1 verb-side defense, retained shape; correctness owned by
-  # the close-CAS HB chain in Task 16 (once landed); this is OPTIMIZATION,
-  # not a TOCTOU defense.
-  if loaded.consumerHead >= loaded.tail:
-    let freshTail = seg.tail.load(moAcquire)
-    if loaded.consumerHead >= freshTail:
-      return
-        UMPMCPopSlotClaimResult[T, S, MT] ->
-        UMPMCPopSegmentExhausted[T, S, MT](
-          pinnedHandle: loaded.pinnedHandle,
-          pinnedEpoch: loaded.pinnedEpoch,
-          queue: loaded.queue,
-          segment: loaded.segment,
-        )
+  # Pre-claim short-circuit 1 (design §3 D7, load-bearing refinement):
+  # only `consumerHead >= S` triggers the genuinely-saturated short-circuit.
+  # The earlier fetchAdd-only `consumerHead >= freshTail` check was
+  # **removed** under LCRQ — the producer's closure-skip retries advance
+  # `tail` past closed cells, so `tail` is no longer a reliable indicator
+  # of the number of filled cells. See design §3 D7.
+  if loaded.consumerHead >= S:
+    return
+      UMPMCPopSlotClaimResult[T, S, MT] ->
+      UMPMCPopSegmentExhausted[T, S, MT](
+        pinnedHandle: loaded.pinnedHandle,
+        pinnedEpoch: loaded.pinnedEpoch,
+        queue: loaded.queue,
+        segment: loaded.segment,
+      )
 
-  # Wait-free claim primitive (D1 = fetchAdd). Acquire ordering on the
-  # fetchAdd RMW serializes claim attempts among consumers. The HB chain
-  # that carries the producer's `seg.data[slot]` write into our subsequent
-  # read goes through `cellState[slot]` publish-CAS (E1, design §7.1) —
-  # established at the close-CAS / CellFilled gate in `readItem` /
-  # `tryClaimSlot`, not at this fetchAdd.
+  # Pre-claim short-circuit 2 (D5 propagation; C6 paired moAcquire).
+  # §7.4: BOTH `seg.closed.load(moAcquire)` AND `seg.tail.load(moAcquire)`
+  # use acquire ordering for HB documentation clarity (a relaxed load on
+  # `tail` is argumentatively sufficient via the prior closed-load HB
+  # chain through E9, but is fragile under future maintenance). Cost:
+  # one extra load-acquire barrier on a path that fires only when the
+  # segment is producer-closed AND consumer-saturated (rare).
+  if seg.closed.load(moAcquire) and
+      loaded.consumerHead >= seg.tail.load(moAcquire):
+    return
+      UMPMCPopSlotClaimResult[T, S, MT] ->
+      UMPMCPopSegmentExhausted[T, S, MT](
+        pinnedHandle: loaded.pinnedHandle,
+        pinnedEpoch: loaded.pinnedEpoch,
+        queue: loaded.queue,
+        segment: loaded.segment,
+      )
+
+  # Wait-free claim primitive (D1 = fetchAdd). Acquire ordering on this
+  # fetchAdd-RMW serializes claim ordering among consumers (slot
+  # uniqueness). The HB chain for seg.data publication is independent —
+  # it rides on the cellState CAS chain (E1, design §7.1), not on
+  # consumerHead.
   let mySlot = seg.consumerHead.fetchAdd(1, moAcquire)
 
   # Slot-index past segment end — segment is consumer-saturated. The facade
@@ -243,11 +267,35 @@ proc tryClaimSlot*[T; S, MT: static int](
         segment: loaded.segment,
       )
 
-  # Task 14: emit SlotClaimed directly. The close-CAS-on-empty branch that
-  # would emit `UMPMCPopClosedSlot` is introduced by Task 16. The post-claim
-  # cellState check that establishes the HB chain with the producer's
-  # publish-CAS lives in `readItem` (defensive debug-mode gate, mirror of
-  # SPMC `unbounded_spmc_pop.nim:371-375`).
+  # LCRQ close-on-empty CAS (design §7.1 E1; §7.4 ordering rationale).
+  # `moAcquireRelease` on success: AcqRel pairs with the producer's
+  # publish-CAS on the same `cellState[mySlot]` so that on the producer's
+  # subsequent attempt the failed CAS observes our `CellClosed` write
+  # (release side) and any HB chain established by us (acquire side).
+  # `moAcquire` on failure: when our close-CAS loses, the cell must be
+  # `CellFilled` (the producer's publish-CAS won — see doAssert below).
+  # Acquire pairs with the producer's `moAcquireRelease` publish, which
+  # carries the `data[mySlot] = move(item)` write (HB through E1) so the
+  # subsequent `readItem` observes a fully-published value.
+  var expected: uint8 = CellEmpty
+  let closeWon = seg.cellState[mySlot].compareExchange(
+      expected, CellClosed, moAcquireRelease, moAcquire)
+  if closeWon:
+    return
+      UMPMCPopSlotClaimResult[T, S, MT] ->
+      UMPMCPopClosedSlot[T, S, MT](
+        pinnedHandle: loaded.pinnedHandle,
+        pinnedEpoch: loaded.pinnedEpoch,
+        queue: loaded.queue,
+      )
+
+  # CAS failure: cell must be CellFilled. CellClosed is impossible —
+  # consumer's own fetchAdd returns a unique `mySlot`; no peer consumer
+  # can have closed our slot, and the producer never writes CellClosed
+  # (the producer's writeItem only writes CellFilled via publish-CAS;
+  # CellClosed is consumer-only state under LCRQ).
+  doAssert expected == CellFilled,
+    "MPMC tryClaimSlot: cell observed unexpected state on close-CAS failure"
   return
     UMPMCPopSlotClaimResult[T, S, MT] ->
     UMPMCPopSlotClaimed[T, S, MT](
@@ -264,16 +312,19 @@ proc readItem*[T; S, MT: static int](
 ): UMPMCPopComplete[T, S, MT] {.transition.} =
   ## Read item from claimed slot.
   ##
-  ## CellFilled gate (Task 14 / Task 16, design §7.1 E1 + §7.4): once
-  ## Task 16 lands the close-CAS in `tryClaimSlot`, `UMPMCPopSlotClaimed`
-  ## will be emitted only after the failed close-CAS observed
-  ## `CellFilled` (with `moAcquire` ordering), establishing HB with the
-  ## producer's `moAcquireRelease` publish-CAS on the same
-  ## `cellState[slot]`. Until Task 16, this debug-mode gate asserts the
-  ## eventual invariant but does not yet have the close-CAS HB edge —
-  ## tryClaimSlot at Task 14 simply fetchAdds and emits SlotClaimed
-  ## (relying on producer ordering and the existing seg.tail acquire
-  ## load for visibility).
+  ## CellFilled gate (Task 16, design §7.1 E1 + §7.4):
+  ## `UMPMCPopSlotClaimed` is emitted by `tryClaimSlot` only after the
+  ## failed close-CAS observed `CellFilled` (with `moAcquire` ordering),
+  ## which pairs with the producer's `moAcquireRelease` publish-CAS on
+  ## the same `cellState[slot]`. This carries the producer's
+  ## `data[slot] = move(item)` write into the consumer's view (HB
+  ## through E1), so the move below reads a fully-published value, NOT
+  ## a moved-from cell from the producer's CAS-fail recovery path.
+  ##
+  ## We re-load `cellState[slot]` here as a debug-build defensive
+  ## gate — the close-CAS HB chain already establishes correctness in
+  ## release builds (no extra atomic load needed on the fast path),
+  ## but the assertion documents the invariant in source.
   let queue = claimed.queue
   let seg = claimed.segment
   when not defined(release):
