@@ -411,3 +411,169 @@ suite "MPMC Push Typestate":
       check got.isSome
       popped.add(got.get)
     check popped == @[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+suite "Task 18 MPMC closure-storm: writeItem Shape A retry + SegmentClosed escalation":
+  ## Plan §1956 (Task 18): the MPMC counterpart to SPMC's
+  ## `tests/t_unbounded_spmc_push_typestate.nim:373` closure-storm test.
+  ##
+  ## Three closure-storm tests, each pinning a distinct ESCAPE path:
+  ##   1. Shape A retry path (slot 0 pre-closed → publish lands at slot 1).
+  ##      Green-mirage: removing `seg.tail.fetchAdd(1, moRelaxed)` from
+  ##      `writeItem` MUST flip this test to FAIL (the retry would
+  ##      escalate to SegmentClosed immediately on the first publish-CAS
+  ##      failure instead of advancing to slot 1).
+  ##   2. SegmentClosed escalation from `writeItem` typestate verb
+  ##      (every slot pre-closed → publish-CAS fails S times → escalate).
+  ##      Asserts the returned variant is `UMPMCPushSegmentClosed` and
+  ##      carries the pendingItem forward. Green-mirage: an absent
+  ##      escalation branch in `writeItem` would either hang or assert.
+  ##   3. Facade-level closure-storm via `unbounded_mupmuc.push`
+  ##      (every slot of the head segment pre-closed → facade dispatches
+  ##      `UMPMCPushSegmentClosed`, rotates to a fresh segment via
+  ##      `closeSegmentDone -> tryAllocateNewSegment`, retries publish).
+  ##      Asserts: (a) the new segment is linked (segmentCount goes
+  ##      1 → 2); (b) the item is observable via `pop`; (c) the old
+  ##      segment's `closed` flag is true. Green-mirage: replacing the
+  ##      facade's `UMPMCPushSegmentClosed(closedState)` arm with
+  ##      `discard` + return would silently drop the item — both the
+  ##      `pop` assertion and the segmentCount assertion would FAIL.
+
+  test "writeItem on closed cell retries via Shape A fetchAdd":
+    # Mirror of SPMC test at tests/t_unbounded_spmc_push_typestate.nim:373.
+    # Pre-close slot 0; push(99). The reservation CAS in tryClaimSlot
+    # advances tail 0→1 and yields slot=0 (CellClosed pre-staged).
+    # publish-CAS at slot 0 fails (expected CellEmpty, observed
+    # CellClosed). Shape A retry: seg.tail.fetchAdd(1, moRelaxed) →
+    # myTailSlot=1, tail→2. publish-CAS at slot 1 wins (cellState[1]
+    # was CellEmpty). Final state: tail==2, cellState[1]==CellFilled,
+    # data[1]==99, segmentCount==1 (no rotation).
+    var manager = initDebraManager[4]()
+    var q: UnboundedMupmuc[8, int, 4]
+    q = newUnboundedMupmuc[8, int, 4](addr manager)
+    let segPtr = cast[ptr UMPMCSegment[8, int]](headSegmentForTest(q))
+    # Close cell 0 directly (simulates a consumer's prior close-CAS).
+    segPtr.cellState[0].store(CellClosed, moRelaxed)
+    var producer = q.getProducer()
+    producer.push(99)
+    # tail moved 0 → 1 (reservation CAS) → 2 (Shape A fetchAdd).
+    check segPtr.tail.load(moRelaxed) == 2
+    check segPtr.cellState[0].load(moRelaxed) == CellClosed
+    check segPtr.cellState[1].load(moRelaxed) == CellFilled
+    check segPtr.data[1] == 99
+    check segPtr.closed.load(moRelaxed) == false
+    check q.segmentCount == 1  # no rotation; Shape A retry stayed in-segment
+
+  test "writeItem on fully-closed segment escalates to UMPMCPushSegmentClosed":
+    # Typestate-level direct test: drive writeItem against a segment
+    # whose entire cellState[] array is pre-staged to CellClosed. Every
+    # publish-CAS fails; Shape A retry advances myTailSlot S times;
+    # closureRetryCount reaches StarvingThreshold = S; writeItem T&Ss
+    # `seg.closed` and returns UMPMCPushSegmentClosed with pendingItem
+    # preserved.
+    var manager = initDebraManager[4]()
+    let handle = registerThread(manager)
+
+    var seg = newTestSegment()
+    # Pre-close every cell in the segment.
+    for i in 0 ..< 64:
+      seg.cellState[i].store(CellClosed, moRelaxed)
+
+    var queue: TestQueue
+    queue.manager = addr manager
+    queue.headSegment.store(seg, moRelaxed)
+    queue.tailSegment.store(seg, moRelaxed)
+    queue.itemCount.store(0, moRelaxed)
+    queue.segments.store(1, moRelaxed)
+
+    var claimResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue, 777)
+      .loadSegment()
+      .tryClaimSlot()
+
+    var observedSegmentClosed = false
+    var observedPending = 0
+    var observedSegPtr: ptr UMPMCSegment[64, int] = nil
+    match claimResult:
+      UMPMCPushSlotClaimed(c):
+        var commit = c.writeItem()
+        match commit:
+          UMPMCPushSegmentClosed(closedState):
+            observedSegmentClosed = true
+            observedPending = closedState.pendingItem
+            observedSegPtr = closedState.segment
+            discard closedState.extractPinned().unpin()
+          UMPMCPushComplete(_):
+            check false
+          UMPMCPushSegmentLoaded(_):
+            check false
+      UMPMCPushSegmentFull(_):
+        check false
+      UMPMCPushReady(_):
+        check false
+
+    check observedSegmentClosed == true
+    check observedPending == 777
+    check observedSegPtr == seg
+    # writeItem's escalation branch T&S'd seg.closed to true.
+    check seg.closed.load(moRelaxed) == true
+    # tail advanced to S (entry reservation + (S-1) Shape A fetchAdds).
+    # Reservation CAS: 0 → 1. The escalation check is
+    # `closureRetryCount >= StarvingThreshold` BEFORE the Shape A
+    # fetchAdd of that iteration, so tail advances exactly S-1 times
+    # via Shape A before escalation: tail == 1 + (S-1) == S.
+    check seg.tail.load(moRelaxed) == 64
+    freeTestSegment(seg)
+
+  test "facade push on fully-closed segment dispatches SegmentClosed arm and rotates":
+    # End-to-end closure-storm via the facade. Pre-close every cell in
+    # the head segment. push(42) dispatches:
+    #   tryClaimSlot CAS (slot 0) → SlotClaimed → writeItem (S retries,
+    #   all fail) → SegmentClosed → facade arm: closeSegmentDone →
+    #   tryAllocateNewSegment (alloc wins, new segment linked) → loop →
+    #   loadSegment → tryClaimSlot on new segment → writeItem (slot 0
+    #   CellEmpty, publish-CAS wins) → Complete.
+    #
+    # Acceptance evidence:
+    #   - segmentCount goes 1 → 2 (new segment linked).
+    #   - Old segment.closed flag is true.
+    #   - pop returns the pushed item (no item loss across SegmentClosed
+    #     arm dispatch).
+    var manager = initDebraManager[4]()
+    var q: UnboundedMupmuc[8, int, 4]
+    q = newUnboundedMupmuc[8, int, 4](addr manager)
+    let oldSegPtr = cast[ptr UMPMCSegment[8, int]](headSegmentForTest(q))
+    # Pre-close every cell on the head segment. Bump consumerHead to S
+    # so the consumer's tryClaimSlot will treat every slot as "already
+    # claimed" and skip the segment cleanly (consumer's close-CAS only
+    # fires on cells at-or-after consumerHead — the pre-closed cells
+    # below consumerHead are off-limits to the consumer's close-CAS
+    # path, mirroring production where consumer-emitted CellClosed
+    # always trails consumerHead's advance).
+    for i in 0 ..< 8:
+      oldSegPtr.cellState[i].store(CellClosed, moRelaxed)
+    oldSegPtr.consumerHead.store(8, moRelaxed)
+
+    check q.segmentCount == 1
+    check oldSegPtr.closed.load(moRelaxed) == false
+
+    var producer = q.getProducer()
+    producer.push(42)
+
+    # SegmentClosed arm executed: facade rotated to a new segment.
+    check q.segmentCount == 2
+    check oldSegPtr.closed.load(moRelaxed) == true
+    # The new segment is reachable via oldSeg.next.
+    let newSegRaw = oldSegPtr.next.load(moAcquire)
+    check newSegRaw != nil
+    let newSegPtr = cast[ptr UMPMCSegment[8, int]](newSegRaw)
+    # publish-CAS landed at slot 0 of the new segment (CellEmpty start).
+    check newSegPtr.cellState[0].load(moRelaxed) == CellFilled
+    check newSegPtr.data[0] == 42
+
+    # Item is observable via pop (round-trip across SegmentClosed
+    # dispatch + new-segment rotation).
+    var consumer = q.getConsumer()
+    let got = consumer.pop()
+    check got.isSome
+    check got.get == 42
+    # Queue drained.
+    check consumer.pop().isNone
