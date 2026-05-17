@@ -30,6 +30,13 @@ import ./adapters/channels_adapter
 import lockfreequeues/mupmuc
 import lockfreequeues/sipmuc
 import lockfreequeues/backoff
+# v5.0.0 cascade D3.6: Queue parity exercise for B3 % delta.
+# Fine-grained imports (not the umbrella) to avoid `Producer`/`Consumer`
+# symbol collisions with the legacy mupmuc/sipmuc imports above.
+import lockfreequeues/queue as q_mod
+import lockfreequeues/strategy
+import lockfreequeues/reclamation
+import lockfreequeues/internal/pinscope_stub
 
 # MVP comparison adapters (Track 3). Gated by per-library defines.
 when defined(adapter_boost_lockfree_queue_available):
@@ -249,6 +256,207 @@ proc runSipmucShape[N, C: static int; T](
   echo ""
   em.addMeasure(slug, "throughput_ops_ms", m, m - s, m + s)
 
+# ---------- v5.0.0 cascade D3.6: Queue-based MPMC parity harnesses ----------
+#
+# Two parallel harnesses for B3 % delta:
+#   - QueueBoundedMupmuc (ccMulti x ccMulti) — full {1,2,4}x{1,2,4}
+#     grid plus 8p8c oversubscription, mirrors the Mupmuc shape set.
+#     Slug `lockfreequeues_queue_bounded_mupmuc/mpmc/<P>p<C>c`.
+#   - QueueBoundedSipmuc (ccSingle x ccMulti) — shapes `1p<C>c` for
+#     C in {1,2,4}, mirrors the Sipmuc shape set. Slug
+#     `lockfreequeues_queue_bounded_sipmuc/mpmc/1p<C>c`.
+# Output metric / units (throughput_ops_ms) match the legacy baselines
+# so B3 parity delta is a per-shape division.
+
+type
+  QBoundedMupmucProducerCtx[N, P, C: static int; T] = object
+    producer: QueueProducer[T, ccMulti, ccMulti, stEager, rkNone,
+                            N, P, C, 0, 0]
+    startIdx: int
+    count: int
+
+  QBoundedMupmucConsumerCtx[N, P, C: static int; T] = object
+    consumer: QueueConsumer[T, ccMulti, ccMulti, stEager, rkNone,
+                            N, P, C, 0, 0]
+    count: int
+
+proc qBoundedMupmucProducerThread[N, P, C: static int; T](
+    ctx: ptr QBoundedMupmucProducerCtx[N, P, C, T]
+) {.thread.} =
+  for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
+    while not ctx.producer.push(T(i)):
+      backoffOnPeerWait()
+
+proc qBoundedMupmucConsumerThread[N, P, C: static int; T](
+    ctx: ptr QBoundedMupmucConsumerCtx[N, P, C, T]
+) {.thread.} =
+  var local = 0
+  while local < ctx.count:
+    let item = ctx.consumer.pop()
+    if item.isSome:
+      inc local
+    else:
+      backoffOnPeerWait()
+
+proc runOneQBoundedMupmucRun[N, P, C: static int; T](
+    queue: var Queue[T, ccMulti, ccMulti, stEager, rkNone, N, P, C, 0, 0],
+    messageCount: int,
+): float =
+  let baseP = messageCount div P
+  let remP = messageCount mod P
+  let baseC = messageCount div C
+  let remC = messageCount mod C
+  var producerThreads:
+    array[P, Thread[ptr QBoundedMupmucProducerCtx[N, P, C, T]]]
+  var consumerThreads:
+    array[C, Thread[ptr QBoundedMupmucConsumerCtx[N, P, C, T]]]
+  var producerCtxs: array[P, QBoundedMupmucProducerCtx[N, P, C, T]]
+  var consumerCtxs: array[C, QBoundedMupmucConsumerCtx[N, P, C, T]]
+  var nextStart = 0
+  for i in 0 ..< P:
+    let count = baseP + (if i < remP: 1 else: 0)
+    producerCtxs[i] = QBoundedMupmucProducerCtx[N, P, C, T](
+      producer: queue.getProducer(idx = i),
+      startIdx: nextStart,
+      count: count,
+    )
+    nextStart += count
+  for i in 0 ..< C:
+    let count = baseC + (if i < remC: 1 else: 0)
+    consumerCtxs[i] = QBoundedMupmucConsumerCtx[N, P, C, T](
+      consumer: queue.getConsumer(idx = i),
+      count: count,
+    )
+  let startTime = getMonoTime()
+  for i in 0 ..< P:
+    createThread(
+      producerThreads[i],
+      qBoundedMupmucProducerThread[N, P, C, T],
+      addr producerCtxs[i],
+    )
+  for i in 0 ..< C:
+    createThread(
+      consumerThreads[i],
+      qBoundedMupmucConsumerThread[N, P, C, T],
+      addr consumerCtxs[i],
+    )
+  for i in 0 ..< P: joinThread(producerThreads[i])
+  for i in 0 ..< C: joinThread(consumerThreads[i])
+  let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
+  if elapsedNs <= 0.0: return 0.0
+  result = float(messageCount) * 1_000_000.0 / elapsedNs
+
+proc runQBoundedMupmucShape[N, P, C: static int; T](
+    em: var BMFEmitter,
+    runs, warmup, messageCount: int,
+) =
+  let slug =
+    "lockfreequeues_queue_bounded_mupmuc/mpmc/" & $P & "p" & $C & "c"
+  echo fmt"QueueBoundedMupmuc {P}p{C}c ({slug}):"
+  for _ in 0 ..< warmup:
+    var q = q_mod.initQueue[T, ccMulti, ccMulti, stEager, N, P, C]()
+    discard runOneQBoundedMupmucRun(q, messageCount)
+  var samples: seq[float] = @[]
+  for _ in 0 ..< runs:
+    var q = q_mod.initQueue[T, ccMulti, ccMulti, stEager, N, P, C]()
+    samples.add(runOneQBoundedMupmucRun(q, messageCount))
+  let m = mean(samples)
+  let s = stddev(samples)
+  echo fmt"  mean: {m:.1f} ops/ms"
+  echo fmt"  stddev: {s:.1f}"
+  echo fmt"  runs: {samples.len}"
+  echo ""
+  em.addMeasure(slug, "throughput_ops_ms", m, m - s, m + s)
+
+# Sipmuc-equivalent (Queue ccSingle x ccMulti)
+
+type
+  QBoundedSipmucProducerCtx[N, C: static int; T] = object
+    queue: ptr Queue[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0, 0]
+    startIdx: int
+    count: int
+
+  QBoundedSipmucConsumerCtx[N, C: static int; T] = object
+    consumer: QueueConsumer[T, ccSingle, ccMulti, stEager, rkNone,
+                            N, 0, C, 0, 0]
+    count: int
+
+proc qBoundedSipmucProducerThread[N, C: static int; T](
+    ctx: ptr QBoundedSipmucProducerCtx[N, C, T]
+) {.thread.} =
+  for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
+    while not ctx.queue[].push(T(i)):
+      backoffOnPeerWait()
+
+proc qBoundedSipmucConsumerThread[N, C: static int; T](
+    ctx: ptr QBoundedSipmucConsumerCtx[N, C, T]
+) {.thread.} =
+  var local = 0
+  while local < ctx.count:
+    let item = ctx.consumer.pop()
+    if item.isSome:
+      inc local
+    else:
+      backoffOnPeerWait()
+
+proc runOneQBoundedSipmucRun[N, C: static int; T](
+    queue: var Queue[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0, 0],
+    messageCount: int,
+): float =
+  let baseC = messageCount div C
+  let remC = messageCount mod C
+  var producerThread: Thread[ptr QBoundedSipmucProducerCtx[N, C, T]]
+  var producerCtx = QBoundedSipmucProducerCtx[N, C, T](
+    queue: addr queue, startIdx: 0, count: messageCount,
+  )
+  var consumerThreads:
+    array[C, Thread[ptr QBoundedSipmucConsumerCtx[N, C, T]]]
+  var consumerCtxs: array[C, QBoundedSipmucConsumerCtx[N, C, T]]
+  for i in 0 ..< C:
+    let count = baseC + (if i < remC: 1 else: 0)
+    consumerCtxs[i] = QBoundedSipmucConsumerCtx[N, C, T](
+      consumer: queue.getConsumer(idx = i),
+      count: count,
+    )
+  let startTime = getMonoTime()
+  createThread(
+    producerThread,
+    qBoundedSipmucProducerThread[N, C, T],
+    addr producerCtx,
+  )
+  for i in 0 ..< C:
+    createThread(
+      consumerThreads[i],
+      qBoundedSipmucConsumerThread[N, C, T],
+      addr consumerCtxs[i],
+    )
+  joinThread(producerThread)
+  for i in 0 ..< C: joinThread(consumerThreads[i])
+  let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
+  if elapsedNs <= 0.0: return 0.0
+  result = float(messageCount) * 1_000_000.0 / elapsedNs
+
+proc runQBoundedSipmucShape[N, C: static int; T](
+    em: var BMFEmitter,
+    runs, warmup, messageCount: int,
+) =
+  let slug = "lockfreequeues_queue_bounded_sipmuc/mpmc/1p" & $C & "c"
+  echo fmt"QueueBoundedSipmuc 1p{C}c ({slug}):"
+  for _ in 0 ..< warmup:
+    var q = q_mod.initQueue[T, ccSingle, ccMulti, stEager, N, 0, C]()
+    discard runOneQBoundedSipmucRun(q, messageCount)
+  var samples: seq[float] = @[]
+  for _ in 0 ..< runs:
+    var q = q_mod.initQueue[T, ccSingle, ccMulti, stEager, N, 0, C]()
+    samples.add(runOneQBoundedSipmucRun(q, messageCount))
+  let m = mean(samples)
+  let s = stddev(samples)
+  echo fmt"  mean: {m:.1f} ops/ms"
+  echo fmt"  stddev: {s:.1f}"
+  echo fmt"  runs: {samples.len}"
+  echo ""
+  em.addMeasure(slug, "throughput_ops_ms", m, m - s, m + s)
+
 # ---------- Channels harness (uses runThroughputHarness) ----------
 
 proc initChannelsQ(capacity: int): ChannelsAdapter[uint64] =
@@ -330,7 +538,9 @@ proc runMvpMpmcShape[A](
 # ---------- Variant dispatch ----------
 
 proc supportedVariantsList(): seq[string] {.compileTime.} =
-  result = @["mupmuc", "sipmuc", "channels"]
+  result = @["mupmuc", "sipmuc",
+             "queue_bounded_mupmuc", "queue_bounded_sipmuc",
+             "channels"]
   when declared(initBoostMpmcQ):
     result.add("boost_lockfree_queue")
   when declared(initCrossbeamArrayQ):
@@ -373,6 +583,36 @@ proc runVariant(variant: string, em: var BMFEmitter) =
     runSipmucShape[MpmcCapacity, 2, uint64](
       em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
     runSipmucShape[MpmcCapacity, 4, uint64](
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+  of "queue_bounded_mupmuc":
+    # v5.0.0 cascade D3.6: Queue parity for the full Mupmuc shape set.
+    runQBoundedMupmucShape[MpmcCapacity, 1, 1, uint64](
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+    runQBoundedMupmucShape[MpmcCapacity, 1, 2, uint64](
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+    runQBoundedMupmucShape[MpmcCapacity, 1, 4, uint64](
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+    runQBoundedMupmucShape[MpmcCapacity, 2, 1, uint64](
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+    runQBoundedMupmucShape[MpmcCapacity, 2, 2, uint64](
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+    runQBoundedMupmucShape[MpmcCapacity, 2, 4, uint64](
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+    runQBoundedMupmucShape[MpmcCapacity, 4, 1, uint64](
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+    runQBoundedMupmucShape[MpmcCapacity, 4, 2, uint64](
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+    runQBoundedMupmucShape[MpmcCapacity, 4, 4, uint64](
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+    runQBoundedMupmucShape[MpmcCapacity, 8, 8, uint64](
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+  of "queue_bounded_sipmuc":
+    # v5.0.0 cascade D3.6: Queue parity for the Sipmuc 1p<C>c set.
+    runQBoundedSipmucShape[MpmcCapacity, 1, uint64](
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+    runQBoundedSipmucShape[MpmcCapacity, 2, uint64](
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+    runQBoundedSipmucShape[MpmcCapacity, 4, uint64](
       em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
   of "channels":
     for p in [1, 2, 4]:

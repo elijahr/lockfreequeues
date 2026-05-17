@@ -29,6 +29,11 @@ import ./adapters/lockfreequeues_sipsic_adapter
 import ./adapters/lockfreequeues_sipmuc_adapter
 import ./adapters/lockfreequeues_mupsic_adapter
 import ./adapters/lockfreequeues_mupmuc_adapter
+# v5.0.0 cascade D3.6: Queue-based parity adapters for B3 % delta.
+import ./adapters/lockfreequeues_queue_bounded_sipsic_adapter
+import ./adapters/lockfreequeues_queue_bounded_sipmuc_adapter
+import ./adapters/lockfreequeues_queue_bounded_mupsic_adapter
+import ./adapters/lockfreequeues_queue_bounded_mupmuc_adapter
 
 const
   ## Per-binary intdefines for latency wall-time control. Mirror the
@@ -81,9 +86,32 @@ proc initMupsic(): LockfreequeuesMupsicAdapter[LatencyCapacity, 1, uint64] =
 proc initMupmuc(): MupmucAdapter[LatencyCapacity, uint64] =
   initMupmucAdapter[LatencyCapacity, uint64]()
 
+# v5.0.0 cascade D3.6: Queue-based parity factories. Slugs use
+# `lockfreequeues_queue_bounded_<family>/<topo>/1p1c` for B3 % delta.
+
+proc initQBoundedSipsic():
+    QueueBoundedSipsicAdapter[LatencyCapacity, uint64] =
+  initQueueBoundedSipsicAdapter[LatencyCapacity, uint64]()
+
+proc initQBoundedSipmuc():
+    QueueBoundedSipmucAdapter[LatencyCapacity, 1, uint64] =
+  makeQueueBoundedSipmucAdapter[LatencyCapacity, 1, uint64](LatencyCapacity)
+
+proc initQBoundedMupsic():
+    QueueBoundedMupsicAdapter[LatencyCapacity, 1, uint64] =
+  makeQueueBoundedMupsicAdapter[LatencyCapacity, 1, uint64](LatencyCapacity)
+
+proc initQBoundedMupmuc():
+    QueueBoundedMupmucAdapter[LatencyCapacity, uint64] =
+  initQueueBoundedMupmucAdapter[LatencyCapacity, uint64]()
+
 # ---------- Variant dispatch ----------
 
-const SupportedVariants = ["sipsic", "mupmuc", "sipmuc", "mupsic"]
+const SupportedVariants = [
+  "sipsic", "mupmuc", "sipmuc", "mupsic",
+  "queue_bounded_sipsic", "queue_bounded_mupmuc",
+  "queue_bounded_sipmuc", "queue_bounded_mupsic",
+]
 
 proc slugFor(variant: string): string =
   ## Slug per design 2.2 / table at design line 357. PR 1 covers the 1p1c
@@ -93,6 +121,14 @@ proc slugFor(variant: string): string =
   of "sipmuc": "lockfreequeues_sipmuc/mpmc/1p1c"
   of "mupsic": "lockfreequeues_mupsic/mpsc/1p1c"
   of "mupmuc": "lockfreequeues_mupmuc/mpmc/1p1c"
+  of "queue_bounded_sipsic":
+    "lockfreequeues_queue_bounded_sipsic/spsc/1p1c"
+  of "queue_bounded_sipmuc":
+    "lockfreequeues_queue_bounded_sipmuc/mpmc/1p1c"
+  of "queue_bounded_mupsic":
+    "lockfreequeues_queue_bounded_mupsic/mpsc/1p1c"
+  of "queue_bounded_mupmuc":
+    "lockfreequeues_queue_bounded_mupmuc/mpmc/1p1c"
   else:
     raise newException(ValueError, "unknown variant: " & variant)
 
@@ -128,6 +164,38 @@ proc runVariant(
     of "mupmuc":
       runLatencyHarness[MupmucAdapter[LatencyCapacity, uint64]](
         queueInit = initMupmuc,
+        messageCount = BenchLatencyMessageCount,
+        runCount = BenchLatencyRuns,
+        warmupCount = BenchLatencyWarmupRuns,
+      )
+    of "queue_bounded_sipsic":
+      runLatencyHarness[
+          QueueBoundedSipsicAdapter[LatencyCapacity, uint64]](
+        queueInit = initQBoundedSipsic,
+        messageCount = BenchLatencyMessageCount,
+        runCount = BenchLatencyRuns,
+        warmupCount = BenchLatencyWarmupRuns,
+      )
+    of "queue_bounded_sipmuc":
+      runLatencyHarness[
+          QueueBoundedSipmucAdapter[LatencyCapacity, 1, uint64]](
+        queueInit = initQBoundedSipmuc,
+        messageCount = BenchLatencyMessageCount,
+        runCount = BenchLatencyRuns,
+        warmupCount = BenchLatencyWarmupRuns,
+      )
+    of "queue_bounded_mupsic":
+      runLatencyHarness[
+          QueueBoundedMupsicAdapter[LatencyCapacity, 1, uint64]](
+        queueInit = initQBoundedMupsic,
+        messageCount = BenchLatencyMessageCount,
+        runCount = BenchLatencyRuns,
+        warmupCount = BenchLatencyWarmupRuns,
+      )
+    of "queue_bounded_mupmuc":
+      runLatencyHarness[
+          QueueBoundedMupmucAdapter[LatencyCapacity, uint64]](
+        queueInit = initQBoundedMupmuc,
         messageCount = BenchLatencyMessageCount,
         runCount = BenchLatencyRuns,
         warmupCount = BenchLatencyWarmupRuns,

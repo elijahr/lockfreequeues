@@ -19,6 +19,15 @@ import std/[monotimes, options, os, parseopt, sets, strformat, syncio, times]
 import ./bench_common
 import lockfreequeues/backoff
 import lockfreequeues/mupsic
+# v5.0.0 cascade D3.6: parallel exercise of the unified Queue generic
+# at MPSC cardinality for B3 parity delta. Bespoke per-shape harness
+# below mirrors the Mupsic one. Imports are fine-grained (not the
+# umbrella) because the umbrella brings in legacy unbounded modules
+# whose `Producer` symbol collides with `mupsic.Producer` above.
+import lockfreequeues/queue as q_mod
+import lockfreequeues/strategy
+import lockfreequeues/reclamation
+import lockfreequeues/internal/pinscope_stub
 
 # PR 4 comparison adapter (Track 4 §4.6). Nim's stdlib system.Channel
 # wired here under the MPSC slot. Blocking-on-full producer; see the
@@ -147,6 +156,106 @@ proc runMupsicShape[N, P: static int; T](
   echo ""
   em.addMeasure(slug, "throughput_ops_ms", m, m - s, m + s)
 
+# ---------- v5.0.0 cascade D3.6: Queue-based MPSC parity harness ----------
+#
+# Parallel to the Mupsic harness above, but exercises the unified
+# `Queue[uint64, ccMulti, ccSingle, stEager, rkNone, N, P, 0, 0, 0]`
+# generic. Slug `lockfreequeues_queue_bounded_mupsic/mpsc/<P>p1c`.
+# Output metric / units (throughput_ops_ms) match the Mupsic baseline
+# so B3 can compute a per-shape % delta.
+
+type
+  QMpscProducerCtx[N, P: static int; T] = object
+    producer: QueueProducer[T, ccMulti, ccSingle, stEager, rkNone,
+                            N, P, 0, 0, 0]
+    startIdx: int
+    count: int
+
+  QMpscConsumerCtx[N, P: static int; T] = object
+    queue: ptr Queue[T, ccMulti, ccSingle, stEager, rkNone,
+                     N, P, 0, 0, 0]
+    count: int
+
+proc qMpscProducerThread[N, P: static int; T](
+    ctx: ptr QMpscProducerCtx[N, P, T]
+) {.thread.} =
+  for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
+    while not ctx.producer.push(T(i)):
+      backoffOnPeerWait()
+
+proc qMpscConsumerThread[N, P: static int; T](
+    ctx: ptr QMpscConsumerCtx[N, P, T]
+) {.thread.} =
+  var local = 0
+  while local < ctx.count:
+    let item = ctx.queue[].pop()
+    if item.isSome:
+      inc local
+    else:
+      backoffOnPeerWait()
+
+proc runOneQMpscRun[N, P: static int; T](
+    queue: var Queue[T, ccMulti, ccSingle, stEager, rkNone, N, P, 0, 0, 0],
+    messageCount: int,
+): float =
+  let baseP = messageCount div P
+  let remP = messageCount mod P
+  var producerThreads: array[P, Thread[ptr QMpscProducerCtx[N, P, T]]]
+  var producerCtxs: array[P, QMpscProducerCtx[N, P, T]]
+  var consumerThread: Thread[ptr QMpscConsumerCtx[N, P, T]]
+  var consumerCtx = QMpscConsumerCtx[N, P, T](
+    queue: addr queue, count: messageCount,
+  )
+  var nextStart = 0
+  for i in 0 ..< P:
+    let count = baseP + (if i < remP: 1 else: 0)
+    producerCtxs[i] = QMpscProducerCtx[N, P, T](
+      producer: queue.getProducer(idx = i),
+      startIdx: nextStart,
+      count: count,
+    )
+    nextStart += count
+  let startTime = getMonoTime()
+  for i in 0 ..< P:
+    createThread(
+      producerThreads[i],
+      qMpscProducerThread[N, P, T],
+      addr producerCtxs[i],
+    )
+  createThread(
+    consumerThread,
+    qMpscConsumerThread[N, P, T],
+    addr consumerCtx,
+  )
+  for i in 0 ..< P:
+    joinThread(producerThreads[i])
+  joinThread(consumerThread)
+  let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
+  if elapsedNs <= 0.0:
+    return 0.0
+  result = float(messageCount) * 1_000_000.0 / elapsedNs
+
+proc runQMpscShape[N, P: static int; T](
+    em: var BMFEmitter,
+    runs, warmup, messageCount: int,
+) =
+  let slug = "lockfreequeues_queue_bounded_mupsic/mpsc/" & $P & "p1c"
+  echo fmt"QueueBoundedMupsic {P}p1c ({slug}):"
+  for _ in 0 ..< warmup:
+    var q = q_mod.initQueue[T, ccMulti, ccSingle, stEager, N, P, 0]()
+    discard runOneQMpscRun(q, messageCount)
+  var samples: seq[float] = @[]
+  for _ in 0 ..< runs:
+    var q = q_mod.initQueue[T, ccMulti, ccSingle, stEager, N, P, 0]()
+    samples.add(runOneQMpscRun(q, messageCount))
+  let m = mean(samples)
+  let s = stddev(samples)
+  echo fmt"  mean: {m:.1f} ops/ms"
+  echo fmt"  stddev: {s:.1f}"
+  echo fmt"  runs: {samples.len}"
+  echo ""
+  em.addMeasure(slug, "throughput_ops_ms", m, m - s, m + s)
+
 # ---------- PR 4 nim_channel dispatch (uses runThroughputHarness) ----------
 #
 # system.Channel exposes uniform push/pop through the adapter, so it
@@ -187,7 +296,7 @@ when defined(adapter_nim_channel_available):
 # ---------- Variant dispatch ----------
 
 proc supportedVariantsList(): seq[string] {.compileTime.} =
-  result = @["mupsic"]
+  result = @["mupsic", "queue_bounded_mupsic"]
   when declared(initNimChannelQ):
     result.add("nim_channel")
 
@@ -201,6 +310,13 @@ proc runVariant(variant: string, em: var BMFEmitter) =
     runMupsicShape[MupsicCapacity, 2, uint64](
       em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount)
     runMupsicShape[MupsicCapacity, 4, uint64](
+      em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount)
+  of "queue_bounded_mupsic":
+    runQMpscShape[MupsicCapacity, 1, uint64](
+      em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount)
+    runQMpscShape[MupsicCapacity, 2, uint64](
+      em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount)
+    runQMpscShape[MupsicCapacity, 4, uint64](
       em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount)
   else:
     when declared(initNimChannelQ):
