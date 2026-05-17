@@ -1,19 +1,34 @@
+## Migrated from `t_sipsic_threaded.nim` — single-producer, single-
+## consumer concurrent test for the unified Queue under SPSC
+## cardinality.
+##
+## Mechanical conversion per Doc C 5:
+##   ptr Sipsic[N, int] -> ptr Queue[int, ccSingle, ccSingle, stEager,
+##                                    rkNone, N, 0, 0, 0, 0]
+##   initSipsic[N, int]() -> initQueue[int, ccSingle, ccSingle, stEager,
+##                                      N, 0, 0]()
+##
+## Test count parity: 2 tests (matches t_sipsic_threaded.nim).
+## Track B / Task B2. Doc C 3.7, 5, 6.1.
+
 import lockfreequeues/atomic_dsl
 import options
 import unittest2
 
 import lockfreequeues
+import lockfreequeues/queue as q_mod
+import lockfreequeues/strategy
+import lockfreequeues/reclamation
+import lockfreequeues/internal/pinscope_stub
 
-const
-  ItemCount = 10000
-  ConsumerCount = 4
+const ItemCount = 10000
 
 type TestContext[N: static int] = object
-  queue: ptr Sipmuc[N, ConsumerCount, int]
+  queue: ptr Queue[int, ccSingle, ccSingle, stEager, rkNone,
+                    N, 0, 0, 0, 0]
   received: ptr array[ItemCount, Atomic[bool]]
   duplicateFound: ptr Atomic[bool]
   producerDone: ptr Atomic[bool]
-  totalConsumed: ptr Atomic[int]
 
 proc producer[N: static int](ctx: ptr TestContext[N]) {.thread.} =
   for i in 1 .. ItemCount:
@@ -22,78 +37,64 @@ proc producer[N: static int](ctx: ptr TestContext[N]) {.thread.} =
   ctx.producerDone[].store(true, moRelease)
 
 proc consumer[N: static int](ctx: ptr TestContext[N]) {.thread.} =
-  var c = ctx.queue[].getConsumer()
-  while true:
-    let item = c.pop()
+  var consumed = 0
+  while consumed < ItemCount:
+    let item = ctx.queue[].pop()
     if item.isSome:
-      let val = item.get - 1 # Items are 1-indexed
+      let val = item.get - 1
       if ctx.received[val].exchange(true, moRelaxed):
         ctx.duplicateFound[].store(true, moRelaxed)
-      if ctx.totalConsumed[].fetchAdd(1, moRelaxed) + 1 >= ItemCount:
-        break
+      inc consumed
     elif ctx.producerDone[].load(moAcquire):
-      if ctx.totalConsumed[].load(moRelaxed) >= ItemCount:
-        break
+      discard
 
-suite "Sipmuc threaded":
+suite "Queue SPSC threaded":
   var
     received: array[ItemCount, Atomic[bool]]
     duplicateFound: Atomic[bool]
     producerDone: Atomic[bool]
-    totalConsumed: Atomic[int]
 
   setup:
     for i in 0 ..< ItemCount:
       received[i].store(false, moRelaxed)
     duplicateFound.store(false, moRelaxed)
     producerDone.store(false, moRelaxed)
-    totalConsumed.store(0, moRelaxed)
 
   test "high contention":
-    var queue = initSipmuc[16, ConsumerCount, int]()
+    var queue = q_mod.initQueue[int, ccSingle, ccSingle, stEager, 16, 0, 0]()
     var ctx = TestContext[16](
       queue: addr queue,
       received: addr received,
       duplicateFound: addr duplicateFound,
       producerDone: addr producerDone,
-      totalConsumed: addr totalConsumed,
     )
 
-    var prodThread: Thread[ptr TestContext[16]]
-    var consThreads: array[ConsumerCount, Thread[ptr TestContext[16]]]
-
+    var prodThread, consThread: Thread[ptr TestContext[16]]
     createThread(prodThread, producer[16], addr ctx)
-    for i in 0 ..< ConsumerCount:
-      createThread(consThreads[i], consumer[16], addr ctx)
+    createThread(consThread, consumer[16], addr ctx)
 
     joinThread(prodThread)
-    for i in 0 ..< ConsumerCount:
-      joinThread(consThreads[i])
+    joinThread(consThread)
 
     check(not duplicateFound.load(moRelaxed))
     for i in 0 ..< ItemCount:
       check(received[i].load(moRelaxed))
 
   test "normal capacity":
-    var queue = initSipmuc[64, ConsumerCount, int]()
+    var queue = q_mod.initQueue[int, ccSingle, ccSingle, stEager, 64, 0, 0]()
     var ctx = TestContext[64](
       queue: addr queue,
       received: addr received,
       duplicateFound: addr duplicateFound,
       producerDone: addr producerDone,
-      totalConsumed: addr totalConsumed,
     )
 
-    var prodThread: Thread[ptr TestContext[64]]
-    var consThreads: array[ConsumerCount, Thread[ptr TestContext[64]]]
-
+    var prodThread, consThread: Thread[ptr TestContext[64]]
     createThread(prodThread, producer[64], addr ctx)
-    for i in 0 ..< ConsumerCount:
-      createThread(consThreads[i], consumer[64], addr ctx)
+    createThread(consThread, consumer[64], addr ctx)
 
     joinThread(prodThread)
-    for i in 0 ..< ConsumerCount:
-      joinThread(consThreads[i])
+    joinThread(consThread)
 
     check(not duplicateFound.load(moRelaxed))
     for i in 0 ..< ItemCount:

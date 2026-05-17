@@ -3,13 +3,25 @@ import ./t_atomic_dsl
 import ./t_backoff
 import ./t_mupmuc
 import ./t_slot_seq_generation_rollover
-# import ./t_mupmuc_threaded  # DISABLED: pre-existing deadlock unrelated to typestate migration
 import ./t_mupsic
 import ./t_mupsic_threaded
 import ./t_sipmuc
-# import ./t_sipmuc_threaded  # DISABLED: pre-existing deadlock unrelated to typestate migration
 import ./t_sipsic
 import ./t_sipsic_threaded
+# v5.0.0 unified Queue tests (Track B / Task B2 migration; legacy
+# t_{mupmuc,sipmuc}_threaded.nim renamed to the t_queue_bounded_*_threaded
+# names below — disabled-comment annotations preserved).
+import ./t_queue_enums
+import ./t_queue_type_shell
+import ./t_queue_bounded_mupsic_smoke
+import ./t_queue_bounded_mupsic
+import ./t_queue_bounded_sipmuc
+import ./t_queue_bounded_mupmuc
+import ./t_queue_bounded_sipsic
+import ./t_queue_bounded_mupsic_threaded
+import ./t_queue_bounded_sipsic_threaded
+# import ./t_queue_bounded_mupmuc_threaded  # DISABLED: pre-existing deadlock unrelated to typestate migration
+# import ./t_queue_bounded_sipmuc_threaded  # DISABLED: pre-existing deadlock unrelated to typestate migration
 import ./t_unbounded_mupmuc
 import ./t_unbounded_mupmuc_threaded
 import ./t_unbounded_mupsic
@@ -29,13 +41,22 @@ export
   t_backoff,
   t_mupmuc,
   t_slot_seq_generation_rollover,
-  # t_mupmuc_threaded,
   t_mupsic,
   t_mupsic_threaded,
   t_sipmuc,
-  # t_sipmuc_threaded,
   t_sipsic,
   t_sipsic_threaded,
+  t_queue_enums,
+  t_queue_type_shell,
+  t_queue_bounded_mupsic_smoke,
+  t_queue_bounded_mupsic,
+  t_queue_bounded_sipmuc,
+  t_queue_bounded_mupmuc,
+  t_queue_bounded_sipsic,
+  t_queue_bounded_mupsic_threaded,
+  t_queue_bounded_sipsic_threaded,
+  # t_queue_bounded_mupmuc_threaded,
+  # t_queue_bounded_sipmuc_threaded,
   t_unbounded_mupmuc,
   t_unbounded_mupmuc_threaded,
   t_unbounded_mupsic,

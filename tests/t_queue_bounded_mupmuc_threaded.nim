@@ -1,8 +1,28 @@
+## Renamed and migrated from `t_mupmuc_threaded.nim` — mechanical
+## conversion to the unified Queue type. This file is DISABLED at the
+## import site in `tests/test.nim` due to a pre-existing deadlock
+## unrelated to the typestate / cardinality-collapse migration. The
+## file body is still mechanically converted to keep it compiling
+## against the new Queue API per impl plan B2.
+##
+## Mechanical conversion per Doc C 5:
+##   ptr Mupmuc[N, P, C, int] -> ptr Queue[int, ccMulti, ccMulti, stEager,
+##                                          rkNone, N, P, C, 0, 0]
+##   initMupmuc[N, P, C, int]() -> initQueue[int, ccMulti, ccMulti, stEager,
+##                                            N, P, C]()
+##
+## Test count parity: 2 tests (matches the legacy file).
+## Track B / Task B2. Doc C 3.7, 5, 6.1.
+
 import lockfreequeues/atomic_dsl
 import options
 import unittest2
 
 import lockfreequeues
+import lockfreequeues/queue as q_mod
+import lockfreequeues/strategy
+import lockfreequeues/reclamation
+import lockfreequeues/internal/pinscope_stub
 
 const
   ItemCount = 10000
@@ -12,12 +32,14 @@ const
 
 type
   ProducerContext[N: static int] = object
-    queue: ptr Mupmuc[N, ProducerCount, ConsumerCount, int]
+    queue: ptr Queue[int, ccMulti, ccMulti, stEager, rkNone,
+                      N, ProducerCount, ConsumerCount, 0, 0]
     producersDone: ptr Atomic[int]
     producerIdx: int
 
   ConsumerContext[N: static int] = object
-    queue: ptr Mupmuc[N, ProducerCount, ConsumerCount, int]
+    queue: ptr Queue[int, ccMulti, ccMulti, stEager, rkNone,
+                      N, ProducerCount, ConsumerCount, 0, 0]
     received: ptr array[ItemCount, Atomic[bool]]
     duplicateFound: ptr Atomic[bool]
     producersDone: ptr Atomic[int]
@@ -36,7 +58,7 @@ proc consumer[N: static int](ctx: ptr ConsumerContext[N]) {.thread.} =
   while true:
     let item = c.pop()
     if item.isSome:
-      let val = item.get - 1 # Items are 1-indexed
+      let val = item.get - 1
       if ctx.received[val].exchange(true, moRelaxed):
         ctx.duplicateFound[].store(true, moRelaxed)
       if ctx.totalConsumed[].fetchAdd(1, moRelaxed) + 1 >= ItemCount:
@@ -45,7 +67,7 @@ proc consumer[N: static int](ctx: ptr ConsumerContext[N]) {.thread.} =
       if ctx.totalConsumed[].load(moRelaxed) >= ItemCount:
         break
 
-suite "Mupmuc threaded":
+suite "Queue MPMC threaded":
   var
     received: array[ItemCount, Atomic[bool]]
     duplicateFound: Atomic[bool]
@@ -60,7 +82,8 @@ suite "Mupmuc threaded":
     totalConsumed.store(0, moRelaxed)
 
   test "high contention":
-    var queue = initMupmuc[16, ProducerCount, ConsumerCount, int]()
+    var queue = q_mod.initQueue[int, ccMulti, ccMulti, stEager,
+                                 16, ProducerCount, ConsumerCount]()
 
     var prodContexts: array[ProducerCount, ProducerContext[16]]
     for i in 0 ..< ProducerCount:
@@ -96,7 +119,8 @@ suite "Mupmuc threaded":
       check(received[i].load(moRelaxed))
 
   test "normal capacity":
-    var queue = initMupmuc[64, ProducerCount, ConsumerCount, int]()
+    var queue = q_mod.initQueue[int, ccMulti, ccMulti, stEager,
+                                 64, ProducerCount, ConsumerCount]()
 
     var prodContexts: array[ProducerCount, ProducerContext[64]]
     for i in 0 ..< ProducerCount:
