@@ -17,8 +17,11 @@
 import std/[options, os, parseopt, sets, strformat, syncio]
 import ./bench_common
 import ./adapters/lockfreequeues_sipsic_adapter
-# v5.0.0 cascade D3.6: Queue-based parity adapter for B3 % delta.
-import ./adapters/lockfreequeues_queue_bounded_sipsic_adapter
+# v5.0.0 cascade D3.6.5: consolidated Queue-based parity adapter.
+import ./adapters/queue_bounded_adapter
+import lockfreequeues/strategy
+import lockfreequeues/reclamation
+import lockfreequeues/internal/pinscope_stub
 
 # MVP comparison adapters (Track 3). Each is included only when its
 # `-d:adapter_<lib>_available` gate is set; absent gate yields no
@@ -55,14 +58,17 @@ proc initSipsicQ(capacity: int): SipsicAdapter[SpscCapacity, uint64] =
   doAssert capacity == SpscCapacity, "capacity must equal SpscCapacity"
   initSipsicAdapter[SpscCapacity, uint64]()
 
-# v5.0.0 cascade D3.6: parallel factory exercising the unified Queue
-# generic at SPSC cardinality. Slug `lockfreequeues_queue_bounded_sipsic/
-# spsc/1p1c`. Output metric and units (throughput_ops_ms) identical to
-# the legacy sipsic baseline so B3 can compute a % delta.
+# v5.0.0 cascade D3.6.5: parallel factory via the consolidated
+# QueueBoundedAdapter at SPSC cardinality. Slug
+# `lockfreequeues_queue_bounded_sipsic/spsc/1p1c`. Output metric +
+# units (throughput_ops_ms) identical to the legacy sipsic baseline
+# so B3 can compute a % delta.
 proc initQueueBoundedSipsicQ(capacity: int):
-    QueueBoundedSipsicAdapter[SpscCapacity, uint64] =
+    QueueBoundedAdapter[ccSingle, ccSingle, stEager,
+                        SpscCapacity, 0, 0, uint64] =
   doAssert capacity == SpscCapacity, "capacity must equal SpscCapacity"
-  initQueueBoundedSipsicAdapter[SpscCapacity, uint64]()
+  makeQueueBoundedAdapter[ccSingle, ccSingle, stEager,
+                          SpscCapacity, 0, 0, uint64](SpscCapacity)
 
 when defined(adapter_boost_lockfree_spsc_available):
   proc initBoostSpscQ(capacity: int): BoostLockfreeSpscAdapter[uint64] =
@@ -140,7 +146,8 @@ proc runVariant(variant: string, em: var BMFEmitter) =
     let slug = "lockfreequeues_queue_bounded_sipsic/spsc/1p1c"
     echo fmt"{variant} ({slug}):"
     let metrics = runThroughputHarness[
-        QueueBoundedSipsicAdapter[SpscCapacity, uint64]](
+        QueueBoundedAdapter[ccSingle, ccSingle, stEager,
+                            SpscCapacity, 0, 0, uint64]](
       queueInit = initQueueBoundedSipsicQ,
       capacity = SpscCapacity,
       numProducers = 1,

@@ -29,11 +29,11 @@ import ./adapters/lockfreequeues_sipsic_adapter
 import ./adapters/lockfreequeues_sipmuc_adapter
 import ./adapters/lockfreequeues_mupsic_adapter
 import ./adapters/lockfreequeues_mupmuc_adapter
-# v5.0.0 cascade D3.6: Queue-based parity adapters for B3 % delta.
-import ./adapters/lockfreequeues_queue_bounded_sipsic_adapter
-import ./adapters/lockfreequeues_queue_bounded_sipmuc_adapter
-import ./adapters/lockfreequeues_queue_bounded_mupsic_adapter
-import ./adapters/lockfreequeues_queue_bounded_mupmuc_adapter
+# v5.0.0 cascade D3.6.5: consolidated Queue-based parity adapter.
+import ./adapters/queue_bounded_adapter
+import lockfreequeues/strategy
+import lockfreequeues/reclamation
+import lockfreequeues/internal/pinscope_stub
 
 const
   ## Per-binary intdefines for latency wall-time control. Mirror the
@@ -86,24 +86,34 @@ proc initMupsic(): LockfreequeuesMupsicAdapter[LatencyCapacity, 1, uint64] =
 proc initMupmuc(): MupmucAdapter[LatencyCapacity, uint64] =
   initMupmucAdapter[LatencyCapacity, uint64]()
 
-# v5.0.0 cascade D3.6: Queue-based parity factories. Slugs use
-# `lockfreequeues_queue_bounded_<family>/<topo>/1p1c` for B3 % delta.
+# v5.0.0 cascade D3.6.5: consolidated Queue-based parity factories.
+# All 4 cardinality combos route through the unified
+# `QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T]` type. Slugs
+# preserve the per-family naming for B3 % delta computation.
 
 proc initQBoundedSipsic():
-    QueueBoundedSipsicAdapter[LatencyCapacity, uint64] =
-  initQueueBoundedSipsicAdapter[LatencyCapacity, uint64]()
+    QueueBoundedAdapter[ccSingle, ccSingle, stEager,
+                        LatencyCapacity, 0, 0, uint64] =
+  makeQueueBoundedAdapter[ccSingle, ccSingle, stEager,
+                          LatencyCapacity, 0, 0, uint64](LatencyCapacity)
 
 proc initQBoundedSipmuc():
-    QueueBoundedSipmucAdapter[LatencyCapacity, 1, uint64] =
-  makeQueueBoundedSipmucAdapter[LatencyCapacity, 1, uint64](LatencyCapacity)
+    QueueBoundedAdapter[ccSingle, ccMulti, stEager,
+                        LatencyCapacity, 0, 1, uint64] =
+  makeQueueBoundedAdapter[ccSingle, ccMulti, stEager,
+                          LatencyCapacity, 0, 1, uint64](LatencyCapacity)
 
 proc initQBoundedMupsic():
-    QueueBoundedMupsicAdapter[LatencyCapacity, 1, uint64] =
-  makeQueueBoundedMupsicAdapter[LatencyCapacity, 1, uint64](LatencyCapacity)
+    QueueBoundedAdapter[ccMulti, ccSingle, stEager,
+                        LatencyCapacity, 1, 0, uint64] =
+  makeQueueBoundedAdapter[ccMulti, ccSingle, stEager,
+                          LatencyCapacity, 1, 0, uint64](LatencyCapacity)
 
 proc initQBoundedMupmuc():
-    QueueBoundedMupmucAdapter[LatencyCapacity, uint64] =
-  initQueueBoundedMupmucAdapter[LatencyCapacity, uint64]()
+    QueueBoundedAdapter[ccMulti, ccMulti, stEager,
+                        LatencyCapacity, 1, 1, uint64] =
+  makeQueueBoundedAdapter[ccMulti, ccMulti, stEager,
+                          LatencyCapacity, 1, 1, uint64](LatencyCapacity)
 
 # ---------- Variant dispatch ----------
 
@@ -170,7 +180,8 @@ proc runVariant(
       )
     of "queue_bounded_sipsic":
       runLatencyHarness[
-          QueueBoundedSipsicAdapter[LatencyCapacity, uint64]](
+          QueueBoundedAdapter[ccSingle, ccSingle, stEager,
+                              LatencyCapacity, 0, 0, uint64]](
         queueInit = initQBoundedSipsic,
         messageCount = BenchLatencyMessageCount,
         runCount = BenchLatencyRuns,
@@ -178,7 +189,8 @@ proc runVariant(
       )
     of "queue_bounded_sipmuc":
       runLatencyHarness[
-          QueueBoundedSipmucAdapter[LatencyCapacity, 1, uint64]](
+          QueueBoundedAdapter[ccSingle, ccMulti, stEager,
+                              LatencyCapacity, 0, 1, uint64]](
         queueInit = initQBoundedSipmuc,
         messageCount = BenchLatencyMessageCount,
         runCount = BenchLatencyRuns,
@@ -186,7 +198,8 @@ proc runVariant(
       )
     of "queue_bounded_mupsic":
       runLatencyHarness[
-          QueueBoundedMupsicAdapter[LatencyCapacity, 1, uint64]](
+          QueueBoundedAdapter[ccMulti, ccSingle, stEager,
+                              LatencyCapacity, 1, 0, uint64]](
         queueInit = initQBoundedMupsic,
         messageCount = BenchLatencyMessageCount,
         runCount = BenchLatencyRuns,
@@ -194,7 +207,8 @@ proc runVariant(
       )
     of "queue_bounded_mupmuc":
       runLatencyHarness[
-          QueueBoundedMupmucAdapter[LatencyCapacity, uint64]](
+          QueueBoundedAdapter[ccMulti, ccMulti, stEager,
+                              LatencyCapacity, 1, 1, uint64]](
         queueInit = initQBoundedMupmuc,
         messageCount = BenchLatencyMessageCount,
         runCount = BenchLatencyRuns,
