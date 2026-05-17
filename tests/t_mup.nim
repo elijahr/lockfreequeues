@@ -83,7 +83,7 @@ template testMupPushWrap*(queue: untyped) =
   for i in 1 .. 4:
     discard queue.getProducer(0).push(i)
   for i in 0 .. 1:
-    when queue is Mupmuc:
+    when compiles(queue.getConsumer(0)):
       discard queue.getConsumer(i).pop()
     else:
       discard queue.pop()
@@ -105,7 +105,7 @@ template testMupPushSeqOverflow*(queue: untyped) =
 template testMupPushSeqWrap*(queue: untyped) =
   discard queue.getProducer(0).push(@[1, 2, 3, 4])
   for i in 0 .. 1:
-    when queue is Mupmuc:
+    when compiles(queue.getConsumer(0)):
       discard queue.getConsumer(i).pop()
     else:
       discard queue.pop()
