@@ -125,14 +125,17 @@ jobs:
         run: nimble benchtests
 
   bench:
-    # Track 2 PR 2: matrix over the 5 topology-split binaries. Each
-    # matrix entry is its own GitHub Actions job with an independent
-    # `timeout-minutes: 18` budget so a hang in one binary cannot burn
-    # the entire workflow's clock — the surviving binaries finish, the
-    # bench-upload job merges what arrived, and the operator gets
-    # partial Bencher coverage rather than no coverage. Per-binary
-    # `-d:` overrides are tuned to fit each variant's CI budget; see
-    # design 2.5 for the override table.
+    # Track 2 PR 2 + v5.0.0 B3 split: matrix over the topology-split
+    # binaries. v5.0.0 B3 split the original `bench_mpmc` into a
+    # per-family pair (bench_mpmc_mupmuc + bench_mpmc_sipmuc) to
+    # eliminate cross-family iCache contention; see the bench_mpmc_*.nim
+    # headers for the diagnostic. Each matrix entry is its own GitHub
+    # Actions job with an independent `timeout-minutes: 18` budget so a
+    # hang in one binary cannot burn the entire workflow's clock — the
+    # surviving binaries finish, the bench-upload job merges what
+    # arrived, and the operator gets partial Bencher coverage rather
+    # than no coverage. Per-binary `-d:` overrides are tuned to fit
+    # each variant's CI budget; see design 2.5 for the override table.
     name: ${{ matrix.binary }} (ubuntu-latest)
     runs-on: ubuntu-latest
     # Two combined gates:
@@ -153,7 +156,8 @@ jobs:
         binary:
           - bench_spsc
           - bench_mpsc
-          - bench_mpmc
+          - bench_mpmc_mupmuc
+          - bench_mpmc_sipmuc
           - bench_unbounded
           - bench_latency
     timeout-minutes: 18
@@ -210,7 +214,7 @@ jobs:
         id: install-boost
         if: |
           env.FORCE_SKIP_BOOST != '1' &&
-          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc')
+          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc_mupmuc')
         continue-on-error: true
         run: |
           sudo apt-get install -qq -y libboost-dev
@@ -220,7 +224,7 @@ jobs:
         if: |
           env.FORCE_SKIP_BOOST != '1' &&
           steps.install-boost.outcome == 'success' &&
-          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc')
+          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc_mupmuc')
         continue-on-error: true
         run: |
           set -eu
@@ -247,7 +251,7 @@ jobs:
 
       - name: Annotate boost skipped
         if: |
-          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc') &&
+          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc_mupmuc') &&
           (env.FORCE_SKIP_BOOST == '1' ||
            steps.install-boost.outcome != 'success' ||
            steps.smoke-boost.outcome != 'success')
@@ -347,12 +351,13 @@ jobs:
         run: |
           echo "::warning title=Adapter skipped::moodycamel install or smoke failed; bench will omit moodycamel slugs."
 
-      # threading.Chan (nimble package): only used by bench_mpmc.
+      # threading.Chan (nimble package): only used by bench_mpmc_mupmuc
+      # (matches the channels/MVP-adapter slot post-B3 split).
       - name: Install threading (nimble)
         id: install-threading-channels
         if: |
           env.FORCE_SKIP_THREADING_CHANNELS != '1' &&
-          matrix.binary == 'bench_mpmc'
+          matrix.binary == 'bench_mpmc_mupmuc'
         continue-on-error: true
         run: |
           nimble install -y threading
@@ -362,7 +367,7 @@ jobs:
         if: |
           env.FORCE_SKIP_THREADING_CHANNELS != '1' &&
           steps.install-threading-channels.outcome == 'success' &&
-          matrix.binary == 'bench_mpmc'
+          matrix.binary == 'bench_mpmc_mupmuc'
         continue-on-error: true
         run: |
           set -eu
@@ -381,7 +386,7 @@ jobs:
 
       - name: Annotate threading.Chan skipped
         if: |
-          matrix.binary == 'bench_mpmc' &&
+          matrix.binary == 'bench_mpmc_mupmuc' &&
           (env.FORCE_SKIP_THREADING_CHANNELS == '1' ||
            steps.install-threading-channels.outcome != 'success' ||
            steps.smoke-threading-channels.outcome != 'success')
@@ -503,13 +508,30 @@ jobs:
                 $ADAPTER_FLAGS \
                 benchmarks/nim/bench_mpsc.nim
               ;;
-            bench_mpmc)
+            bench_mpmc_mupmuc)
+              # v5.0.0 B3 split: this binary owns the Mupmuc grid +
+              # Queue-bounded-mupmuc parity + nim_channels grid + MVP
+              # comparison adapters (boost.lockfree, crossbeam ArrayQueue,
+              # threading.Chan). Shares the BenchMpmc* intdefines with
+              # bench_mpmc_sipmuc so existing CI overrides apply unchanged.
               nim "$NIM_MODE" -d:release -d:danger --threads:on \
                 -d:BenchMpmcMessageCount=1000000 \
                 -d:BenchMpmcRuns=5 \
                 -d:BenchMpmcWarmup=2 \
                 $ADAPTER_FLAGS \
-                benchmarks/nim/bench_mpmc.nim
+                benchmarks/nim/bench_mpmc_mupmuc.nim
+              ;;
+            bench_mpmc_sipmuc)
+              # v5.0.0 B3 split: this binary owns the Sipmuc 1p{1,2,4}c
+              # set + Queue-bounded-sipmuc parity. No MVP adapters live
+              # here (sipmuc-shape MVP adapters do not exist), so
+              # ADAPTER_FLAGS is ignored; stay on `nim c` because none
+              # of the imported types require C++.
+              nim c -d:release -d:danger --threads:on \
+                -d:BenchMpmcMessageCount=1000000 \
+                -d:BenchMpmcRuns=5 \
+                -d:BenchMpmcWarmup=2 \
+                benchmarks/nim/bench_mpmc_sipmuc.nim
               ;;
             bench_unbounded)
               # bench_unbounded supports loony (Nim, plain `nim c`) and
@@ -620,10 +642,11 @@ jobs:
       - name: Download BMF artifacts
         # Pattern matches every per-binary artifact uploaded by the
         # bench matrix (`bench-bench_spsc-bmf`, `bench-bench_mpsc-bmf`,
-        # `bench-bench_mpmc-bmf`, `bench-bench_unbounded-bmf`,
-        # `bench-bench_latency-bmf`). Each artifact lands in its own
-        # subdir under `bmf-inputs/` (no `merge-multiple`) so any future
-        # filename overlap between binaries cannot silently overwrite.
+        # `bench-bench_mpmc_mupmuc-bmf`, `bench-bench_mpmc_sipmuc-bmf`,
+        # `bench-bench_unbounded-bmf`, `bench-bench_latency-bmf`). Each
+        # artifact lands in its own subdir under `bmf-inputs/` (no
+        # `merge-multiple`) so any future filename overlap between
+        # binaries cannot silently overwrite.
         uses: actions/download-artifact@v4
         with:
           pattern: bench-*-bmf
@@ -762,7 +785,7 @@ jobs:
       #
       # NOTE on previous measure name: the prior config used
       # `--threshold-measure throughput`; the actual measure key emitted by
-      # bench_{spsc,mpsc,mpmc,unbounded}.nim is `throughput_ops_ms`, so the
+      # the per-topology bench binaries is `throughput_ops_ms`, so the
       # earlier threshold never matched any measure. Track 6 corrects this.
       #
       # NOTE on continue-on-error (v4.2.0): the Bencher CLI is currently

@@ -151,6 +151,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `benchmarks/nim/bench_mpmc.nim` split into per-family binaries
+  (`bench_mpmc_mupmuc.nim` + `bench_mpmc_sipmuc.nim`) as the v5.0.0 B3
+  bench-binary-layout mitigation. Co-compiling the Mupmuc grid, the
+  Sipmuc shapes, the Queue-bounded parity paths, the Nim channels
+  grid, and the MVP comparison adapters into a single release binary
+  was producing a -39.6% ± 1.2% throughput artifact on
+  `sipmuc/mpmc/1p1c` even though Queue's SPMC pop generated C is
+  byte-for-byte identical to the legacy Sipmuc pop. Isolating each
+  family into its own binary removes the cross-family iCache
+  contention surface at the source. CI matrix (`bench.yml`), local
+  runner (`benchmarks/runner.py`), the `nimble benchmarks` task,
+  the topology-split deletion-safety tests, and the nightly
+  `bench-comparison.yml` crossbeam workflow all enumerate both new
+  binaries in place of the pre-split single. MVP comparison adapters
+  (boost.lockfree, crossbeam ArrayQueue, threading.Chan) live in the
+  mupmuc binary because their slug shape matches the mupmuc grid.
 - The three pre-existing guide-shaped pages (`safety-model.md`,
   `slot-ownership-typestates.md`, `examples.md`) moved from
   `docs/` to `docs/guide/` so the entire guide track lives under one

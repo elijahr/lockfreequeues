@@ -12,9 +12,17 @@ regression gate via [Bencher.dev](https://bencher.dev).
 - `nim/bench_spsc.nim` - Bounded SPSC throughput driver (Sipsic 1p1c).
 - `nim/bench_mpsc.nim` - Bounded MPSC throughput driver
   (Mupsic {1,2,4}p1c).
-- `nim/bench_mpmc.nim` - Bounded MPMC throughput driver
-  (Mupmuc {1,2,4}p{1,2,4}c plus 8p8c oversubscription, Sipmuc 1p{1,2,4}c,
-  Nim channels {1,2,4}p{1,2,4}c).
+- `nim/bench_mpmc_mupmuc.nim` - Bounded MPMC throughput driver, Mupmuc
+  family (Mupmuc {1,2,4}p{1,2,4}c plus 8p8c oversubscription, Queue
+  ccMulti×ccMulti parity at the same shapes, Nim channels
+  {1,2,4}p{1,2,4}c, plus the MVP comparison adapters whose slug shape
+  matches the mupmuc grid).
+- `nim/bench_mpmc_sipmuc.nim` - Bounded MPMC throughput driver, Sipmuc
+  family (Sipmuc 1p{1,2,4}c, Queue ccSingle×ccMulti parity at the same
+  shapes). v5.0.0 B3 split the original `bench_mpmc.nim` into these
+  two per-family binaries to eliminate cross-family iCache contention
+  that was producing a spurious -39.6% throughput artifact on
+  `sipmuc/mpmc/1p1c`; see the file headers for the diagnostic.
 - `nim/bench_unbounded.nim` - Unbounded throughput driver across all
   four lockfreequeues unbounded variants.
 - `nim/bench_latency.nim` - Latency (ping-pong RTT) driver across the
@@ -53,19 +61,22 @@ regression gate via [Bencher.dev](https://bencher.dev).
 nimble benchmarks
 
 # CI-tighter shape: pick one binary and override its per-binary
-# intdefines. Each binary owns its own knobs (design doc 2.5).
+# intdefines. Each binary owns its own knobs (design doc 2.5). The
+# two mpmc binaries share the BenchMpmc* knobs.
 nim c -r -d:release -d:danger --threads:on \
   -d:BenchMpmcMessageCount=100000 -d:BenchMpmcRuns=5 -d:BenchMpmcWarmup=2 \
-  benchmarks/nim/bench_mpmc.nim
+  benchmarks/nim/bench_mpmc_mupmuc.nim
 
 # Emit BMF JSON natively (no Python parser; merge to combine).
-./.tmp/bench_spsc       --bmf-out=spsc.json
-./.tmp/bench_mpsc       --bmf-out=mpsc.json
-./.tmp/bench_mpmc       --bmf-out=mpmc.json
-./.tmp/bench_unbounded  --bmf-out=unbounded.json
-./.tmp/bench_latency    --bmf-out=latency.json
+./.tmp/bench_spsc          --bmf-out=spsc.json
+./.tmp/bench_mpsc          --bmf-out=mpsc.json
+./.tmp/bench_mpmc_mupmuc   --bmf-out=mpmc_mupmuc.json
+./.tmp/bench_mpmc_sipmuc   --bmf-out=mpmc_sipmuc.json
+./.tmp/bench_unbounded     --bmf-out=unbounded.json
+./.tmp/bench_latency       --bmf-out=latency.json
 python3 benchmarks/merge_bmf.py merged.json \
-  spsc.json mpsc.json mpmc.json unbounded.json latency.json
+  spsc.json mpsc.json mpmc_mupmuc.json mpmc_sipmuc.json \
+  unbounded.json latency.json
 ```
 
 ## Metrics
@@ -76,10 +87,12 @@ python3 benchmarks/merge_bmf.py merged.json \
 
 ## Cloud benchmarking (Bencher.dev)
 
-`.github/workflows/bench.yml` runs the five topology-split binaries on
+`.github/workflows/bench.yml` runs the topology-split binaries on
 `ubuntu-latest` for every PR and every push to `main`/`devel` via a
 GitHub Actions matrix (one matrix entry per binary, each with its own
-`timeout-minutes: 12` budget). The workflow:
+`timeout-minutes: 18` budget). v5.0.0 B3 split the `bench_mpmc` slot
+into `bench_mpmc_mupmuc` + `bench_mpmc_sipmuc` so the family budgets
+run in parallel as independent matrix entries. The workflow:
 
 1. Compiles each binary with its CI-tuned per-binary intdefines
    (e.g. `-d:BenchSpscMessageCount=1000000 -d:BenchSpscRuns=5
@@ -139,14 +152,21 @@ unions the five binary fragments, a single slug can carry both
 `bench_latency`) when the slug shape matches `1p1c` on a bounded
 variant.
 
-Current slug set emitted across the five binaries:
+Current slug set emitted across the topology-split binaries:
 
-- `bench_spsc`: `lockfreequeues_sipsic/spsc/1p1c`.
-- `bench_mpsc`: `lockfreequeues_mupsic/mpsc/{1,2,4}p1c`.
-- `bench_mpmc`: `lockfreequeues_mupmuc/mpmc/{1,2,4}p{1,2,4}c` plus
+- `bench_spsc`: `lockfreequeues_sipsic/spsc/1p1c`,
+  `lockfreequeues_queue_bounded_sipsic/spsc/1p1c`.
+- `bench_mpsc`: `lockfreequeues_mupsic/mpsc/{1,2,4}p1c`,
+  `lockfreequeues_queue_bounded_mupsic/mpsc/{1,2,4}p1c`.
+- `bench_mpmc_mupmuc`:
+  `lockfreequeues_mupmuc/mpmc/{1,2,4}p{1,2,4}c` plus
   `lockfreequeues_mupmuc/mpmc/8p8c`,
-  `lockfreequeues_sipmuc/mpmc/1p{1,2,4}c`,
+  `lockfreequeues_queue_bounded_mupmuc/mpmc/{1,2,4}p{1,2,4}c` plus
+  `lockfreequeues_queue_bounded_mupmuc/mpmc/8p8c`,
   `nim_channels/mpmc/{1,2,4}p{1,2,4}c`.
+- `bench_mpmc_sipmuc`:
+  `lockfreequeues_sipmuc/mpmc/1p{1,2,4}c`,
+  `lockfreequeues_queue_bounded_sipmuc/mpmc/1p{1,2,4}c`.
 - `bench_unbounded`:
   `lockfreequeues_unbounded_sipsic/spsc_unbounded/1p1c`,
   `lockfreequeues_unbounded_sipmuc/mpmc_unbounded/1p{1,2,4}c`,
@@ -225,7 +245,7 @@ nim c -r -d:release -d:danger --threads:on \
 nim cpp -r -d:release -d:danger --threads:on \
   -d:adapter_boost_lockfree_queue_available \
   -d:BenchMpmcMessageCount=100000 -d:BenchMpmcRuns=3 \
-  benchmarks/nim/bench_mpmc.nim boost_lockfree_queue
+  benchmarks/nim/bench_mpmc_mupmuc.nim boost_lockfree_queue
 
 # Crossbeam (Rust cdylib):
 cargo build --release \
@@ -234,7 +254,7 @@ nim c -r -d:release -d:danger --threads:on \
   -d:adapter_crossbeam_array_queue_available \
   --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
   -d:BenchMpmcMessageCount=100000 -d:BenchMpmcRuns=3 \
-  benchmarks/nim/bench_mpmc.nim crossbeam_array_queue
+  benchmarks/nim/bench_mpmc_mupmuc.nim crossbeam_array_queue
 
 # MoodyCamel (vendored single-header; nim cpp):
 nim cpp -r -d:release -d:danger --threads:on \
@@ -247,7 +267,7 @@ nimble install threading
 nim c -r -d:release -d:danger --threads:on \
   -d:adapter_threading_channels_available \
   -d:BenchMpmcMessageCount=100000 -d:BenchMpmcRuns=3 \
-  benchmarks/nim/bench_mpmc.nim threading_channels
+  benchmarks/nim/bench_mpmc_mupmuc.nim threading_channels
 
 # Nim system.Channel (no install):
 nim c -r -d:release -d:danger --threads:on \

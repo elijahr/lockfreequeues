@@ -3,9 +3,13 @@
 
 Orchestrates benchmark execution across languages and collects results.
 PR 2 (bench-rollup) replaced the single `bench_throughput` driver with
-five topology-split binaries; this runner now builds + runs all five
-in sequence and merges the BMF fragments via `merge_bmf.py` so callers
-keep getting one combined JSON file.
+topology-split binaries; v5.0.0 B3 further split the MPMC slice into a
+per-family pair (bench_mpmc_mupmuc + bench_mpmc_sipmuc) so that the
+Mupmuc grid and the Sipmuc shapes no longer share a release binary
+(cross-family iCache contention previously produced a -39.6%
+sipmuc/mpmc/1p1c throughput artifact). This runner builds + runs all
+six in sequence and merges the BMF fragments via `merge_bmf.py` so
+callers keep getting one combined JSON file.
 """
 
 import argparse
@@ -19,14 +23,15 @@ BENCHMARK_DIR = Path(__file__).parent
 PROJECT_ROOT = BENCHMARK_DIR.parent
 RESULTS_DIR = BENCHMARK_DIR / "results"
 
-# Track 2 PR 2: 5 topology-split binaries (one binary per topology
-# slice + the latency binary from PR 1). Each is built and run
+# Track 2 PR 2 + v5.0.0 B3 split: topology-split binaries with the
+# MPMC slice further split per family. Each is built and run
 # separately; merge_bmf.py unions the fragments before downstream
 # consumers see a single JSON.
 NIM_BINARIES = (
     "bench_spsc",
     "bench_mpsc",
-    "bench_mpmc",
+    "bench_mpmc_mupmuc",
+    "bench_mpmc_sipmuc",
     "bench_unbounded",
     "bench_latency",
 )
@@ -57,7 +62,7 @@ def build_nim():
 
 
 def run_nim(runs: int, output_file: Path):
-    """Run all 5 Nim topology-split binaries and merge their BMF outputs.
+    """Run every Nim topology-split binary and merge their BMF outputs.
 
     The `runs` argument is honored at compile time (via per-binary
     `-d:Bench<Topo>Runs=<n>` overrides) — kept as a no-op runtime arg
@@ -76,9 +81,9 @@ def run_nim(runs: int, output_file: Path):
                 check=True,
             )
             fragments.append(out)
-        # Merge the 5 BMF fragments into the requested output file via
-        # merge_bmf.py. Unions per-slug measure dicts and exits 1 on
-        # (slug, measure) collisions.
+        # Merge the per-binary BMF fragments into the requested output
+        # file via merge_bmf.py. Unions per-slug measure dicts and exits
+        # 1 on (slug, measure) collisions.
         print(f"Merging {len(fragments)} fragments -> {output_file}")
         subprocess.run(
             [

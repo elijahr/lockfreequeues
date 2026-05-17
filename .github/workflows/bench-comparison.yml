@@ -114,10 +114,13 @@ jobs:
             benchmarks/nim/smoke/smoke_crossbeam.nim
           ./.tmp/smoke_crossbeam
 
-      - name: Compile bench_mpmc with crossbeam_array_queue
-        # CI run shape mirrors bench.yml's bench_mpmc settings (1M / 5 / 2).
-        # rpath ensures the dylib loads from the in-tree build dir at
-        # runtime without needing LD_LIBRARY_PATH.
+      - name: Compile bench_mpmc_mupmuc with crossbeam_array_queue
+        # v5.0.0 B3 split: crossbeam_array_queue's slug shape matches
+        # the mupmuc grid so it lives in the mupmuc binary (the sipmuc
+        # binary has no MVP-adapter wiring). CI run shape mirrors
+        # bench.yml's bench_mpmc_mupmuc settings (1M / 5 / 2). rpath
+        # ensures the dylib loads from the in-tree build dir at runtime
+        # without needing LD_LIBRARY_PATH.
         run: |
           set -eu
           nim c -d:release -d:danger --threads:on \
@@ -126,7 +129,7 @@ jobs:
             -d:BenchMpmcWarmup=2 \
             -d:adapter_crossbeam_array_queue_available \
             --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
-            benchmarks/nim/bench_mpmc.nim
+            benchmarks/nim/bench_mpmc_mupmuc.nim
 
       - name: Compile bench_unbounded with crossbeam_seg_queue
         run: |
@@ -145,10 +148,10 @@ jobs:
             --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
             benchmarks/nim/bench_unbounded.nim
 
-      - name: Run bench_mpmc (crossbeam_array_queue only)
+      - name: Run bench_mpmc_mupmuc (crossbeam_array_queue only)
         timeout-minutes: 12
         run: |
-          ./.tmp/bench_mpmc crossbeam_array_queue \
+          ./.tmp/bench_mpmc_mupmuc crossbeam_array_queue \
             --bmf-out=bench_mpmc_crossbeam.json \
             | tee bench_mpmc_crossbeam_output.txt
 

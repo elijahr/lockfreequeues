@@ -189,12 +189,16 @@ class MergeBmfTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("BadSlug", result.stderr)
 
-    # PR 2 Task 2.9: 5-input disjoint-slug union (one input per
-    # topology-split binary). Validates that the upload-job pipeline
-    # the topology split assumes — five sibling BMF fragments arriving
-    # via `actions/download-artifact` and going through merge_bmf.py
-    # before the single `bencher run` upload — produces a single merged
-    # output whose slug set is the disjoint union of the five inputs.
+    # PR 2 Task 2.9: 5-input disjoint-slug union test. Validates that
+    # the upload-job pipeline the topology split assumes — sibling BMF
+    # fragments arriving via `actions/download-artifact` and going
+    # through merge_bmf.py before the single `bencher run` upload —
+    # produces a single merged output whose slug set is the disjoint
+    # union of the inputs. The 5-input shape pre-dates the v5.0.0 B3
+    # mpmc-binary split; the production pipeline now ships 6 fragments
+    # (spsc + mpsc + mpmc_mupmuc + mpmc_sipmuc + unbounded + latency),
+    # but the merger's union semantics are independent of fragment
+    # count so this test continues to cover the contract.
     def test_five_input_union(self) -> None:
         """5-input disjoint-slug union (one slug per binary)."""
         spsc = self.dir / "bench_spsc.json"

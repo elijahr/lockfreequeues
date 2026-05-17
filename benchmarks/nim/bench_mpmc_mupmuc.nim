@@ -1,38 +1,50 @@
-## Bounded MPMC throughput bench (Track 2 PR 2 Task 2.5).
+## Bounded Mupmuc throughput bench (v5.0.0 B3 split).
 ##
-## Splits the MPMC slice out of the legacy bench_throughput.nim into a
-## standalone binary. Covers three queue families:
+## Carved out of the legacy `bench_mpmc.nim` to eliminate cross-family
+## iCache contention. See `bench_mpmc_sipmuc.nim`'s header for the full
+## diagnostic context; in short, co-compiling the legacy + Queue
+## Sipmuc paths alongside the Mupmuc grid in a single release binary
+## produced a -39.6% ± 1.2% throughput artifact on
+## `sipmuc/mpmc/1p1c` even though the generated C for Queue's SPMC pop
+## was byte-for-byte identical to the legacy Sipmuc pop.
 ##
-##   - Mupmuc (lockfreequeues, multi-producer + multi-consumer): the full
-##     {1,2,4} P x {1,2,4} C grid PLUS the 8p8c oversubscription case.
-##     8p8c is the issue #15 livelock regression coverage shape and is
-##     present in the pre-split bench_throughput fixture; keeping it here
-##     preserves the deletion-safety guarantee.
-##   - Sipmuc (lockfreequeues, single-producer + multi-consumer): shapes
-##     `1p{1,2,4}c`. Sipmuc lives under `mpmc` per design 2.4 (single
-##     producer is just N=1 of multi-producer).
+## This binary covers the Mupmuc + Queue-bounded-mupmuc families plus
+## the non-lockfreequeues comparison adapters whose slug shape matches
+## the Mupmuc grid:
+##
+##   - Mupmuc (lockfreequeues, multi-producer + multi-consumer): the
+##     full {1,2,4}p x {1,2,4}c grid PLUS the 8p8c oversubscription
+##     case (issue #15 livelock regression coverage).
+##   - Queue (ccMulti x ccMulti, stEager, rkNone) parity: same shape
+##     set as Mupmuc; slug
+##     `lockfreequeues_queue_bounded_mupmuc/mpmc/<P>p<C>c`.
 ##   - nim_channels (Nim system Channel, MPMC): shapes
-##     `{1,2,4} P x {1,2,4} C`.
+##     `{1,2,4}p x {1,2,4}c`.
+##   - MVP comparison adapters (Boost.LockFree, Crossbeam ArrayQueue,
+##     threading.Chan) at `{1,2,4}p x {1,2,4}c`, gated by per-library
+##     `-d:adapter_<lib>_available`.
 ##
-## Per-binary intdefines (design §2.5):
+## The companion `bench_mpmc_sipmuc.nim` carries the Sipmuc + Queue-
+## bounded-sipmuc shapes. After `merge_bmf.py` unions both BMF
+## fragments the resulting JSON is identical (modulo per-shape numeric
+## values) to what the pre-split `bench_mpmc` emitted, so downstream
+## tooling (superset_check, bencher upload, chart consumption) needs
+## no schema changes.
+##
+## Per-binary intdefines (design §2.5; shared with bench_mpmc_sipmuc
+## so existing CI overrides continue to work unchanged):
 ##   -d:BenchMpmcRuns=<N>          (default 33)
 ##   -d:BenchMpmcMessageCount=<N>  (default 1_000_000)
 ##   -d:BenchMpmcWarmup=<N>        (default 3)
-##
-## Mupmuc + Sipmuc require per-thread Producer / Consumer objects, so
-## those topologies use a bespoke harness (mirrors bench_throughput's
-## legacy Mupmuc path); channels exposes a uniform push/pop and uses
-## bench_common.runThroughputHarness.
 
 import std/[monotimes, options, os, parseopt, sets, strformat, syncio, times]
 import ./bench_common
 import ./adapters/channels_adapter
 import lockfreequeues/mupmuc
-import lockfreequeues/sipmuc
 import lockfreequeues/backoff
 # v5.0.0 cascade D3.6: Queue parity exercise for B3 % delta.
 # Fine-grained imports (not the umbrella) to avoid `Producer`/`Consumer`
-# symbol collisions with the legacy mupmuc/sipmuc imports above.
+# symbol collisions with the legacy mupmuc imports above.
 import lockfreequeues/queue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
@@ -165,108 +177,10 @@ proc runMupmucShape[N, P, C: static int; T](
   echo ""
   em.addMeasure(slug, "throughput_ops_ms", m, m - s, m + s)
 
-# ---------- Sipmuc bespoke harness ----------
+# ---------- v5.0.0 cascade D3.6: Queue ccMulti x ccMulti harness ----------
 #
-# Sipmuc has a single producer (called from the run thread) and C
-# consumers. The single-producer push path goes through the queue
-# object directly (`var Sipmuc.push`). Each consumer thread takes a
-# pre-assigned `Consumer[N, C, T]` value via `getConsumer(idx = i)`.
-
-type
-  SipmucProducerCtx[N, C: static int; T] = object
-    queue: ptr Sipmuc[N, C, T]
-    startIdx: int
-    count: int
-
-  SipmucConsumerCtx[N, C: static int; T] = object
-    consumer: sipmuc.Consumer[N, C, T]
-    count: int
-
-proc sipmucProducerThread[N, C: static int; T](
-    ctx: ptr SipmucProducerCtx[N, C, T]
-) {.thread.} =
-  for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
-    while not ctx.queue[].push(T(i)):
-      backoffOnPeerWait()
-
-proc sipmucConsumerThread[N, C: static int; T](
-    ctx: ptr SipmucConsumerCtx[N, C, T]
-) {.thread.} =
-  var local = 0
-  while local < ctx.count:
-    let item = ctx.consumer.pop()
-    if item.isSome:
-      inc local
-    else:
-      backoffOnPeerWait()
-
-proc runOneSipmucRun[N, C: static int; T](
-    queue: var Sipmuc[N, C, T], messageCount: int
-): float =
-  let baseC = messageCount div C
-  let remC = messageCount mod C
-  var producerThread: Thread[ptr SipmucProducerCtx[N, C, T]]
-  var producerCtx = SipmucProducerCtx[N, C, T](
-    queue: addr queue, startIdx: 0, count: messageCount,
-  )
-  var consumerThreads: array[C, Thread[ptr SipmucConsumerCtx[N, C, T]]]
-  var consumerCtxs: array[C, SipmucConsumerCtx[N, C, T]]
-  for i in 0 ..< C:
-    let count = baseC + (if i < remC: 1 else: 0)
-    consumerCtxs[i] = SipmucConsumerCtx[N, C, T](
-      consumer: queue.getConsumer(idx = i),
-      count: count,
-    )
-  let startTime = getMonoTime()
-  createThread(
-    producerThread,
-    sipmucProducerThread[N, C, T],
-    addr producerCtx,
-  )
-  for i in 0 ..< C:
-    createThread(
-      consumerThreads[i],
-      sipmucConsumerThread[N, C, T],
-      addr consumerCtxs[i],
-    )
-  joinThread(producerThread)
-  for i in 0 ..< C: joinThread(consumerThreads[i])
-  let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
-  if elapsedNs <= 0.0: return 0.0
-  result = float(messageCount) * 1_000_000.0 / elapsedNs
-
-proc runSipmucShape[N, C: static int; T](
-    em: var BMFEmitter,
-    runs, warmup, messageCount: int,
-) =
-  let slug = "lockfreequeues_sipmuc/mpmc/1p" & $C & "c"
-  echo fmt"Sipmuc 1p{C}c ({slug}):"
-  for _ in 0 ..< warmup:
-    var q = initSipmuc[N, C, T]()
-    discard runOneSipmucRun(q, messageCount)
-  var samples: seq[float] = @[]
-  for _ in 0 ..< runs:
-    var q = initSipmuc[N, C, T]()
-    samples.add(runOneSipmucRun(q, messageCount))
-  let m = mean(samples)
-  let s = stddev(samples)
-  echo fmt"  mean: {m:.1f} ops/ms"
-  echo fmt"  stddev: {s:.1f}"
-  echo fmt"  runs: {samples.len}"
-  echo ""
-  em.addMeasure(slug, "throughput_ops_ms", m, m - s, m + s)
-
-# ---------- v5.0.0 cascade D3.6: Queue-based MPMC parity harnesses ----------
-#
-# Two parallel harnesses for B3 % delta:
-#   - QueueBoundedMupmuc (ccMulti x ccMulti) — full {1,2,4}x{1,2,4}
-#     grid plus 8p8c oversubscription, mirrors the Mupmuc shape set.
-#     Slug `lockfreequeues_queue_bounded_mupmuc/mpmc/<P>p<C>c`.
-#   - QueueBoundedSipmuc (ccSingle x ccMulti) — shapes `1p<C>c` for
-#     C in {1,2,4}, mirrors the Sipmuc shape set. Slug
-#     `lockfreequeues_queue_bounded_sipmuc/mpmc/1p<C>c`.
-# Output metric / units (throughput_ops_ms) match the legacy baselines
-# so B3 parity delta is a per-shape division.
+# Slug `lockfreequeues_queue_bounded_mupmuc/mpmc/<P>p<C>c`. Output
+# metric / units (throughput_ops_ms) match the legacy Mupmuc baseline.
 
 type
   QBoundedMupmucProducerCtx[N, P, C: static int; T] = object
@@ -368,95 +282,6 @@ proc runQBoundedMupmucShape[N, P, C: static int; T](
   echo ""
   em.addMeasure(slug, "throughput_ops_ms", m, m - s, m + s)
 
-# Sipmuc-equivalent (Queue ccSingle x ccMulti)
-
-type
-  QBoundedSipmucProducerCtx[N, C: static int; T] = object
-    queue: ptr Queue[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0, 0]
-    startIdx: int
-    count: int
-
-  QBoundedSipmucConsumerCtx[N, C: static int; T] = object
-    consumer: QueueConsumer[T, ccSingle, ccMulti, stEager, rkNone,
-                            N, 0, C, 0, 0]
-    count: int
-
-proc qBoundedSipmucProducerThread[N, C: static int; T](
-    ctx: ptr QBoundedSipmucProducerCtx[N, C, T]
-) {.thread.} =
-  for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
-    while not ctx.queue[].push(T(i)):
-      backoffOnPeerWait()
-
-proc qBoundedSipmucConsumerThread[N, C: static int; T](
-    ctx: ptr QBoundedSipmucConsumerCtx[N, C, T]
-) {.thread.} =
-  var local = 0
-  while local < ctx.count:
-    let item = ctx.consumer.pop()
-    if item.isSome:
-      inc local
-    else:
-      backoffOnPeerWait()
-
-proc runOneQBoundedSipmucRun[N, C: static int; T](
-    queue: var Queue[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0, 0],
-    messageCount: int,
-): float =
-  let baseC = messageCount div C
-  let remC = messageCount mod C
-  var producerThread: Thread[ptr QBoundedSipmucProducerCtx[N, C, T]]
-  var producerCtx = QBoundedSipmucProducerCtx[N, C, T](
-    queue: addr queue, startIdx: 0, count: messageCount,
-  )
-  var consumerThreads:
-    array[C, Thread[ptr QBoundedSipmucConsumerCtx[N, C, T]]]
-  var consumerCtxs: array[C, QBoundedSipmucConsumerCtx[N, C, T]]
-  for i in 0 ..< C:
-    let count = baseC + (if i < remC: 1 else: 0)
-    consumerCtxs[i] = QBoundedSipmucConsumerCtx[N, C, T](
-      consumer: queue.getConsumer(idx = i),
-      count: count,
-    )
-  let startTime = getMonoTime()
-  createThread(
-    producerThread,
-    qBoundedSipmucProducerThread[N, C, T],
-    addr producerCtx,
-  )
-  for i in 0 ..< C:
-    createThread(
-      consumerThreads[i],
-      qBoundedSipmucConsumerThread[N, C, T],
-      addr consumerCtxs[i],
-    )
-  joinThread(producerThread)
-  for i in 0 ..< C: joinThread(consumerThreads[i])
-  let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
-  if elapsedNs <= 0.0: return 0.0
-  result = float(messageCount) * 1_000_000.0 / elapsedNs
-
-proc runQBoundedSipmucShape[N, C: static int; T](
-    em: var BMFEmitter,
-    runs, warmup, messageCount: int,
-) =
-  let slug = "lockfreequeues_queue_bounded_sipmuc/mpmc/1p" & $C & "c"
-  echo fmt"QueueBoundedSipmuc 1p{C}c ({slug}):"
-  for _ in 0 ..< warmup:
-    var q = q_mod.initQueue[T, ccSingle, ccMulti, stEager, N, 0, C]()
-    discard runOneQBoundedSipmucRun(q, messageCount)
-  var samples: seq[float] = @[]
-  for _ in 0 ..< runs:
-    var q = q_mod.initQueue[T, ccSingle, ccMulti, stEager, N, 0, C]()
-    samples.add(runOneQBoundedSipmucRun(q, messageCount))
-  let m = mean(samples)
-  let s = stddev(samples)
-  echo fmt"  mean: {m:.1f} ops/ms"
-  echo fmt"  stddev: {s:.1f}"
-  echo fmt"  runs: {samples.len}"
-  echo ""
-  em.addMeasure(slug, "throughput_ops_ms", m, m - s, m + s)
-
 # ---------- Channels harness (uses runThroughputHarness) ----------
 
 proc initChannelsQ(capacity: int): ChannelsAdapter[uint64] =
@@ -491,7 +316,7 @@ proc runChannelsShape(
 # ---------- MVP adapter dispatch (boost MPMC + crossbeam ArrayQueue) ----------
 #
 # Both MVP adapters expose push/pop directly so they go through
-# runThroughputHarness; the {1,2,4} P x {1,2,4} C grid keeps shape parity
+# runThroughputHarness; the {1,2,4}p x {1,2,4}c grid keeps shape parity
 # with the lockfreequeues mupmuc baseline (≥ 9 shapes per design 2.4).
 
 when defined(adapter_boost_lockfree_queue_available):
@@ -538,9 +363,7 @@ proc runMvpMpmcShape[A](
 # ---------- Variant dispatch ----------
 
 proc supportedVariantsList(): seq[string] {.compileTime.} =
-  result = @["mupmuc", "sipmuc",
-             "queue_bounded_mupmuc", "queue_bounded_sipmuc",
-             "channels"]
+  result = @["mupmuc", "queue_bounded_mupmuc", "channels"]
   when declared(initBoostMpmcQ):
     result.add("boost_lockfree_queue")
   when declared(initCrossbeamArrayQ):
@@ -553,7 +376,7 @@ const SupportedVariants = supportedVariantsList()
 proc runVariant(variant: string, em: var BMFEmitter) =
   case variant
   of "mupmuc":
-    # Full {1,2,4} x {1,2,4} grid (9 shapes) — design 2.4 / impl plan 2.5.
+    # Full {1,2,4}p x {1,2,4}c grid (9 shapes) — design 2.4 / impl plan 2.5.
     runMupmucShape[MpmcCapacity, 1, 1, uint64](
       em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
     runMupmucShape[MpmcCapacity, 1, 2, uint64](
@@ -576,14 +399,6 @@ proc runVariant(variant: string, em: var BMFEmitter) =
     # (CAS-retry livelock fix). Preserved from pre-split bench_throughput.
     runMupmucShape[MpmcCapacity, 8, 8, uint64](
       em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-  of "sipmuc":
-    # Single producer x {1,2,4} consumers — design 2.4.
-    runSipmucShape[MpmcCapacity, 1, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-    runSipmucShape[MpmcCapacity, 2, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-    runSipmucShape[MpmcCapacity, 4, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
   of "queue_bounded_mupmuc":
     # v5.0.0 cascade D3.6: Queue parity for the full Mupmuc shape set.
     runQBoundedMupmucShape[MpmcCapacity, 1, 1, uint64](
@@ -605,14 +420,6 @@ proc runVariant(variant: string, em: var BMFEmitter) =
     runQBoundedMupmucShape[MpmcCapacity, 4, 4, uint64](
       em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
     runQBoundedMupmucShape[MpmcCapacity, 8, 8, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-  of "queue_bounded_sipmuc":
-    # v5.0.0 cascade D3.6: Queue parity for the Sipmuc 1p<C>c set.
-    runQBoundedSipmucShape[MpmcCapacity, 1, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-    runQBoundedSipmucShape[MpmcCapacity, 2, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
-    runQBoundedSipmucShape[MpmcCapacity, 4, uint64](
       em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
   of "channels":
     for p in [1, 2, 4]:
@@ -687,8 +494,8 @@ when isMainModule:
         groups.incl arg
       groups
 
-  echo "MPMC Throughput Benchmark"
-  echo "========================="
+  echo "MPMC Mupmuc Throughput Benchmark"
+  echo "================================"
   echo ""
 
   var emitter = initBMFEmitter()
