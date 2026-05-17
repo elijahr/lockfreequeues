@@ -1,16 +1,14 @@
 import ./t_aligned_alloc
 import ./t_atomic_dsl
 import ./t_backoff
-import ./t_mupmuc
 import ./t_slot_seq_generation_rollover
-import ./t_mupsic
-import ./t_mupsic_threaded
-import ./t_sipmuc
-import ./t_sipsic
-import ./t_sipsic_threaded
-# v5.0.0 unified Queue tests (Track B / Task B2 migration; legacy
-# t_{mupmuc,sipmuc}_threaded.nim renamed to the t_queue_bounded_*_threaded
-# names below — disabled-comment annotations preserved).
+# v5.0.0 cascade (Track D3.2): legacy bounded test imports removed.
+# Per-family Mupsic/Sipmuc/Mupmuc/Sipsic coverage now lives in the
+# t_queue_bounded_* files below (Manager B / Task B2 verified pass-count
+# parity: mupsic 28/28, sipmuc 27/27, mupmuc 28/28, sipsic 21/21,
+# mupsic_threaded 2/2, sipsic_threaded 2/2). Files
+# tests/t_{mupsic,sipmuc,mupmuc,sipsic}{,_threaded}.nim remain on disk
+# until Track F5 deletes them with their src/ counterparts.
 import ./t_queue_enums
 import ./t_queue_type_shell
 import ./t_queue_bounded_mupsic_smoke
@@ -39,13 +37,7 @@ export
   t_aligned_alloc,
   t_atomic_dsl,
   t_backoff,
-  t_mupmuc,
   t_slot_seq_generation_rollover,
-  t_mupsic,
-  t_mupsic_threaded,
-  t_sipmuc,
-  t_sipsic,
-  t_sipsic_threaded,
   t_queue_enums,
   t_queue_type_shell,
   t_queue_bounded_mupsic_smoke,
