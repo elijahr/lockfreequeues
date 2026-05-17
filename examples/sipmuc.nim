@@ -1,13 +1,20 @@
-## Example: Single-producer, multi-consumer (SPMC) queue
+## Example: Single-producer, multi-consumer (SPMC) bounded queue using
+## the unified `Queue` generic.
 ##
-## This demonstrates a fan-out pattern where one producer
-## distributes work to multiple consumers.
+## This demonstrates a fan-out pattern where one producer distributes
+## work to multiple consumers.
+##
+## v5.0.0 cascade migration: the legacy `Sipmuc[N, C, T]` family was
+## collapsed into `Queue[T, ccSingle, ccMulti, stEager, rkNone, N, 0,
+## C, 0, 0]`. Consumers are obtained via `q.getConsumer(idx)` with an
+## explicit consumer index per thread.
 
 import lockfreequeues/atomic_dsl
 import os
 import options
 
 import lockfreequeues
+import lockfreequeues/queue as q_mod
 
 
 const
@@ -16,13 +23,13 @@ const
 
 
 var
-  queue = initSipmuc[64, NumConsumers, int]()
+  q = q_mod.initQueue[int, ccSingle, ccMulti, stEager, 64, 0, NumConsumers]()
   done: Atomic[bool]
   processed: array[NumConsumers, Atomic[int]]
 
 
 proc consumerThread(idx: int) {.thread.} =
-  let consumer = queue.getConsumer(idx)
+  let consumer = q.getConsumer(idx)
   var count = 0
 
   while not done.load(moAcquire):
@@ -56,7 +63,7 @@ when isMainModule:
 
   # Producer pushes items
   for i in 1..NumItems:
-    while not queue.push(i):
+    while not q.push(i):
       sleep(1)
 
   done.store(true, moRelease)

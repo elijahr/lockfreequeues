@@ -1,19 +1,26 @@
-## Example usage of Mupmuc, a multi-producer, multi-consumer (MPMC) bounded queue.
+## Example usage of the unified `Queue` generic in MPMC (multi-producer,
+## multi-consumer) bounded cardinality.
+##
+## v5.0.0 cascade migration: the legacy `Mupmuc[N, P, C, T]` family was
+## collapsed into `Queue[T, ccMulti, ccMulti, stEager, rkNone, N, P, C,
+## 0, 0]`. Producers/consumers are obtained via `q.getProducer()` /
+## `q.getConsumer()` (one per thread).
 
 import options
 import random
 
 import lockfreequeues
+import lockfreequeues/queue as q_mod
 
 var
   # Queue that can hold 8 ints at a time,
   # with 32 producer & 32 consumer workers
-  queue = initMupmuc[8, 32, 32, int]()
+  q = q_mod.initQueue[int, ccMulti, ccMulti, stEager, 8, 32, 32]()
 
 
 proc consumerFunc() {.thread.} =
   # Get a unique consumer for this thread
-  var consumer = queue.getConsumer()
+  var consumer = q.getConsumer()
 
   # Try to pop a single item from the queue; pop() returns Option[int]
   let item = consumer.pop()
@@ -28,7 +35,7 @@ proc consumerFunc() {.thread.} =
 
 proc producerFunc() {.thread.} =
   # Get a unique producer for this thread
-  var producer = queue.getProducer()
+  var producer = q.getProducer()
 
   let item = rand(100)
 
@@ -63,4 +70,3 @@ for c in 32..<64:
   threads[c].createThread(consumerFunc)
 
 joinThreads(threads)
-

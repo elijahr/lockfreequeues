@@ -23,6 +23,7 @@ import std/monotimes
 import times
 
 import lockfreequeues
+import lockfreequeues/queue as q_mod
 
 const
   QueueCapacity = 128
@@ -41,7 +42,7 @@ type
     payload: int
 
 var
-  queue = initSipmuc[QueueCapacity, NumWorkers, Task]()
+  q = q_mod.initQueue[Task, ccSingle, ccMulti, stEager, QueueCapacity, 0, NumWorkers]()
   done: Atomic[bool]
   tasksCompleted: array[NumWorkers, Atomic[int]]
   totalLatency: array[NumWorkers, Atomic[int64]]
@@ -66,7 +67,7 @@ proc simulateWork(task: Task) =
 
 proc workerThread(idx: int) {.thread.} =
   ## Worker consumes tasks from the queue until shutdown.
-  let consumer = queue.getConsumer(idx)
+  let consumer = q.getConsumer(idx)
   var completed = 0
   var latencySum: int64 = 0
 
@@ -109,7 +110,7 @@ proc dispatcherThread() {.thread.} =
     inc taskId
 
     # Push with backpressure - wait if queue is full
-    while not queue.push(task):
+    while not q.push(task):
       sleep(0)
 
   done.store(true, moRelease)

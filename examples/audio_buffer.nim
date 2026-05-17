@@ -19,6 +19,7 @@ import os
 import options
 
 import lockfreequeues
+import lockfreequeues/queue as q_mod
 
 const
   SampleRate = 44100
@@ -32,7 +33,7 @@ type
     timestamp: int64
 
 var
-  queue = initSipsic[BufferSize, AudioSample]()
+  q = q_mod.initQueue[AudioSample, ccSingle, ccSingle, stEager, BufferSize, 0, 0]()
   running: Atomic[bool]
   samplesProduced: Atomic[int]
   samplesConsumed: Atomic[int]
@@ -57,7 +58,7 @@ proc captureThread() {.thread.} =
       timestamp: sampleIndex
     )
 
-    if queue.push(sample):
+    if q.push(sample):
       discard samplesProduced.fetchAdd(1, moRelaxed)
       inc sampleIndex
     else:
@@ -73,8 +74,8 @@ proc playbackThread() {.thread.} =
   ## Simulates audio playback hardware draining the buffer.
   ## In a real application, this would be driven by hardware interrupts.
 
-  while running.load(moAcquire) or queue.pop().isSome:
-    let sample = queue.pop()
+  while running.load(moAcquire) or q.pop().isSome:
+    let sample = q.pop()
 
     if sample.isSome:
       # In a real application, send to DAC

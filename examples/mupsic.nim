@@ -1,32 +1,39 @@
-## Example usage of Mupsic, a multi-producer, single-consumer (MPSC) bounded queue.
+## Example usage of the unified `Queue` generic in MPSC (multi-producer,
+## single-consumer) bounded cardinality.
+##
+## v5.0.0 cascade migration: the legacy `Mupsic[N, P, T]` family was
+## collapsed into `Queue[T, ccMulti, ccSingle, stEager, rkNone, N, P,
+## 0, 0, 0]`. Producers are obtained via `q.getProducer()` (one per
+## thread) and push through the returned `QueueProducer`.
 
 import options
 import random
 
 import lockfreequeues
+import lockfreequeues/queue as q_mod
 
 var
   # Queue that can hold 8 ints at a time,
   # with 32 producer workers
-  queue = initMupsic[8, 32, int]()
+  q = q_mod.initQueue[int, ccMulti, ccSingle, stEager, 8, 32, 0]()
 
 
 proc consumerFunc() {.thread.} =
   for i in 0..32:
     # Try to pop a single item from the queue; pop() returns Option[int]
-    let item = queue.pop()
+    let item = q.pop()
 
     echo "[consumer] popped item: ", item
 
     # Try to pop four items from the queue; pop(int) returns Option[seq[int]]
-    let items = queue.pop(4)
+    let items = q.pop(4)
 
     echo "[consumer] popped items: ", items
 
 
 proc producerFunc() {.thread.} =
   # Get a unique producer for this thread
-  var producer = queue.getProducer()
+  var producer = q.getProducer()
 
   let item = rand(100)
 
