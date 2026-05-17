@@ -21,6 +21,16 @@
 
 Total **migrating** sites in plan-defined scope: 477. UnboundedSipsic hits explicitly excluded (Doc C §3.0.3 carve-out).
 
+> **Note (audit, Phase 4.6.4 fact-check):** The 477 count includes 5
+> file:line entries that match `sipsic` inside `unbounded_sipsic`
+> in the C-grep subset. Per the R6 carve-out (unbounded_sipsic stays
+> untouched throughout v5.0.0 Phase 1) and per D2 mapping §3 (legacy
+> UnboundedSipsic stays separate from the Queue collapse), the true
+> migrating-site count is 472 (= 477 − 5). HALT-GATE evaluation is
+> unaffected: both 472 and 477 are within the ≤500 cap (and within
+> the post-stress:IN ≤550 threshold). This note records the precision
+> caveat for future audits.
+
 ### HALT-GATE evaluation
 
 Per task brief: HALT if total > 500 sites. Per impl plan §D1 the inventory grep scope is `src/ tests/ examples/ benchmarks/ docs/`. That scope yields **477 ≤ 500 → PASS**.

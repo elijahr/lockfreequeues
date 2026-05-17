@@ -2,8 +2,14 @@
 
 **Status: PASS.** Intra-binary Queue-vs-Legacy parity green on all 13 mpmc
 shapes (0 post-split HALTs vs 6 pre-split HALTs). The bench-binary-layout
-artifact that produced the original `sipmuc/mpmc/1p1c` -39.6% HALT is
+artifact that produced the original `sipmuc/mpmc/1p1c` -39.6% HALT[^39-6-note] is
 eliminated at source.
+
+[^39-6-note]: Note: -39.6% is the figure from the original 2-run cold-state
+    HALT that motivated this bench-split work. The round-2 33-run cold-state
+    re-bench at default Runs=33 measured the same shape at -39.5%
+    (= -39.47% rounded) — within measurement noise of the original, both
+    disconfirmed by the post-split intra-binary parity result.
 
 Branch: `feat/v5.0.0-impl-track-B3-mitigation`
 Base: `a3b0b4b` (refactor(cascade): D3.6.5 bounded — consolidate Queue
@@ -18,7 +24,8 @@ Date: 2026-05-17
 B3 PASS after `bench_mpmc.nim` per-family split. Intra-binary
 Queue-vs-Legacy parity green on all 13 mpmc shapes (0 post-split HALTs
 vs 6 pre-split). Bench-binary-layout artifact that produced the
-original `sipmuc/mpmc/1p1c` -39.6% HALT eliminated at source.
+original `sipmuc/mpmc/1p1c` -39.6% HALT (see headline footnote on the
+-39.6% / -39.5% historical figures) eliminated at source.
 
 The original B3 gate ("any bounded family >10% throughput regression on
 Queue parity vs the legacy v4.x types") was framed implicitly for a
