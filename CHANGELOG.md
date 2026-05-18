@@ -5,10 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased] — v5.0.0
+
+What was developed under the v4.2.0 and v4.3.0 banners ships for the
+first time as v5.0.0. Neither v4.2.0 nor v4.3.0 was tagged or merged to
+`devel`; both branches are abandoned in place (`feat/v4.2.0-bench-tightening`
+and `feat/v4.3-task-14` remain on the remote as audit-trail artifacts and
+are NOT carried forward as tags). The substantive work from both windows
+is consolidated into v5.0.0 below, deduplicated against the unified Queue
+reframe and against each other.
+
+The reframe consolidates 7+ typestate queue families (`Sipsic`, `Sipmuc`,
+`Mupsic`, `Mupmuc`, `UnboundedSipmuc`, `UnboundedMupsic`, `UnboundedMupmuc`,
+plus their phantom variants) into a single unified
+`Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]` generic. The
+`UnboundedSipsic[S, T]` SPSC type stays separate (no EBR integration
+required). See `docs/v5.0.0-migration/reframe-rationale.md` for the full
+inflection-point rationale and `docs/v5.0.0-migration/design-queue-collapse-v5.0.0-20260516.md`
+(Doc C) for the complete surface specification.
+
+v5.0.0 ships in two stages: the base release lands `RK = rkNone`
+(bounded) under the unified `Queue` shell with the 9 Doc C §3.0.2.4
+param-coherence guards active; the v5.0.0 RC adds `RK = rkEbr`
+(unbounded) once `nim-debra >= 0.8.0` is released (Track E).
 
 ### BREAKING
 
+- Unified `Queue` generic. The seven non-SPSC queue families
+  (`Sipsic`, `Sipmuc`, `Mupsic`, `Mupmuc`, `UnboundedSipmuc`,
+  `UnboundedMupsic`, `UnboundedMupmuc`) collapse into a single
+  `Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]` generic
+  type. `PinScopeCardinality` (`ccSingle` / `ccMulti`) and
+  `ReclamationKind` (`rkNone` / `rkEbr`) are exposed as static phantom
+  parameters on the type. `DeallocationStrategy` (formerly a runtime
+  enum field) is now also a static phantom (`stManual` / `stEager`);
+  the legacy enum values `Manual` / `Eager` remain exported as `const`
+  aliases for grep continuity. `UnboundedSipsic[S, T]` is unchanged.
+  **No aliases are provided** — every typed call site
+  (`var q: Mupsic[...]`, `var u: UnboundedMupmuc[...]`, etc.) must
+  migrate mechanically to the unified `Queue[T, ...]` form. See
+  `docs/migration.md` for the full migration table.
+- `rkNone` (bounded) ships in the v5.0.0 base release; `rkEbr`
+  (unbounded) ships in the v5.0.0 RC alongside `nim-debra 0.8.0`. The
+  legacy unbounded `withPin:` ergonomics carry into `rkEbr` via the
+  `Queue` facade.
+- 9 compile-time param-coherence guards (Doc C §3.0.2.4) wired into
+  `validateQueueParams[Queue[T, ...]]()`. Calling a malformed
+  parametrisation (e.g. `ccProd = ccMulti` with `P = 1`,
+  `rkEbr` with no `MaxThreads`, `S` not a power of two, etc.) fails
+  at compile time with the verbatim Doc C §3.0.2.4 error messages.
 - `CASAttempt` typestate restructured into a proper typestate union. `CASPending` now transitions to `CASSucceeded | CASFailed` (aliased as `CASResult`) via `executeCAS`, replacing the previous single-state design with `assumeSuccess` / `assumeFailure` escape hatches. The `assumeSuccess` and `assumeFailure` procs have been removed. Callers that drove `CASAttempt` outside the bundled MPMC machinery must migrate to the union return form. These helpers were only consumed by `tests/t_cas.nim`; the bundled MPMC machinery calls `compareExchangeWeak` directly and was unaffected. No public lock-free queue API is affected.
 
 ### Added
@@ -508,6 +553,267 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed (typestates 0.7 uplift)
 
 - 22 read-only typestate accessors across `src/lockfreequeues/typestates/` now carry `{.notATransition.}`. typestates' verifier flagged these once `typestates verify -W` was wired into CI; the procs are pure data extraction and were never transitions.
+
+### Added (v5.0.0 unified Queue — Phase 1)
+
+- `Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]` generic
+  type shell at `src/lockfreequeues/queue.nim`. Field layout splits by
+  cardinality: `ccSingle × ccSingle` uses `StorageN1[N, T]` (N+1 slots,
+  `Atomic[int]` head/tail) lifted verbatim from `sipsic.nim`; all other
+  bounded shapes use `MPMCCellArrayN[N, T]` (Vyukov per-slot seq
+  counters, `Atomic[uint64]` head/tail) lifted verbatim from
+  `mupsic.nim` / `sipmuc.nim` / `mupmuc.nim`. Param order is
+  LOAD-BEARING per Doc C §3.0.1: `T, ccProd, ccCons, ST, RK, N, P, C,
+  S, MaxThreads`. The `when RK == rkEbr` field declarations are wrapped
+  in `when false:` for the Phase 1 mode-(a) carve-out so the type
+  instantiates without a `nim-debra >= 0.8.0` dependency; Track E
+  rewrites those declarations with real debra types when the
+  nim-debra worktree linkage lands.
+- `ReclamationKind` enum (`rkNone` / `rkEbr`) and `PinScopeCardinality`
+  enum (`ccSingle` / `ccMulti`) under `src/lockfreequeues/reclamation.nim`
+  and `src/lockfreequeues/strategy.nim`. Both are exposed as static
+  phantom parameters on `Queue` and travel with their enum type
+  (visible to any module that imports `queue`; per-member re-exports
+  are rejected by Nim).
+- `DeallocationStrategy` lifted to a static phantom parameter `ST`
+  (`stManual` / `stEager`) on `Queue`. The runtime `strategy:` field on
+  the legacy `Unbounded*` queues is removed; every `if self.strategy
+  == X` collapses to `when ST == X` and the two strategies
+  monomorphize separately. Legacy enum values `Manual` and `Eager`
+  remain exported as `const` aliases for `stManual` / `stEager` to
+  ease grep continuity.
+- 9 compile-time `validateQueueParams` guards (Doc C §3.0.2.4) wired
+  through a sibling generic template `assertQueueParams`. Nim does not
+  accept `static:` blocks (nor `{.error.}` pragmas) directly inside an
+  object type body, so the guards are lifted out of the type
+  declaration and invoked by `validateQueueParams[Queue[T, ...]]()`.
+  Condition expressions and error messages are byte-identical with
+  Doc C §3.0.2.4; only the syntactic wrapper differs. Track A4 will
+  harden this with a `nim check` expected-fail shell harness.
+- `rkNone` (bounded) push/pop ladder under the unified `Queue`
+  (Phase 1, Track B). All four bounded topologies (SPSC, SPMC, MPSC,
+  MPMC) route through the typestate verbs from
+  `src/lockfreequeues/typestates/` and use `backoffOnRetry` (with
+  schedYield escalation at `YieldThreshold`) on CAS-retry paths. Per
+  Doc C §3.0: the bounded body field declarations are lifted verbatim
+  from the legacy facades, so the typestate verbs continue to compile
+  against `head` / `tail` / `(storage | cells)` without change.
+- Bounded parity tests under the unified `Queue` shell (Phase 1,
+  Track B2). `t_queue_bounded_{sipsic,sipmuc,mupsic,mupmuc}.nim`
+  exercise round-trip set equality, FIFO-per-producer, and capacity
+  edges through the unified facade; results are byte-for-byte
+  identical with the legacy facade.
+- `tests/t_queue_bounded_mupmuc_threaded.nim` and
+  `tests/t_queue_bounded_sipmuc_threaded.nim` re-enabled (commit
+  `232d418`). These were previously disabled with a stale v3.x
+  deadlock comment; the v4.0.0 Vyukov bounded protocol rewrite
+  closed the underlying race, and the v5.0.0 unified Queue facade
+  has the same protocol body.
+- Intra-binary bench parity gate. `benchmarks/nim/bench_mpmc.nim`
+  split into per-family binaries (`bench_mpmc_mupmuc.nim` +
+  `bench_mpmc_sipmuc.nim`) as the B3 bench-binary-layout mitigation
+  (commit `37aa1c5`). Co-compiling the Mupmuc grid, the Sipmuc
+  shapes, the Queue-bounded parity paths, the Nim channels grid,
+  and the MVP comparison adapters into a single release binary was
+  producing a -39.6% ± 1.2% throughput artifact on
+  `sipmuc/mpmc/1p1c` even though Queue's SPMC pop generated C is
+  byte-for-byte identical to the legacy Sipmuc pop. Isolating each
+  family into its own binary removes the cross-family iCache
+  contention surface at the source. CI matrix (`bench.yml`), local
+  runner (`benchmarks/runner.py`), the `nimble benchmarks` task, the
+  topology-split deletion-safety tests, and the nightly
+  `bench-comparison.yml` crossbeam workflow all enumerate both new
+  binaries in place of the pre-split single. MVP comparison adapters
+  (boost.lockfree, crossbeam ArrayQueue, threading.Chan) live in the
+  mupmuc binary because their slug shape matches the mupmuc grid.
+
+### Documentation (v5.0.0 reframe audit trail)
+
+- `docs/v5.0.0-migration/reframe-rationale.md` (commit `d6f6244`):
+  captures the 2026-05-17 operator decision to reframe the planned
+  v4.3 MINOR release as a SemVer MAJOR `v5.0.0` and collapse the
+  seven non-SPSC queue families into the unified `Queue` generic.
+  Documents the inflection-point rationale per the most-correct-
+  least-deferred rule so future maintainers (and the v6 design pass)
+  have a captured audit trail.
+- `docs/migration.md` (commit `d6f6244`): full migration guide for
+  4.1.x → 5.0.0, including the migration table for every retired
+  type, the two-stage release plan (base = `rkNone`, RC = `rkEbr`),
+  and explicit "no aliases" rule for typed call sites.
+- `docs/v5.0.0-migration/design-queue-collapse-v5.0.0-20260516.md`
+  (Doc C, commit `ca24d63`): complete surface specification for the
+  unified `Queue` generic. Defines §3.0 target shape, §3.0.1 uniform
+  generic, §3.0.2.4 9 param-coherence guards, and §5 verbatim source
+  for the bounded and unbounded field bodies. Load-bearing for
+  Track B (rkNone body), Track E (rkEbr body), and Track A4
+  (param-coherence harness).
+- `docs/v5.0.0-migration/cascade-inventory.md` (commit `ad70f69`,
+  Track D-early D1) and `docs/v5.0.0-migration/cascade-mapping.md`
+  (commit `4d97248`, Track D-early D2): inventory and mapping of
+  every legacy-facade call site touched by the unified `Queue`
+  cascade. Refactor commits (`c6c9066` umbrella, `5e32dd4` runner,
+  `40fe70b` examples, `333b339` benches, `a3b0b4b` adapter
+  consolidation) cite these documents.
+- `docs/v5.0.0-migration/track-e-preflight.md` (commit `dc4fcdc`):
+  Track E preflight memo for M3. Documents the Task 11 LCRQ
+  baseline rename `prevConsumerIdx → consumerHead` as orphan on
+  `feat/v4.3-task-14`; the rename was NOT applied to v5.0.0-impl,
+  and the unbounded path on v5.0.0-impl is pre-Task-11 state. Track
+  E (rkEbr unbounded) will land the rename alongside the
+  consumer-claim relaxation when nim-debra 0.8.0 worktree linkage
+  lands.
+- Phase 4.6 audit-trail clarifications (commit `9cde893`,
+  I1+D2+N3): three coordinated docstring / cross-reference fixes
+  surfaced by the Phase 4.6 self-review pass. Documented at the
+  point of impact so future maintainers see the rationale inline.
+- `AGENTS.md` propagation (commit `d0e1996`): the `AGENTS.md`
+  pattern established under v4.2/v4.3 (TSAN test-runner hang
+  workaround, "Defense placement follows commit placement"
+  principle) propagated into v5.0.0-impl audit trail without
+  semantic change.
+
+### Known Limitations
+
+The v4.3-no-post-release-deferral rule requires that every limitation
+surfaced in a prior release be verdict-classified for the successor
+release rather than silently dropped. The 7 limitations carried into
+v5.0.0 are below, each with codebase-grounded evidence for the
+verdict.
+
+- **L1 — `backoffOnPeerWait` queue-side `schedYield` escalation: (b)
+  STILL OPEN.** v4.2.0's Constraint #7 noted that queue-side
+  `backoffOnPeerWait` does not escalate to `schedYield`; only the
+  harness-side `HarnessBackoff` does. v4.3 took a different shape
+  (path-typed split via `backoffOnCASLossRetry`) but that work is
+  orphan on `feat/v4.3-task-14` and did NOT propagate to v5.0.0-impl.
+  On v5.0.0-impl, `backoffOnPeerWait` remains cpuPause-only
+  (`src/lockfreequeues/backoff.nim` line 78), and no queue source
+  file calls it (all CAS-retry sites use `backoffOnRetry`, which
+  DOES escalate to `schedYield` at `YieldThreshold`). The original
+  L1 concern about `backoffOnPeerWait` migration is unaddressed, so
+  the limitation carries forward; the unified Queue's CAS-retry
+  paths are healthy via `backoffOnRetry`. Resolution path:
+  either drop `backoffOnPeerWait` (no callers), give it
+  `schedYield` escalation, or document it as cpuPause-only by
+  design. Deferred to a v5.x post-release cleanup pass.
+
+- **L2 — `folly_pcq` adapter DROPPED (transitive-include threshold):
+  (a) FIXED via removal.** v4.2.0 dropped the `folly_pcq` adapter
+  from the comparison set because the transitive-include closure
+  (15 unique folly headers) exceeded the 6-header threshold and
+  folly main required C++20 vs the repo's C++17. Verification:
+  `grep -rn folly_pcq src/ benchmarks/` returns no matches on
+  v5.0.0-impl; the adapter file is not present in
+  `benchmarks/nim/adapters/`. The decision stands as final.
+
+- **L3 — `LOCKFREEQUEUES_BENCH_STRICT_FLOOR=1` env-var gate: (a)
+  FIXED via removal.** v4.2.0 left the strict-floor gate in place
+  pending post-merge regeneration of
+  `docs/assets/bench-results/latest.json` with the restored
+  boost / loony / threading_channels / crossbeam slugs.
+  Verification: `grep -rn LOCKFREEQUEUES_BENCH_STRICT_FLOOR
+  STRICT_FLOOR .` returns no matches on v5.0.0-impl. The gate has
+  been retired; strict-mode is now the de facto default through
+  the deletion-safety guard in `superset_check.py` (wired into
+  `bench.yml` between `merge_bmf.py` and `bencher run`).
+
+- **L4 — ~65-70% compile-time growth under v4.3 facade-over-
+  typestate-verbs pattern: (c) NO LONGER APPLICABLE per reframe.**
+  v4.3.0 noted ~65-70% compile-time growth from the v4.3 facade-
+  over-typestate-verbs migration of the four unbounded families.
+  That migration is orphan on `feat/v4.3-task-14` and did NOT
+  propagate to v5.0.0-impl. The v5.0.0 unified `Queue` reframe
+  uses a different code-organisation strategy (single generic
+  type, `when RK == ...` branches, lifted-verbatim bounded body
+  from the legacy facades) so the v4.3 compile-time baseline is
+  no longer the reference. The unified Queue's bounded body
+  `compiles()` helper (`51f9e47`) and the 9 `validateQueueParams`
+  guards (B1+B1.1) shifted the compile-time characteristics
+  enough that the v4.3 "65-70% growth" metric is not meaningful
+  against v5.0.0. Bench harness measurement is deferred (no
+  benches in Phase 4.7 prep scope); compile-time tracking
+  resumes as a v5.x post-release optimisation candidate, not a
+  v5.0.0 release gate.
+
+- **L5 — Strict-FIFO consumer-claim relaxation (`prevConsumerIdx →
+  consumerHead`): (b) STILL OPEN.** v4.3.0 deferred this rename
+  and the CAS-on-head consumer-claim mechanism to v4.4. Per the
+  Track E preflight memo
+  (`docs/v5.0.0-migration/track-e-preflight.md`, commit
+  `dc4fcdc`), the Task 11 LCRQ baseline rename is orphan on
+  `feat/v4.3-task-14` and was NOT applied to v5.0.0-impl.
+  Verification: `grep -rn prevConsumerIdx src/` returns 16
+  matches across `unbounded_mupmuc.nim`, `unbounded_sipmuc.nim`,
+  and the typestate modules — the pre-Task-11 state. Track E
+  (`RK = rkEbr` unbounded body) carries the semantic mandate and
+  will land the rename alongside the consumer-claim relaxation
+  when `nim-debra 0.8.0` worktree linkage lands. The v5.0.0 RC
+  closes this limitation.
+
+- **L6 — `neutralizeStalled` mid-call safety caveat (R5): (c) NO
+  LONGER APPLICABLE per reframe.** v4.3.0 documented that queue
+  push/pop is not safe under `neutralizeStalled` mid-call.
+  Verification: `grep -rn neutralizeStalled src/ tests/ docs/`
+  returns zero matches on v5.0.0-impl. The function is not part
+  of the v5.0.0 public surface, so the safety caveat no longer
+  has an API to attach to. If a future release re-introduces
+  `neutralizeStalled` (e.g. under Track E's pin-scope work), the
+  caveat returns with the function.
+
+- **L7 — Apple Silicon padding test manual-only: (b) STILL OPEN.**
+  v4.2.0 and v4.3.0 documented that `tests/t_unbounded_padding.nim`
+  runs against the host's `CacheLineBytes` (64 bytes on
+  `ubuntu-latest`, 128 bytes on Apple Silicon). The 128-byte path
+  runs manually on Apple Silicon hardware rather than as part of
+  the CI matrix. Verification: `tests/t_unbounded_padding.nim`
+  exists and IS wired into `tests/test.nim` (imported at line 35,
+  enumerated at line 64) — so the 64-byte path runs in CI under
+  every memory-manager lane. CI for the 128-byte Apple Silicon
+  path is not present in `.github/workflows/`. The manual on-device
+  run remains the documented procedure. Carries forward as
+  STILL OPEN; cross-platform CI for aarch64 is tracked as a v5.x
+  post-release infrastructure candidate.
+
+### v4.3 work absorbed into v5.0.0 RC (Track E)
+
+The v4.3.0 work that landed on `feat/v4.3-task-14` (TOCTOU item-loss
+fixes for unbounded SPMC / SPSC / MPSC pop at commits `bb50bc9` and
+`7296240`; facade-over-typestate-verbs migration of the four
+unbounded families; `typestates 0.8.0` uplift; the orphan SPMC
+`consumerHeads` field removal; 14 previously-orphan tests wired into
+`nimble test`) is NOT on v5.0.0-impl. Per the operator decision to
+abandon v4.2/v4.3 banners and roll the work into the v5.0.0
+narrative, and per the two-stage v5.0.0 release plan
+(`docs/migration.md` "Phase 3 — unbounded path availability"), this
+work is absorbed into the v5.0.0 RC alongside Track E (the
+`RK = rkEbr` unbounded body). The orphan branches remain on the
+remote as audit-trail artifacts; Track E will cite their commit
+SHAs when porting the substantive content. This is consistent with
+the v4.3-no-post-release-deferral rule because the v4.3 work is not
+silently dropped — it is explicitly scoped to the same release
+stream (v5.0.0 RC) that owns its destination subsystem.
+
+### References
+
+Cross-references to v5.0.0 reframe documents (audit trail):
+
+- [Migration guide](docs/migration.md) — full migration table from
+  4.1.x to 5.0.0; cited in BREAKING.
+- [Reframe rationale](docs/v5.0.0-migration/reframe-rationale.md) —
+  why v4.3 became v5.0.0; cited in the prose opening of this
+  release.
+- [Doc C — unified Queue surface
+  specification](docs/v5.0.0-migration/design-queue-collapse-v5.0.0-20260516.md)
+  — full design surface; cited in BREAKING for the 9
+  param-coherence guards.
+- [Track E preflight
+  memo](docs/v5.0.0-migration/track-e-preflight.md) — `rkEbr`
+  unbounded body preflight, `prevConsumerIdx → consumerHead`
+  rename mandate; cited in L5.
+- [Cascade inventory](docs/v5.0.0-migration/cascade-inventory.md)
+  and [Cascade
+  mapping](docs/v5.0.0-migration/cascade-mapping.md) — Track
+  D-early audit trail for the cross-cascade refactor commits.
 
 ## [4.1.0] - 2026-05-01
 
