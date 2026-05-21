@@ -12,7 +12,7 @@ import lockfreequeues/typestates/unbounded_mpsc_pop
 
 # Type aliases for our test types
 type
-  TestQueue = UnboundedMupsicBase[64, int, 4]
+  TestQueue = UnboundedMupsicBase[64, int, 4, ccSingle]
   TestSegment = MPSCSegment[64, int]
 
 # Test segment allocation
@@ -46,7 +46,8 @@ suite "MPSC Pop Typestate":
     queue.segments.store(1, moRelaxed)
 
     # Actually use the types with real data
-    let loaded = startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
+    let loaded =
+      startPop[int, 64, 4, ccSingle](unpinned(handle).pin(), addr queue).loadSegment()
 
     # Verify fields are accessible and have valid values
     check loaded.head >= 0
@@ -76,7 +77,8 @@ suite "MPSC Pop Typestate":
     queue.itemCount.store(5, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let loaded = startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
+    let loaded =
+      startPop[int, 64, 4, ccSingle](unpinned(handle).pin(), addr queue).loadSegment()
 
     check loaded.head == 5
     check loaded.tail == 10
@@ -118,8 +120,9 @@ suite "MPSC Pop Typestate":
     queue.itemCount.store(5, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let checkResult =
-      startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment().checkSlot()
+    let checkResult = startPop[int, 64, 4, ccSingle](unpinned(handle).pin(), addr queue)
+      .loadSegment()
+      .checkSlot()
 
     check checkResult.kind == mMPSCPopSlotAvailable
     check checkResult.mpscpopslotavailable.slot == 0
@@ -148,8 +151,9 @@ suite "MPSC Pop Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let checkResult =
-      startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment().checkSlot()
+    let checkResult = startPop[int, 64, 4, ccSingle](unpinned(handle).pin(), addr queue)
+      .loadSegment()
+      .checkSlot()
 
     check checkResult.kind == mMPSCPopSegmentExhausted
 
@@ -183,8 +187,9 @@ suite "MPSC Pop Typestate":
     queue.itemCount.store(3, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let slotAvail =
-      startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment().checkSlot()
+    let slotAvail = startPop[int, 64, 4, ccSingle](unpinned(handle).pin(), addr queue)
+      .loadSegment()
+      .checkSlot()
 
     check slotAvail.kind == mMPSCPopSlotAvailable
 
@@ -216,8 +221,9 @@ suite "MPSC Pop Typestate":
     queue.itemCount.store(3, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let slotAvail =
-      startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment().checkSlot()
+    let slotAvail = startPop[int, 64, 4, ccSingle](unpinned(handle).pin(), addr queue)
+      .loadSegment()
+      .checkSlot()
 
     check slotAvail.kind == mMPSCPopSlotAvailable
 
@@ -254,8 +260,9 @@ suite "MPSC Pop Typestate":
     queue.itemCount.store(3, moRelaxed)
     queue.segments.store(2, moRelaxed)
 
-    let checkResult =
-      startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment().checkSlot()
+    let checkResult = startPop[int, 64, 4, ccSingle](unpinned(handle).pin(), addr queue)
+      .loadSegment()
+      .checkSlot()
 
     check checkResult.kind == mMPSCPopSegmentExhausted
 

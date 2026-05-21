@@ -11,7 +11,7 @@ import lockfreequeues/typestates/unbounded_mpmc_push
 
 # Type aliases for our test types
 type
-  TestQueue = UnboundedMupmucBase[64, int, 4]
+  TestQueue = UnboundedMupmucBase[64, int, 4, ccMulti]
   TestSegment = MPMCSegment[64, int]
 
 # Test segment allocation
@@ -30,7 +30,7 @@ proc freeTestSegment(seg: ptr TestSegment) =
 suite "MPMC Push Typestate":
   test "typestate types exist and are usable":
     # Verify state types exist and fields are accessible
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -42,7 +42,8 @@ suite "MPMC Push Typestate":
     queue.segments.store(1, moRelaxed)
 
     # Actually use the types with real data
-    let loaded = startPush[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
+    let loaded =
+      startPush[int, 64, 4, ccMulti](unpinned(handle).pin(), addr queue).loadSegment()
 
     # Verify fields are accessible and have valid values
     check loaded.tail >= 0
@@ -61,7 +62,7 @@ suite "MPMC Push Typestate":
     freeTestSegment(seg)
 
   test "loadSegment loads tail segment":
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -74,7 +75,8 @@ suite "MPMC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let loaded = startPush[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
+    let loaded =
+      startPush[int, 64, 4, ccMulti](unpinned(handle).pin(), addr queue).loadSegment()
 
     check loaded.tail == 10
     check loaded.segment == seg
@@ -97,7 +99,7 @@ suite "MPMC Push Typestate":
     freeTestSegment(seg)
 
   test "tryClaimSlot returns SlotClaimed when CAS succeeds":
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -108,7 +110,7 @@ suite "MPMC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let claimResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    let claimResult = startPush[int, 64, 4, ccMulti](unpinned(handle).pin(), addr queue)
       .loadSegment()
       .tryClaimSlot()
 
@@ -129,7 +131,7 @@ suite "MPMC Push Typestate":
     freeTestSegment(seg)
 
   test "tryClaimSlot returns SegmentFull when segment full":
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -142,7 +144,7 @@ suite "MPMC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let claimResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    let claimResult = startPush[int, 64, 4, ccMulti](unpinned(handle).pin(), addr queue)
       .loadSegment()
       .tryClaimSlot()
 
@@ -174,7 +176,7 @@ suite "MPMC Push Typestate":
     freeTestSegment(newSeg)
 
   test "tryClaimSlot returns Ready when CAS fails (retry path)":
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -188,7 +190,8 @@ suite "MPMC Push Typestate":
     queue.segments.store(1, moRelaxed)
 
     # Load segment with tail=5
-    let loaded = startPush[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
+    let loaded =
+      startPush[int, 64, 4, ccMulti](unpinned(handle).pin(), addr queue).loadSegment()
 
     check loaded.tail == 5
 
@@ -211,7 +214,7 @@ suite "MPMC Push Typestate":
     freeTestSegment(seg)
 
   test "allocateNewSegment handles allocation race":
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -230,7 +233,7 @@ suite "MPMC Push Typestate":
 
     # Now try to allocate our own segment
     var seg3 = newTestSegment()
-    let claimResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    let claimResult = startPush[int, 64, 4, ccMulti](unpinned(handle).pin(), addr queue)
       .loadSegment()
       .tryClaimSlot()
 
@@ -260,7 +263,7 @@ suite "MPMC Push Typestate":
     freeTestSegment(seg3)
 
   test "writeItem writes data correctly":
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -271,7 +274,7 @@ suite "MPMC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let claimResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    let claimResult = startPush[int, 64, 4, ccMulti](unpinned(handle).pin(), addr queue)
       .loadSegment()
       .tryClaimSlot()
 
@@ -292,7 +295,7 @@ suite "MPMC Push Typestate":
     freeTestSegment(seg)
 
   test "markCommitted sets committed flag and updates itemCount":
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -303,7 +306,7 @@ suite "MPMC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let claimResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    let claimResult = startPush[int, 64, 4, ccMulti](unpinned(handle).pin(), addr queue)
       .loadSegment()
       .tryClaimSlot()
 

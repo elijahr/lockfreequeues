@@ -11,7 +11,7 @@ import lockfreequeues/typestates/unbounded_spmc_pop
 
 # Type aliases for our test types
 type
-  TestQueue = UnboundedSipmucBase[64, int, 4]
+  TestQueue = UnboundedSipmucBase[64, int, 4, ccMulti]
   TestSegment = SPMCSegment[64, int]
 
 # Test segment allocation
@@ -26,7 +26,7 @@ proc freeTestSegment(seg: ptr TestSegment) =
 
 suite "SPMC Pop Typestate":
   test "typestate types exist and are usable":
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -40,7 +40,8 @@ suite "SPMC Pop Typestate":
     queue.itemCount.store(1, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let loaded = startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
+    let loaded =
+      startPop[int, 64, 4, ccMulti](unpinned(handle).pin(), addr queue).loadSegment()
 
     check loaded.tail >= loaded.prevConsumerIdx
     check loaded.segment != nil
@@ -51,7 +52,7 @@ suite "SPMC Pop Typestate":
     freeTestSegment(seg)
 
   test "loadSegment loads head segment and prevConsumerIdx":
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -65,7 +66,8 @@ suite "SPMC Pop Typestate":
     queue.itemCount.store(5, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let loaded = startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
+    let loaded =
+      startPop[int, 64, 4, ccMulti](unpinned(handle).pin(), addr queue).loadSegment()
 
     check loaded.prevConsumerIdx == 4
     check loaded.tail == 10
@@ -84,7 +86,7 @@ suite "SPMC Pop Typestate":
     freeTestSegment(seg)
 
   test "tryClaimSlot returns SlotClaimed when CAS succeeds":
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -99,7 +101,7 @@ suite "SPMC Pop Typestate":
     queue.itemCount.store(5, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let claimResult = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
+    let claimResult = startPop[int, 64, 4, ccMulti](unpinned(handle).pin(), addr queue)
       .loadSegment()
       .tryClaimSlot()
 
@@ -114,7 +116,7 @@ suite "SPMC Pop Typestate":
     freeTestSegment(seg)
 
   test "tryClaimSlot returns SegmentExhausted when no items":
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -128,7 +130,7 @@ suite "SPMC Pop Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let claimResult = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
+    let claimResult = startPop[int, 64, 4, ccMulti](unpinned(handle).pin(), addr queue)
       .loadSegment()
       .tryClaimSlot()
 
@@ -143,7 +145,7 @@ suite "SPMC Pop Typestate":
     freeTestSegment(seg)
 
   test "tryClaimSlot returns Ready when CAS fails (retry path)":
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -157,7 +159,8 @@ suite "SPMC Pop Typestate":
     queue.itemCount.store(5, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let loaded = startPop[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
+    let loaded =
+      startPop[int, 64, 4, ccMulti](unpinned(handle).pin(), addr queue).loadSegment()
 
     check loaded.prevConsumerIdx == 2
 
@@ -177,7 +180,7 @@ suite "SPMC Pop Typestate":
     freeTestSegment(seg)
 
   test "readItem reads value correctly":
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -194,7 +197,7 @@ suite "SPMC Pop Typestate":
     queue.itemCount.store(3, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let claimResult = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
+    let claimResult = startPop[int, 64, 4, ccMulti](unpinned(handle).pin(), addr queue)
       .loadSegment()
       .tryClaimSlot()
 
@@ -209,7 +212,7 @@ suite "SPMC Pop Typestate":
     freeTestSegment(seg)
 
   test "advanceSegment returns Ready when next segment exists":
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg1 = newTestSegment()
@@ -228,7 +231,7 @@ suite "SPMC Pop Typestate":
     queue.itemCount.store(3, moRelaxed)
     queue.segments.store(2, moRelaxed)
 
-    let claimResult = startPop[int, 64, 4](unpinned(handle).pin(), addr queue)
+    let claimResult = startPop[int, 64, 4, ccMulti](unpinned(handle).pin(), addr queue)
       .loadSegment()
       .tryClaimSlot()
 

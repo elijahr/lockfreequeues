@@ -1,6 +1,6 @@
 ## Typestate for unbounded MPMC push operations.
 ##
-## Bridges from DEBRA's Pinned[MT] state, performs push with CAS coordination
+## Bridges from DEBRA's Pinned[MT, CC] state, performs push with CAS coordination
 ## and committed flags, bridges back. Multiple producers coordinate via CAS on tail.
 
 import ../atomic_dsl
@@ -17,104 +17,117 @@ type
     committed*: array[S, Atomic[bool]] # Track which slots are ready to read
 
   # Base queue type for MPMC
-  UnboundedMupmucBase*[S: static int, T; MaxThreads: static int] = object
-    manager*: ptr DebraManager[MaxThreads]
+  # CC = ccMulti — consumer side is multi-consumer (mpmc_pop coordinates via
+  # CAS), so the nim-debra pin/retire contract requires the manager/handle
+  # axis to be ccMulti.
+  UnboundedMupmucBase*[
+    S: static int, T; MaxThreads: static int, CC: static PinScopeCardinality = ccMulti
+  ] = object
+    manager*: ptr DebraManager[MaxThreads, CC]
     headSegment*: ptr MPMCSegment[S, T]
     tailSegment*: Atomic[ptr MPMCSegment[S, T]] # Atomic for CAS
     itemCount*: Atomic[int]
     segments*: Atomic[int]
 
   # Base context - carries pinned state and queue pointer
-  MPMCPushContext*[T; S, MT: static int] = object of RootObj
-    pinnedHandle*: ThreadHandle[MT]
+  MPMCPushContext*[T; S, MT: static int, CC: static PinScopeCardinality = ccMulti] = object of RootObj
+    pinnedHandle*: ThreadHandle[MT, CC]
     pinnedEpoch*: uint64
-    queue*: ptr UnboundedMupmucBase[S, T, MT]
+    queue*: ptr UnboundedMupmucBase[S, T, MT, CC]
 
   # States
-  MPMCPushReady*[T; S, MT: static int] = distinct MPMCPushContext[T, S, MT]
+  MPMCPushReady*[T; S, MT: static int, CC: static PinScopeCardinality = ccMulti] =
+    distinct MPMCPushContext[T, S, MT, CC]
 
-  MPMCPushSegmentLoaded*[T; S, MT: static int] = object
-    pinnedHandle*: ThreadHandle[MT]
+  MPMCPushSegmentLoaded*[T; S, MT: static int, CC: static PinScopeCardinality = ccMulti] = object
+    pinnedHandle*: ThreadHandle[MT, CC]
     pinnedEpoch*: uint64
-    queue*: ptr UnboundedMupmucBase[S, T, MT]
+    queue*: ptr UnboundedMupmucBase[S, T, MT, CC]
     segment*: ptr MPMCSegment[S, T]
     tail*: int
 
-  MPMCPushSegmentFull*[T; S, MT: static int] = object
-    pinnedHandle*: ThreadHandle[MT]
+  MPMCPushSegmentFull*[T; S, MT: static int, CC: static PinScopeCardinality = ccMulti] = object
+    pinnedHandle*: ThreadHandle[MT, CC]
     pinnedEpoch*: uint64
-    queue*: ptr UnboundedMupmucBase[S, T, MT]
+    queue*: ptr UnboundedMupmucBase[S, T, MT, CC]
     segment*: ptr MPMCSegment[S, T]
 
-  MPMCPushSlotClaimed*[T; S, MT: static int] = object
-    pinnedHandle*: ThreadHandle[MT]
+  MPMCPushSlotClaimed*[T; S, MT: static int, CC: static PinScopeCardinality = ccMulti] = object
+    pinnedHandle*: ThreadHandle[MT, CC]
     pinnedEpoch*: uint64
-    queue*: ptr UnboundedMupmucBase[S, T, MT]
-    segment*: ptr MPMCSegment[S, T]
-    slot*: int
-
-  MPMCPushItemWritten*[T; S, MT: static int] = object
-    pinnedHandle*: ThreadHandle[MT]
-    pinnedEpoch*: uint64
-    queue*: ptr UnboundedMupmucBase[S, T, MT]
+    queue*: ptr UnboundedMupmucBase[S, T, MT, CC]
     segment*: ptr MPMCSegment[S, T]
     slot*: int
 
-  MPMCPushComplete*[T; S, MT: static int] = object
-    pinnedHandle*: ThreadHandle[MT]
+  MPMCPushItemWritten*[T; S, MT: static int, CC: static PinScopeCardinality = ccMulti] = object
+    pinnedHandle*: ThreadHandle[MT, CC]
     pinnedEpoch*: uint64
-    queue*: ptr UnboundedMupmucBase[S, T, MT]
+    queue*: ptr UnboundedMupmucBase[S, T, MT, CC]
+    segment*: ptr MPMCSegment[S, T]
+    slot*: int
 
-typestate MPMCPushContext[T, S: static int, MT: static int]:
+  MPMCPushComplete*[T; S, MT: static int, CC: static PinScopeCardinality = ccMulti] = object
+    pinnedHandle*: ThreadHandle[MT, CC]
+    pinnedEpoch*: uint64
+    queue*: ptr UnboundedMupmucBase[S, T, MT, CC]
+
+typestate MPMCPushContext[
+  T, S: static int, MT: static int, CC: static PinScopeCardinality
+]:
   inheritsFromRootObj = true
   consumeOnTransition = true
-  states MPMCPushReady[T, S, MT],
-    MPMCPushSegmentLoaded[T, S, MT],
-    MPMCPushSegmentFull[T, S, MT],
-    MPMCPushSlotClaimed[T, S, MT],
-    MPMCPushItemWritten[T, S, MT],
-    MPMCPushComplete[T, S, MT]
+  defaults:
+    CC:
+      ccMulti
+  states MPMCPushReady[T, S, MT, CC],
+    MPMCPushSegmentLoaded[T, S, MT, CC],
+    MPMCPushSegmentFull[T, S, MT, CC],
+    MPMCPushSlotClaimed[T, S, MT, CC],
+    MPMCPushItemWritten[T, S, MT, CC],
+    MPMCPushComplete[T, S, MT, CC]
   transitions:
-    MPMCPushReady[T, S, MT] -> MPMCPushSegmentLoaded[T, S, MT]
-    MPMCPushSegmentLoaded[T, S, MT] ->
+    MPMCPushReady[T, S, MT, CC] -> MPMCPushSegmentLoaded[T, S, MT, CC]
+    MPMCPushSegmentLoaded[T, S, MT, CC] ->
       (
-        MPMCPushSlotClaimed[T, S, MT] | MPMCPushSegmentFull[T, S, MT] |
-        MPMCPushReady[T, S, MT]
-      ) as MPMCSlotClaimResult[T, S, MT]
-    MPMCPushSegmentFull[T, S, MT] -> MPMCPushReady[T, S, MT]
-    MPMCPushSlotClaimed[T, S, MT] -> MPMCPushItemWritten[T, S, MT]
-    MPMCPushItemWritten[T, S, MT] -> MPMCPushComplete[T, S, MT]
+        MPMCPushSlotClaimed[T, S, MT, CC] | MPMCPushSegmentFull[T, S, MT, CC] |
+        MPMCPushReady[T, S, MT, CC]
+      ) as MPMCSlotClaimResult[T, S, MT, CC]
+    MPMCPushSegmentFull[T, S, MT, CC] -> MPMCPushReady[T, S, MT, CC]
+    MPMCPushSlotClaimed[T, S, MT, CC] -> MPMCPushItemWritten[T, S, MT, CC]
+    MPMCPushItemWritten[T, S, MT, CC] -> MPMCPushComplete[T, S, MT, CC]
 
 # Factory: Create push typestate context from DEBRA's Pinned state
-proc startPush*[T; S, MT: static int](
-    pinned: sink Pinned[MT], queue: ptr UnboundedMupmucBase[S, T, MT]
-): MPMCPushReady[T, S, MT] =
+proc startPush*[T; S, MT: static int, CC: static PinScopeCardinality](
+    pinned: sink Pinned[MT, CC], queue: ptr UnboundedMupmucBase[S, T, MT, CC]
+): MPMCPushReady[T, S, MT, CC] =
   ## Create push context from DEBRA's Pinned state.
-  MPMCPushReady[T, S, MT](
-    MPMCPushContext[T, S, MT](
+  MPMCPushReady[T, S, MT, CC](
+    MPMCPushContext[T, S, MT, CC](
       pinnedHandle: pinned.handle, pinnedEpoch: pinned.epoch, queue: queue
     )
   )
 
 # Extract Pinned state from MPMCPushComplete for unpinning
-proc extractPinned*[T; S, MT: static int](
-    complete: sink MPMCPushComplete[T, S, MT]
-): Pinned[MT] =
+proc extractPinned*[T; S, MT: static int, CC: static PinScopeCardinality](
+    complete: sink MPMCPushComplete[T, S, MT, CC]
+): Pinned[MT, CC] =
   ## Extract DEBRA's Pinned state for unpinning.
-  Pinned[MT](
-    EpochGuardContext[MT](handle: complete.pinnedHandle, epoch: complete.pinnedEpoch)
+  Pinned[MT, CC](
+    EpochGuardContext[MT, CC](
+      handle: complete.pinnedHandle, epoch: complete.pinnedEpoch
+    )
   )
 
 # Load segment transition
-proc loadSegment*[T; S, MT: static int](
-    ready: sink MPMCPushReady[T, S, MT]
-): MPMCPushSegmentLoaded[T, S, MT] {.transition.} =
+proc loadSegment*[T; S, MT: static int, CC: static PinScopeCardinality](
+    ready: sink MPMCPushReady[T, S, MT, CC]
+): MPMCPushSegmentLoaded[T, S, MT, CC] {.transition.} =
   ## Load current tail segment and tail position.
-  let ctx = MPMCPushContext[T, S, MT](ready)
+  let ctx = MPMCPushContext[T, S, MT, CC](ready)
   let seg = ctx.queue.tailSegment.load(moAcquire)
   let tail = seg.tail.load(moAcquire)
 
-  MPMCPushSegmentLoaded[T, S, MT](
+  MPMCPushSegmentLoaded[T, S, MT, CC](
     pinnedHandle: ctx.pinnedHandle,
     pinnedEpoch: ctx.pinnedEpoch,
     queue: ctx.queue,
@@ -123,9 +136,9 @@ proc loadSegment*[T; S, MT: static int](
   )
 
 # Try to claim slot with CAS
-proc tryClaimSlot*[T; S, MT: static int](
-    loaded: sink MPMCPushSegmentLoaded[T, S, MT]
-): MPMCSlotClaimResult[T, S, MT] {.transition.} =
+proc tryClaimSlot*[T; S, MT: static int, CC: static PinScopeCardinality](
+    loaded: sink MPMCPushSegmentLoaded[T, S, MT, CC]
+): MPMCSlotClaimResult[T, S, MT, CC] {.transition.} =
   ## Try to claim a slot using CAS. Returns:
   ## - SlotClaimed: CAS succeeded, slot is ours
   ## - SegmentFull: segment is full, need new segment
@@ -134,8 +147,8 @@ proc tryClaimSlot*[T; S, MT: static int](
 
   if tail >= S:
     return
-      MPMCSlotClaimResult[T, S, MT] ->
-      MPMCPushSegmentFull[T, S, MT](
+      MPMCSlotClaimResult[T, S, MT, CC] ->
+      MPMCPushSegmentFull[T, S, MT, CC](
         pinnedHandle: loaded.pinnedHandle,
         pinnedEpoch: loaded.pinnedEpoch,
         queue: loaded.queue,
@@ -147,8 +160,8 @@ proc tryClaimSlot*[T; S, MT: static int](
   if loaded.segment.tail.compareExchange(expected, tail + 1, moAcquire, moRelaxed):
     # Won the slot
     return
-      MPMCSlotClaimResult[T, S, MT] ->
-      MPMCPushSlotClaimed[T, S, MT](
+      MPMCSlotClaimResult[T, S, MT, CC] ->
+      MPMCPushSlotClaimed[T, S, MT, CC](
         pinnedHandle: loaded.pinnedHandle,
         pinnedEpoch: loaded.pinnedEpoch,
         queue: loaded.queue,
@@ -158,9 +171,9 @@ proc tryClaimSlot*[T; S, MT: static int](
   else:
     # CAS failed - retry from beginning
     return
-      MPMCSlotClaimResult[T, S, MT] ->
-      MPMCPushReady[T, S, MT](
-        MPMCPushContext[T, S, MT](
+      MPMCSlotClaimResult[T, S, MT, CC] ->
+      MPMCPushReady[T, S, MT, CC](
+        MPMCPushContext[T, S, MT, CC](
           pinnedHandle: loaded.pinnedHandle,
           pinnedEpoch: loaded.pinnedEpoch,
           queue: loaded.queue,
@@ -168,9 +181,9 @@ proc tryClaimSlot*[T; S, MT: static int](
       )
 
 # Handle segment full - allocate new segment
-proc allocateNewSegment*[T; S, MT: static int](
-    full: sink MPMCPushSegmentFull[T, S, MT], newSegment: ptr MPMCSegment[S, T]
-): MPMCPushReady[T, S, MT] {.transition.} =
+proc allocateNewSegment*[T; S, MT: static int, CC: static PinScopeCardinality](
+    full: sink MPMCPushSegmentFull[T, S, MT, CC], newSegment: ptr MPMCSegment[S, T]
+): MPMCPushReady[T, S, MT, CC] {.transition.} =
   ## Link new segment and return to Ready state to retry.
   ## Caller must allocate the segment before calling.
   # Check if someone else already linked a segment
@@ -199,16 +212,16 @@ proc allocateNewSegment*[T; S, MT: static int](
           expectedSeg, winnerSeg, moRelease, moRelaxed
         )
 
-  MPMCPushReady[T, S, MT](
-    MPMCPushContext[T, S, MT](
+  MPMCPushReady[T, S, MT, CC](
+    MPMCPushContext[T, S, MT, CC](
       pinnedHandle: full.pinnedHandle, pinnedEpoch: full.pinnedEpoch, queue: full.queue
     )
   )
 
 # Helper that returns allocation status (for callers who need to know if they should free newSegment)
-proc tryAllocateNewSegment*[T; S, MT: static int](
-    full: sink MPMCPushSegmentFull[T, S, MT], newSegment: ptr MPMCSegment[S, T]
-): tuple[ready: MPMCPushReady[T, S, MT], allocated: bool] =
+proc tryAllocateNewSegment*[T; S, MT: static int, CC: static PinScopeCardinality](
+    full: sink MPMCPushSegmentFull[T, S, MT, CC], newSegment: ptr MPMCSegment[S, T]
+): tuple[ready: MPMCPushReady[T, S, MT, CC], allocated: bool] =
   ## Try to link new segment using CAS.
   ## Returns (ready state, true if we allocated, false if someone else did).
   ## This is a non-transition helper that wraps allocateNewSegment.
@@ -220,8 +233,8 @@ proc tryAllocateNewSegment*[T; S, MT: static int](
     discard
       full.queue.tailSegment.compareExchange(expectedSeg, nextSeg, moRelease, moRelaxed)
     return (
-      MPMCPushReady[T, S, MT](
-        MPMCPushContext[T, S, MT](
+      MPMCPushReady[T, S, MT, CC](
+        MPMCPushContext[T, S, MT, CC](
           pinnedHandle: full.pinnedHandle,
           pinnedEpoch: full.pinnedEpoch,
           queue: full.queue,
@@ -240,8 +253,8 @@ proc tryAllocateNewSegment*[T; S, MT: static int](
     )
     discard full.queue.segments.fetchAdd(1, moRelaxed)
     return (
-      MPMCPushReady[T, S, MT](
-        MPMCPushContext[T, S, MT](
+      MPMCPushReady[T, S, MT, CC](
+        MPMCPushContext[T, S, MT, CC](
           pinnedHandle: full.pinnedHandle,
           pinnedEpoch: full.pinnedEpoch,
           queue: full.queue,
@@ -259,8 +272,8 @@ proc tryAllocateNewSegment*[T; S, MT: static int](
         expectedSeg, winnerSeg, moRelease, moRelaxed
       )
     return (
-      MPMCPushReady[T, S, MT](
-        MPMCPushContext[T, S, MT](
+      MPMCPushReady[T, S, MT, CC](
+        MPMCPushContext[T, S, MT, CC](
           pinnedHandle: full.pinnedHandle,
           pinnedEpoch: full.pinnedEpoch,
           queue: full.queue,
@@ -270,13 +283,13 @@ proc tryAllocateNewSegment*[T; S, MT: static int](
     )
 
 # Write item to claimed slot
-proc writeItem*[T; S, MT: static int](
-    claimed: sink MPMCPushSlotClaimed[T, S, MT], item: T
-): MPMCPushItemWritten[T, S, MT] {.transition.} =
+proc writeItem*[T; S, MT: static int, CC: static PinScopeCardinality](
+    claimed: sink MPMCPushSlotClaimed[T, S, MT, CC], item: T
+): MPMCPushItemWritten[T, S, MT, CC] {.transition.} =
   ## Write item to slot.
   claimed.segment.data[claimed.slot] = item
 
-  MPMCPushItemWritten[T, S, MT](
+  MPMCPushItemWritten[T, S, MT, CC](
     pinnedHandle: claimed.pinnedHandle,
     pinnedEpoch: claimed.pinnedEpoch,
     queue: claimed.queue,
@@ -285,14 +298,14 @@ proc writeItem*[T; S, MT: static int](
   )
 
 # Mark slot as committed
-proc markCommitted*[T; S, MT: static int](
-    written: sink MPMCPushItemWritten[T, S, MT]
-): MPMCPushComplete[T, S, MT] {.transition.} =
+proc markCommitted*[T; S, MT: static int, CC: static PinScopeCardinality](
+    written: sink MPMCPushItemWritten[T, S, MT, CC]
+): MPMCPushComplete[T, S, MT, CC] {.transition.} =
   ## Mark slot as committed.
   written.segment.committed[written.slot].store(true, moRelease)
   discard written.queue.itemCount.fetchAdd(1, moRelaxed)
 
-  MPMCPushComplete[T, S, MT](
+  MPMCPushComplete[T, S, MT, CC](
     pinnedHandle: written.pinnedHandle,
     pinnedEpoch: written.pinnedEpoch,
     queue: written.queue,

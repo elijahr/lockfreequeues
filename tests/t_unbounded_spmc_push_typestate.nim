@@ -5,13 +5,17 @@
 
 import unittest2
 import lockfreequeues/atomic_dsl
+import lockfreequeues/strategy
 import debra
 
 import lockfreequeues/typestates/unbounded_spmc_push
 
 # Type aliases for our test types
+# ST = stEager (compile-time phantom replaces the v4.x runtime `strategy: int`
+# field per Step 3.3.5 / Doc C §3.6). CC = ccMulti — SPMC scaffolds bind
+# DebraManager / ThreadHandle / Pinned at ccMulti.
 type
-  TestQueue = UnboundedSipmuc[64, int, 4]
+  TestQueue = UnboundedSipmuc[64, int, 4, stEager, ccMulti]
   TestSegment = Segment[64, int]
 
 # Test segment allocation
@@ -27,7 +31,7 @@ proc freeTestSegment(seg: ptr TestSegment) =
 suite "SPMC Push Typestate":
   test "typestate types exist and are usable":
     # Verify state types exist and fields are accessible
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -35,13 +39,15 @@ suite "SPMC Push Typestate":
     queue.manager = addr manager
     queue.headSegment = seg
     queue.tailSegment = seg
-    queue.strategy = 0 # Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
 
     # Actually use the types with real data
-    let loaded = startPush[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
+    let loaded = startPush[int, 64, 4, stEager, ccMulti](
+        unpinned(handle).pin(), addr queue
+      )
+      .loadSegment()
 
     # Verify fields are accessible and have valid values
     check loaded.tail >= 0
@@ -55,7 +61,7 @@ suite "SPMC Push Typestate":
     freeTestSegment(seg)
 
   test "loadSegment loads tail segment":
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -65,13 +71,15 @@ suite "SPMC Push Typestate":
     queue.manager = addr manager
     queue.headSegment = seg
     queue.tailSegment = seg
-    queue.strategy = 0 # Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
 
     # Use unpinned/pin from debra - chain to avoid copy issues
-    let loaded = startPush[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
+    let loaded = startPush[int, 64, 4, stEager, ccMulti](
+        unpinned(handle).pin(), addr queue
+      )
+      .loadSegment()
 
     check loaded.tail == 10
     check loaded.segment == seg
@@ -93,7 +101,7 @@ suite "SPMC Push Typestate":
     freeTestSegment(seg)
 
   test "checkFull returns SlotReady when not full":
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -101,12 +109,13 @@ suite "SPMC Push Typestate":
     queue.manager = addr manager
     queue.headSegment = seg
     queue.tailSegment = seg
-    queue.strategy = 0 # Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
 
-    let checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    let checkResult = startPush[int, 64, 4, stEager, ccMulti](
+        unpinned(handle).pin(), addr queue
+      )
       .loadSegment()
       .checkFull()
 
@@ -122,7 +131,7 @@ suite "SPMC Push Typestate":
     freeTestSegment(seg)
 
   test "checkFull returns SegmentFull when full":
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -132,12 +141,13 @@ suite "SPMC Push Typestate":
     queue.manager = addr manager
     queue.headSegment = seg
     queue.tailSegment = seg
-    queue.strategy = 0 # Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
 
-    let checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    let checkResult = startPush[int, 64, 4, stEager, ccMulti](
+        unpinned(handle).pin(), addr queue
+      )
       .loadSegment()
       .checkFull()
 
@@ -164,7 +174,7 @@ suite "SPMC Push Typestate":
     freeTestSegment(newSeg)
 
   test "writeItem writes data and publishes":
-    var manager = initDebraManager[4]()
+    var manager = initDebraManager[4, ccMulti]()
     let handle = registerThread(manager)
 
     var seg = newTestSegment()
@@ -172,12 +182,13 @@ suite "SPMC Push Typestate":
     queue.manager = addr manager
     queue.headSegment = seg
     queue.tailSegment = seg
-    queue.strategy = 0 # Manual
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
     queue.consumerCount.store(0, moRelaxed)
 
-    let checkResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    let checkResult = startPush[int, 64, 4, stEager, ccMulti](
+        unpinned(handle).pin(), addr queue
+      )
       .loadSegment()
       .checkFull()
 

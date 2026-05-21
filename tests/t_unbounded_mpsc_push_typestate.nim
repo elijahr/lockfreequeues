@@ -11,7 +11,7 @@ import lockfreequeues/typestates/unbounded_mpsc_push
 
 # Type aliases for our test types
 type
-  TestQueue = UnboundedMupsicBase[64, int, 4]
+  TestQueue = UnboundedMupsicBase[64, int, 4, ccSingle]
   TestSegment = MPSCSegment[64, int]
 
 # Test segment allocation
@@ -42,7 +42,8 @@ suite "MPSC Push Typestate":
     queue.segments.store(1, moRelaxed)
 
     # Actually use the types with real data
-    let loaded = startPush[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
+    let loaded =
+      startPush[int, 64, 4, ccSingle](unpinned(handle).pin(), addr queue).loadSegment()
 
     # Verify fields are accessible and have valid values
     check loaded.tail >= 0
@@ -74,7 +75,8 @@ suite "MPSC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let loaded = startPush[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
+    let loaded =
+      startPush[int, 64, 4, ccSingle](unpinned(handle).pin(), addr queue).loadSegment()
 
     check loaded.tail == 10
     check loaded.segment == seg
@@ -108,7 +110,9 @@ suite "MPSC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let claimResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    let claimResult = startPush[int, 64, 4, ccSingle](
+        unpinned(handle).pin(), addr queue
+      )
       .loadSegment()
       .tryClaimSlot()
 
@@ -142,7 +146,9 @@ suite "MPSC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let claimResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    let claimResult = startPush[int, 64, 4, ccSingle](
+        unpinned(handle).pin(), addr queue
+      )
       .loadSegment()
       .tryClaimSlot()
 
@@ -188,7 +194,8 @@ suite "MPSC Push Typestate":
     queue.segments.store(1, moRelaxed)
 
     # Load segment with tail=5
-    let loaded = startPush[int, 64, 4](unpinned(handle).pin(), addr queue).loadSegment()
+    let loaded =
+      startPush[int, 64, 4, ccSingle](unpinned(handle).pin(), addr queue).loadSegment()
 
     check loaded.tail == 5
 
@@ -230,7 +237,9 @@ suite "MPSC Push Typestate":
 
     # Now try to allocate our own segment
     var seg3 = newTestSegment()
-    let claimResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    let claimResult = startPush[int, 64, 4, ccSingle](
+        unpinned(handle).pin(), addr queue
+      )
       .loadSegment()
       .tryClaimSlot()
 
@@ -271,7 +280,9 @@ suite "MPSC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let claimResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    let claimResult = startPush[int, 64, 4, ccSingle](
+        unpinned(handle).pin(), addr queue
+      )
       .loadSegment()
       .tryClaimSlot()
 
@@ -303,7 +314,9 @@ suite "MPSC Push Typestate":
     queue.itemCount.store(0, moRelaxed)
     queue.segments.store(1, moRelaxed)
 
-    let claimResult = startPush[int, 64, 4](unpinned(handle).pin(), addr queue)
+    let claimResult = startPush[int, 64, 4, ccSingle](
+        unpinned(handle).pin(), addr queue
+      )
       .loadSegment()
       .tryClaimSlot()
 
