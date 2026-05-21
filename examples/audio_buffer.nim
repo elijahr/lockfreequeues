@@ -19,7 +19,6 @@ import os
 import options
 
 import lockfreequeues
-import lockfreequeues/queue as q_mod
 
 const
   SampleRate = 44100
@@ -33,7 +32,7 @@ type
     timestamp: int64
 
 var
-  q = q_mod.initQueue[AudioSample, ccSingle, ccSingle, stEager, BufferSize, 0, 0]()
+  q = newSipsicQueue[AudioSample, BufferSize]()
   running: Atomic[bool]
   samplesProduced: Atomic[int]
   samplesConsumed: Atomic[int]

@@ -3,19 +3,19 @@
 ##
 ## v5.0.0 cascade migration: the legacy `Sipsic[N, T]` family was
 ## collapsed into `Queue[T, ccSingle, ccSingle, stEager, rkNone, N, 0,
-## 0, 0, 0]`. The constructor short form below uses `initQueue[T,
-## ccProd, ccCons, ST, N, P, C]()` (7-param shorthand for the bounded
-## case; the underlying type fills in `rkNone, S=0, MaxThreads=0`).
+## 0, 0, 0]`. The constructor short form below uses the
+## `newSipsicQueue[T, N]()` smart-constructor added in v5.0.0 (Doc C
+## §3.0.4) — `ccProd = ccCons = ccSingle`, `RK = rkNone`, and `ST`
+## defaults to `DefaultDeallocationStrategy`.
 
 import options
 import random
 
 import lockfreequeues
-import lockfreequeues/queue as q_mod
 
 var
   # Queue that can hold 8 ints at a time
-  q = q_mod.initQueue[int, ccSingle, ccSingle, stEager, 8, 0, 0]()
+  q = newSipsicQueue[int, 8]()
 
 
 proc consumerFunc() {.thread.} =

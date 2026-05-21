@@ -7,7 +7,7 @@ import lockfreequeues
 const ItemCount = 10000
 
 type TestContext[N: static int] = object
-  queue: ptr Sipsic[N, int]
+  queue: ptr Queue[int, ccSingle, ccSingle, stEager, rkNone, N, 0, 0, 0, 0]
   received: ptr array[ItemCount, Atomic[bool]]
   duplicateFound: ptr Atomic[bool]
   producerDone: ptr Atomic[bool]
@@ -44,7 +44,7 @@ suite "Sipsic threaded":
     producerDone.store(false, moRelaxed)
 
   test "high contention":
-    var queue = initSipsic[16, int]()
+    var queue = newSipsicQueue[int, 16]()
     var ctx = TestContext[16](
       queue: addr queue,
       received: addr received,
@@ -64,7 +64,7 @@ suite "Sipsic threaded":
       check(received[i].load(moRelaxed))
 
   test "normal capacity":
-    var queue = initSipsic[64, int]()
+    var queue = newSipsicQueue[int, 64]()
     var ctx = TestContext[64](
       queue: addr queue,
       received: addr received,

@@ -7,7 +7,7 @@ import ./t_integration
 import ./t_sic
 import ./t_sip
 
-var queue = initSipsic[8, int]()
+var queue = newSipsicQueue[int, 8]()
 
 suite "Sipsic[N, T]":
   test "capacity":
