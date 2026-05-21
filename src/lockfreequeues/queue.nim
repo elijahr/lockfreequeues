@@ -42,6 +42,7 @@ import ./internal/aligned_alloc
 import ./atomic_dsl
 import ./backoff
 import options
+import std/typetraits
 
 import ./exceptions
 import ./typestates
@@ -70,7 +71,7 @@ import ./typestates/spsc_pop
 # the stub enum.
 from debra import
   DebraManager, ThreadHandle, PinnedScope, initDebraManager, registerThread, bindClient,
-  unbindClient
+  unbindClient, unpinned, pinScope
 
 export exceptions
 
@@ -95,20 +96,49 @@ static:
     "LockFreeQueuesAdvanceEvery must be a positive integer"
 
 type
-  Segment*[S: static int, T] = object
-    ## Unified rkEbr segment placeholder — declared in queue.nim per Doc C
-    ## §3.0 / §5 (the unified `Queue` owns its `Segment` type, distinct
-    ## from the per-family `Segment`/`MPSCSegment`/`MPMCSegment` types
-    ## that live alongside the legacy unbounded families and the
-    ## `typestates/unbounded_*` scaffolding). The full field set
-    ## (`data`, `next`, `head`, `tail`, plus per-cardinality `closed` /
-    ## `committed` / `prevConsumerIdx` flags) is fleshed out by Track E
-    ## constructors and push/pop bodies in Steps 3.3.2-3.3.4. For 3.3.1
-    ## (field-decl unlock only) the type is intentionally empty so the
-    ## `Queue` rkEbr branch's `Atomic[ptr Segment[S, T]]` fields type-
-    ## check — the type is only referenced via `ptr`, never instantiated
-    ## by value, until Track E lands.
-    discard
+  Segment*[T; ccProd, ccCons: static PinScopeCardinality, S: static int] = object
+    ## Unified rkEbr segment — declared in queue.nim per Doc C §3.0 / §5.
+    ## The unified `Queue` owns its `Segment` type, distinct from the
+    ## per-family `Segment` types in the legacy `unbounded_*.nim` files.
+    ##
+    ## Parameterized by `ccProd` / `ccCons` so each cardinality variant's
+    ## field set matches its per-family analogue verbatim (lifted from
+    ## the legacy sources):
+    ##   - `data: array[S, T]` — slot storage (all variants).
+    ##   - `next: Atomic[ptr Segment[...]]` — linked-list pointer (all
+    ##     variants).
+    ##   - `tail`: producer write index. Atomic[int] for multi-producer
+    ##     (CAS-coordinated) and for sipsic-equiv (publish via release
+    ##     store). Lifted from `unbounded_{mupsic,sipmuc,mupmuc,sipsic}.nim`.
+    ##   - `head: int` — single-consumer non-atomic read position
+    ##     (mupsic-equiv only). Lifted from `unbounded_mupsic.nim:72`.
+    ##   - `committed: array[S, Atomic[bool]]` — multi-producer
+    ##     publication flags (mupsic-equiv + mupmuc-equiv). Lifted from
+    ##     `unbounded_mupsic.nim:78` / `unbounded_mupmuc.nim:72`.
+    ##   - `prevConsumerIdx: Atomic[int]` — multi-consumer CAS slot
+    ##     (sipmuc-equiv + mupmuc-equiv). Lifted from
+    ##     `unbounded_sipmuc.nim:74` / `unbounded_mupmuc.nim:70`.
+    ##
+    ## Step 3.3.3 introduces the field set and allocates via
+    ## `newSegment[T, ccProd, ccCons, S]()` on the push growth path.
+    ## Step 3.3.4 wires up pop-side retire (`segmentDestructor`).
+    data*: array[S, T]
+    next* {.align: CacheLineBytes.}: Atomic[ptr Segment[T, ccProd, ccCons, S]]
+    tail* {.align: CacheLineBytes.}: Atomic[int]
+    when ccProd == ccMulti and ccCons == ccSingle:
+      # mupsic-equiv: single-consumer non-atomic read position. Aligned
+      # to its own cache line so the consumer's `head` writes do not
+      # invalidate producers' cached `tail` line (legacy:
+      # `unbounded_mupsic.nim:72`).
+      head* {.align: CacheLineBytes.}: int
+    when ccProd == ccMulti:
+      # mupsic-equiv + mupmuc-equiv: multi-producer publication flags
+      # (legacy: `unbounded_mupsic.nim:78`, `unbounded_mupmuc.nim:72`).
+      committed* {.align: CacheLineBytes.}: array[S, Atomic[bool]]
+    when ccCons == ccMulti:
+      # sipmuc-equiv + mupmuc-equiv: multi-consumer CAS coordination
+      # (legacy: `unbounded_sipmuc.nim:74`, `unbounded_mupmuc.nim:70`).
+      prevConsumerIdx* {.align: CacheLineBytes.}: Atomic[int]
 
   Queue*[
     T;
@@ -178,8 +208,8 @@ type
       # different enum type from `debra.PinScopeCardinality.ccSingle`);
       # `ThreadHandle` expects the debra-typed cardinality.
       manager*: ptr DebraManager[MaxThreads]
-      headSegment* {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
-      tailSegment* {.align: CacheLineBytes.}: Atomic[ptr Segment[S, T]]
+      headSegment* {.align: CacheLineBytes.}: Atomic[ptr Segment[T, ccProd, ccCons, S]]
+      tailSegment* {.align: CacheLineBytes.}: Atomic[ptr Segment[T, ccProd, ccCons, S]]
       itemCount*: Atomic[int]
       segments*: Atomic[int]
       ownsManager*: bool
@@ -355,11 +385,22 @@ type
   ] = object
     ## Per-thread producer handle for a unified Queue. Retrieved via
     ## `Queue.getProducer()`. Defined for every (ccProd, ccCons) shape
-    ## for type uniformity; only meaningful when `ccProd == ccMulti`
-    ## (single-producer cardinalities push directly through
-    ## `Queue.push`).
+    ## for type uniformity.
+    ##
+    ## For the rkEbr branch with `ccProd == ccMulti` (mupsic-equiv and
+    ## mupmuc-equiv) the producer additionally carries its own
+    ## `ThreadHandle[MaxThreads, debra.ccSingle]` — each producer
+    ## thread owns its own handle for the pin/unpin cycle in `push`
+    ## (§3.5.4 / §3.5.5 pin-only sites; mirrors
+    ## `unbounded_mupmuc.nim:102` and `unbounded_mupsic.nim:109`).
+    ## For `ccProd == ccSingle` the field is absent (sipsic-equiv has
+    ## no EBR and sipmuc-equiv producer-push is also pin-free per
+    ## `unbounded_sipmuc.nim:197`). For `RK == rkNone` (bounded) the
+    ## field is absent (bounded queues have no debra integration).
     idx*: int
     queue*: ptr Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]
+    when RK == rkEbr and ccProd == ccMulti:
+      handle*: ThreadHandle[MaxThreads, debra.ccSingle]
 
   QueueConsumer*[
     T;
@@ -973,6 +1014,30 @@ proc pop*[
 ## §5 (verbatim source).
 ## ----------------------------------------------------------------------
 
+proc newSegment[T; ccProd, ccCons: static PinScopeCardinality, S: static int](): ptr Segment[
+  T, ccProd, ccCons, S
+] =
+  ## Allocate a new segment on a CacheLineBytes boundary so the
+  ## `{.align.}` pragmas on `next` / `tail` / `committed` /
+  ## `prevConsumerIdx` land on distinct physical cache lines rather
+  ## than sharing the 16-byte-aligned base that `c_calloc` returns.
+  ##
+  ## Lifted from `unbounded_mupmuc.nim:112-120`,
+  ## `unbounded_mupsic.nim:111-119`, `unbounded_sipmuc.nim:109-115`,
+  ## `unbounded_sipsic.nim:42-49`. The field-init set is the union of
+  ## the per-family initializers, gated by `when` to match each
+  ## cardinality's field presence.
+  result = allocAligned[Segment[T, ccProd, ccCons, S]]()
+  result.next.store(nil, moRelaxed)
+  result.tail.store(0, moRelaxed)
+  when ccProd == ccMulti and ccCons == ccSingle:
+    result.head = 0
+  when ccProd == ccMulti:
+    for i in 0 ..< S:
+      result.committed[i].store(false, moRelaxed)
+  when ccCons == ccMulti:
+    result.prevConsumerIdx.store(-1, moRelaxed)
+
 proc newQueue*[
     T;
     ccProd, ccCons: static PinScopeCardinality,
@@ -1002,7 +1067,6 @@ proc newQueue*[
   result.manager = manager
   result.ownsManager = false
   result.itemCount.store(0, moRelaxed)
-  result.segments.store(0, moRelaxed)
   when ccProd == ccMulti:
     result.producerCount.store(0, moRelaxed)
   when ccCons == ccMulti:
@@ -1011,9 +1075,15 @@ proc newQueue*[
     result.handle = handle
   else:
     discard handle
-  # Segment allocation deferred to Step 3.3.3/3.3.4 (the `Segment[S, T]`
-  # field set is still the 3.3.1 placeholder). `headSegment` /
-  # `tailSegment` default to `nil` via the `Atomic[ptr ...]` zero-init.
+  # Step 3.3.3: allocate the initial `Segment[T, ccProd, ccCons, S]`
+  # and publish on both `headSegment` and `tailSegment`. Lifted from
+  # the legacy `newUnboundedMupmuc` (line 153-155), `newUnboundedMupsic`
+  # (line 154-156), `newUnboundedSipmuc` (line 148-150), and
+  # `newUnboundedSipsic` (line 69-71) constructors.
+  let seg = newSegment[T, ccProd, ccCons, S]()
+  result.headSegment.store(seg, moRelaxed)
+  result.tailSegment.store(seg, moRelaxed)
+  result.segments.store(1, moRelaxed)
   bindClient(manager[])
 
 proc newQueue*[
@@ -1068,12 +1138,32 @@ proc getProducer*[
 ](
     self: var Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads]
 ): QueueProducer[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads] =
-  ## Returns a `QueueProducer` view bound to this rkEbr queue. Step
-  ## 3.3.2 placeholder — populates `queue` and a sentinel `idx`. Step
-  ## 3.3.3 (push body) wires up per-thread debra-handle registration
-  ## semantics.
+  ## Returns a `QueueProducer` view bound to this rkEbr queue. For
+  ## `ccProd == ccMulti` (mupsic-equiv + mupmuc-equiv) registers the
+  ## calling thread against the queue's `DebraManager` and stores the
+  ## resulting `ThreadHandle` on the producer view — the handle drives
+  ## the §3.5.4 / §3.5.5 pin-only push sites in `push` below.
+  ##
+  ## Each call to the auto-register overload consumes one
+  ## `DebraManager` thread slot; per the legacy contract
+  ## (`unbounded_mupmuc.nim:213-225`) the slot is **not reclaimed** when
+  ## the producer view is destroyed — it lives until the manager itself
+  ## is destroyed. Long-running queues should reuse the same
+  ## `QueueProducer` per thread.
+  ##
+  ## For `ccProd == ccSingle` (sipsic-equiv + sipmuc-equiv) the producer
+  ## view carries no handle — single-producer push needs no pin.
   result.queue = addr(self)
-  result.idx = -1
+  when ccProd == ccMulti:
+    # Lift verbatim from `unbounded_mupmuc.nim:200-209` (manual-handle
+    # path) + auto-register overload (`:211-224`): bump
+    # `producerCount`, register thread, store handle. The fetchAdd is
+    # moAcquire to publish the slot consumption to other producers.
+    let idx = self.producerCount.fetchAdd(1, moAcquire)
+    result.idx = idx
+    result.handle = registerThread(self.manager[])
+  else:
+    result.idx = -1
 
 proc getConsumer*[
     T;
@@ -1089,6 +1179,221 @@ proc getConsumer*[
   ## semantics.
   result.queue = addr(self)
   result.idx = -1
+
+## ----------------------------------------------------------------------
+## rkEbr len / segmentCount accessors — Track E / Step 3.3.3.
+##
+## Lifted from `unbounded_mupmuc.nim:188-198` / `unbounded_mupsic.nim` /
+## `unbounded_sipmuc.nim` / `unbounded_sipsic.nim`.
+## ----------------------------------------------------------------------
+
+proc len*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](self: var Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads]): int =
+  ## Number of items currently in the queue (atomic snapshot).
+  result = self.itemCount.load(moRelaxed)
+
+proc segmentCount*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](self: var Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads]): int =
+  ## Number of segments currently allocated (atomic snapshot).
+  result = self.segments.load(moRelaxed)
+
+## ----------------------------------------------------------------------
+## rkEbr push body — Track E / Step 3.3.3.
+##
+## Doc C §3.5 carrier decision: push lives on `QueueProducer[..., rkEbr,
+## ...]` across all 4 cardinality variants (sipsic-equiv, sipmuc-equiv,
+## mupsic-equiv, mupmuc-equiv). The `getProducer` accessor returns a
+## producer view in every variant for type uniformity; single-producer
+## variants (sipsic-equiv, sipmuc-equiv) get a no-handle producer and
+## a no-pin push path, while multi-producer variants (mupsic-equiv,
+## mupmuc-equiv) get a `ThreadHandle`-carrying producer that drives the
+## §3.5.4 / §3.5.5 pin-only sites.
+##
+## **§3.5.6 Pin-Claim Ordering invariant** (load-bearing): for the
+## multi-producer variants the `pinScope(unpinned(self.handle))` call
+## happens BEFORE any segment-pointer load (`self.queue.tailSegment.
+## load(...)`). The pin acquisition publishes the producer's epoch
+## subscription onto the manager so a consumer cannot reclaim the
+## segment between our load and our slot CAS. Lifted verbatim from
+## `unbounded_mupmuc.nim:268-312` and `unbounded_mupsic.nim:252-297`;
+## the only structural change from `self.handle.withPin: ...` to
+## `var scope = pinScope(unpinned(self.handle))` is the RAII shape
+## (block exit / `=destroy` drives the unpin chain rather than the
+## `withPin` template's deferred unpin).
+##
+## The two pin-only sites (§3.5.4 mupsic-equiv + §3.5.5 mupmuc-equiv)
+## do NOT retire any segment in `push`; segment retire is the consumer's
+## job in `pop` (Step 3.3.4). `scope` is constructed but `scope.state`
+## is never used directly — the value's presence on the stack is
+## sufficient to keep the pin alive, and the destructor drives the
+## unpin at scope exit on every path (normal return, `break`-from-loop,
+## raise — though push body is `{.raises: [].}` so no raise path
+## exists). typestates 0.9.2's CFG analyzer accepts the pattern via the
+## `=destroy` `{.destructorTransition: PinnedScopeAlive ->
+## PinnedScopeDestroyed.}` registration in
+## `nim-debra/src/debra/typestates/pinned_scope.nim:180`.
+## ----------------------------------------------------------------------
+
+proc push*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var QueueProducer[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads],
+    item: T,
+) {.raises: [].} =
+  ## Push a single item onto the unbounded queue. Never blocks; never
+  ## fails (the queue grows by segment allocation on the slow path).
+  ##
+  ## Per-cardinality dispatch:
+  ##   - **ccSingle × ccSingle** (sipsic-equiv): no pin, no CAS. Lifted
+  ##     from `unbounded_sipsic.nim:83-115`. Note: per Doc C §3.0.3 the
+  ##     canonical SPSC unbounded queue is `UnboundedSipsic` — this
+  ##     `Queue[..., ccSingle, ccSingle, rkEbr, ...]` shape is
+  ##     instantiable for type-uniformity but `UnboundedSipsic` is the
+  ##     production-recommended type.
+  ##   - **ccSingle × ccMulti** (sipmuc-equiv): no pin (single
+  ##     producer), simple `tailSegment` advance with release publish.
+  ##     Lifted from `unbounded_sipmuc.nim:197-229`. `tailSegment` is
+  ##     atomic on the unified Queue (uniform field declaration across
+  ##     cardinalities) where the legacy sipmuc had a non-atomic
+  ##     `tailSegment: ptr Segment[...]` — single-producer use means
+  ##     the only writer is this thread, so the legacy ordering is
+  ##     preserved with `moRelaxed` loads and `moRelease` stores on
+  ##     the unified atomic.
+  ##   - **ccMulti × ccSingle** (mupsic-equiv): pin via
+  ##     `pinScope(unpinned(self.handle))`, CAS slot claim with
+  ##     segment growth on full. §3.5.4 pin-only site. Lifted verbatim
+  ##     from `unbounded_mupsic.nim:252-297`.
+  ##   - **ccMulti × ccMulti** (mupmuc-equiv): pin via
+  ##     `pinScope(unpinned(self.handle))`, CAS slot claim with
+  ##     segment growth on full. §3.5.5 pin-only site. Lifted verbatim
+  ##     from `unbounded_mupmuc.nim:268-312`.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.
+          error:
+            "Queue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
+            "mutate the refcount on the same object multiple threads can " &
+            "read or write, which is a race regardless of whether the " &
+            "refcount itself is atomic. Use a lock-free type (int, " &
+            "pointer, ptr T, etc.) or compile with " &
+            "-d:allowNonLockFreeQueueItems to explicitly allow it."
+        .}
+
+  when ccProd == ccSingle and ccCons == ccSingle:
+    # sipsic-equiv — lifted from unbounded_sipsic.nim:97-115. No pin
+    # required (SPSC has no retire-race). The unified Queue's
+    # `tailSegment` is atomic; single-producer means `moRelaxed` load
+    # is safe (only this thread writes).
+    var seg = self.queue.tailSegment.load(moRelaxed)
+    let tail = seg.tail.load(moRelaxed)
+    if tail >= S:
+      # Allocate new segment. Publish via `seg.next` first (release)
+      # so a concurrent consumer that observes the new `next` pointer
+      # also sees the segment's initialized fields. Then publish via
+      # `tailSegment`.
+      let newSeg = newSegment[T, ccProd, ccCons, S]()
+      seg.next.store(newSeg, moRelease)
+      self.queue.tailSegment.store(newSeg, moRelease)
+      seg = newSeg
+      discard self.queue.segments.fetchAdd(1, moRelaxed)
+    let pos = seg.tail.load(moRelaxed)
+    seg.data[pos] = item
+    seg.tail.store(pos + 1, moRelease)
+    discard self.queue.itemCount.fetchAdd(1, moRelaxed)
+  elif ccProd == ccSingle and ccCons == ccMulti:
+    # sipmuc-equiv — lifted from unbounded_sipmuc.nim:213-229. No pin
+    # (single producer; sipmuc's producer-push has no `withPin`).
+    # Legacy sipmuc used non-atomic `tailSegment: ptr Segment[...]`;
+    # the unified Queue's `tailSegment` is `Atomic[ptr ...]` for
+    # field-layout uniformity. Single-producer means `moRelaxed`
+    # load + `moRelease` store preserves the legacy ordering (the
+    # consumer side reads `headSegment.next`, not `tailSegment`).
+    var seg = self.queue.tailSegment.load(moRelaxed)
+    var tail = seg.tail.load(moRelaxed)
+    if tail >= S:
+      let newSeg = newSegment[T, ccProd, ccCons, S]()
+      seg.next.store(newSeg, moRelease)
+      self.queue.tailSegment.store(newSeg, moRelease)
+      seg = newSeg
+      tail = 0
+      discard self.queue.segments.fetchAdd(1, moRelaxed)
+    seg.data[tail] = item
+    seg.tail.store(tail + 1, moRelease)
+    discard self.queue.itemCount.fetchAdd(1, moRelaxed)
+  else:
+    # ccProd == ccMulti — both mupsic-equiv (§3.5.4) and mupmuc-equiv
+    # (§3.5.5) share the same push body shape; the difference between
+    # them is purely on the pop side (consumer cardinality), so the
+    # push CAS-loop logic is identical and we share one branch here.
+    #
+    # §3.5.6 Pin-Claim Ordering: `pinScope` MUST be acquired BEFORE
+    # the first `self.queue.tailSegment.load(...)`. Verified by
+    # inspection: the `var scope = ...` line is the first statement
+    # of this branch; the loop's first action is the segment-pointer
+    # load.
+    block:
+      var scope {.used.} = pinScope(unpinned(self.handle))
+      var spins = InitialSpin
+      while true:
+        var seg = self.queue.tailSegment.load(moAcquire)
+        var tail = seg.tail.load(moAcquire)
+        if tail >= S:
+          let nextSeg = seg.next.load(moAcquire)
+          if nextSeg == nil:
+            let newSeg = newSegment[T, ccProd, ccCons, S]()
+            var expectedNext: ptr Segment[T, ccProd, ccCons, S] = nil
+            if seg.next.compareExchange(expectedNext, newSeg, moRelease, moRelaxed):
+              var expectedSeg = seg
+              discard self.queue.tailSegment.compareExchange(
+                expectedSeg, newSeg, moRelease, moRelaxed
+              )
+              discard self.queue.segments.fetchAdd(1, moRelaxed)
+              # Success edge: loop to retry slot claim on the new
+              # segment without backoff (legacy comment lifted from
+              # `unbounded_mupsic.nim:273`).
+              continue
+            else:
+              # Lost the segment-alloc race: another producer linked
+              # first. Free our orphan and back off before retrying.
+              freeAligned(newSeg)
+              backoffOnRetry(spins)
+              continue
+          else:
+            # Someone else already linked next; advance tailSegment
+            # (best effort, may CAS-fail because someone else
+            # advanced) and retry slot claim on the new segment.
+            # Success edge, no backoff.
+            var expectedSeg = seg
+            discard self.queue.tailSegment.compareExchange(
+              expectedSeg, nextSeg, moRelease, moRelaxed
+            )
+            continue
+        # Try to claim a slot
+        var expected = tail
+        if seg.tail.compareExchange(expected, tail + 1, moAcquire, moRelaxed):
+          seg.data[tail] = item
+          seg.committed[tail].store(true, moRelease)
+          discard self.queue.itemCount.fetchAdd(1, moRelaxed)
+          break
+        # Lost CAS, retry (no explicit backoff — the CAS itself is
+        # the synchronization; legacy mupsic/mupmuc both loop without
+        # backoff on slot-CAS failure).
+      # scope.=destroy fires here on block exit, driving
+      # `PinnedScopeAlive -> PinnedScopeDestroyed` via the registered
+      # `{.destructorTransition.}` (typestates 0.9.2 accepts).
 
 proc `=destroy`*[
     T;
@@ -1126,13 +1431,29 @@ proc `=destroy`*[
   ## branch-specialized `=destroy` overloads for a generic object; the
   ## `when RK == ...:` dispatch INSIDE the body is the supported shape.
   when RK == rkEbr:
+    # Walk the linked-segment list, freeing each segment. Step 3.3.3
+    # introduces the `next` field on `Segment[T, ccProd, ccCons, S]`
+    # and allocates the initial segment in `newQueue`; the loop is now
+    # reachable. Per-slot destructor handling for managed `T` is
+    # consolidated into `segmentDestructor` (Step 3.3.4 adds it
+    # alongside the pop body's retire path); for the single-threaded
+    # `=destroy` path it suffices to walk `next` and `freeAligned`
+    # each segment because no other thread can be observing them at
+    # destructor time (Nim's destructor semantics + the manager's
+    # `clientCount` invariant guarantee no concurrent EBR pin can
+    # straddle this point). Managed `T` slots are zero'd via the same
+    # `reset` shape the legacy `segmentDestructor` uses (lifted from
+    # `unbounded_mupmuc.nim:326` / `unbounded_mupsic.nim:312` /
+    # `unbounded_sipmuc.nim:274`); for POD `T`
+    # (`supportsCopyMem`) the `reset` loop compile-time-elides.
     var seg = self.headSegment.load(moRelaxed)
     while seg != nil:
-      # Segment field set (including `next`) lands in Step 3.3.3/3.3.4;
-      # for now the loop body is unreachable (segments never allocated).
-      # Track E populates the `next` load + per-slot dtor here.
+      let nextSeg = seg.next.load(moRelaxed)
+      when not supportsCopyMem(T):
+        for i in 0 ..< S:
+          reset(seg.data[i])
       freeAligned(seg)
-      seg = nil
+      seg = nextSeg
 
     if self.manager != nil:
       unbindClient(self.manager[])
