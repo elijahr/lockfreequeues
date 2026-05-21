@@ -138,7 +138,7 @@ are preserved). The remaining ~290+ sites all migrate to the
 - ThreadHandle CC threading on every queue object field and on every
   `Producer*` / `Consumer*` object that holds a handle. The CC value
   is fixed per (`ccProd`, `ccCons`) family per §3.3 table.
-- Migration of all 5 `withPin` sites to `pin(handle.unpinned())`
+- Migration of all 5 `withPin` sites to `pinScope(unpinned(handle))`
   returning a `PinnedScope[MaxThreads, CC]` (RAII via `=destroy`).
 - Use of `q.retireOnCAS(...)` / `q.retireOnPublish(...)` per §3.0.2.
 - Removal of the `strategy: DeallocationStrategy` field from every
@@ -898,7 +898,7 @@ if self.strategy == Eager:
 
 ```nim
 block:
-  var scope = pin(self.handle.unpinned())  # PinnedScope[MaxThreads, ccSingle]
+  var scope = pinScope(unpinned(self.handle))  # PinnedScope[MaxThreads, ccSingle]
   var seg = self.headSegment.load(moAcquire)
   while true:
     let tail = seg.tail.load(moAcquire)
@@ -978,7 +978,7 @@ if self.queue.strategy == Eager:
 
 ```nim
 block:
-  var scope = pin(self.handle.unpinned())  # PinnedScope[MaxThreads, ccMulti]
+  var scope = pinScope(unpinned(self.handle))  # PinnedScope[MaxThreads, ccMulti]
   var seg = self.queue.headSegment.load(moAcquire)
   var spins = InitialSpin
   while true:
@@ -1079,7 +1079,7 @@ self.handle.withPin:
 
 ```nim
 block:
-  var scope = pin(self.handle.unpinned())  # PinnedScope[MaxThreads, ccSingle]
+  var scope = pinScope(unpinned(self.handle))  # PinnedScope[MaxThreads, ccSingle]
   var spins = InitialSpin
   while true:
     var seg = self.queue.tailSegment.load(moAcquire)
