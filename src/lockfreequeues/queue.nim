@@ -70,8 +70,16 @@ import ./typestates/spsc_pop
 # `debra.PinScopeCardinality` qualified-only and avoid colliding with
 # the stub enum.
 from debra import
-  DebraManager, ThreadHandle, PinnedScope, initDebraManager, registerThread, bindClient,
-  unbindClient, unpinned, pinScope
+  DebraManager, ThreadHandle, PinnedScope, Destructor, initDebraManager, registerThread,
+  bindClient, unbindClient, unpinned, pinScope, advanceEvery, reclaimNow
+
+# `retireOnCAS` / `retireOnPublish` are member-style symbols on
+# `PinnedScope` defined in `debra/typestates/pinned_scope.nim`; they are
+# re-exported by the top-level `debra` module. Imported separately so the
+# per-queue wrappers below resolve `scope.retireOnCAS(...)` /
+# `scope.retireOnPublish(...)` calls without needing the full `debra` import
+# (which would unqualify `PinScopeCardinality` and collide with the stub).
+from debra import retireOnCAS, retireOnPublish
 
 export exceptions
 
@@ -130,6 +138,18 @@ type
       # to its own cache line so the consumer's `head` writes do not
       # invalidate producers' cached `tail` line (legacy:
       # `unbounded_mupsic.nim:72`).
+      head* {.align: CacheLineBytes.}: int
+    when ccProd == ccSingle and ccCons == ccSingle:
+      # sipsic-equiv: single-consumer non-atomic read position. The
+      # legacy `unbounded_sipsic.nim:27` uses `Atomic[int]` for memory
+      # model uniformity but functionally only the single consumer
+      # writes it. Doc C §3.0.3 keeps `UnboundedSipsic` as a separate
+      # type; this rkEbr (ccSingle, ccSingle) shape is instantiable for
+      # type uniformity and the field is the minimum needed for a
+      # functional pop body. Step 3.3.4 resolution: "least surprising"
+      # (Doc C is silent on this case; lift the sipsic-legacy field
+      # shape, downgraded to plain `int` since there is by definition
+      # no other writer).
       head* {.align: CacheLineBytes.}: int
     when ccProd == ccMulti:
       # mupsic-equiv + mupmuc-equiv: multi-producer publication flags
@@ -413,8 +433,28 @@ type
     ## `Queue.getConsumer()`. Defined for every (ccProd, ccCons) shape
     ## for type uniformity; only meaningful when `ccCons == ccMulti`
     ## (single-consumer cardinalities pop directly through `Queue.pop`).
+    ##
+    ## For the rkEbr branch with `ccCons == ccMulti` (sipmuc-equiv and
+    ## mupmuc-equiv) the consumer additionally carries its own
+    ## `ThreadHandle[MaxThreads, debra.ccSingle]` — each consumer
+    ## thread owns its own handle for the pin/retire cycle in `pop`
+    ## (§3.5.2 mupmuc-equiv + §3.5.3 sipmuc-equiv retire-bearing
+    ## sites; mirrors `unbounded_mupmuc.nim:110` and
+    ## `unbounded_sipmuc.nim:107`).
+    ##
+    ## CC choice (`debra.ccSingle`) matches QueueProducer.handle for
+    ## cross-axis symmetry: `registerThread(self.manager[])` infers CC
+    ## from the manager (which defaults to ccSingle in the v5.0.0
+    ## constructors). Doc C §3.5.2 line 984's `PinnedScope[MaxThreads,
+    ## ccMulti]` comment is aspirational; matching it would require
+    ## `DebraManager[MT, ccMulti]` which Phase 3.3 does not authorize.
+    ## For `ccCons == ccSingle` (sipsic-equiv has no retire;
+    ## mupsic-equiv's consumer handle lives on the queue) the field
+    ## is absent. For `RK == rkNone` (bounded) the field is absent.
     idx*: int
     queue*: ptr Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]
+    when RK == rkEbr and ccCons == ccMulti:
+      handle*: ThreadHandle[MaxThreads, debra.ccSingle]
 
 proc clear[
     T;
@@ -1032,11 +1072,134 @@ proc newSegment[T; ccProd, ccCons: static PinScopeCardinality, S: static int]():
   result.tail.store(0, moRelaxed)
   when ccProd == ccMulti and ccCons == ccSingle:
     result.head = 0
+  when ccProd == ccSingle and ccCons == ccSingle:
+    # sipsic-equiv: consumer-side head cursor (see Segment field decl).
+    result.head = 0
   when ccProd == ccMulti:
     for i in 0 ..< S:
       result.committed[i].store(false, moRelaxed)
   when ccCons == ccMulti:
     result.prevConsumerIdx.store(-1, moRelaxed)
+
+## ----------------------------------------------------------------------
+## Per-queue retire wrappers — Doc C §3.0.2 + γ bounded-asymmetry guard.
+##
+## Both procs are defined ONLY for `RK == rkEbr`. The overload-on-rkEbr
+## resolution is the bounded-asymmetry guard (γ): callers that hold a
+## `Queue[..., rkNone, ...]` fail UFCS lookup with method-not-defined,
+## so bounded queues cannot accidentally route retire through nim-debra.
+## No `static: assert` is needed — the type-overload constraint already
+## enforces the gate at compile time.
+##
+## `retireOnCAS` is callable under any consumer cardinality (DR-S3 — the
+## CAS arbitrates between multiple writers).
+##
+## `retireOnPublish` is additionally gated on `ccCons == ccSingle` for
+## the foot-gun warning verbatim from Doc C §3.0.2 lines 481-498 /
+## nim-debra `pinned_scope.nim:161-176` (DR-S4):
+##
+##   FOOT-GUN — single-writer required (DR-S4). Stores `desired` into
+##   `atomic` and retires the displaced value. nim-debra cannot
+##   statically verify that `atomic` is single-writer; under
+##   multi-writer use, the displaced value may be retired concurrently
+##   and double-freed on reclamation. Use `retireOnCAS` for the
+##   multi-writer-safe form.
+##
+## In the mupsic-equiv consumer-pop path (§3.5.1) the sole writer to
+## `headSegment` is the single consumer thread, which is the contract
+## the type signature enforces via `ccCons == ccSingle`.
+##
+## Wrappers delegate verbatim to nim-debra primitives, preserving the
+## §3.5.6 Pin-Claim Ordering invariant by construction (the primitive
+## encodes Items 1-6 in its `Pinned → RetireReady → Retired → Pinned`
+## rotation chain — nim-debra design doc §3.4.0).
+## ----------------------------------------------------------------------
+
+proc retireOnCAS*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    CC: static debra.PinScopeCardinality,
+    S, MaxThreads: static int,
+    U;
+](
+    q: var Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads],
+    scope: var PinnedScope[MaxThreads, CC],
+    atomic: var Atomic[U],
+    expected, desired: U,
+    dtor: Destructor,
+): bool {.discardable.} =
+  ## Doc C §3.0.2 — per-queue `retireOnCAS` wrapper (γ bounded-asymmetry
+  ## guard via `RK == rkEbr` in the receiver type).
+  ##
+  ## Delegates to `scope.retireOnCAS(...)` (nim-debra
+  ## `typestates/pinned_scope.nim:134`). Returns the CAS result: true on
+  ## success (after the rotation chain rebuilds `scope.state` as Pinned
+  ## in the same epoch so further retires inside the same pinned scope
+  ## remain valid), false on failure (leaving `scope.state` unchanged;
+  ## the caller is expected to re-read `atomic` on the backoff path —
+  ## Risk 5, Doc C §3.5.2 lines 1024-1030).
+  ##
+  ## Unused params `q`, `T`, `ccProd`, `ccCons`, `ST` exist purely to
+  ## carry the type-overload constraint; the body delegates to the
+  ## already-bound `scope`.
+  discard q
+  scope.retireOnCAS(atomic, expected, desired, dtor)
+
+proc retireOnPublish*[
+    T;
+    ccProd: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    CC: static debra.PinScopeCardinality,
+    S, MaxThreads: static int,
+    U;
+](
+    q: var Queue[T, ccProd, ccSingle, ST, rkEbr, 0, 0, 0, S, MaxThreads],
+    scope: var PinnedScope[MaxThreads, CC],
+    atomic: var Atomic[U],
+    desired: U,
+    dtor: Destructor,
+) =
+  ## Doc C §3.0.2 — per-queue `retireOnPublish` wrapper (γ guard via
+  ## `RK == rkEbr` AND `ccCons == ccSingle` in the receiver type).
+  ##
+  ## **FOOT-GUN — single-writer required (DR-S4).** Stores `desired`
+  ## into `atomic` and retires the displaced value. nim-debra cannot
+  ## statically verify that `atomic` is single-writer; under
+  ## multi-writer use, the displaced value may be retired concurrently
+  ## and double-freed on reclamation. The `ccCons == ccSingle`
+  ## overload gate ensures the only writer to a queue-owned
+  ## `headSegment` is the single consumer thread (§3.5.1 mupsic-equiv
+  ## consumer-pop path). Use `retireOnCAS` for the multi-writer-safe
+  ## form.
+  ##
+  ## Delegates to `scope.retireOnPublish(...)` (nim-debra
+  ## `typestates/pinned_scope.nim:161`).
+  discard q
+  scope.retireOnPublish(atomic, desired, dtor)
+
+# ---------------------------------------------------------------------
+# Segment destructor — monomorphic-per-(T, ccProd, ccCons, S) destructor
+# matching nim-debra's `Destructor = proc(p: pointer) {.nimcall.}`
+# signature. Reset any managed `T` slots (`string`, `seq`, `ref`, ...)
+# before `freeAligned`'s away the segment block — otherwise their
+# internal allocations leak. For POD `T` (`supportsCopyMem`) the loop
+# compile-time-elides.
+#
+# Lift verbatim from `unbounded_mupmuc.nim:326-331`,
+# `unbounded_mupsic.nim:312-317`, `unbounded_sipmuc.nim:274-279` (all
+# three legacy `segmentDestructor` definitions are byte-identical
+# modulo Segment type name; consolidated here per Doc C §3.0).
+# ---------------------------------------------------------------------
+
+proc segmentDestructor[T; ccProd, ccCons: static PinScopeCardinality, S: static int](
+    p: pointer
+) {.nimcall, raises: [].} =
+  when not supportsCopyMem(T):
+    let seg = cast[ptr Segment[T, ccProd, ccCons, S]](p)
+    for i in 0 ..< S:
+      reset(seg.data[i])
+  freeAligned(p)
 
 proc newQueue*[
     T;
@@ -1173,12 +1336,35 @@ proc getConsumer*[
 ](
     self: var Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads]
 ): QueueConsumer[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads] =
-  ## Returns a `QueueConsumer` view bound to this rkEbr queue. Step
-  ## 3.3.2 placeholder — populates `queue` and a sentinel `idx`. Step
-  ## 3.3.4 (pop body) wires up per-thread debra-handle registration
-  ## semantics.
+  ## Returns a `QueueConsumer` view bound to this rkEbr queue. For
+  ## `ccCons == ccMulti` (sipmuc-equiv + mupmuc-equiv) registers the
+  ## calling thread against the queue's `DebraManager` and stores the
+  ## resulting `ThreadHandle` on the consumer view — the handle drives
+  ## the §3.5.2 / §3.5.3 retire-bearing pop sites in `pop` below.
+  ##
+  ## Each call to the auto-register overload consumes one
+  ## `DebraManager` thread slot; per the legacy contract
+  ## (`unbounded_sipmuc.nim:247-253` / `unbounded_mupmuc.nim:226-235`)
+  ## the slot is **not reclaimed** when the consumer view is destroyed
+  ## — it lives until the manager itself is destroyed. Long-running
+  ## queues should reuse the same `QueueConsumer` per thread.
+  ##
+  ## For `ccCons == ccSingle` (sipsic-equiv + mupsic-equiv) the
+  ## consumer view carries no handle — sipsic has no retire-race and
+  ## mupsic stores its consumer handle on the queue itself.
   result.queue = addr(self)
-  result.idx = -1
+  when ccCons == ccMulti:
+    # Lift verbatim from `unbounded_mupmuc.nim:232-235` (manual-handle
+    # path) + auto-register overload (`:237-250`): bump
+    # `consumerCount`, register thread, store handle. The fetchAdd is
+    # moAcquire to publish the slot consumption to other consumers.
+    # Mirrors getProducer's multi-producer block above for cross-axis
+    # symmetry.
+    let idx = self.consumerCount.fetchAdd(1, moAcquire)
+    result.idx = idx
+    result.handle = registerThread(self.manager[])
+  else:
+    result.idx = -1
 
 ## ----------------------------------------------------------------------
 ## rkEbr len / segmentCount accessors — Track E / Step 3.3.3.
@@ -1394,6 +1580,346 @@ proc push*[
       # scope.=destroy fires here on block exit, driving
       # `PinnedScopeAlive -> PinnedScopeDestroyed` via the registered
       # `{.destructorTransition.}` (typestates 0.9.2 accepts).
+
+## ----------------------------------------------------------------------
+## rkEbr pop body — Track E / Step 3.3.4.
+##
+## Doc C §3.5 carrier decision: pop lives on bare `Queue` for
+## ccCons == ccSingle variants (sipsic-equiv, mupsic-equiv) and on
+## `QueueConsumer` for ccCons == ccMulti variants (sipmuc-equiv,
+## mupmuc-equiv). This mirrors the rkNone dispatch pattern at
+## queue.nim:685/:702 (direct Queue for single-consumer) and
+## :724/:746 (via QueueConsumer for multi-consumer).
+##
+## Three retire-bearing variants route through per-queue wrappers
+## (§3.0.2): mupsic-equiv uses `q.retireOnPublish` (§3.5.1, single
+## consumer = single writer to `headSegment`); sipmuc-equiv and
+## mupmuc-equiv use `q.retireOnCAS` (§3.5.2 / §3.5.3, multi-consumer
+## CAS arbitration). One sipsic-equiv variant is no-pin no-retire per
+## §3.0.3 — `UnboundedSipsic` is the canonical SPSC unbounded type;
+## this rkEbr (ccSingle, ccSingle) shape is instantiable for type
+## uniformity. The pop body lifts from `unbounded_sipsic.nim:122-166`
+## (no withPin, no debra) with a per-segment `head: int` field added
+## to the unified Segment for the (ccSingle, ccSingle) case (see
+## Segment field decl — Doc C §3.0 is silent on this shape since
+## §3.0.3 keeps SipSic separate; the field is the minimum needed for
+## a functional pop body, resolution "least surprising").
+##
+## §3.5.6 Pin-Claim Ordering invariant (load-bearing): for the
+## multi-consumer + mupsic-equiv variants, `pinScope(unpinned(...))`
+## is the FIRST statement of the `block:` scope; the
+## `self.queue.headSegment.load(...)` (mupsic: `self.headSegment.load`)
+## is the NEXT statement. Lifted verbatim from Doc C §3.5.1 (mupsic
+## "After", lines 902-931) and §3.5.2 (mupmuc "After", lines 982-1022);
+## §3.5.3 (sipmuc) is structurally identical to §3.5.2 with
+## `compareExchange` (weak) instead of `compareExchangeStrong`.
+##
+## CAS-failure semantics change (Doc C §3.5.2 lines 1024-1030, Risk 5):
+## legacy `unbounded_*muc.nim` code reads `seg = expected` after a
+## failing `compareExchangeStrong` to recover the CAS-load result.
+## `retireOnCAS` returns bool only, so the migration re-reads
+## `self.queue.headSegment.load(moAcquire)` on the backoff path.
+## Functionally equivalent; one extra atomic load on the backoff path.
+## ----------------------------------------------------------------------
+
+# --- sipsic-equiv pop (ccSingle × ccSingle, direct on Queue, no pin) -----
+proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
+    self: var Queue[T, ccSingle, ccSingle, ST, rkEbr, 0, 0, 0, S, MaxThreads]
+): Option[T] =
+  ## sipsic-equiv pop — direct slot read + segment advance with
+  ## `freeAligned(oldSeg)`. No pin (SPSC has no retire-race; only one
+  ## consumer ever runs, only one producer ever writes). No
+  ## `retireOn*` wrapper (no race for nim-debra to arbitrate).
+  ## Lifted from `unbounded_sipsic.nim:122-166` with the per-segment
+  ## `head` field downgraded from `Atomic[int]` to plain `int` since
+  ## by definition no other writer exists.
+  ##
+  ## Doc C §3.0.3 keeps `UnboundedSipsic` separate; this rkEbr
+  ## (ccSingle, ccSingle) shape is instantiable only for type
+  ## uniformity. Production SPSC unbounded code should prefer
+  ## `UnboundedSipsic[S, T]`.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.
+          error:
+            "Queue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
+            "mutate the refcount on the same object multiple threads can " &
+            "read or write, which is a race regardless of whether the " &
+            "refcount itself is atomic. Use a lock-free type (int, " &
+            "pointer, ptr T, etc.) or compile with " &
+            "-d:allowNonLockFreeQueueItems to explicitly allow it."
+        .}
+
+  # SPSC: only the consumer reads/writes headSegment. Acquire load picks
+  # up the producer's release stores to `seg.next` when we cross segments.
+  var seg = self.headSegment.load(moAcquire)
+
+  while true:
+    let head = seg.head
+    let tail = seg.tail.load(moAcquire)
+
+    # Check if there's data in current segment
+    if head < tail:
+      let value = seg.data[head]
+      seg.head = head + 1
+      discard self.itemCount.fetchSub(1, moRelaxed)
+      return some(value)
+
+    # Segment exhausted, try to advance
+    let nextSeg = seg.next.load(moAcquire)
+    if nextSeg == nil:
+      return none(T)
+
+    # Advance to next segment and free old one. Publish the advance via
+    # release store so any future readers see the up-to-date head.
+    let oldSeg = seg
+    self.headSegment.store(nextSeg, moRelease)
+    seg = nextSeg
+    discard self.segments.fetchSub(1, moRelaxed)
+    freeAligned(oldSeg)
+
+# --- mupsic-equiv pop (ccMulti × ccSingle, direct on Queue, retireOnPublish)
+proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
+    self: var Queue[T, ccMulti, ccSingle, ST, rkEbr, 0, 0, 0, S, MaxThreads]
+): Option[T] =
+  ## mupsic-equiv pop — §3.5.1 retire-bearing site. Lift verbatim from
+  ## Doc C §3.5.1 "After" (lines 902-931).
+  ##
+  ## §3.5.6 Pin-Claim Ordering: `pinScope(unpinned(self.handle))` is
+  ## the FIRST stmt of the `block:` scope; the first
+  ## `self.headSegment.load(...)` is the NEXT stmt. Verified by
+  ## inspection — the `var scope = ...` line precedes the segment
+  ## load with no intervening statements.
+  ##
+  ## Single-consumer routes through `q.retireOnPublish` (foot-gun
+  ## DR-S4: the type signature `ccCons == ccSingle` enforces the
+  ## single-writer-to-`headSegment` requirement).
+  ##
+  ## The post-block `when ST == stEager:` advanceEvery/reclaimNow tail
+  ## runs after `scope.=destroy` so reclamation happens with the
+  ## consumer thread momentarily unpinned (avoiding self-deadlock on
+  ## the per-thread epoch).
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.
+          error:
+            "Queue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
+            "mutate the refcount on the same object multiple threads can " &
+            "read or write, which is a race regardless of whether the " &
+            "refcount itself is atomic. Use a lock-free type (int, " &
+            "pointer, ptr T, etc.) or compile with " &
+            "-d:allowNonLockFreeQueueItems to explicitly allow it."
+        .}
+
+  block:
+    var scope = pinScope(unpinned(self.handle))
+    var seg = self.headSegment.load(moAcquire)
+    while true:
+      let tail = seg.tail.load(moAcquire)
+      if seg.head < tail:
+        if seg.committed[seg.head].load(moAcquire):
+          result = some(seg.data[seg.head])
+          inc seg.head
+          discard self.itemCount.fetchSub(1, moRelaxed)
+        # If not committed, producer hasn't finished writing yet;
+        # result stays none.
+        break
+      let nextSeg = seg.next.load(moAcquire)
+      if nextSeg == nil:
+        break
+      # Per-queue retireOnPublish wrapper (§3.0.2) routes to nim-debra's
+      # store-publish primitive. The (γ) bounded-asymmetry guard fires
+      # here: only defined for RK = rkEbr AND ccCons == ccSingle.
+      self.retireOnPublish(
+        scope, self.headSegment, nextSeg, segmentDestructor[T, ccMulti, ccSingle, S]
+      )
+      when ST != stManual:
+        discard self.segments.fetchSub(1, moRelaxed)
+      seg = nextSeg
+    # scope.=destroy fires here on block exit, driving
+    # `PinnedScopeAlive -> PinnedScopeDestroyed` via the registered
+    # `{.destructorTransition.}` (typestates 0.9.2 accepts).
+
+  when ST == stEager:
+    if self.handle.advanceEvery(LockFreeQueuesAdvanceEvery):
+      discard reclaimNow(self.handle)
+
+# --- sipmuc-equiv pop (ccSingle × ccMulti, via QueueConsumer, retireOnCAS)
+proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
+    self: var QueueConsumer[T, ccSingle, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads]
+): Option[T] =
+  ## sipmuc-equiv pop — §3.5.3 retire-bearing site (structurally
+  ## identical to §3.5.2 with `compareExchange` (weak) instead of
+  ## `compareExchangeStrong`; Doc C §3.5.3 omits the verbatim body).
+  ##
+  ## §3.5.6 Pin-Claim Ordering: `pinScope(unpinned(self.handle))` is
+  ## the FIRST stmt of the `block:` scope; the first
+  ## `self.queue.headSegment.load(...)` is the NEXT stmt.
+  ##
+  ## Multi-consumer routes through `q.retireOnCAS`. CAS-failure
+  ## semantics change (Risk 5): the legacy code uses
+  ## `expected` after the failing CAS; `retireOnCAS` returns bool only,
+  ## so the migration re-reads `self.queue.headSegment.load(moAcquire)`.
+  ##
+  ## Note: the unified Segment shape carries `prevConsumerIdx` per-
+  ## segment (lifted from `unbounded_sipmuc.nim:74`); per-consumer
+  ## tracking is via `prevConsumerIdx` only, not the (legacy) Consumer-
+  ## scoped `localHead` (which the legacy sipmuc Consumer carried but
+  ## never used in the pop body — verified at
+  ## `unbounded_sipmuc.nim:106-107`).
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.
+          error:
+            "Queue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
+            "mutate the refcount on the same object multiple threads can " &
+            "read or write, which is a race regardless of whether the " &
+            "refcount itself is atomic. Use a lock-free type (int, " &
+            "pointer, ptr T, etc.) or compile with " &
+            "-d:allowNonLockFreeQueueItems to explicitly allow it."
+        .}
+
+  block:
+    var scope = pinScope(unpinned(self.handle))
+    var seg = self.queue.headSegment.load(moAcquire)
+    var spins = InitialSpin
+    while true:
+      let tail = seg.tail.load(moAcquire)
+      var prevIdx = seg.prevConsumerIdx.load(moAcquire)
+      let mySlot = prevIdx + 1
+      if mySlot >= tail:
+        # Segment exhausted, try to advance to the next segment.
+        let nextSeg = seg.next.load(moAcquire)
+        if nextSeg == nil:
+          break
+        # Per-queue retireOnCAS wrapper (§3.0.2). (γ) guard fires:
+        # only defined for RK = rkEbr.
+        if self.queue[].retireOnCAS(
+          scope,
+          self.queue.headSegment,
+          seg,
+          nextSeg,
+          segmentDestructor[T, ccSingle, ccMulti, S],
+        ):
+          when ST != stManual:
+            discard self.queue.segments.fetchSub(1, moRelaxed)
+          seg = nextSeg
+        else:
+          # CAS failed: legacy used `seg = expected`; retireOnCAS does
+          # not expose the load result, so re-read headSegment on the
+          # backoff path (Doc C §3.5.2 lines 1024-1030 / Risk 5).
+          seg = self.queue.headSegment.load(moAcquire)
+        backoffOnRetry(spins)
+        continue
+
+      # CAS to claim slot (sipmuc uses weak compareExchange per
+      # `unbounded_sipmuc.nim:345`).
+      if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
+        result = some(seg.data[mySlot])
+        discard self.queue.itemCount.fetchSub(1, moRelaxed)
+        break
+      # Lost CAS, retry.
+
+  when ST == stEager:
+    if self.handle.advanceEvery(LockFreeQueuesAdvanceEvery):
+      discard reclaimNow(self.handle)
+
+# --- mupmuc-equiv pop (ccMulti × ccMulti, via QueueConsumer, retireOnCAS) -
+proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
+    self: var QueueConsumer[T, ccMulti, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads]
+): Option[T] =
+  ## mupmuc-equiv pop — §3.5.2 retire-bearing site. Lift verbatim from
+  ## Doc C §3.5.2 "After" (lines 982-1022).
+  ##
+  ## §3.5.6 Pin-Claim Ordering: `pinScope(unpinned(self.handle))` is
+  ## the FIRST stmt of the `block:` scope; the first
+  ## `self.queue.headSegment.load(...)` is the NEXT stmt.
+  ##
+  ## Uses `compareExchangeStrong` (legacy `unbounded_mupmuc.nim:381`).
+  ## Multi-consumer routes through `q.retireOnCAS`. CAS-failure
+  ## semantics change (Risk 5): re-read on backoff path.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.
+          error:
+            "Queue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
+            "mutate the refcount on the same object multiple threads can " &
+            "read or write, which is a race regardless of whether the " &
+            "refcount itself is atomic. Use a lock-free type (int, " &
+            "pointer, ptr T, etc.) or compile with " &
+            "-d:allowNonLockFreeQueueItems to explicitly allow it."
+        .}
+
+  block:
+    var scope = pinScope(unpinned(self.handle))
+    var seg = self.queue.headSegment.load(moAcquire)
+    var spins = InitialSpin
+    while true:
+      let tail = seg.tail.load(moAcquire)
+      var prevIdx = seg.prevConsumerIdx.load(moAcquire)
+      let mySlot = prevIdx + 1
+      if mySlot >= tail:
+        if mySlot < S and seg.tail.load(moAcquire) > mySlot:
+          if not seg.committed[mySlot].load(moAcquire):
+            break
+          backoffOnRetry(spins)
+          continue
+        let nextSeg = seg.next.load(moAcquire)
+        if nextSeg == nil:
+          break
+        # Per-queue retireOnCAS wrapper (§3.0.2). (γ) guard fires:
+        # only defined for RK = rkEbr.
+        if self.queue[].retireOnCAS(
+          scope,
+          self.queue.headSegment,
+          seg,
+          nextSeg,
+          segmentDestructor[T, ccMulti, ccMulti, S],
+        ):
+          when ST != stManual:
+            discard self.queue.segments.fetchSub(1, moRelaxed)
+          seg = nextSeg
+        else:
+          # CAS failed: re-read headSegment on the backoff path (Doc C
+          # §3.5.2 lines 1024-1030 / Risk 5).
+          seg = self.queue.headSegment.load(moAcquire)
+        backoffOnRetry(spins)
+        continue
+      if not seg.committed[mySlot].load(moAcquire):
+        break # Producer still writing
+      if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
+        result = some(seg.data[mySlot])
+        discard self.queue.itemCount.fetchSub(1, moRelaxed)
+        break
+      # Lost CAS, retry.
+
+  when ST == stEager:
+    if self.handle.advanceEvery(LockFreeQueuesAdvanceEvery):
+      discard reclaimNow(self.handle)
+
+# --- ccMulti-consumer trap on bare Queue.pop for rkEbr -------------------
+# Mirrors the rkNone ccMulti-consumer trap at queue.nim:770 (which uses
+# `raise newException(InvalidCallDefect, ...)`). The trap raises at
+# runtime if a caller mistakenly pops on the bare Queue rather than via
+# `QueueConsumer.pop()`. Doc C §3.0.2 routing requires the QueueConsumer
+# carrier for the multi-consumer rkEbr case (§3.5.2 mupmuc-equiv,
+# §3.5.3 sipmuc-equiv).
+proc pop*[
+    T;
+    ccProd: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](self: var Queue[T, ccProd, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads]): Option[T] =
+  ## Raises `InvalidCallDefect`. Use `QueueConsumer.pop()` instead.
+  raise newException(InvalidCallDefect, "Use QueueConsumer.pop()")
 
 proc `=destroy`*[
     T;
