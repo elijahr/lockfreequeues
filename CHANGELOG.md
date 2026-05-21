@@ -630,6 +630,24 @@ param-coherence guards active; the v5.0.0 RC adds `RK = rkEbr`
   binaries in place of the pre-split single. MVP comparison adapters
   (boost.lockfree, crossbeam ArrayQueue, threading.Chan) live in the
   mupmuc binary because their slug shape matches the mupmuc grid.
+- Smart-constructor shorthands per Doc C §3.0.4 (Step 3.3.5b). Seven
+  user-facing helpers wrap the generic `initQueue` (bounded) and
+  `newQueue` (unbounded) constructors with per-family fixed
+  cardinality, hiding the 10-param phantom suite from the common
+  call-site: `newSipsicQueue[T, N]`, `newMupsicQueue[T, N, P]`,
+  `newSipmucQueue[T, N, C]`, `newMupmucQueue[T, N, P, C]` (bounded,
+  `RK = rkNone`); `newUnboundedMupsicQueue[T, S, MaxThreads]` (borrow
+  takes `(mgr, consumerHandle)`; auto-create takes `()`),
+  `newUnboundedSipmucQueue[T, S, MaxThreads]` and
+  `newUnboundedMupmucQueue[T, S, MaxThreads]` (borrow takes `(mgr)`;
+  auto-create takes `()`) (unbounded, `RK = rkEbr`). DELIBERATELY no
+  `newUnboundedSipsicQueue` per Doc C §3.0.3 — `UnboundedSipsic`
+  stays separate in `unbounded_sipsic.nim` as the recommended SPSC
+  path. A handle-free `ccCons == ccMulti` `newQueue` borrow overload
+  is added alongside the smart-constructors to preserve legacy
+  `newUnboundedSipmuc(mgr)` and `newUnboundedMupmuc(mgr)` ergonomics
+  under the smart-constructor surface; the handle-taking overload
+  remains canonical for direct `newQueue` callers.
 
 ### Documentation (v5.0.0 reframe audit trail)
 

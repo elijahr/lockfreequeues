@@ -1328,6 +1328,43 @@ proc newQueue*[
 
 proc newQueue*[
     T;
+    ccProd: static PinScopeCardinality,
+    ST: static DeallocationStrategy = DefaultDeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    _: typedesc[Queue[T, ccProd, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads]],
+    manager: ptr DebraManager[MaxThreads, debra.ccMulti],
+): Queue[T, ccProd, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads] =
+  ## Handle-free borrow overload for `ccCons == ccMulti` (sipmuc-equiv
+  ## and mupmuc-equiv). Companion to the handle-taking
+  ## `newQueue(typedesc, manager, handle)` overload above; added by
+  ## Step 3.3.5b to preserve the legacy `newUnboundedSipmuc(mgr)` and
+  ## `newUnboundedMupmuc(mgr)` borrow ergonomics under the
+  ## smart-constructor surface (`newUnboundedSipmucQueue` /
+  ## `newUnboundedMupmucQueue`) without forcing callers to fabricate a
+  ## throwaway `ThreadHandle`.
+  ##
+  ## The handle-taking ccCons == ccMulti overload remains the canonical
+  ## signature for callers reaching `newQueue` directly — it discards
+  ## the handle internally for signature symmetry with the
+  ## ccCons == ccSingle borrow overload. This handle-free overload
+  ## simply omits the discarded handle param; the body is otherwise
+  ## byte-identical (Doc C §3.1 / §5).
+  validateQueueParams(Queue[T, ccProd, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads])
+  result.manager = manager
+  result.ownsManager = false
+  result.itemCount.store(0, moRelaxed)
+  when ccProd == ccMulti:
+    result.producerCount.store(0, moRelaxed)
+  result.consumerCount.store(0, moRelaxed)
+  let seg = newSegment[T, ccProd, ccMulti, S]()
+  result.headSegment.store(seg, moRelaxed)
+  result.tailSegment.store(seg, moRelaxed)
+  result.segments.store(1, moRelaxed)
+  bindClient(manager[])
+
+proc newQueue*[
+    T;
     ccProd, ccCons: static PinScopeCardinality,
     ST: static DeallocationStrategy = DefaultDeallocationStrategy,
     S, MaxThreads: static int,
@@ -2076,6 +2113,178 @@ proc `=destroy`*[
       if self.ownsManager:
         reset(self.manager[])
         freeAligned(self.manager)
+
+## ----------------------------------------------------------------------
+## Smart-constructor shorthands (Doc C §3.0.4)
+##
+## Seven user-facing helpers that wrap the generic `initQueue` (bounded)
+## and `newQueue` (unbounded) constructors with per-family fixed
+## cardinality, hiding the 10-param phantom suite from the common
+## call-site. SHIP #3 in v5.0.0, ratified at plan-ratification time.
+##
+## Bounded helpers (`RK = rkNone`, `ST = DefaultDeallocationStrategy`):
+##   - `newSipsicQueue[T; N]()` — `ccSingle × ccSingle`
+##   - `newMupsicQueue[T; N, P]()` — `ccMulti  × ccSingle`
+##   - `newSipmucQueue[T; N, C]()` — `ccSingle × ccMulti`
+##   - `newMupmucQueue[T; N, P, C]()` — `ccMulti × ccMulti`
+##
+## Unbounded helpers (`RK = rkEbr`, two overloads each — auto-create and
+## manager-borrow with the legacy per-family handle convention):
+##   - `newUnboundedMupsicQueue[T; S, MaxThreads]`
+##     — borrow takes `(manager, consumerHandle)`; auto-create takes `()`
+##   - `newUnboundedSipmucQueue[T; S, MaxThreads]`
+##     — borrow takes `(manager)`; auto-create takes `()`
+##   - `newUnboundedMupmucQueue[T; S, MaxThreads]`
+##     — borrow takes `(manager)`; auto-create takes `()`
+##
+## DELIBERATELY NO `newUnboundedSipsicQueue`: per Doc C §3.0.3 the
+## separate `UnboundedSipsic[S, T]` type stays in `unbounded_sipsic.nim`
+## as the recommended SPSC-unbounded path. The
+## `Queue[T, ccSingle, ccSingle, _, rkEbr, ...]` instantiation is
+## type-uniformity only — a smart-constructor would shadow the
+## recommended path with a footgun shortcut. Callers who genuinely want
+## the unified-Queue sipsic-equiv shape still have raw
+## `newQueue(Queue[...])` available.
+##
+## **Push-uniform / pop-asymmetric API**: `push` is uniform across all
+## cardinalities (`QueueProducer.push` for `ccProd == ccMulti`,
+## `Queue.push` directly for `ccProd == ccSingle`). `pop` is asymmetric:
+## sipsic-equiv and mupsic-equiv (`ccCons == ccSingle`) call `pop`
+## directly on the queue; sipmuc-equiv and mupmuc-equiv
+## (`ccCons == ccMulti`) go through `getConsumer().pop`. These smart-
+## constructors return the queue value itself — consumer-handle
+## acquisition still uses `getConsumer` for the multi-consumer families.
+## ----------------------------------------------------------------------
+
+proc newSipsicQueue*[T; N: static int](): Queue[
+    T, ccSingle, ccSingle, DefaultDeallocationStrategy, rkNone, N, 0, 0, 0, 0
+] {.inline.} =
+  ## Bounded sipsic-equivalent (`ccSingle × ccSingle`) smart-constructor.
+  ## Forwards to `initQueue` with `RK = rkNone` and
+  ## `ST = DefaultDeallocationStrategy` (bounded queues do not use `ST`
+  ## per Doc C §3.1 — the default keeps the type signature uniform).
+  ## Doc C §3.0.4.
+  initQueue[T, ccSingle, ccSingle, DefaultDeallocationStrategy, N, 0, 0]()
+
+proc newMupsicQueue*[T; N, P: static int](): Queue[
+    T, ccMulti, ccSingle, DefaultDeallocationStrategy, rkNone, N, P, 0, 0, 0
+] {.inline.} =
+  ## Bounded mupsic-equivalent (`ccMulti × ccSingle`) smart-constructor.
+  ## Forwards to `initQueue` with `RK = rkNone` and
+  ## `ST = DefaultDeallocationStrategy`. `P` is the producer-registry
+  ## capacity. Doc C §3.0.4.
+  initQueue[T, ccMulti, ccSingle, DefaultDeallocationStrategy, N, P, 0]()
+
+proc newSipmucQueue*[T; N, C: static int](): Queue[
+    T, ccSingle, ccMulti, DefaultDeallocationStrategy, rkNone, N, 0, C, 0, 0
+] {.inline.} =
+  ## Bounded sipmuc-equivalent (`ccSingle × ccMulti`) smart-constructor.
+  ## Forwards to `initQueue` with `RK = rkNone` and
+  ## `ST = DefaultDeallocationStrategy`. `C` is the consumer-registry
+  ## capacity. Doc C §3.0.4.
+  initQueue[T, ccSingle, ccMulti, DefaultDeallocationStrategy, N, 0, C]()
+
+proc newMupmucQueue*[T; N, P, C: static int](): Queue[
+    T, ccMulti, ccMulti, DefaultDeallocationStrategy, rkNone, N, P, C, 0, 0
+] {.inline.} =
+  ## Bounded mupmuc-equivalent (`ccMulti × ccMulti`) smart-constructor.
+  ## Forwards to `initQueue` with `RK = rkNone` and
+  ## `ST = DefaultDeallocationStrategy`. `P` is the producer-registry
+  ## capacity, `C` is the consumer-registry capacity. Doc C §3.0.4.
+  initQueue[T, ccMulti, ccMulti, DefaultDeallocationStrategy, N, P, C]()
+
+proc newUnboundedMupsicQueue*[
+    T;
+    ST: static DeallocationStrategy = DefaultDeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    manager: ptr DebraManager[MaxThreads, debra.ccSingle],
+    consumerHandle: ThreadHandle[MaxThreads, debra.ccSingle],
+): Queue[T, ccMulti, ccSingle, ST, rkEbr, 0, 0, 0, S, MaxThreads] {.inline.} =
+  ## Unbounded mupsic-equivalent (`ccMulti × ccSingle`) borrow
+  ## smart-constructor. Caller owns the `DebraManager`; the queue records
+  ## `ownsManager = false` and its `=destroy` will NOT tear the manager
+  ## down. `consumerHandle` must be the handle of the (future) consumer
+  ## thread — mupsic-equiv stores it on the queue per Doc C §3.0.
+  ## Doc C §3.0.4 / §3.1.
+  newQueue(
+    Queue[T, ccMulti, ccSingle, ST, rkEbr, 0, 0, 0, S, MaxThreads],
+    manager,
+    consumerHandle,
+  )
+
+proc newUnboundedMupsicQueue*[
+    T;
+    ST: static DeallocationStrategy = DefaultDeallocationStrategy,
+    S, MaxThreads: static int,
+](): Queue[T, ccMulti, ccSingle, ST, rkEbr, 0, 0, 0, S, MaxThreads] {.inline.} =
+  ## Unbounded mupsic-equivalent (`ccMulti × ccSingle`) auto-create
+  ## smart-constructor. Heap-allocates a private `DebraManager`,
+  ## registers the calling thread (yielding the consumer handle stored
+  ## on the queue), and records `ownsManager = true`. The queue's
+  ## `=destroy` tears the manager down.
+  ##
+  ## **Caller must be the consumer thread.** Constructing on a different
+  ## thread than the future `pop` caller would mis-route the consumer
+  ## handle. Multi-queue / multi-thread setups should use the
+  ## borrow overload with an explicit handle obtained on the consumer
+  ## thread. Doc C §3.0.4 / §3.1.
+  newQueue(Queue[T, ccMulti, ccSingle, ST, rkEbr, 0, 0, 0, S, MaxThreads])
+
+proc newUnboundedSipmucQueue*[
+    T;
+    ST: static DeallocationStrategy = DefaultDeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    manager: ptr DebraManager[MaxThreads, debra.ccMulti]
+): Queue[T, ccSingle, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads] {.inline.} =
+  ## Unbounded sipmuc-equivalent (`ccSingle × ccMulti`) borrow
+  ## smart-constructor. Caller owns the `DebraManager` (must be
+  ## `ccMulti`-cardinality per nim-debra contract — `ccCons == ccMulti`
+  ## queues need ccMulti consumer pins). Routes to the handle-free
+  ## `newQueue` borrow overload added by Step 3.3.5b. No queue-level
+  ## consumer handle — consumers acquire handles via
+  ## `getConsumer` on their own thread. Doc C §3.0.4 / §3.1.
+  newQueue(Queue[T, ccSingle, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads], manager)
+
+proc newUnboundedSipmucQueue*[
+    T;
+    ST: static DeallocationStrategy = DefaultDeallocationStrategy,
+    S, MaxThreads: static int,
+](): Queue[T, ccSingle, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads] {.inline.} =
+  ## Unbounded sipmuc-equivalent (`ccSingle × ccMulti`) auto-create
+  ## smart-constructor. Heap-allocates a private `DebraManager` and
+  ## records `ownsManager = true`. The queue's `=destroy` tears the
+  ## manager down. Consumers register via `getConsumer` per-thread.
+  ## Doc C §3.0.4 / §3.1.
+  newQueue(Queue[T, ccSingle, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads])
+
+proc newUnboundedMupmucQueue*[
+    T;
+    ST: static DeallocationStrategy = DefaultDeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    manager: ptr DebraManager[MaxThreads, debra.ccMulti]
+): Queue[T, ccMulti, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads] {.inline.} =
+  ## Unbounded mupmuc-equivalent (`ccMulti × ccMulti`) borrow
+  ## smart-constructor. Caller owns the `DebraManager` (ccMulti
+  ## cardinality). Routes to the handle-free `newQueue` borrow overload
+  ## added by Step 3.3.5b. Producers and consumers each register via
+  ## `getProducer` / `getConsumer` on their own threads.
+  ## Doc C §3.0.4 / §3.1.
+  newQueue(Queue[T, ccMulti, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads], manager)
+
+proc newUnboundedMupmucQueue*[
+    T;
+    ST: static DeallocationStrategy = DefaultDeallocationStrategy,
+    S, MaxThreads: static int,
+](): Queue[T, ccMulti, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads] {.inline.} =
+  ## Unbounded mupmuc-equivalent (`ccMulti × ccMulti`) auto-create
+  ## smart-constructor. Heap-allocates a private `DebraManager` and
+  ## records `ownsManager = true`. The queue's `=destroy` tears the
+  ## manager down. Producers and consumers register via
+  ## `getProducer` / `getConsumer` per-thread. Doc C §3.0.4 / §3.1.
+  newQueue(Queue[T, ccMulti, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads])
 
 when defined(testing):
   from unittest import check
