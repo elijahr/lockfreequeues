@@ -227,7 +227,19 @@ type
       # resolves to `./internal/pinscope_stub.ccSingle` (which is a
       # different enum type from `debra.PinScopeCardinality.ccSingle`);
       # `ThreadHandle` expects the debra-typed cardinality.
-      manager*: ptr DebraManager[MaxThreads]
+      #
+      # Manager CC is gated on `ccCons` (Step 3.3.4.5 soundness fix):
+      # nim-debra `cardinality.nim` REQUIRES `ccMulti` for consumer pins
+      # on multi-consumer queues. For ccCons == ccMulti variants
+      # (sipmuc-equiv + mupmuc-equiv) the manager is allocated as
+      # `DebraManager[MT, ccMulti]` so `registerThread` returns a
+      # ccMulti-CC'd `ThreadHandle`, which propagates through to the
+      # consumer-side `pinScope(unpinned(handle))` retire chains.
+      # ccCons == ccSingle variants keep the ccSingle manager.
+      when ccCons == ccMulti:
+        manager*: ptr DebraManager[MaxThreads, debra.ccMulti]
+      else:
+        manager*: ptr DebraManager[MaxThreads, debra.ccSingle]
       headSegment* {.align: CacheLineBytes.}: Atomic[ptr Segment[T, ccProd, ccCons, S]]
       tailSegment* {.align: CacheLineBytes.}: Atomic[ptr Segment[T, ccProd, ccCons, S]]
       itemCount*: Atomic[int]
@@ -420,7 +432,18 @@ type
     idx*: int
     queue*: ptr Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]
     when RK == rkEbr and ccProd == ccMulti:
-      handle*: ThreadHandle[MaxThreads, debra.ccSingle]
+      # Producer.handle CC follows the manager (Step 3.3.4.5): for
+      # mupmuc-equiv (ccCons == ccMulti) the manager is ccMulti, and
+      # `registerThread` on a ccMulti manager returns
+      # `ThreadHandle[MT, ccMulti]` — ccSingle handle is unavailable
+      # here. Per nim-debra cardinality.nim, ccMulti is a safe superset
+      # of ccSingle semantics on the producer side. For mupsic-equiv
+      # (ccCons == ccSingle) the manager stays ccSingle and the
+      # producer-side ccSingle contract holds verbatim.
+      when ccCons == ccMulti:
+        handle*: ThreadHandle[MaxThreads, debra.ccMulti]
+      else:
+        handle*: ThreadHandle[MaxThreads, debra.ccSingle]
 
   QueueConsumer*[
     T;
@@ -436,25 +459,28 @@ type
     ##
     ## For the rkEbr branch with `ccCons == ccMulti` (sipmuc-equiv and
     ## mupmuc-equiv) the consumer additionally carries its own
-    ## `ThreadHandle[MaxThreads, debra.ccSingle]` — each consumer
+    ## `ThreadHandle[MaxThreads, debra.ccMulti]` — each consumer
     ## thread owns its own handle for the pin/retire cycle in `pop`
     ## (§3.5.2 mupmuc-equiv + §3.5.3 sipmuc-equiv retire-bearing
     ## sites; mirrors `unbounded_mupmuc.nim:110` and
     ## `unbounded_sipmuc.nim:107`).
     ##
-    ## CC choice (`debra.ccSingle`) matches QueueProducer.handle for
-    ## cross-axis symmetry: `registerThread(self.manager[])` infers CC
-    ## from the manager (which defaults to ccSingle in the v5.0.0
-    ## constructors). Doc C §3.5.2 line 984's `PinnedScope[MaxThreads,
-    ## ccMulti]` comment is aspirational; matching it would require
-    ## `DebraManager[MT, ccMulti]` which Phase 3.3 does not authorize.
-    ## For `ccCons == ccSingle` (sipsic-equiv has no retire;
-    ## mupsic-equiv's consumer handle lives on the queue) the field
-    ## is absent. For `RK == rkNone` (bounded) the field is absent.
+    ## CC choice (`debra.ccMulti`) is REQUIRED by nim-debra's
+    ## `cardinality.nim` contract for consumer pins on multi-consumer
+    ## queues (Step 3.3.4.5 soundness fix). The Queue.manager is
+    ## allocated as `DebraManager[MT, ccMulti]` for ccCons == ccMulti
+    ## variants so `registerThread(self.manager[])` returns a
+    ## ccMulti-CC'd handle, propagating the ccMulti through to the
+    ## `pinScope(unpinned(self.handle))` retire chain in §3.5.2 / §3.5.3.
+    ## Doc C §3.5.2 line 984's `PinnedScope[MaxThreads, ccMulti]` is
+    ## now matched verbatim by the impl. For `ccCons == ccSingle`
+    ## (sipsic-equiv has no retire; mupsic-equiv's consumer handle
+    ## lives on the queue) the field is absent. For `RK == rkNone`
+    ## (bounded) the field is absent.
     idx*: int
     queue*: ptr Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]
     when RK == rkEbr and ccCons == ccMulti:
-      handle*: ThreadHandle[MaxThreads, debra.ccSingle]
+      handle*: ThreadHandle[MaxThreads, debra.ccMulti]
 
 proc clear[
     T;
@@ -1203,15 +1229,16 @@ proc segmentDestructor[T; ccProd, ccCons: static PinScopeCardinality, S: static 
 
 proc newQueue*[
     T;
-    ccProd, ccCons: static PinScopeCardinality,
+    ccProd: static PinScopeCardinality,
     ST: static DeallocationStrategy = DefaultDeallocationStrategy,
     S, MaxThreads: static int,
 ](
-    _: typedesc[Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads]],
-    manager: ptr DebraManager[MaxThreads],
+    _: typedesc[Queue[T, ccProd, ccSingle, ST, rkEbr, 0, 0, 0, S, MaxThreads]],
+    manager: ptr DebraManager[MaxThreads, debra.ccSingle],
     handle: ThreadHandle[MaxThreads, debra.ccSingle],
-): Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads] =
-  ## Manager-borrowed rkEbr `newQueue` overload (Doc C §3.1 / §5).
+): Queue[T, ccProd, ccSingle, ST, rkEbr, 0, 0, 0, S, MaxThreads] =
+  ## Manager-borrowed rkEbr `newQueue` overload (Doc C §3.1 / §5) —
+  ## ccCons == ccSingle variants (sipsic-equiv + mupsic-equiv).
   ##
   ## Caller owns the `DebraManager` and is responsible for its lifetime;
   ## this queue records `ownsManager = false` and its `=destroy` will
@@ -1226,24 +1253,74 @@ proc newQueue*[
   ## rkEbr combos and silently drop it. Resolution: "least surprising"
   ## — match Doc C §5 verbatim rather than splitting the borrow shape
   ## per-cardinality (Step 3.3.3/3.3.4 may refine).
-  validateQueueParams(Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads])
+  ##
+  ## Step 3.3.4.5 split this signature into a ccCons-paired pair of
+  ## overloads (this one + the ccCons == ccMulti companion below): Nim
+  ## does not permit a `when ccCons == ccMulti` gate inside a proc
+  ## signature type expression, so the manager-CC dispatch must live
+  ## in the overload set rather than a single signature.
+  validateQueueParams(Queue[T, ccProd, ccSingle, ST, rkEbr, 0, 0, 0, S, MaxThreads])
   result.manager = manager
   result.ownsManager = false
   result.itemCount.store(0, moRelaxed)
   when ccProd == ccMulti:
     result.producerCount.store(0, moRelaxed)
-  when ccCons == ccMulti:
-    result.consumerCount.store(0, moRelaxed)
-  when ccProd == ccMulti and ccCons == ccSingle:
+  when ccProd == ccMulti:
+    # ccCons == ccSingle here, so mupsic-equiv branch consumes the
+    # queue-level handle. sipsic-equiv (ccProd == ccSingle) discards it.
     result.handle = handle
   else:
     discard handle
-  # Step 3.3.3: allocate the initial `Segment[T, ccProd, ccCons, S]`
+  # Step 3.3.3: allocate the initial `Segment[T, ccProd, ccSingle, S]`
   # and publish on both `headSegment` and `tailSegment`. Lifted from
-  # the legacy `newUnboundedMupmuc` (line 153-155), `newUnboundedMupsic`
-  # (line 154-156), `newUnboundedSipmuc` (line 148-150), and
+  # the legacy `newUnboundedMupsic` (line 154-156) and
   # `newUnboundedSipsic` (line 69-71) constructors.
-  let seg = newSegment[T, ccProd, ccCons, S]()
+  let seg = newSegment[T, ccProd, ccSingle, S]()
+  result.headSegment.store(seg, moRelaxed)
+  result.tailSegment.store(seg, moRelaxed)
+  result.segments.store(1, moRelaxed)
+  bindClient(manager[])
+
+proc newQueue*[
+    T;
+    ccProd: static PinScopeCardinality,
+    ST: static DeallocationStrategy = DefaultDeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    _: typedesc[Queue[T, ccProd, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads]],
+    manager: ptr DebraManager[MaxThreads, debra.ccMulti],
+    handle: ThreadHandle[MaxThreads, debra.ccMulti],
+): Queue[T, ccProd, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads] =
+  ## Manager-borrowed rkEbr `newQueue` overload (Doc C §3.1 / §5) —
+  ## ccCons == ccMulti variants (sipmuc-equiv + mupmuc-equiv).
+  ##
+  ## Companion to the ccCons == ccSingle overload above. The manager
+  ## param is `DebraManager[MT, ccMulti]` per nim-debra's
+  ## `cardinality.nim` contract requiring ccMulti for consumer pins on
+  ## multi-consumer queues (Step 3.3.4.5 soundness fix).
+  ##
+  ## `handle` (ccMulti) is accepted for signature symmetry with the
+  ## ccCons == ccSingle borrow overload above and discarded — neither
+  ## sipmuc-equiv nor mupmuc-equiv carries a queue-level handle field;
+  ## consumer handles live on `QueueConsumer.handle` and producer
+  ## handles on `QueueProducer.handle` (registered per-thread via
+  ## `getConsumer` / `getProducer` against this ccMulti manager).
+  ## CC is `ccMulti` because `registerThread` on a ccMulti manager
+  ## returns `ThreadHandle[MT, ccMulti]`; no ccSingle handle is
+  ## obtainable from a ccMulti manager.
+  validateQueueParams(Queue[T, ccProd, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads])
+  result.manager = manager
+  result.ownsManager = false
+  result.itemCount.store(0, moRelaxed)
+  when ccProd == ccMulti:
+    result.producerCount.store(0, moRelaxed)
+  result.consumerCount.store(0, moRelaxed)
+  discard handle
+  # Step 3.3.3: allocate the initial `Segment[T, ccProd, ccMulti, S]`
+  # and publish on both `headSegment` and `tailSegment`. Lifted from
+  # the legacy `newUnboundedMupmuc` (line 153-155) and
+  # `newUnboundedSipmuc` (line 148-150) constructors.
+  let seg = newSegment[T, ccProd, ccMulti, S]()
   result.headSegment.store(seg, moRelaxed)
   result.tailSegment.store(seg, moRelaxed)
   result.segments.store(1, moRelaxed)
@@ -1278,10 +1355,23 @@ proc newQueue*[
   ## `unbounded_mupsic.nim` newUnboundedMupsic auto-create overload
   ## (which Track F retires once the unified body lands).
   validateQueueParams(Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads])
-  let mgr = allocAligned[DebraManager[MaxThreads]]()
+  # Step 3.3.4.5: manager CC is gated on ccCons. For ccCons == ccMulti
+  # variants (sipmuc-equiv + mupmuc-equiv) we allocate a ccMulti
+  # manager per nim-debra cardinality.nim contract; `registerThread`
+  # on a ccMulti manager returns `ThreadHandle[MT, ccMulti]` which
+  # routes to the ccCons == ccMulti borrow overload above. For
+  # ccCons == ccSingle variants the manager stays ccSingle and routes
+  # to the ccSingle borrow overload.
+  when ccCons == ccMulti:
+    let mgr = allocAligned[DebraManager[MaxThreads, debra.ccMulti]]()
+  else:
+    let mgr = allocAligned[DebraManager[MaxThreads, debra.ccSingle]]()
   var ok = false
   try:
-    mgr[] = initDebraManager[MaxThreads]()
+    when ccCons == ccMulti:
+      mgr[] = initDebraManager[MaxThreads, debra.ccMulti]()
+    else:
+      mgr[] = initDebraManager[MaxThreads, debra.ccSingle]()
     let consumerHandle = registerThread(mgr[])
     result = newQueue(
       Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads], mgr, consumerHandle
