@@ -38,6 +38,7 @@
 import ./strategy
 import ./reclamation
 import ./internal/pinscope_stub
+import ./internal/aligned_alloc
 import ./atomic_dsl
 import ./backoff
 import options
@@ -61,7 +62,15 @@ import ./typestates/spsc_pop
 # Phase-3.3 step retires the stub. `debra.ccSingle` is used in the
 # hard-coded mupsic-equiv `handle` field decl below; the Queue phantom
 # params `ccProd`/`ccCons` remain stub-typed.
-from debra import DebraManager, ThreadHandle, PinnedScope
+#
+# Step 3.3.2 adds `initDebraManager`, `registerThread`, `bindClient`,
+# `unbindClient` for the rkEbr constructor / destructor surface. Each
+# symbol is named individually (rather than `import debra`) to keep
+# `debra.PinScopeCardinality` qualified-only and avoid colliding with
+# the stub enum.
+from debra import
+  DebraManager, ThreadHandle, PinnedScope, initDebraManager, registerThread, bindClient,
+  unbindClient
 
 export exceptions
 
@@ -914,6 +923,222 @@ proc pop*[
 ): Option[seq[T]] =
   ## Raises `InvalidCallDefect`. Use `QueueConsumer.pop()` instead.
   raise newException(InvalidCallDefect, "Use QueueConsumer.pop()")
+
+## ----------------------------------------------------------------------
+## Unbounded body (RK = rkEbr) — Track E / Step 3.3.2.
+##
+## Constructor / accessor / destructor surface for the rkEbr branch of
+## the unified `Queue` generic per Doc C §3.0 + §3.1 / §5.
+##
+## **Two `newQueue` overloads** per Doc C §5:
+##
+##   1. **Manager-owning** — zero-arg `newQueue(typedesc[Queue[...]])`.
+##      Allocates a heap `DebraManager[MaxThreads]` internally, registers
+##      the calling thread (for the mupsic-equiv `handle` field), and
+##      sets `ownsManager = true`. The queue's `=destroy` tears the
+##      manager down (drains limbo bags, asserts `clientCount == 0`) and
+##      frees the heap allocation.
+##   2. **Manager-borrowed** — `newQueue(typedesc[Queue[...]], manager,
+##      handle)`. Takes a `ptr DebraManager[MaxThreads]` plus the
+##      consumer `ThreadHandle[MaxThreads, ccCons]` per Doc C §5. Sets
+##      `ownsManager = false`. The queue's `=destroy` does NOT free the
+##      manager; lifetime is the caller's responsibility. The handle
+##      argument is consumed only by the mupsic-equiv variant
+##      (`ccProd == ccMulti and ccCons == ccSingle`); other variants
+##      accept the arg for signature uniformity (Doc C §5 prescribes one
+##      borrow shape across all 4 rkEbr cardinality combos) and discard
+##      it. Resolution: "least surprising" — match Doc C verbatim; the
+##      handle drops onto the queue only when the queue actually has a
+##      `handle` field. Step 3.3.3/3.3.4 may refine the per-cardinality
+##      signature surface as push/pop bodies land.
+##
+## **`getProducer` / `getConsumer` accessors** are placeholders that
+## return the existing `QueueProducer[..., rkEbr, ...]` /
+## `QueueConsumer[..., rkEbr, ...]` shapes (defined for every RK for
+## type uniformity). Per-thread debra-handle registration on the views
+## is deferred to Step 3.3.3/3.3.4 when the push/pop bodies are wired
+## up; the 3.3.2 stubs just return correctly-typed views with
+## `queue = addr self` and `idx = -1`.
+##
+## **`=destroy`** walks the segment list (`headSegment` → `next` → ...
+## free each), then unbinds the client from the manager. When
+## `ownsManager`, additionally runs the manager's destructor and frees
+## the heap slot; otherwise leaves the manager alone. Segments are not
+## yet allocated by the 3.3.2 constructors (Step 3.3.3/3.3.4 fleshes
+## out the Segment field set and segment-allocation paths), so the
+## walk degenerates to a `nil` check and the manager-borrow correctness
+## check exercises the `ownsManager == false` branch in isolation.
+##
+## Doc C §3.0 (target shape), §3.1 (constructor/accessor signatures),
+## §5 (verbatim source).
+## ----------------------------------------------------------------------
+
+proc newQueue*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy = DefaultDeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    _: typedesc[Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads]],
+    manager: ptr DebraManager[MaxThreads],
+    handle: ThreadHandle[MaxThreads, debra.ccSingle],
+): Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads] =
+  ## Manager-borrowed rkEbr `newQueue` overload (Doc C §3.1 / §5).
+  ##
+  ## Caller owns the `DebraManager` and is responsible for its lifetime;
+  ## this queue records `ownsManager = false` and its `=destroy` will
+  ## NOT tear the manager down. `bindClient` is still called so the
+  ## manager's destructor can assert `clientCount == 0` and refuse to
+  ## drop while clients remain bound.
+  ##
+  ## `handle` is consumed by the mupsic-equiv variant
+  ## (`ccProd == ccMulti and ccCons == ccSingle`) which carries a
+  ## queue-level consumer handle per Doc C §3.0. Other cardinality
+  ## variants accept the arg for signature uniformity across the 4
+  ## rkEbr combos and silently drop it. Resolution: "least surprising"
+  ## — match Doc C §5 verbatim rather than splitting the borrow shape
+  ## per-cardinality (Step 3.3.3/3.3.4 may refine).
+  validateQueueParams(Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads])
+  result.manager = manager
+  result.ownsManager = false
+  result.itemCount.store(0, moRelaxed)
+  result.segments.store(0, moRelaxed)
+  when ccProd == ccMulti:
+    result.producerCount.store(0, moRelaxed)
+  when ccCons == ccMulti:
+    result.consumerCount.store(0, moRelaxed)
+  when ccProd == ccMulti and ccCons == ccSingle:
+    result.handle = handle
+  else:
+    discard handle
+  # Segment allocation deferred to Step 3.3.3/3.3.4 (the `Segment[S, T]`
+  # field set is still the 3.3.1 placeholder). `headSegment` /
+  # `tailSegment` default to `nil` via the `Atomic[ptr ...]` zero-init.
+  bindClient(manager[])
+
+proc newQueue*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy = DefaultDeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    _: typedesc[Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads]]
+): Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads] =
+  ## Manager-owning rkEbr `newQueue` overload (Doc C §3.1 / §5).
+  ##
+  ## Heap-allocates a private `DebraManager[MaxThreads]`, registers the
+  ## calling thread (yielding the consumer handle used by the mupsic-
+  ## equiv variant), and records `ownsManager = true`. The queue's
+  ## `=destroy` runs the manager's destructor (drains limbo bags,
+  ## asserts `clientCount == 0`) and frees the heap slot.
+  ##
+  ## **Caller must be the consumer thread.** For the mupsic-equiv
+  ## variant the manager-owning shape stores the consumer handle on the
+  ## queue; constructing on a different thread than the future `pop`
+  ## caller would mis-route the handle. Multi-queue / multi-thread
+  ## setups should use the manager-borrowed overload with an explicit
+  ## handle obtained on the consumer thread.
+  ##
+  ## Failure-path cleanup uses `finally` (not `except:`) so that
+  ## `Defect`-class raises (e.g. `OutOfMemDefect` from
+  ## `initDebraManager`) also free `mgr`. Pattern lifted verbatim from
+  ## `unbounded_mupsic.nim` newUnboundedMupsic auto-create overload
+  ## (which Track F retires once the unified body lands).
+  validateQueueParams(Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads])
+  let mgr = allocAligned[DebraManager[MaxThreads]]()
+  var ok = false
+  try:
+    mgr[] = initDebraManager[MaxThreads]()
+    let consumerHandle = registerThread(mgr[])
+    result = newQueue(
+      Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads], mgr, consumerHandle
+    )
+    result.ownsManager = true
+    ok = true
+  finally:
+    if not ok:
+      reset(mgr[])
+      freeAligned(mgr)
+
+proc getProducer*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads]
+): QueueProducer[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads] =
+  ## Returns a `QueueProducer` view bound to this rkEbr queue. Step
+  ## 3.3.2 placeholder — populates `queue` and a sentinel `idx`. Step
+  ## 3.3.3 (push body) wires up per-thread debra-handle registration
+  ## semantics.
+  result.queue = addr(self)
+  result.idx = -1
+
+proc getConsumer*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads]
+): QueueConsumer[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads] =
+  ## Returns a `QueueConsumer` view bound to this rkEbr queue. Step
+  ## 3.3.2 placeholder — populates `queue` and a sentinel `idx`. Step
+  ## 3.3.4 (pop body) wires up per-thread debra-handle registration
+  ## semantics.
+  result.queue = addr(self)
+  result.idx = -1
+
+proc `=destroy`*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    RK: static ReclamationKind,
+    N, P, C, S, MaxThreads: static int,
+](self: var Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]) =
+  ## Unified `=destroy` hook for `Queue`. Bounded (`RK == rkNone`)
+  ## queues require no cleanup — the Vyukov body owns no heap state —
+  ## so the destructor is a no-op on that branch and Nim's default
+  ## field-wise destruction handles the inline storage and atomic
+  ## counters.
+  ##
+  ## Unbounded (`RK == rkEbr`) queues:
+  ##   1. Walk `headSegment` → `next` → ... freeing each segment.
+  ##   2. Unbind this queue's client refcount on the manager.
+  ##   3. When `ownsManager`, additionally run the manager's destructor
+  ##      (drains limbo bags + asserts `clientCount == 0`) and free
+  ##      the heap allocation. When `not ownsManager`, leave the
+  ##      manager untouched (caller-owned per the borrow overload's
+  ##      contract — verified at 3.3.2 commit time via a throwaway
+  ##      runtime fixture; the persistent test suite gains a borrow-
+  ##      drop fixture in Step 3.3.3/3.3.4 when push/pop bodies land).
+  ##
+  ## Segment walk shape: in 3.3.2 the constructors do not yet allocate
+  ## segments (`Segment` field-set fleshing lands in Step 3.3.3/3.3.4),
+  ## so the loop body is unreachable for now — `headSegment` is `nil`
+  ## by default and the walk returns immediately. The structural shape
+  ## is in place so 3.3.3/3.3.4 only need to wire up `next` plus
+  ## per-slot dtor, not re-author the walk.
+  ##
+  ## The destructor is declared as a single hook covering both `RK`
+  ## branches because Nim's destructor binding does not select between
+  ## branch-specialized `=destroy` overloads for a generic object; the
+  ## `when RK == ...:` dispatch INSIDE the body is the supported shape.
+  when RK == rkEbr:
+    var seg = self.headSegment.load(moRelaxed)
+    while seg != nil:
+      # Segment field set (including `next`) lands in Step 3.3.3/3.3.4;
+      # for now the loop body is unreachable (segments never allocated).
+      # Track E populates the `next` load + per-slot dtor here.
+      freeAligned(seg)
+      seg = nil
+
+    if self.manager != nil:
+      unbindClient(self.manager[])
+      if self.ownsManager:
+        reset(self.manager[])
+        freeAligned(self.manager)
 
 when defined(testing):
   from unittest import check
