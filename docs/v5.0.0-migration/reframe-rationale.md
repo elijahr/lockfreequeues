@@ -107,7 +107,7 @@ shift:
 
 ## See also
 
-- `docs/v5.0.0-migration/design-queue-collapse-v5.0.0-20260516.md` —
+- `docs/v5.0.0-migration/design-queue-collapse-v5.0.0.md` —
   the authoritative v5.0.0 design document. Section 1 carries the
   release-goal framing; section 3.0.2.4 specifies the static-assert
   guard set; section 5 carries the migration table reproduced in

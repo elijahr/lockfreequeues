@@ -238,7 +238,7 @@ provided.
 
 ## See also
 
-- `docs/v5.0.0-migration/design-queue-collapse-v5.0.0-20260516.md` —
+- `docs/v5.0.0-migration/design-queue-collapse-v5.0.0.md` —
   the full v5.0.0 design document (10-param generic, the nine
   `validateQueueParams` guards, the `PinnedScope` migration plan, the
   per-bucket migration impact estimate over ~290 call sites).

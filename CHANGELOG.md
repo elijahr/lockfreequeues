@@ -5,7 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — v5.0.0
+## [Unreleased]
+
+(No entries yet — post-5.0.0 work lands here.)
+
+## [5.0.0] - YYYY-MM-DD
 
 What was developed under the v4.2.0 and v4.3.0 banners ships for the
 first time as v5.0.0. Neither v4.2.0 nor v4.3.0 was tagged or merged to
@@ -21,7 +25,7 @@ plus their phantom variants) into a single unified
 `Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]` generic. The
 `UnboundedSipsic[S, T]` SPSC type stays separate (no EBR integration
 required). See `docs/v5.0.0-migration/reframe-rationale.md` for the full
-inflection-point rationale and `docs/v5.0.0-migration/design-queue-collapse-v5.0.0-20260516.md`
+inflection-point rationale and `docs/v5.0.0-migration/design-queue-collapse-v5.0.0.md`
 (Doc C) for the complete surface specification.
 
 v5.0.0 ships in two stages: the base release lands `RK = rkNone`
@@ -640,7 +644,7 @@ param-coherence guards active; the v5.0.0 RC adds `RK = rkEbr`
   4.1.x → 5.0.0, including the migration table for every retired
   type, the two-stage release plan (base = `rkNone`, RC = `rkEbr`),
   and explicit "no aliases" rule for typed call sites.
-- `docs/v5.0.0-migration/design-queue-collapse-v5.0.0-20260516.md`
+- `docs/v5.0.0-migration/design-queue-collapse-v5.0.0.md`
   (Doc C, commit `ca24d63`): complete surface specification for the
   unified `Queue` generic. Defines §3.0 target shape, §3.0.1 uniform
   generic, §3.0.2.4 9 param-coherence guards, and §5 verbatim source
@@ -803,7 +807,7 @@ Cross-references to v5.0.0 reframe documents (audit trail):
   why v4.3 became v5.0.0; cited in the prose opening of this
   release.
 - [Doc C — unified Queue surface
-  specification](docs/v5.0.0-migration/design-queue-collapse-v5.0.0-20260516.md)
+  specification](docs/v5.0.0-migration/design-queue-collapse-v5.0.0.md)
   — full design surface; cited in BREAKING for the 9
   param-coherence guards.
 - [Track E preflight

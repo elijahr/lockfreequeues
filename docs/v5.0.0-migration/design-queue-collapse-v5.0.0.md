@@ -102,11 +102,14 @@ are preserved). The remaining ~290+ sites all migrate to the
 
 > **Note (file provenance):** This document was originally drafted as
 > `design-strategy-cardinality-phantoms-v4.2-20260516.md` in the
-> spellbook designs directory during the v4.2 → v5.0.0 reframe. It is
-> committed into the repo at
-> `docs/v5.0.0-migration/design-queue-collapse-v5.0.0-20260516.md` as
-> the repo-canonical, v5.0.0-aligned copy. The spellbook copy is
-> orphan history; this file is authoritative going forward.
+> spellbook designs directory during the v4.2 → v5.0.0 reframe. It was
+> originally filed in the repo as
+> `docs/v5.0.0-migration/design-queue-collapse-v5.0.0-20260516.md` and
+> renamed 2026-05-21 to
+> `docs/v5.0.0-migration/design-queue-collapse-v5.0.0.md` (dropping the
+> temporary date stamp now that v5.0.0 is the only ongoing design).
+> The spellbook copy is orphan history; this file is authoritative
+> going forward.
 
 ## 2. Scope & Non-Goals
 
