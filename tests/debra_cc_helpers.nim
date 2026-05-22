@@ -1,0 +1,22 @@
+## Test helpers for v5.0.0 unbounded sipmuc/mupmuc tests.
+##
+## The 3.3.6 migration target imports `lockfreequeues/queue` + nim-debra,
+## both of which export a `PinScopeCardinality` enum with `ccSingle` /
+## `ccMulti` members. v5.0.0 keeps the lockfreequeues stub in place until
+## Track E1 re-homes the canonical enum into nim-debra and deletes the
+## stub (`internal/pinscope_stub.nim`'s removal protocol §1-§3). Until then,
+## test files that need a ccMulti-typed `DebraManager` (sipmuc-equiv,
+## mupmuc-equiv) cannot import both `debra` and `lockfreequeues/queue`
+## unqualified without colliding on `ccMulti`.
+##
+## This helper module imports `debra` in isolation and exposes a single
+## constructor that returns a ccMulti `DebraManager`. Callers can then
+## `import lockfreequeues` + use `Queue[..., ccMulti, ...]` types
+## referring to the pinscope_stub members without ambiguity.
+
+import debra
+
+proc initMultiConsumerManager*[MaxThreads: static int](): DebraManager[MaxThreads, ccMulti] =
+  ## Returns a fresh `DebraManager[MaxThreads, ccMulti]` for tests of
+  ## `ccCons == ccMulti` queues (sipmuc-equiv, mupmuc-equiv).
+  initDebraManager[MaxThreads, ccMulti]()

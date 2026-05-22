@@ -23,7 +23,6 @@ import std/monotimes
 import times
 
 import lockfreequeues
-import lockfreequeues/queue as q_mod
 
 const
   QueueCapacity = 128
@@ -42,7 +41,7 @@ type
     payload: int
 
 var
-  q = q_mod.initQueue[Task, ccSingle, ccMulti, stEager, QueueCapacity, 0, NumWorkers]()
+  q = newSipmucQueue[Task, QueueCapacity, NumWorkers]()
   done: Atomic[bool]
   tasksCompleted: array[NumWorkers, Atomic[int]]
   totalLatency: array[NumWorkers, Atomic[int64]]

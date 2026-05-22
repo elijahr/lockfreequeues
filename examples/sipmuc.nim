@@ -14,7 +14,6 @@ import os
 import options
 
 import lockfreequeues
-import lockfreequeues/queue as q_mod
 
 
 const
@@ -23,7 +22,7 @@ const
 
 
 var
-  q = q_mod.initQueue[int, ccSingle, ccMulti, stEager, 64, 0, NumConsumers]()
+  q = newSipmucQueue[int, 64, NumConsumers]()
   done: Atomic[bool]
   processed: array[NumConsumers, Atomic[int]]
 
