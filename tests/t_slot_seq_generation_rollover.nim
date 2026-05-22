@@ -47,7 +47,7 @@ suite "slot-seq generation rollover - Mupmuc":
   test "preempted consumer cannot be re-claimed by wrap-around consumer (Mupmuc)":
     # N=4 is the smallest capacity that exercises the wrap. P/C are arbitrary
     # for this single-threaded drive; we never call getProducer/getConsumer.
-    var q = initMupmuc[4, 2, 2, int]()
+    var q = newMupmucQueue[int, 4, 2, 2]()
     let pushBase = cast[ptr MupmucPushBase[4, 2, 2, int]](addr q)
     let popBase = cast[ptr MupmucBase[4, 2, 2, int]](addr q)
 
@@ -179,7 +179,7 @@ suite "slot-seq generation rollover - Sipmuc":
     # Same trace structure as Mupmuc, but the producer side uses the
     # spmc_push (defensive-CAS) verb. The bug shape is identical - the
     # consumer side is what re-armed the slot in the original protocol.
-    var q = initSipmuc[4, 2, int]()
+    var q = newSipmucQueue[int, 4, 2]()
     let pushBase = cast[ptr SipmucPushBase[4, 2, int]](addr q)
     let popBase = cast[ptr SipmucBase[4, 2, int]](addr q)
 
@@ -270,7 +270,7 @@ suite "slot-seq generation rollover - Mupsic":
   test "preempted consumer cannot be re-claimed by wrap-around consumer (Mupsic)":
     # Same trace structure. Producer side uses mpsc_push; consumer side
     # uses mpsc_pop (defensive-CAS form per design §10.9).
-    var q = initMupsic[4, 2, int]()
+    var q = newMupsicQueue[int, 4, 2]()
     let pushBase = cast[ptr MupsicPushBase[4, 2, int]](addr q)
     let popBase = cast[ptr MupsicBase[4, 2, int]](addr q)
 

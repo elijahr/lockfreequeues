@@ -4,9 +4,10 @@
 when not compileOption("threads"):
   {.error: "t_stress requires --threads:on option.".}
 
-import std/[atomics, options]
+import std/options
 import unittest2
 import lockfreequeues
+import lockfreequeues/atomic_dsl
 
 const
   SmallBuffer = 16
@@ -32,7 +33,7 @@ proc computeChecksum(id: int, payload: string): uint32 =
 
 suite "Stress - Sipsic (SPSC)":
   test "Sipsic 100k int":
-    var queue = initSipsic[StandardBuffer, int]()
+    var queue = newSipsicQueue[int, StandardBuffer]()
 
     # Push all items
     for i in 0 ..< Count100k:
@@ -52,7 +53,7 @@ suite "Stress - Sipsic (SPSC)":
     check popped > 0
 
   test "Sipsic 100k with buffer=16 (frequent wrapping)":
-    var queue = initSipsic[SmallBuffer, int]()
+    var queue = newSipsicQueue[int, SmallBuffer]()
     var pushed = 0
     var popped = 0
 
@@ -74,7 +75,7 @@ suite "Stress - Sipsic (SPSC)":
     check pushed == popped
 
   test "Sipsic 100k string":
-    var queue = initSipsic[StandardBuffer, string]()
+    var queue = newSipsicQueue[string, StandardBuffer]()
     var pushed = 0
     var popped = 0
 
@@ -95,7 +96,7 @@ suite "Stress - Sipsic (SPSC)":
     check pushed == popped
 
   test "Sipsic 100k TestObject with checksum verification":
-    var queue = initSipsic[StandardBuffer, TestObject]()
+    var queue = newSipsicQueue[TestObject, StandardBuffer]()
     var pushed = 0
     var verified = 0
 
@@ -129,13 +130,13 @@ suite "Stress - Sipsic (SPSC)":
 
 type
   MupmucPCtx[N, P, C: static int, T] = object
-    queue: ptr Mupmuc[N, P, C, T]
+    queue: ptr Queue[T, ccMulti, ccMulti, stEager, rkNone, N, P, C, 0, 0]
     count: int
     producerIdx: int
     sent: ptr Atomic[int]
 
   MupmucCCtx[N, P, C: static int, T] = object
-    queue: ptr Mupmuc[N, P, C, T]
+    queue: ptr Queue[T, ccMulti, ccMulti, stEager, rkNone, N, P, C, 0, 0]
     count: int
     consumerIdx: int
     received: ptr Atomic[int]
@@ -145,7 +146,7 @@ proc mupmucProducer[N, P, C: static int](ctx: ptr MupmucPCtx[N, P, C, int]) {.th
   for i in 0 ..< ctx.count:
     while not p.push(i):
       discard
-    ctx.sent[].atomicInc()
+    discard ctx.sent[].fetchAdd(1, moRelaxed)
 
 proc mupmucConsumer[N, P, C: static int](ctx: ptr MupmucCCtx[N, P, C, int]) {.thread.} =
   let c = ctx.queue[].getConsumer(idx = ctx.consumerIdx)
@@ -154,14 +155,14 @@ proc mupmucConsumer[N, P, C: static int](ctx: ptr MupmucCCtx[N, P, C, int]) {.th
     let item = c.pop()
     if item.isSome:
       inc localReceived
-      ctx.received[].atomicInc()
+      discard ctx.received[].fetchAdd(1, moRelaxed)
 
 suite "Stress - Mupmuc (MPMC)":
   test "Mupmuc 1P/1C 10k int":
-    var queue = initMupmuc[StandardBuffer, 1, 1, int]()
+    var queue = newMupmucQueue[int, StandardBuffer, 1, 1]()
     var sent, received: Atomic[int]
-    sent.store(0)
-    received.store(0)
+    sent.store(0, moRelaxed)
+    received.store(0, moRelaxed)
 
     var pctx = MupmucPCtx[StandardBuffer, 1, 1, int](
       queue: addr queue, count: Count10k, producerIdx: 0, sent: addr sent
@@ -179,14 +180,14 @@ suite "Stress - Mupmuc (MPMC)":
     joinThread(pThread)
     joinThread(cThread)
 
-    check sent.load() == Count10k
-    check received.load() == Count10k
+    check sent.load(moRelaxed) == Count10k
+    check received.load(moRelaxed) == Count10k
 
   test "Mupmuc 2P/2C 10k int":
-    var queue = initMupmuc[StandardBuffer, 2, 2, int]()
+    var queue = newMupmucQueue[int, StandardBuffer, 2, 2]()
     var sent, received: Atomic[int]
-    sent.store(0)
-    received.store(0)
+    sent.store(0, moRelaxed)
+    received.store(0, moRelaxed)
 
     const PerThread = Count10k div 2
 
@@ -216,14 +217,14 @@ suite "Stress - Mupmuc (MPMC)":
     joinThread(cThreads[0])
     joinThread(cThreads[1])
 
-    check sent.load() == Count10k
-    check received.load() == Count10k
+    check sent.load(moRelaxed) == Count10k
+    check received.load(moRelaxed) == Count10k
 
   test "Mupmuc 2P/2C 10k with buffer=16 (stress wraparound)":
-    var queue = initMupmuc[SmallBuffer, 2, 2, int]()
+    var queue = newMupmucQueue[int, SmallBuffer, 2, 2]()
     var sent, received: Atomic[int]
-    sent.store(0)
-    received.store(0)
+    sent.store(0, moRelaxed)
+    received.store(0, moRelaxed)
 
     const PerThread = Count10k div 2
 
@@ -253,15 +254,15 @@ suite "Stress - Mupmuc (MPMC)":
     joinThread(cThreads[0])
     joinThread(cThreads[1])
 
-    check sent.load() == Count10k
-    check received.load() == Count10k
+    check sent.load(moRelaxed) == Count10k
+    check received.load(moRelaxed) == Count10k
 
 # =============================================================================
 # Sipmuc (SPMC) Stress Tests
 # =============================================================================
 
 type SipmucCCtx[N, C: static int, T] = object
-  queue: ptr Sipmuc[N, C, T]
+  queue: ptr Queue[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0, 0]
   count: int
   consumerIdx: int
   received: ptr Atomic[int]
@@ -273,13 +274,13 @@ proc sipmucConsumer[N, C: static int](ctx: ptr SipmucCCtx[N, C, int]) {.thread.}
     let item = c.pop()
     if item.isSome:
       inc localReceived
-      ctx.received[].atomicInc()
+      discard ctx.received[].fetchAdd(1, moRelaxed)
 
 suite "Stress - Sipmuc (SPMC)":
   test "Sipmuc 1P/2C 10k int":
-    var queue = initSipmuc[StandardBuffer, 2, int]()
+    var queue = newSipmucQueue[int, StandardBuffer, 2]()
     var received: Atomic[int]
-    received.store(0)
+    received.store(0, moRelaxed)
 
     const PerConsumer = Count10k div 2
 
@@ -303,14 +304,14 @@ suite "Stress - Sipmuc (SPMC)":
     joinThread(cThreads[0])
     joinThread(cThreads[1])
 
-    check received.load() == Count10k
+    check received.load(moRelaxed) == Count10k
 
 # =============================================================================
 # Mupsic (MPSC) Stress Tests
 # =============================================================================
 
 type MupsicPCtx[N, P: static int, T] = object
-  queue: ptr Mupsic[N, P, T]
+  queue: ptr Queue[T, ccMulti, ccSingle, stEager, rkNone, N, P, 0, 0, 0]
   count: int
   producerIdx: int
   sent: ptr Atomic[int]
@@ -320,13 +321,13 @@ proc mupsicProducer[N, P: static int](ctx: ptr MupsicPCtx[N, P, int]) {.thread.}
   for i in 0 ..< ctx.count:
     while not p.push(i):
       discard
-    ctx.sent[].atomicInc()
+    discard ctx.sent[].fetchAdd(1, moRelaxed)
 
 suite "Stress - Mupsic (MPSC)":
   test "Mupsic 2P/1C 10k int":
-    var queue = initMupsic[StandardBuffer, 2, int]()
+    var queue = newMupsicQueue[int, StandardBuffer, 2]()
     var sent: Atomic[int]
-    sent.store(0)
+    sent.store(0, moRelaxed)
 
     const PerProducer = Count10k div 2
 
@@ -352,13 +353,13 @@ suite "Stress - Mupsic (MPSC)":
     joinThread(pThreads[0])
     joinThread(pThreads[1])
 
-    check sent.load() == Count10k
+    check sent.load(moRelaxed) == Count10k
     check received == Count10k
 
   test "Mupsic 2P/1C 10k with buffer=16 (stress wraparound)":
-    var queue = initMupsic[SmallBuffer, 2, int]()
+    var queue = newMupsicQueue[int, SmallBuffer, 2]()
     var sent: Atomic[int]
-    sent.store(0)
+    sent.store(0, moRelaxed)
 
     const PerProducer = Count10k div 2
 
@@ -384,5 +385,5 @@ suite "Stress - Mupsic (MPSC)":
     joinThread(pThreads[0])
     joinThread(pThreads[1])
 
-    check sent.load() == Count10k
+    check sent.load(moRelaxed) == Count10k
     check received == Count10k

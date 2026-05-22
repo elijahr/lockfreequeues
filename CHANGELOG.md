@@ -658,6 +658,10 @@ param-coherence guards active; the v5.0.0 RC adds `RK = rkEbr`
   bodies and add no new retire-bearing sites. A
   `Queue.pop(count: int)` trap on bare `Queue` for ccCons == ccMulti
   matches the single-item trap shape.
+- Migrated ~290 legacy API call sites across tests + examples to the
+  unified Queue generic via the 3.3.5b smart-constructors. Per-family
+  bundling preserved bisectability; UnboundedSipsic + its 4 tests
+  untouched per §3.0.3 keep-separate decision.
 
 ### Documentation (v5.0.0 reframe audit trail)
 
