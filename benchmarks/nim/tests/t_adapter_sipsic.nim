@@ -1,5 +1,5 @@
 import unittest2
-import ../adapters/lockfreequeues_sipsic
+import ../adapters/lockfreequeues_sipsic_adapter
 import ../adapter
 
 suite "SipsicAdapter":

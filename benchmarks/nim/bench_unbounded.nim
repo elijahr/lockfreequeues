@@ -39,10 +39,21 @@ import ./bench_common
 import ./adapters/lockfreequeues_unbounded_mupsic_adapter
 import lockfreequeues/backoff
 import lockfreequeues/unbounded_sipsic
-import lockfreequeues/unbounded_sipmuc
-import lockfreequeues/unbounded_mupmuc
-import lockfreequeues/unbounded_mupsic
-import debra
+# v5.0.0 cascade Step 3.3.8c: the legacy `lockfreequeues/unbounded_*`
+# modules (sipmuc/mupsic/mupmuc) were deleted in 3.3.7; the harnesses
+# below now drive the unified `Queue[T, ccProd, ccCons, stEager, rkEbr,
+# 0, 0, 0, S, MaxThreads]` generic via the smart-constructors
+# `newUnboundedSipmucQueue` / `newUnboundedMupsicQueue` /
+# `newUnboundedMupmucQueue`. UnboundedSipsic stays per Doc C §3.0.3.
+# Fine-grained imports (queue / strategy / reclamation /
+# internal/pinscope_stub) keep the cardinality enum unambiguous when
+# co-importing `debra` — the umbrella would re-export the stub and
+# collide with `debra.PinScopeCardinality`.
+import lockfreequeues/queue
+import lockfreequeues/strategy
+import lockfreequeues/reclamation
+import lockfreequeues/internal/pinscope_stub
+from debra import DebraManager, initDebraManager
 
 # MVP comparison adapters (Track 3). Loony is unbounded MPMC; Crossbeam
 # SegQueue is unbounded MPMC. Both go through runThroughputHarness.
@@ -149,30 +160,42 @@ proc runUSipsicShape(em: var BMFEmitter, runs, warmup, messageCount: int) =
 # ---------- UnboundedSipmuc harness (single producer, N consumers, DEBRA) ----------
 
 type
+  # Unified Queue[T, ccSingle, ccMulti, stEager, rkEbr, ..., S, MT]
+  # alias — replaces legacy `UnboundedSipmuc[S, T, MT]`. ccCons == ccMulti
+  # pins the manager cardinality to `debra.ccMulti` (smart-constructor
+  # signature).
+  USipmucQueueT[S: static int; T; MaxT: static int] =
+    Queue[T, ccSingle, ccMulti, stEager, rkEbr, 0, 0, 0, S, MaxT]
+
   USipmucProducerCtx[S: static int; T; MaxT: static int] = object
-    queue: ptr UnboundedSipmuc[S, T, MaxT]
+    queue: ptr USipmucQueueT[S, T, MaxT]
     count: int
 
   USipmucConsumerCtx[S: static int; T; MaxT: static int] = object
-    queue: ptr UnboundedSipmuc[S, T, MaxT]
-    manager: ptr DebraManager[MaxT]
+    queue: ptr USipmucQueueT[S, T, MaxT]
+    manager: ptr DebraManager[MaxT, debra.ccMulti]
     count: int
 
 proc usipmucProducerThread[S: static int; T; MaxT: static int](
     ctx: ptr USipmucProducerCtx[S, T, MaxT]
 ) {.thread.} =
-  # Single-producer push goes through the queue object directly. No
-  # DEBRA register needed for the producer (UnboundedSipmuc only retires
-  # on consumer-side; the producer never traverses retired segments).
-  for i in 0 ..< ctx.count:
-    ctx.queue[].push(T(i))
+  # rkEbr push for the unified Queue lives on QueueProducer even for
+  # ccProd == ccSingle (Doc C §3.5.4). UnboundedSipmuc-equiv producer
+  # views carry no ThreadHandle (single producer, no pin needed) but
+  # the view object is still required structurally.
+  {.cast(gcsafe).}:
+    var p = ctx.queue[].getProducer()
+    for i in 0 ..< ctx.count:
+      p.push(T(i))
 
 proc usipmucConsumerThread[S: static int; T; MaxT: static int](
     ctx: ptr USipmucConsumerCtx[S, T, MaxT]
 ) {.thread.} =
   {.cast(gcsafe).}:
-    let handle = registerThread(ctx.manager[])
-    var consumer = ctx.queue[].getConsumer(handle)
+    # Unified Queue.getConsumer() auto-registers the calling thread
+    # against the queue's DebraManager and stores the handle on the
+    # returned view — no explicit `registerThread` call required.
+    var consumer = ctx.queue[].getConsumer()
     var local = 0
     while local < ctx.count:
       let r = consumer.pop()
@@ -182,8 +205,8 @@ proc usipmucConsumerThread[S: static int; T; MaxT: static int](
         backoffOnPeerWait()
 
 proc runOneUSipmucRun[S: static int; T; MaxT: static int; C: static int](
-    queue: ptr UnboundedSipmuc[S, T, MaxT],
-    manager: ptr DebraManager[MaxT],
+    queue: ptr USipmucQueueT[S, T, MaxT],
+    manager: ptr DebraManager[MaxT, debra.ccMulti],
     messageCount: int,
 ): float =
   let baseC = messageCount div C
@@ -244,9 +267,10 @@ proc runUSipmucShape[C: static int](
   # construction, into zeroed memory. This is intentional and safe;
   # `create` is NOT a hidden destructor on uninit memory.
   for _ in 0 ..< warmup:
-    var manager = create(DebraManager[MaxThreads])
-    manager[] = initDebraManager[MaxThreads]()
-    var q = newUnboundedSipmuc[SegmentSize, uint64, MaxThreads](manager)
+    var manager = create(DebraManager[MaxThreads, debra.ccMulti])
+    manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
+    var q =
+      newUnboundedSipmucQueue[uint64, stEager, SegmentSize, MaxThreads](manager)
     discard runOneUSipmucRun[SegmentSize, uint64, MaxThreads, C](
       addr q, manager, messageCount)
     reset(q)
@@ -254,9 +278,10 @@ proc runUSipmucShape[C: static int](
     dealloc(manager)
   var samples: seq[float] = @[]
   for _ in 0 ..< runs:
-    var manager = create(DebraManager[MaxThreads])
-    manager[] = initDebraManager[MaxThreads]()
-    var q = newUnboundedSipmuc[SegmentSize, uint64, MaxThreads](manager)
+    var manager = create(DebraManager[MaxThreads, debra.ccMulti])
+    manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
+    var q =
+      newUnboundedSipmucQueue[uint64, stEager, SegmentSize, MaxThreads](manager)
     samples.add(runOneUSipmucRun[SegmentSize, uint64, MaxThreads, C](
       addr q, manager, messageCount))
     reset(q)
@@ -273,9 +298,16 @@ proc runUSipmucShape[C: static int](
 # ---------- UnboundedMupsic harness (N producers, 1 consumer, DEBRA) ----------
 
 type
+  # Unified Queue[T, ccMulti, ccSingle, stEager, rkEbr, ..., S, MT]
+  # alias — replaces legacy `UnboundedMupsic[S, T, MT]`. ccCons ==
+  # ccSingle pins the manager cardinality to `debra.ccSingle`
+  # (smart-constructor signature).
+  UMupsicQueueT[S: static int; T; MaxT: static int] =
+    Queue[T, ccMulti, ccSingle, stEager, rkEbr, 0, 0, 0, S, MaxT]
+
   UMupsicProducerCtx2[S: static int; T; MaxT: static int] = object
-    queue: ptr UnboundedMupsic[S, T, MaxT]
-    manager: ptr DebraManager[MaxT]
+    queue: ptr UMupsicQueueT[S, T, MaxT]
+    manager: ptr DebraManager[MaxT, debra.ccSingle]
     startIdx: int
     count: int
 
@@ -283,14 +315,16 @@ proc umupsicProducerThread[S: static int; T; MaxT: static int](
     ctx: ptr UMupsicProducerCtx2[S, T, MaxT]
 ) {.thread.} =
   {.cast(gcsafe).}:
-    let handle = registerThread(ctx.manager[])
-    var p = ctx.queue[].getProducer(handle)
+    # Unified Queue.getProducer() auto-registers the calling thread
+    # against the queue's DebraManager and stores the handle on the
+    # returned producer view.
+    var p = ctx.queue[].getProducer()
     for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
       p.push(T(i))
 
 proc runOneUMupsicRun[S: static int; T; MaxT: static int; P: static int](
-    queue: ptr UnboundedMupsic[S, T, MaxT],
-    manager: ptr DebraManager[MaxT],
+    queue: ptr UMupsicQueueT[S, T, MaxT],
+    manager: ptr DebraManager[MaxT, debra.ccSingle],
     messageCount: int,
 ): float =
   let baseP = messageCount div P
@@ -355,23 +389,29 @@ proc runUMupsicShape[P: static int](
 # ---------- UnboundedMupmuc harness (N producers, N consumers, DEBRA) ----------
 
 type
+  # Unified Queue[T, ccMulti, ccMulti, stEager, rkEbr, ..., S, MT]
+  # alias — replaces legacy `UnboundedMupmuc[S, T, MT]`. ccCons ==
+  # ccMulti pins the manager cardinality to `debra.ccMulti`
+  # (smart-constructor signature).
+  UMupmucQueueT[S: static int; T; MaxT: static int] =
+    Queue[T, ccMulti, ccMulti, stEager, rkEbr, 0, 0, 0, S, MaxT]
+
   UMupmucProducerCtx[S: static int; T; MaxT: static int] = object
-    queue: ptr UnboundedMupmuc[S, T, MaxT]
-    manager: ptr DebraManager[MaxT]
+    queue: ptr UMupmucQueueT[S, T, MaxT]
+    manager: ptr DebraManager[MaxT, debra.ccMulti]
     startIdx: int
     count: int
 
   UMupmucConsumerCtx[S: static int; T; MaxT: static int] = object
-    queue: ptr UnboundedMupmuc[S, T, MaxT]
-    manager: ptr DebraManager[MaxT]
+    queue: ptr UMupmucQueueT[S, T, MaxT]
+    manager: ptr DebraManager[MaxT, debra.ccMulti]
     count: int
 
 proc umupmucProducerThread[S: static int; T; MaxT: static int](
     ctx: ptr UMupmucProducerCtx[S, T, MaxT]
 ) {.thread.} =
   {.cast(gcsafe).}:
-    let handle = registerThread(ctx.manager[])
-    var producer = ctx.queue[].getProducer(handle)
+    var producer = ctx.queue[].getProducer()
     for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
       producer.push(T(i))
 
@@ -379,8 +419,7 @@ proc umupmucConsumerThread[S: static int; T; MaxT: static int](
     ctx: ptr UMupmucConsumerCtx[S, T, MaxT]
 ) {.thread.} =
   {.cast(gcsafe).}:
-    let handle = registerThread(ctx.manager[])
-    var consumer = ctx.queue[].getConsumer(handle)
+    var consumer = ctx.queue[].getConsumer()
     var local = 0
     while local < ctx.count:
       let r = consumer.pop()
@@ -391,8 +430,8 @@ proc umupmucConsumerThread[S: static int; T; MaxT: static int](
 
 proc runOneUMupmucRun[S: static int; T; MaxT: static int;
                       P: static int; C: static int](
-    queue: ptr UnboundedMupmuc[S, T, MaxT],
-    manager: ptr DebraManager[MaxT],
+    queue: ptr UMupmucQueueT[S, T, MaxT],
+    manager: ptr DebraManager[MaxT, debra.ccMulti],
     messageCount: int,
 ): float =
   let baseP = messageCount div P
@@ -446,9 +485,10 @@ proc runUMupmucShape[P: static int; C: static int](
   # block comment there for why `reset(q)` must precede `reset(manager[])`
   # (and why reset DOES invoke `=destroy` under Nim 2.x ARC/ORC).
   for _ in 0 ..< warmup:
-    var manager = create(DebraManager[MaxThreads])
-    manager[] = initDebraManager[MaxThreads]()
-    var q = newUnboundedMupmuc[SegmentSize, uint64, MaxThreads](manager)
+    var manager = create(DebraManager[MaxThreads, debra.ccMulti])
+    manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
+    var q =
+      newUnboundedMupmucQueue[uint64, stEager, SegmentSize, MaxThreads](manager)
     discard runOneUMupmucRun[SegmentSize, uint64, MaxThreads, P, C](
       addr q, manager, messageCount)
     reset(q)
@@ -456,9 +496,10 @@ proc runUMupmucShape[P: static int; C: static int](
     dealloc(manager)
   var samples: seq[float] = @[]
   for _ in 0 ..< runs:
-    var manager = create(DebraManager[MaxThreads])
-    manager[] = initDebraManager[MaxThreads]()
-    var q = newUnboundedMupmuc[SegmentSize, uint64, MaxThreads](manager)
+    var manager = create(DebraManager[MaxThreads, debra.ccMulti])
+    manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
+    var q =
+      newUnboundedMupmucQueue[uint64, stEager, SegmentSize, MaxThreads](manager)
     samples.add(runOneUMupmucRun[SegmentSize, uint64, MaxThreads, P, C](
       addr q, manager, messageCount))
     reset(q)

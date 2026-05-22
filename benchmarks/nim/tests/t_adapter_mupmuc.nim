@@ -1,5 +1,5 @@
 import unittest2
-import ../adapters/lockfreequeues_mupmuc
+import ../adapters/lockfreequeues_mupmuc_adapter
 import ../adapter
 
 suite "MupmucAdapter":

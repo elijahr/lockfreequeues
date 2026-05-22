@@ -18,12 +18,15 @@
 import std/[monotimes, options, os, parseopt, sets, strformat, syncio, times]
 import ./bench_common
 import lockfreequeues/backoff
-import lockfreequeues/mupsic
-# v5.0.0 cascade D3.6: parallel exercise of the unified Queue generic
-# at MPSC cardinality for B3 parity delta. Bespoke per-shape harness
-# below mirrors the Mupsic one. Imports are fine-grained (not the
-# umbrella) because the umbrella brings in legacy unbounded modules
-# whose `Producer` symbol collides with `mupsic.Producer` above.
+# v5.0.0 cascade Step 3.3.8c: the legacy `lockfreequeues/mupsic` module
+# was deleted in 3.3.7; the "mupsic" variant below now drives the unified
+# `Queue[T, ccMulti, ccSingle, stEager, rkNone, N, P, 0, 0, 0]` generic
+# via the smart-constructor `newMupsicQueue` / `initQueue`. The legacy
+# variant slug + measure shape are preserved verbatim; the queue_bounded
+# parity variant below uses the same underlying generic at the same
+# Queue instantiation (semantically redundant post-deletion but kept so
+# the B3 cascade slug set remains stable across the 3.3 implementation
+# steps).
 import lockfreequeues/queue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
@@ -65,13 +68,20 @@ const
 # ship them into worker contexts.
 
 type
+  # Unified Queue[T, ccMulti, ccSingle, stEager, rkNone, N, P, 0, 0, 0]
+  # instantiation alias — replaces legacy `Mupsic[N, P, T]`.
+  MupsicQueueT[N, P: static int; T] =
+    Queue[T, ccMulti, ccSingle, stEager, rkNone, N, P, 0, 0, 0]
+  MupsicProducerT[N, P: static int; T] =
+    QueueProducer[T, ccMulti, ccSingle, stEager, rkNone, N, P, 0, 0, 0]
+
   MupsicProducerCtx[N, P: static int; T] = object
-    producer: Producer[N, P, T]
+    producer: MupsicProducerT[N, P, T]
     startIdx: int
     count: int
 
   MupsicConsumerCtx[N, P: static int; T] = object
-    queue: ptr Mupsic[N, P, T]
+    queue: ptr MupsicQueueT[N, P, T]
     count: int
 
 proc mupsicProducerThread[N, P: static int; T](
@@ -93,7 +103,7 @@ proc mupsicConsumerThread[N, P: static int; T](
       backoffOnPeerWait()
 
 proc runOneMupsicRun[N, P: static int; T](
-    queue: var Mupsic[N, P, T], messageCount: int
+    queue: var MupsicQueueT[N, P, T], messageCount: int
 ): float =
   ## One run; returns ops/ms. Spread `messageCount mod P` over the first
   ## producers so the per-producer counts sum to messageCount exactly,
@@ -142,11 +152,11 @@ proc runMupsicShape[N, P: static int; T](
   let slug = "lockfreequeues_mupsic/mpsc/" & $P & "p1c"
   echo fmt"Mupsic {P}p1c ({slug}):"
   for _ in 0 ..< warmup:
-    var q = initMupsic[N, P, T]()
+    var q = q_mod.initQueue[T, ccMulti, ccSingle, stEager, N, P, 0]()
     discard runOneMupsicRun(q, messageCount)
   var samples: seq[float] = @[]
   for _ in 0 ..< runs:
-    var q = initMupsic[N, P, T]()
+    var q = q_mod.initQueue[T, ccMulti, ccSingle, stEager, N, P, 0]()
     samples.add(runOneMupsicRun(q, messageCount))
   let m = mean(samples)
   let s = stddev(samples)

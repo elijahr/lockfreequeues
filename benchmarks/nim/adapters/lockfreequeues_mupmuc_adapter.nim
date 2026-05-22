@@ -1,28 +1,42 @@
-## Adapter for lockfreequeues Mupmuc (bounded MPMC).
+## Adapter for lockfreequeues Mupmuc-equivalent (bounded MPMC).
 ##
 ## Renamed from `lockfreequeues_mupmuc.nim` in PR 0 Task 0.9 per design
 ## section 2.2. `topologiesSupported` is exported here for PR 3
 ## Task 3.11.
 ##
-## Note: Mupmuc requires using Producer/Consumer objects for push/pop.
-## This adapter manages those internally for single-threaded testing.
-## For multi-threaded benchmarks, use getProducer/getConsumer directly.
+## Note: Mupmuc-equiv requires using Producer/Consumer views for
+## push/pop. This adapter manages those internally for single-threaded
+## testing. For multi-threaded benchmarks, use getProducer/getConsumer
+## on the underlying queue directly.
+##
+## v5.0.0 cascade: the legacy `Mupmuc[N, P, C, T]` type was deleted in
+## 3.3.7 in favour of the unified `Queue[T, ccMulti, ccMulti, stEager,
+## rkNone, N, P, C, 0, 0]` generic. The adapter surface
+## (`initMupmucAdapter`, `deinitMupmucAdapter`, `cleanup`, `push`,
+## `pop`, `name`) is preserved verbatim.
 
 import options
-import lockfreequeues/mupmuc
+import lockfreequeues
 import ../bench_common
 
 const topologiesSupported*: set[Topology] = {tMpmc}
 
 type
+  MupmucAdapterQueue[N: static int, T] =
+    Queue[T, ccMulti, ccMulti, stEager, rkNone, N, 1, 1, 0, 0]
+  MupmucAdapterProducer[N: static int, T] =
+    QueueProducer[T, ccMulti, ccMulti, stEager, rkNone, N, 1, 1, 0, 0]
+  MupmucAdapterConsumer[N: static int, T] =
+    QueueConsumer[T, ccMulti, ccMulti, stEager, rkNone, N, 1, 1, 0, 0]
+
   MupmucAdapter*[N: static int, T] = object
-    queue: ptr Mupmuc[N, 1, 1, T]
-    producer: MupmucProducer[N, 1, 1, T]
-    consumer: Consumer[N, 1, 1, T]
+    queue: ptr MupmucAdapterQueue[N, T]
+    producer: MupmucAdapterProducer[N, T]
+    consumer: MupmucAdapterConsumer[N, T]
 
 proc initMupmucAdapter*[N: static int, T](): MupmucAdapter[N, T] =
-  result.queue = create(Mupmuc[N, 1, 1, T])
-  result.queue[] = initMupmuc[N, 1, 1, T]()
+  result.queue = create(MupmucAdapterQueue[N, T])
+  result.queue[] = initQueue[T, ccMulti, ccMulti, stEager, N, 1, 1]()
   # Use idx parameter to manually assign producer/consumer for single-threaded
   # use AND for multi-threaded ping-pong (bench_common.runLatencyHarness):
   # `getProducer(idx = 0)` skips the threadId-based registration path, so the

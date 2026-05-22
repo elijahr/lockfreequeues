@@ -1,8 +1,14 @@
-## Adapter for lockfreequeues Sipsic (bounded SPSC).
+## Adapter for lockfreequeues Sipsic-equivalent (bounded SPSC).
 ##
 ## Renamed from `lockfreequeues_sipsic.nim` in PR 0 Task 0.9 per design
 ## section 2.2 (`<library_slug>_adapter.nim`). `topologiesSupported` is
 ## exported here for PR 3 Task 3.11 consumption.
+##
+## v5.0.0 cascade: the legacy `Sipsic[N, T]` type was deleted in
+## 3.3.7 in favour of the unified `Queue[T, ccSingle, ccSingle, stEager,
+## rkNone, N, 0, 0, 0, 0]` generic. The adapter surface (`push`, `pop`,
+## `name`, the `init*Adapter` factory) is preserved verbatim so bench
+## drivers do not need to be re-wired.
 
 import options
 import lockfreequeues
@@ -13,10 +19,10 @@ const topologiesSupported*: set[Topology] = {tSpsc}
 
 type
   SipsicAdapter*[N: static int, T] = object
-    queue: Sipsic[N, T]
+    queue: Queue[T, ccSingle, ccSingle, stEager, rkNone, N, 0, 0, 0, 0]
 
 proc initSipsicAdapter*[N: static int, T](): SipsicAdapter[N, T] =
-  result.queue = initSipsic[N, T]()
+  result.queue = initQueue[T, ccSingle, ccSingle, stEager, N, 0, 0]()
 
 proc push*[N: static int, T](a: var SipsicAdapter[N, T], item: T): PushResult =
   if a.queue.push(item): prSuccess else: prFull

@@ -33,11 +33,16 @@
 
 import std/[monotimes, options, os, parseopt, sets, strformat, syncio, times]
 import ./bench_common
-import lockfreequeues/sipmuc
 import lockfreequeues/backoff
-# v5.0.0 cascade D3.6: Queue parity exercise for B3 % delta.
-# Fine-grained imports (not the umbrella) to avoid `Producer`/`Consumer`
-# symbol collisions with the legacy sipmuc imports above.
+# v5.0.0 cascade Step 3.3.8c: the legacy `lockfreequeues/sipmuc` module
+# was deleted in 3.3.7; the "sipmuc" variant below now drives the unified
+# `Queue[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0, 0]` generic
+# via the smart-constructor `newSipmucQueue` / `initQueue`. The legacy
+# variant slug + measure shape are preserved verbatim; the queue_bounded
+# parity variant below uses the same underlying generic at the same
+# Queue instantiation (semantically redundant post-deletion but kept so
+# the B3 cascade slug set remains stable across the 3.3 implementation
+# steps).
 import lockfreequeues/queue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
@@ -69,13 +74,20 @@ const
 # pre-assigned `Consumer[N, C, T]` value via `getConsumer(idx = i)`.
 
 type
+  # Unified Queue[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0, 0]
+  # instantiation alias — replaces legacy `Sipmuc[N, C, T]`.
+  SipmucQueueT[N, C: static int; T] =
+    Queue[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0, 0]
+  SipmucConsumerT[N, C: static int; T] =
+    QueueConsumer[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0, 0]
+
   SipmucProducerCtx[N, C: static int; T] = object
-    queue: ptr Sipmuc[N, C, T]
+    queue: ptr SipmucQueueT[N, C, T]
     startIdx: int
     count: int
 
   SipmucConsumerCtx[N, C: static int; T] = object
-    consumer: sipmuc.Consumer[N, C, T]
+    consumer: SipmucConsumerT[N, C, T]
     count: int
 
 proc sipmucProducerThread[N, C: static int; T](
@@ -97,7 +109,7 @@ proc sipmucConsumerThread[N, C: static int; T](
       backoffOnPeerWait()
 
 proc runOneSipmucRun[N, C: static int; T](
-    queue: var Sipmuc[N, C, T], messageCount: int
+    queue: var SipmucQueueT[N, C, T], messageCount: int
 ): float =
   let baseC = messageCount div C
   let remC = messageCount mod C
@@ -138,11 +150,11 @@ proc runSipmucShape[N, C: static int; T](
   let slug = "lockfreequeues_sipmuc/mpmc/1p" & $C & "c"
   echo fmt"Sipmuc 1p{C}c ({slug}):"
   for _ in 0 ..< warmup:
-    var q = initSipmuc[N, C, T]()
+    var q = q_mod.initQueue[T, ccSingle, ccMulti, stEager, N, 0, C]()
     discard runOneSipmucRun(q, messageCount)
   var samples: seq[float] = @[]
   for _ in 0 ..< runs:
-    var q = initSipmuc[N, C, T]()
+    var q = q_mod.initQueue[T, ccSingle, ccMulti, stEager, N, 0, C]()
     samples.add(runOneSipmucRun(q, messageCount))
   let m = mean(samples)
   let s = stddev(samples)

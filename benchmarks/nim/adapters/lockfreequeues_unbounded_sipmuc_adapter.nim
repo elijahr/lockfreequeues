@@ -1,44 +1,91 @@
-## Adapter for lockfreequeues UnboundedSipmuc (unbounded SPMC, single
-## producer + N consumers).
+## Adapter for lockfreequeues UnboundedSipmuc-equivalent (unbounded
+## SPMC, single producer + N consumers).
 ##
-## Topology: `mpmc_unbounded` with shapes `1p<C>c`. UnboundedSipmuc
-## requires a `DebraManager` for epoch-based segment reclamation;
-## consumers register against the manager and obtain a `Consumer` via
-## `queue.getConsumer(handle)` ON THEIR OWN THREAD.
+## Topology: `mpmc_unbounded` with shapes `1p<C>c`. The unified
+## Queue[T, ccSingle, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads]
+## requires a `DebraManager[MaxThreads, ccMulti]` for epoch-based
+## segment reclamation; consumers register against the manager via
+## `queue.getConsumer()` ON THEIR OWN THREAD (the unified
+## `getConsumer` auto-registers the calling thread and stores the
+## resulting `ThreadHandle` on the returned `QueueConsumer` view).
 ##
 ## This adapter owns the queue, the manager, and a pre-registered
-## consumer-0 handle for the smoke / 1p1c shape. Multi-consumer shapes
-## (1p2c, 1p4c) register additional consumer handles per-thread inside
-## the bench harness.
+## consumer-0 view (`getConsumer` called on the init thread) for the
+## smoke / 1p1c shape. Multi-consumer shapes (1p2c, 1p4c) register
+## additional consumer views per-thread inside the bench harness via
+## `adapter.queue.getConsumer()`.
+##
+## v5.0.0 cascade: the legacy `UnboundedSipmuc[S, T, MT]` type was
+## deleted in 3.3.7. The smart-constructor `newUnboundedSipmucQueue`
+## returns the unified Queue value; the legacy
+## "consumer0Handle + queue.getConsumer(handle)" plumbing collapses
+## into a single `queue.getConsumer()` call on the init thread.
 
-import lockfreequeues/unbounded_sipmuc
-import debra
+# Fine-grained imports (not the umbrella) so the `ccSingle` /
+# `ccMulti` symbols flow from a single enum module. The umbrella
+# re-exports `pinscope_stub`'s `PinScopeCardinality`; `import debra`
+# re-exports its own (compatible) enum from `debra/cardinality`, and
+# co-importing both at user level causes ambiguity on the unqualified
+# `ccSingle` / `ccMulti` literals used in Queue's static params.
+import lockfreequeues/queue
+import lockfreequeues/strategy
+import lockfreequeues/reclamation
+import lockfreequeues/internal/pinscope_stub
+from debra import DebraManager, initDebraManager
 import options
 import ../bench_common
 
 const topologiesSupported* = {tMpmcUnbounded}
 
-type LockfreequeuesUnboundedSipmucAdapter*[S: static int, T;
-                                            MaxThreads: static int] = object
-  ## Manager is heap-pointer because UnboundedSipmuc takes a `ptr
-  ## DebraManager` constructor argument (the queue stores the pointer
-  ## into shared retire state). Queue is inline because heap-pointer
-  ## storage on a generic destructor-bearing type triggers a Nim 2.2.6
-  ## codegen bug from this generic adapter site.
-  manager*: ptr DebraManager[MaxThreads]
-  queue*: UnboundedSipmuc[S, T, MaxThreads]
-  consumer0Handle*: ThreadHandle[MaxThreads]
-  consumer0*: Consumer[S, T, MaxThreads]
+type
+  UnboundedSipmucAdapterQueue[S: static int, T;
+                              MaxThreads: static int] =
+    Queue[T, ccSingle, ccMulti, stEager, rkEbr, 0, 0, 0, S, MaxThreads]
+  UnboundedSipmucAdapterProducer[S: static int, T;
+                                 MaxThreads: static int] =
+    QueueProducer[T, ccSingle, ccMulti, stEager, rkEbr,
+                  0, 0, 0, S, MaxThreads]
+  UnboundedSipmucAdapterConsumer[S: static int, T;
+                                 MaxThreads: static int] =
+    QueueConsumer[T, ccSingle, ccMulti, stEager, rkEbr,
+                  0, 0, 0, S, MaxThreads]
+
+  LockfreequeuesUnboundedSipmucAdapter*[S: static int, T;
+                                        MaxThreads: static int] = object
+    ## Manager is heap-pointer because the unified Queue rkEbr borrow
+    ## smart-constructor takes a `ptr DebraManager` (the queue stores
+    ## the pointer into shared retire state). Queue is inline because
+    ## heap-pointer storage on a generic destructor-bearing type
+    ## triggers a Nim 2.2.6 codegen bug from this generic adapter site
+    ## (mirrors the lockfreequeues_unbounded_sipsic_adapter comment).
+    ##
+    ## ccCons == ccMulti requires a ccMulti-cardinality manager per
+    ## nim-debra `cardinality.nim`; the smart-constructor enforces this
+    ## at the type level.
+    ##
+    ## Unified `push` for rkEbr lives on `QueueProducer` (not `Queue`)
+    ## across all 4 cardinality combos — including ccSingle producer —
+    ## so the adapter caches a `producer0` view for the smoke / 1p1c
+    ## shape.
+    manager*: ptr DebraManager[MaxThreads, debra.ccMulti]
+    queue*: UnboundedSipmucAdapterQueue[S, T, MaxThreads]
+    producer0*: UnboundedSipmucAdapterProducer[S, T, MaxThreads]
+    consumer0*: UnboundedSipmucAdapterConsumer[S, T, MaxThreads]
 
 proc makeLockfreequeuesUnboundedSipmucAdapter*[S: static int, T;
                                                 MaxThreads: static int](
     capacity: int = 0    # ignored for unbounded
 ): LockfreequeuesUnboundedSipmucAdapter[S, T, MaxThreads] =
-  result.manager = create(DebraManager[MaxThreads])
-  result.manager[] = initDebraManager[MaxThreads]()
-  result.consumer0Handle = registerThread(result.manager[])
-  result.queue = newUnboundedSipmuc[S, T, MaxThreads](result.manager)
-  result.consumer0 = result.queue.getConsumer(result.consumer0Handle)
+  result.manager = create(DebraManager[MaxThreads, debra.ccMulti])
+  result.manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
+  result.queue =
+    newUnboundedSipmucQueue[T, stEager, S, MaxThreads](result.manager)
+  # producer0 / consumer0 each (auto-)register the calling (init)
+  # thread against the queue's manager and store the handle on the
+  # returned view. Multi-consumer shapes obtain their own per-thread
+  # views via `queue.getConsumer()`.
+  result.producer0 = result.queue.getProducer()
+  result.consumer0 = result.queue.getConsumer()
 
 proc cleanup*[S: static int, T; MaxThreads: static int](
     a: var LockfreequeuesUnboundedSipmucAdapter[S, T, MaxThreads]
@@ -57,7 +104,7 @@ proc cleanup*[S: static int, T; MaxThreads: static int](
 proc push*[S: static int, T; MaxThreads: static int](
     a: var LockfreequeuesUnboundedSipmucAdapter[S, T, MaxThreads], item: T
 ): PushResult =
-  a.queue.push(item)
+  a.producer0.push(item)
   prSuccess
 
 proc pop*[S: static int, T; MaxThreads: static int](
