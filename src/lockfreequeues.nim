@@ -21,24 +21,32 @@
 ## introspection helpers from the unbounded legacy modules into
 ## queue.nim. Their re-exports below are correspondingly removed.
 ## UnboundedSipsic stays per Doc C §3.0.3.
+##
+## Step 3.3.11-B.1 (Bundle B) introduces the bounded `BQueue[T, ccProd,
+## ccCons, N, P, C]` type as a parallel API alongside the still-unified
+## `Queue`. BQueue is re-exported below. Sub-dispatch B.2 (Bundle C)
+## strips the bounded arm from `queue.nim`, after which BQueue is the
+## sole owner of the bounded shape.
 
 when compileOption("threads"):
   import
     ./lockfreequeues/[
-      atomic_dsl, exceptions, queue, reclamation, strategy, unbounded_sipsic,
+      atomic_dsl, bqueue, exceptions, queue, reclamation, strategy,
+      unbounded_sipsic,
     ]
   import ./lockfreequeues/internal/pinscope_stub
 
   export
-    atomic_dsl, exceptions, queue, reclamation, strategy, unbounded_sipsic
+    atomic_dsl, bqueue, exceptions, queue, reclamation, strategy,
+    unbounded_sipsic
   export pinscope_stub
 else:
   # threading off, only provide the unified Queue + its supporting enums
   # (Queue SPSC works without threads). The legacy `sipsic` module is
   # deleted in 3.3.7b; SPSC behaviour is now reached via the unified
   # Queue type itself.
-  import ./lockfreequeues/[atomic_dsl, queue, reclamation, strategy]
+  import ./lockfreequeues/[atomic_dsl, bqueue, queue, reclamation, strategy]
   import ./lockfreequeues/internal/pinscope_stub
 
-  export atomic_dsl, queue, reclamation, strategy
+  export atomic_dsl, bqueue, queue, reclamation, strategy
   export pinscope_stub
