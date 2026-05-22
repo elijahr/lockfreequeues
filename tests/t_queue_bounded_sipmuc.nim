@@ -22,8 +22,6 @@ import lockfreequeues/queue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
-import lockfreequeues/mupsic
-import lockfreequeues/sipmuc
 import ./t_integration
 import ./t_suc
 

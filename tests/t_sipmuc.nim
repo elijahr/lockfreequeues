@@ -5,8 +5,6 @@ import unittest2
 
 import lockfreequeues
 import lockfreequeues/exceptions
-import lockfreequeues/mupsic
-import lockfreequeues/sipmuc
 import ./t_integration
 import ./t_suc
 
@@ -41,7 +39,7 @@ suite "getConsumer(Sipmuc[N, C, T])":
     for c in 0 ..< 4:
       queue.consumerThreadIds[c].store(c + 1000, moSequentiallyConsistent)
 
-    expect sipmuc.NoConsumersAvailableError:
+    expect NoConsumersAvailableError:
       discard queue.getConsumer()
 
 suite "pop(Consumer[N, C, T])":

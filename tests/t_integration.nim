@@ -1,4 +1,9 @@
-import lockfreequeues/sipmuc
+## Shared bounded-queue exerciser templates. All bodies operate on
+## `untyped` arguments so symbol resolution happens at the caller's
+## context — no per-family legacy imports are needed here.
+##
+## Step 3.3.7b dropped the vestigial `import lockfreequeues/sipmuc`;
+## the legacy modules are deleted in this commit.
 
 template testCapacity*(queue: untyped) =
   check(queue.capacity == 8)
