@@ -2,8 +2,13 @@ import lockfreequeues/atomic_dsl
 import options
 import unittest2
 
-import debra
-import lockfreequeues/unbounded_mupmuc
+import lockfreequeues/queue
+import lockfreequeues/strategy
+import lockfreequeues/reclamation
+import lockfreequeues/internal/pinscope_stub
+
+from debra import DebraManager, registerThread
+import ./debra_cc_helpers
 
 const
   ItemCount = 10000
@@ -13,33 +18,33 @@ const
   MaxThreads = 16
 
 type
-  ProducerContext[S: static int] = object
-    queue: ptr UnboundedMupmuc[S, int, MaxThreads]
-    manager: ptr DebraManager[MaxThreads]
+  ProducerContext[ST: static DeallocationStrategy, S: static int] = object
+    queue: ptr Queue[int, ccMulti, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads]
     producersDone: ptr Atomic[int]
     producerIdx: int
 
-  ConsumerContext[S: static int] = object
-    queue: ptr UnboundedMupmuc[S, int, MaxThreads]
-    manager: ptr DebraManager[MaxThreads]
+  ConsumerContext[ST: static DeallocationStrategy, S: static int] = object
+    queue: ptr Queue[int, ccMulti, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads]
     received: ptr array[ItemCount, Atomic[bool]]
     duplicateFound: ptr Atomic[bool]
     producersDone: ptr Atomic[int]
     totalConsumed: ptr Atomic[int]
 
-proc producer[S: static int](ctx: ptr ProducerContext[S]) {.thread.} =
+proc producer[ST: static DeallocationStrategy, S: static int](
+    ctx: ptr ProducerContext[ST, S]
+) {.thread.} =
   {.cast(gcsafe).}:
-    let handle = registerThread(ctx.manager[])
-    var p = ctx.queue[].getProducer(handle)
+    var p = ctx.queue[].getProducer()
     let base = ctx.producerIdx * ItemsPerProducer
     for i in 1 .. ItemsPerProducer:
       p.push(base + i)
     discard ctx.producersDone[].fetchAdd(1, moRelease)
 
-proc consumer[S: static int](ctx: ptr ConsumerContext[S]) {.thread.} =
+proc consumer[ST: static DeallocationStrategy, S: static int](
+    ctx: ptr ConsumerContext[ST, S]
+) {.thread.} =
   {.cast(gcsafe).}:
-    let handle = registerThread(ctx.manager[])
-    var c = ctx.queue[].getConsumer(handle)
+    var c = ctx.queue[].getConsumer()
     while true:
       let item = c.pop()
       if item.isSome:
@@ -67,36 +72,34 @@ suite "UnboundedMupmuc threaded":
     totalConsumed.store(0, moRelaxed)
 
   test "high segment turnover":
-    var manager = initDebraManager[MaxThreads]()
-    var queue = newUnboundedMupmuc[8, int, MaxThreads](addr manager)
+    var manager = initMultiConsumerManager[MaxThreads]()
+    var queue = newUnboundedMupmucQueue[int, stEager, 8, MaxThreads](addr manager)
 
-    var prodContexts: array[ProducerCount, ProducerContext[8]]
+    var prodContexts: array[ProducerCount, ProducerContext[stEager, 8]]
     for i in 0 ..< ProducerCount:
-      prodContexts[i] = ProducerContext[8](
+      prodContexts[i] = ProducerContext[stEager, 8](
         queue: addr queue,
-        manager: addr manager,
         producersDone: addr producersDone,
         producerIdx: i,
       )
 
-    var consContexts: array[ConsumerCount, ConsumerContext[8]]
+    var consContexts: array[ConsumerCount, ConsumerContext[stEager, 8]]
     for i in 0 ..< ConsumerCount:
-      consContexts[i] = ConsumerContext[8](
+      consContexts[i] = ConsumerContext[stEager, 8](
         queue: addr queue,
-        manager: addr manager,
         received: addr received,
         duplicateFound: addr duplicateFound,
         producersDone: addr producersDone,
         totalConsumed: addr totalConsumed,
       )
 
-    var prodThreads: array[ProducerCount, Thread[ptr ProducerContext[8]]]
-    var consThreads: array[ConsumerCount, Thread[ptr ConsumerContext[8]]]
+    var prodThreads: array[ProducerCount, Thread[ptr ProducerContext[stEager, 8]]]
+    var consThreads: array[ConsumerCount, Thread[ptr ConsumerContext[stEager, 8]]]
 
     for i in 0 ..< ProducerCount:
-      createThread(prodThreads[i], producer[8], addr prodContexts[i])
+      createThread(prodThreads[i], producer[stEager, 8], addr prodContexts[i])
     for i in 0 ..< ConsumerCount:
-      createThread(consThreads[i], consumer[8], addr consContexts[i])
+      createThread(consThreads[i], consumer[stEager, 8], addr consContexts[i])
 
     for i in 0 ..< ProducerCount:
       joinThread(prodThreads[i])
@@ -108,36 +111,34 @@ suite "UnboundedMupmuc threaded":
       check(received[i].load(moRelaxed))
 
   test "normal segment size":
-    var manager = initDebraManager[MaxThreads]()
-    var queue = newUnboundedMupmuc[64, int, MaxThreads](addr manager)
+    var manager = initMultiConsumerManager[MaxThreads]()
+    var queue = newUnboundedMupmucQueue[int, stEager, 64, MaxThreads](addr manager)
 
-    var prodContexts: array[ProducerCount, ProducerContext[64]]
+    var prodContexts: array[ProducerCount, ProducerContext[stEager, 64]]
     for i in 0 ..< ProducerCount:
-      prodContexts[i] = ProducerContext[64](
+      prodContexts[i] = ProducerContext[stEager, 64](
         queue: addr queue,
-        manager: addr manager,
         producersDone: addr producersDone,
         producerIdx: i,
       )
 
-    var consContexts: array[ConsumerCount, ConsumerContext[64]]
+    var consContexts: array[ConsumerCount, ConsumerContext[stEager, 64]]
     for i in 0 ..< ConsumerCount:
-      consContexts[i] = ConsumerContext[64](
+      consContexts[i] = ConsumerContext[stEager, 64](
         queue: addr queue,
-        manager: addr manager,
         received: addr received,
         duplicateFound: addr duplicateFound,
         producersDone: addr producersDone,
         totalConsumed: addr totalConsumed,
       )
 
-    var prodThreads: array[ProducerCount, Thread[ptr ProducerContext[64]]]
-    var consThreads: array[ConsumerCount, Thread[ptr ConsumerContext[64]]]
+    var prodThreads: array[ProducerCount, Thread[ptr ProducerContext[stEager, 64]]]
+    var consThreads: array[ConsumerCount, Thread[ptr ConsumerContext[stEager, 64]]]
 
     for i in 0 ..< ProducerCount:
-      createThread(prodThreads[i], producer[64], addr prodContexts[i])
+      createThread(prodThreads[i], producer[stEager, 64], addr prodContexts[i])
     for i in 0 ..< ConsumerCount:
-      createThread(consThreads[i], consumer[64], addr consContexts[i])
+      createThread(consThreads[i], consumer[stEager, 64], addr consContexts[i])
 
     for i in 0 ..< ProducerCount:
       joinThread(prodThreads[i])
@@ -149,19 +150,17 @@ suite "UnboundedMupmuc threaded":
       check(received[i].load(moRelaxed))
 
   test "segment retirement (Manual)":
-    var manager = initDebraManager[MaxThreads]()
-    var queue = newUnboundedMupmuc[8, int, MaxThreads](addr manager, Manual)
+    var manager = initMultiConsumerManager[MaxThreads]()
+    var queue = newUnboundedMupmucQueue[int, stManual, 8, MaxThreads](addr manager)
 
     # Push items to create segments
-    let producerHandle = registerThread(manager)
-    var p = queue.getProducer(producerHandle)
+    var p = queue.getProducer()
     for i in 1 .. 1000:
       p.push(i)
     let peakSegments = queue.segmentCount()
 
     # Pop all items
-    let consumerHandle = registerThread(manager)
-    var c = queue.getConsumer(consumerHandle)
+    var c = queue.getConsumer()
     for i in 1 .. 1000:
       discard c.pop()
 
@@ -169,18 +168,16 @@ suite "UnboundedMupmuc threaded":
     check(queue.segmentCount() == peakSegments)
 
   test "segment retirement (Eager)":
-    var manager = initDebraManager[MaxThreads]()
-    var queue = newUnboundedMupmuc[8, int, MaxThreads](addr manager, Eager)
+    var manager = initMultiConsumerManager[MaxThreads]()
+    var queue = newUnboundedMupmucQueue[int, stEager, 8, MaxThreads](addr manager)
 
     # Push items to create segments
-    let producerHandle = registerThread(manager)
-    var p = queue.getProducer(producerHandle)
+    var p = queue.getProducer()
     for i in 1 .. 1000:
       p.push(i)
 
     # Pop all items
-    let consumerHandle = registerThread(manager)
-    var c = queue.getConsumer(consumerHandle)
+    var c = queue.getConsumer()
     for i in 1 .. 1000:
       discard c.pop()
 

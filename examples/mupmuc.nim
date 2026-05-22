@@ -1,21 +1,20 @@
-## Example usage of the unified `Queue` generic in MPMC (multi-producer,
-## multi-consumer) bounded cardinality.
+## Example: Multi-producer, multi-consumer (MPMC) bounded queue using
+## the unified `Queue` generic.
 ##
 ## v5.0.0 cascade migration: the legacy `Mupmuc[N, P, C, T]` family was
 ## collapsed into `Queue[T, ccMulti, ccMulti, stEager, rkNone, N, P, C,
-## 0, 0]`. Producers/consumers are obtained via `q.getProducer()` /
+## 0, 0]`. Producers and consumers are obtained via `q.getProducer()` /
 ## `q.getConsumer()` (one per thread).
 
 import options
 import random
 
 import lockfreequeues
-import lockfreequeues/queue as q_mod
 
 var
   # Queue that can hold 8 ints at a time,
   # with 32 producer & 32 consumer workers
-  q = q_mod.initQueue[int, ccMulti, ccMulti, stEager, 8, 32, 32]()
+  q = newMupmucQueue[int, 8, 32, 32]()
 
 
 proc consumerFunc() {.thread.} =

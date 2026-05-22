@@ -25,8 +25,12 @@ import std/monotimes
 import strutils
 import times
 
-import debra
-import lockfreequeues
+import lockfreequeues/queue as lfq_queue
+import lockfreequeues/strategy
+import lockfreequeues/reclamation
+import lockfreequeues/internal/pinscope_stub
+
+import ./debra_cc_helpers
 
 const
   SegmentSize = 32
@@ -47,19 +51,25 @@ type
     priority: Priority
     workMs: int  # Simulated work duration
 
+  JobQueue = lfq_queue.Queue[Job, ccMulti, ccMulti, stEager, rkEbr, 0, 0, 0,
+                             SegmentSize, MaxThreads]
+
   SubmitterContext = object
-    queue: ptr UnboundedMupmuc[SegmentSize, Job, MaxThreads]
-    manager: ptr DebraManager[MaxThreads]
+    queue: ptr JobQueue
     submitterId: int
 
   WorkerContext = object
-    queue: ptr UnboundedMupmuc[SegmentSize, Job, MaxThreads]
-    manager: ptr DebraManager[MaxThreads]
+    queue: ptr JobQueue
     workerId: int
 
+
 var
-  manager = initDebraManager[MaxThreads]()
-  queue = newUnboundedMupmuc[SegmentSize, Job, MaxThreads](addr manager)
+  # `initMultiConsumerManager` (from `./debra_cc_helpers`) walls off the
+  # `debra` import so the `ccMulti` token here resolves unambiguously
+  # to `lockfreequeues/internal/pinscope_stub.ccMulti` when the Queue
+  # type is instantiated below.
+  manager = initMultiConsumerManager[MaxThreads]()
+  queue = newUnboundedMupmucQueue[Job, stEager, SegmentSize, MaxThreads](addr manager)
   running: Atomic[bool]
   jobsSubmitted: array[NumSubmitters, Atomic[int]]
   jobsCompleted: array[NumWorkers, Atomic[int]]
@@ -69,8 +79,7 @@ var
 proc submitterThread(ctx: ptr SubmitterContext) {.thread.} =
   ## Job submitter - creates and enqueues jobs.
   {.cast(gcsafe).}:
-    let handle = registerThread(ctx.manager[])
-    var producer = ctx.queue[].getProducer(handle)
+    var producer = ctx.queue[].getProducer()
     var submitted = 0
 
     for i in 0..<JobsPerSubmitter:
@@ -106,8 +115,7 @@ proc submitterThread(ctx: ptr SubmitterContext) {.thread.} =
 proc workerThread(ctx: ptr WorkerContext) {.thread.} =
   ## Worker - fetches and executes jobs.
   {.cast(gcsafe).}:
-    let handle = registerThread(ctx.manager[])
-    var consumer = ctx.queue[].getConsumer(handle)
+    var consumer = ctx.queue[].getConsumer()
     var completed = 0
     var workTime: int64 = 0
 
@@ -123,11 +131,6 @@ proc workerThread(ctx: ptr WorkerContext) {.thread.} =
         workTime += (getMonoTime() - start).inMilliseconds
 
         inc completed
-
-        # Periodic reclamation
-        if completed mod 10 == 0:
-          ctx.manager[].advance()
-          discard reclaimNow(handle)
       else:
         sleep(1)
 
@@ -161,7 +164,6 @@ when isMainModule:
   for i in 0..<NumWorkers:
     workerContexts[i] = WorkerContext(
       queue: addr queue,
-      manager: addr manager,
       workerId: i,
     )
 
@@ -174,7 +176,6 @@ when isMainModule:
   for i in 0..<NumSubmitters:
     submitterContexts[i] = SubmitterContext(
       queue: addr queue,
-      manager: addr manager,
       submitterId: i,
     )
 

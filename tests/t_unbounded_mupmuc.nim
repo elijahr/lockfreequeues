@@ -1,46 +1,45 @@
-import lockfreequeues/atomic_dsl
 import options
 import unittest2
 
-import debra
-import lockfreequeues/unbounded_mupmuc
+import lockfreequeues/queue
+import lockfreequeues/strategy
+import lockfreequeues/reclamation
+import lockfreequeues/internal/pinscope_stub
+
+import debra as debra_mod
+from debra import DebraManager, initDebraManager, registerThread
 
 suite "UnboundedMupmuc":
-  test "newUnboundedMupmuc creates valid instance":
-    var manager = initDebraManager[4]()
-    var queue = newUnboundedMupmuc[16, int, 4](addr manager)
+  test "newUnboundedMupmucQueue creates valid instance":
+    var manager = initDebraManager[4, debra_mod.ccMulti]()
+    var queue = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
     check(queue.segmentCount == 1)
 
   test "getProducer returns valid producer":
-    var manager = initDebraManager[4]()
-    var queue = newUnboundedMupmuc[16, int, 4](addr manager)
-    let producerHandle = registerThread(manager)
-    var producer = queue.getProducer(producerHandle)
+    var manager = initDebraManager[4, debra_mod.ccMulti]()
+    var queue = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
+    var producer = queue.getProducer()
     check(producer.idx >= 0)
 
   test "getConsumer returns valid consumer":
-    var manager = initDebraManager[4]()
-    var queue = newUnboundedMupmuc[16, int, 4](addr manager)
-    let consumerHandle = registerThread(manager)
-    var consumer = queue.getConsumer(consumerHandle)
+    var manager = initDebraManager[4, debra_mod.ccMulti]()
+    var queue = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
+    var consumer = queue.getConsumer()
     check(consumer.idx >= 0)
 
   test "producer push single item":
-    var manager = initDebraManager[4]()
-    var queue = newUnboundedMupmuc[16, int, 4](addr manager)
-    let producerHandle = registerThread(manager)
-    var producer = queue.getProducer(producerHandle)
+    var manager = initDebraManager[4, debra_mod.ccMulti]()
+    var queue = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
+    var producer = queue.getProducer()
 
     producer.push(42)
     check(queue.len == 1)
 
   test "consumer pop single item":
-    var manager = initDebraManager[4]()
-    var queue = newUnboundedMupmuc[16, int, 4](addr manager)
-    let producerHandle = registerThread(manager)
-    let consumerHandle = registerThread(manager)
-    var producer = queue.getProducer(producerHandle)
-    var consumer = queue.getConsumer(consumerHandle)
+    var manager = initDebraManager[4, debra_mod.ccMulti]()
+    var queue = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
+    var producer = queue.getProducer()
+    var consumer = queue.getConsumer()
 
     producer.push(42)
     let item = consumer.pop()
@@ -49,21 +48,18 @@ suite "UnboundedMupmuc":
     check(queue.len == 0)
 
   test "pop from empty returns none":
-    var manager = initDebraManager[4]()
-    var queue = newUnboundedMupmuc[16, int, 4](addr manager)
-    let consumerHandle = registerThread(manager)
-    var consumer = queue.getConsumer(consumerHandle)
+    var manager = initDebraManager[4, debra_mod.ccMulti]()
+    var queue = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
+    var consumer = queue.getConsumer()
 
     let item = consumer.pop()
     check(item.isNone)
 
   test "FIFO order preserved with single producer and consumer":
-    var manager = initDebraManager[4]()
-    var queue = newUnboundedMupmuc[16, int, 4](addr manager)
-    let producerHandle = registerThread(manager)
-    let consumerHandle = registerThread(manager)
-    var producer = queue.getProducer(producerHandle)
-    var consumer = queue.getConsumer(consumerHandle)
+    var manager = initDebraManager[4, debra_mod.ccMulti]()
+    var queue = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
+    var producer = queue.getProducer()
+    var consumer = queue.getConsumer()
 
     for i in 1 .. 5:
       producer.push(i)
@@ -74,15 +70,12 @@ suite "UnboundedMupmuc":
       check(item.get == i)
 
   test "multiple producers can push":
-    var manager = initDebraManager[4]()
-    var queue = newUnboundedMupmuc[16, int, 4](addr manager)
+    var manager = initDebraManager[4, debra_mod.ccMulti]()
+    var queue = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
 
-    let producerHandle1 = registerThread(manager)
-    let producerHandle2 = registerThread(manager)
-    let consumerHandle = registerThread(manager)
-    var producer1 = queue.getProducer(producerHandle1)
-    var producer2 = queue.getProducer(producerHandle2)
-    var consumer = queue.getConsumer(consumerHandle)
+    var producer1 = queue.getProducer()
+    var producer2 = queue.getProducer()
+    var consumer = queue.getConsumer()
 
     for i in 1 .. 5:
       producer1.push(i)
@@ -99,18 +92,15 @@ suite "UnboundedMupmuc":
     check(total == 15 + 515)
 
   test "multiple consumers can pop":
-    var manager = initDebraManager[4]()
-    var queue = newUnboundedMupmuc[16, int, 4](addr manager)
-    let producerHandle = registerThread(manager)
-    var producer = queue.getProducer(producerHandle)
+    var manager = initDebraManager[4, debra_mod.ccMulti]()
+    var queue = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
+    var producer = queue.getProducer()
 
     for i in 1 .. 10:
       producer.push(i)
 
-    let consumerHandle1 = registerThread(manager)
-    let consumerHandle2 = registerThread(manager)
-    var consumer1 = queue.getConsumer(consumerHandle1)
-    var consumer2 = queue.getConsumer(consumerHandle2)
+    var consumer1 = queue.getConsumer()
+    var consumer2 = queue.getConsumer()
 
     var count1, count2 = 0
     var total = 0
@@ -129,12 +119,10 @@ suite "UnboundedMupmuc":
     check(total == 55)
 
   test "grows beyond single segment":
-    var manager = initDebraManager[4]()
-    var queue = newUnboundedMupmuc[4, int, 4](addr manager)
-    let producerHandle = registerThread(manager)
-    let consumerHandle = registerThread(manager)
-    var producer = queue.getProducer(producerHandle)
-    var consumer = queue.getConsumer(consumerHandle)
+    var manager = initDebraManager[4, debra_mod.ccMulti]()
+    var queue = newUnboundedMupmucQueue[int, stEager, 4, 4](addr manager)
+    var producer = queue.getProducer()
+    var consumer = queue.getConsumer()
 
     for i in 1 .. 10:
       producer.push(i)
@@ -147,12 +135,10 @@ suite "UnboundedMupmuc":
       check(item.get == i)
 
   test "len tracks items correctly":
-    var manager = initDebraManager[4]()
-    var queue = newUnboundedMupmuc[8, int, 4](addr manager)
-    let producerHandle = registerThread(manager)
-    let consumerHandle = registerThread(manager)
-    var producer = queue.getProducer(producerHandle)
-    var consumer = queue.getConsumer(consumerHandle)
+    var manager = initDebraManager[4, debra_mod.ccMulti]()
+    var queue = newUnboundedMupmucQueue[int, stEager, 8, 4](addr manager)
+    var producer = queue.getProducer()
+    var consumer = queue.getConsumer()
 
     check(queue.len == 0)
 
@@ -171,12 +157,10 @@ suite "UnboundedMupmuc":
     check(queue.len == 0)
 
   test "batch push":
-    var manager = initDebraManager[4]()
-    var queue = newUnboundedMupmuc[8, int, 4](addr manager)
-    let producerHandle = registerThread(manager)
-    let consumerHandle = registerThread(manager)
-    var producer = queue.getProducer(producerHandle)
-    var consumer = queue.getConsumer(consumerHandle)
+    var manager = initDebraManager[4, debra_mod.ccMulti]()
+    var queue = newUnboundedMupmucQueue[int, stEager, 8, 4](addr manager)
+    var producer = queue.getProducer()
+    var consumer = queue.getConsumer()
 
     producer.push(@[1, 2, 3, 4, 5])
     check(queue.len == 5)
@@ -185,12 +169,10 @@ suite "UnboundedMupmuc":
       check(consumer.pop().get == i)
 
   test "batch pop":
-    var manager = initDebraManager[4]()
-    var queue = newUnboundedMupmuc[8, int, 4](addr manager)
-    let producerHandle = registerThread(manager)
-    let consumerHandle = registerThread(manager)
-    var producer = queue.getProducer(producerHandle)
-    var consumer = queue.getConsumer(consumerHandle)
+    var manager = initDebraManager[4, debra_mod.ccMulti]()
+    var queue = newUnboundedMupmucQueue[int, stEager, 8, 4](addr manager)
+    var producer = queue.getProducer()
+    var consumer = queue.getConsumer()
 
     for i in 1 .. 10:
       producer.push(i)
@@ -201,12 +183,10 @@ suite "UnboundedMupmuc":
     check(queue.len == 5)
 
   test "batch pop more than available":
-    var manager = initDebraManager[4]()
-    var queue = newUnboundedMupmuc[8, int, 4](addr manager)
-    let producerHandle = registerThread(manager)
-    let consumerHandle = registerThread(manager)
-    var producer = queue.getProducer(producerHandle)
-    var consumer = queue.getConsumer(consumerHandle)
+    var manager = initDebraManager[4, debra_mod.ccMulti]()
+    var queue = newUnboundedMupmucQueue[int, stEager, 8, 4](addr manager)
+    var producer = queue.getProducer()
+    var consumer = queue.getConsumer()
 
     producer.push(@[1, 2, 3])
 
@@ -216,10 +196,9 @@ suite "UnboundedMupmuc":
     check(queue.len == 0)
 
   test "batch pop from empty":
-    var manager = initDebraManager[4]()
-    var queue = newUnboundedMupmuc[8, int, 4](addr manager)
-    let consumerHandle = registerThread(manager)
-    var consumer = queue.getConsumer(consumerHandle)
+    var manager = initDebraManager[4, debra_mod.ccMulti]()
+    var queue = newUnboundedMupmucQueue[int, stEager, 8, 4](addr manager)
+    var consumer = queue.getConsumer()
 
     let items = consumer.pop(5)
     check(items.isNone)

@@ -8,7 +8,7 @@ import ./t_integration
 import ./t_muc
 import ./t_mup
 
-var queue = initMupmuc[8, 4, 4, int]()
+var queue = newMupmucQueue[int, 8, 4, 4]()
 
 suite "Mupmuc[N, P, C, T]":
   test "capacity":
