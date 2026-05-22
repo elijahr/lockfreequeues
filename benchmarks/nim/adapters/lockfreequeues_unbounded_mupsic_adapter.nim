@@ -25,9 +25,10 @@
 ## consumer handle and exposes them so that bench code can register
 ## producers on the worker threads themselves.
 ##
-## The bench harness in `bench_unbounded.nim` consumes this adapter
-## directly via specialized benchmark procs (was `bench_throughput.nim`
-## prior to the PR 2 topology split).
+## The bench harness in `bench_unbounded_mupsic.nim` consumes this
+## adapter directly via specialized benchmark procs (was
+## `bench_throughput.nim` prior to the PR 2 topology split; then
+## `bench_unbounded.nim` until v5.0.0 3.3.9-D split it per family).
 ##
 ## v5.0.0 cascade: the legacy `UnboundedMupsic[S, T, MT]` type was
 ## deleted in 3.3.7. The borrow-form smart-constructor

@@ -23,8 +23,21 @@ regression gate via [Bencher.dev](https://bencher.dev).
   two per-family binaries to eliminate cross-family iCache contention
   that was producing a spurious -39.6% throughput artifact on
   `sipmuc/mpmc/1p1c`; see the file headers for the diagnostic.
-- `nim/bench_unbounded.nim` - Unbounded throughput driver across all
-  four lockfreequeues unbounded variants.
+- `nim/bench_unbounded_sipsic.nim` - Unbounded throughput driver,
+  UnboundedSipsic family (1p1c). v5.0.0 3.3.9-D split the original
+  `bench_unbounded.nim` into four per-family binaries (this file plus
+  the three below) to eliminate cross-family iCache contention that
+  was producing -17% to -34% throughput regressions on
+  unbounded_mupmuc/2p2c, unbounded_mupsic/2p1c, and
+  unbounded_mupsic/4p1c; see the file headers for the diagnostic.
+- `nim/bench_unbounded_sipmuc.nim` - Unbounded throughput driver,
+  UnboundedSipmuc family (1p{1,2,4}c).
+- `nim/bench_unbounded_mupsic.nim` - Unbounded throughput driver,
+  UnboundedMupsic family ({1,2,4}p1c).
+- `nim/bench_unbounded_mupmuc.nim` - Unbounded throughput driver,
+  UnboundedMupmuc family ({1,2,4}p{1,2,4}c full grid plus the MVP
+  comparison adapters whose slug shape matches the mupmuc unbounded
+  grid: Loony, Crossbeam SegQueue, MoodyCamel).
 - `nim/bench_latency.nim` - Latency (ping-pong RTT) driver across the
   four bounded lockfreequeues variants.
 - `nim/adapters/` - One file per upstream queue library
@@ -49,8 +62,8 @@ regression gate via [Bencher.dev](https://bencher.dev).
   (`tests/fixtures/pre-split-slugs.json`).
 - `results/` - JSON output from local benchmark runs.
 - `runner.py` - Orchestrates local benchmark execution. Builds and
-  runs all five binaries, then merges their fragments via
-  `merge_bmf.py`.
+  runs all nine topology-split binaries (post 3.3.9-D), then merges
+  their fragments via `merge_bmf.py`.
 
 ## Quick Start (local)
 
@@ -68,15 +81,20 @@ nim c -r -d:release -d:danger --threads:on \
   benchmarks/nim/bench_mpmc_mupmuc.nim
 
 # Emit BMF JSON natively (no Python parser; merge to combine).
-./.tmp/bench_spsc          --bmf-out=spsc.json
-./.tmp/bench_mpsc          --bmf-out=mpsc.json
-./.tmp/bench_mpmc_mupmuc   --bmf-out=mpmc_mupmuc.json
-./.tmp/bench_mpmc_sipmuc   --bmf-out=mpmc_sipmuc.json
-./.tmp/bench_unbounded     --bmf-out=unbounded.json
-./.tmp/bench_latency       --bmf-out=latency.json
+./.tmp/bench_spsc                --bmf-out=spsc.json
+./.tmp/bench_mpsc                --bmf-out=mpsc.json
+./.tmp/bench_mpmc_mupmuc         --bmf-out=mpmc_mupmuc.json
+./.tmp/bench_mpmc_sipmuc         --bmf-out=mpmc_sipmuc.json
+./.tmp/bench_unbounded_sipsic    --bmf-out=unbounded_sipsic.json
+./.tmp/bench_unbounded_sipmuc    --bmf-out=unbounded_sipmuc.json
+./.tmp/bench_unbounded_mupsic    --bmf-out=unbounded_mupsic.json
+./.tmp/bench_unbounded_mupmuc    --bmf-out=unbounded_mupmuc.json
+./.tmp/bench_latency             --bmf-out=latency.json
 python3 benchmarks/merge_bmf.py merged.json \
   spsc.json mpsc.json mpmc_mupmuc.json mpmc_sipmuc.json \
-  unbounded.json latency.json
+  unbounded_sipsic.json unbounded_sipmuc.json \
+  unbounded_mupsic.json unbounded_mupmuc.json \
+  latency.json
 ```
 
 ## Metrics
@@ -91,8 +109,10 @@ python3 benchmarks/merge_bmf.py merged.json \
 `ubuntu-latest` for every PR and every push to `main`/`devel` via a
 GitHub Actions matrix (one matrix entry per binary, each with its own
 `timeout-minutes: 18` budget). v5.0.0 B3 split the `bench_mpmc` slot
-into `bench_mpmc_mupmuc` + `bench_mpmc_sipmuc` so the family budgets
-run in parallel as independent matrix entries. The workflow:
+into `bench_mpmc_mupmuc` + `bench_mpmc_sipmuc`; v5.0.0 3.3.9-D fanned
+the `bench_unbounded` slot into four per-family binaries
+(`bench_unbounded_{sipsic,sipmuc,mupsic,mupmuc}`) so each family runs
+in parallel as an independent matrix entry. The workflow:
 
 1. Compiles each binary with its CI-tuned per-binary intdefines
    (e.g. `-d:BenchSpscMessageCount=1000000 -d:BenchSpscRuns=5
@@ -167,10 +187,13 @@ Current slug set emitted across the topology-split binaries:
 - `bench_mpmc_sipmuc`:
   `lockfreequeues_sipmuc/mpmc/1p{1,2,4}c`,
   `lockfreequeues_queue_bounded_sipmuc/mpmc/1p{1,2,4}c`.
-- `bench_unbounded`:
-  `lockfreequeues_unbounded_sipsic/spsc_unbounded/1p1c`,
-  `lockfreequeues_unbounded_sipmuc/mpmc_unbounded/1p{1,2,4}c`,
-  `lockfreequeues_unbounded_mupsic/mpsc_unbounded/{1,2,4}p1c`,
+- `bench_unbounded_sipsic`:
+  `lockfreequeues_unbounded_sipsic/spsc_unbounded/1p1c`.
+- `bench_unbounded_sipmuc`:
+  `lockfreequeues_unbounded_sipmuc/mpmc_unbounded/1p{1,2,4}c`.
+- `bench_unbounded_mupsic`:
+  `lockfreequeues_unbounded_mupsic/mpsc_unbounded/{1,2,4}p1c`.
+- `bench_unbounded_mupmuc`:
   `lockfreequeues_unbounded_mupmuc/mpmc_unbounded/{1,2,4}p{1,2,4}c`.
 - `bench_latency`:
   `lockfreequeues_{sipsic,sipmuc,mupsic,mupmuc}/{spsc,mpmc,mpsc,mpmc}/1p1c`.
@@ -234,12 +257,12 @@ compiler). Per-library obligations are tracked in
 ### Running comparison adapters locally
 
 ```bash
-# Loony (Nim only):
+# Loony (Nim only; lives in bench_unbounded_mupmuc post 3.3.9-D split):
 nimble install loony
 nim c -r -d:release -d:danger --threads:on \
   -d:adapter_loony_available \
   -d:UnboundedMupmucMessageCount=100000 -d:UnboundedMupmucRuns=3 \
-  benchmarks/nim/bench_unbounded.nim loony
+  benchmarks/nim/bench_unbounded_mupmuc.nim loony
 
 # Boost (C++ headers; macOS: brew install boost; Ubuntu: apt install libboost-dev):
 nim cpp -r -d:release -d:danger --threads:on \
@@ -256,11 +279,12 @@ nim c -r -d:release -d:danger --threads:on \
   -d:BenchMpmcMessageCount=100000 -d:BenchMpmcRuns=3 \
   benchmarks/nim/bench_mpmc_mupmuc.nim crossbeam_array_queue
 
-# MoodyCamel (vendored single-header; nim cpp):
+# MoodyCamel (vendored single-header; nim cpp; lives in
+# bench_unbounded_mupmuc post 3.3.9-D split):
 nim cpp -r -d:release -d:danger --threads:on \
   -d:adapter_moodycamel_available \
   -d:UnboundedMupmucMessageCount=100000 -d:UnboundedMupmucRuns=3 \
-  benchmarks/nim/bench_unbounded.nim moodycamel
+  benchmarks/nim/bench_unbounded_mupmuc.nim moodycamel
 
 # nimble threading.Chan:
 nimble install threading

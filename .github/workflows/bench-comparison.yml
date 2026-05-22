@@ -131,22 +131,19 @@ jobs:
             --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
             benchmarks/nim/bench_mpmc_mupmuc.nim
 
-      - name: Compile bench_unbounded with crossbeam_seg_queue
+      - name: Compile bench_unbounded_mupmuc with crossbeam_seg_queue
+        # v5.0.0 3.3.9-D split: the Crossbeam SegQueue adapter lives in
+        # bench_unbounded_mupmuc (matches the mupmuc unbounded
+        # MVP-adapter slot post-split).
         run: |
           set -eu
           nim c -d:release -d:danger --threads:on \
-            -d:UnboundedSipsicMessageCount=500000 \
-            -d:UnboundedSipsicRuns=3 \
-            -d:UnboundedSipmucMessageCount=500000 \
-            -d:UnboundedSipmucRuns=3 \
-            -d:UnboundedMupsicMessageCount=500000 \
-            -d:UnboundedMupsicRuns=3 \
             -d:UnboundedMupmucMessageCount=500000 \
             -d:UnboundedMupmucRuns=3 \
             -d:BenchUnboundedWarmup=2 \
             -d:adapter_crossbeam_seg_queue_available \
             --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
-            benchmarks/nim/bench_unbounded.nim
+            benchmarks/nim/bench_unbounded_mupmuc.nim
 
       - name: Run bench_mpmc_mupmuc (crossbeam_array_queue only)
         timeout-minutes: 12
@@ -155,10 +152,10 @@ jobs:
             --bmf-out=bench_mpmc_crossbeam.json \
             | tee bench_mpmc_crossbeam_output.txt
 
-      - name: Run bench_unbounded (crossbeam_seg_queue only)
+      - name: Run bench_unbounded_mupmuc (crossbeam_seg_queue only)
         timeout-minutes: 12
         run: |
-          ./.tmp/bench_unbounded crossbeam_seg_queue \
+          ./.tmp/bench_unbounded_mupmuc crossbeam_seg_queue \
             --bmf-out=bench_unbounded_crossbeam.json \
             | tee bench_unbounded_crossbeam_output.txt
 

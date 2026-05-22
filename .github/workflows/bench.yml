@@ -158,7 +158,10 @@ jobs:
           - bench_mpsc
           - bench_mpmc_mupmuc
           - bench_mpmc_sipmuc
-          - bench_unbounded
+          - bench_unbounded_sipsic
+          - bench_unbounded_sipmuc
+          - bench_unbounded_mupsic
+          - bench_unbounded_mupmuc
           - bench_latency
     timeout-minutes: 18
 
@@ -260,11 +263,12 @@ jobs:
 
       - name: Install loony (nimble)
         # Loony is a Nim-only unbounded MPMC queue; nimble pulls it from
-        # the registry. Only bench_unbounded uses it.
+        # the registry. Only bench_unbounded_mupmuc uses it (matches the
+        # mupmuc unbounded MVP-adapter slot post-3.3.9-D split).
         id: install-loony
         if: |
           env.FORCE_SKIP_LOONY != '1' &&
-          matrix.binary == 'bench_unbounded'
+          matrix.binary == 'bench_unbounded_mupmuc'
         continue-on-error: true
         run: |
           nimble install -y loony
@@ -274,7 +278,7 @@ jobs:
         if: |
           env.FORCE_SKIP_LOONY != '1' &&
           steps.install-loony.outcome == 'success' &&
-          matrix.binary == 'bench_unbounded'
+          matrix.binary == 'bench_unbounded_mupmuc'
         continue-on-error: true
         run: |
           # The smoke is the round-trip test in tests/t_bench_adapters.nim.
@@ -294,7 +298,7 @@ jobs:
 
       - name: Annotate loony skipped
         if: |
-          matrix.binary == 'bench_unbounded' &&
+          matrix.binary == 'bench_unbounded_mupmuc' &&
           (env.FORCE_SKIP_LOONY == '1' ||
            steps.install-loony.outcome != 'success' ||
            steps.smoke-loony.outcome != 'success')
@@ -307,12 +311,14 @@ jobs:
       # benchmarks/vendor/concurrentqueue/concurrentqueue.h. The
       # "install" step is therefore a `test -f` rather than a fetch, so
       # the bench is reproducible without network egress. Only
-      # bench_unbounded wires the moodycamel adapter (mpmc_unbounded).
+      # bench_unbounded_mupmuc wires the moodycamel adapter
+      # (mpmc_unbounded; matches the mupmuc unbounded MVP-adapter slot
+      # post-3.3.9-D split).
       - name: Install MoodyCamel (vendored header presence check)
         id: install-moodycamel
         if: |
           env.FORCE_SKIP_MOODYCAMEL != '1' &&
-          matrix.binary == 'bench_unbounded'
+          matrix.binary == 'bench_unbounded_mupmuc'
         continue-on-error: true
         run: |
           test -f benchmarks/vendor/concurrentqueue/concurrentqueue.h
@@ -323,7 +329,7 @@ jobs:
         if: |
           env.FORCE_SKIP_MOODYCAMEL != '1' &&
           steps.install-moodycamel.outcome == 'success' &&
-          matrix.binary == 'bench_unbounded'
+          matrix.binary == 'bench_unbounded_mupmuc'
         continue-on-error: true
         run: |
           set -eu
@@ -344,7 +350,7 @@ jobs:
 
       - name: Annotate MoodyCamel skipped
         if: |
-          matrix.binary == 'bench_unbounded' &&
+          matrix.binary == 'bench_unbounded_mupmuc' &&
           (env.FORCE_SKIP_MOODYCAMEL == '1' ||
            steps.install-moodycamel.outcome != 'success' ||
            steps.smoke-moodycamel.outcome != 'success')
@@ -467,15 +473,16 @@ jobs:
       - name: Compile ${{ matrix.binary }} (CI-tuned run shape)
         # Per-binary -d: overrides mirror the design 2.5 CI override
         # column. Bounded throughput binaries: 1M messages × 5 runs ×
-        # 2 warmup; cheap, single-digit seconds total. bench_unbounded
-        # uses a tighter shape — sipsic 200K×3, sipmuc/mupsic 100K×2,
-        # mupmuc 50K×2 — because the 16-shape total (1+3+3+9) plus
-        # oversubscribed shapes like 1p4c on 4-vCPU runners exhausts
-        # the budget at higher N. The mupmuc 9-shape grid dominates
-        # the wall clock so it gets the deepest cut. bench_latency
-        # keeps PR 1's tighter shape (50K × 11 × 2) because each
-        # ping-pong RTT records exactly one sample, so 1M messages
-        # would never fit.
+        # 2 warmup; cheap, single-digit seconds total. The four
+        # bench_unbounded_* binaries (post 3.3.9-D split) each carry
+        # only their own family's overrides — sipsic 200K×3, sipmuc/
+        # mupsic 100K×2, mupmuc 50K×2 — because the previously-monolithic
+        # 16-shape total (1+3+3+9) plus oversubscribed shapes like 1p4c
+        # on 4-vCPU runners exhausted the budget at higher N. The
+        # mupmuc 9-shape grid still dominates its own job's wall clock
+        # so it gets the deepest cut. bench_latency keeps PR 1's
+        # tighter shape (50K × 11 × 2) because each ping-pong RTT
+        # records exactly one sample, so 1M messages would never fit.
         #
         # ${{ steps.adapter-flags.outputs.flags }} is the space-separated
         # set of -d:adapter_*_available defines that survived install +
@@ -533,24 +540,53 @@ jobs:
                 -d:BenchMpmcWarmup=2 \
                 benchmarks/nim/bench_mpmc_sipmuc.nim
               ;;
-            bench_unbounded)
-              # bench_unbounded supports loony (Nim, plain `nim c`) and
-              # PR 4's MoodyCamel (C++ vendored header, requires `nim
-              # cpp`). NIM_MODE is "cpp" iff ADAPTER_MOODYCAMEL was
-              # set; otherwise it stays "c". loony is mode-neutral.
-              nim "$NIM_MODE" -d:release -d:danger --threads:on \
+            bench_unbounded_sipsic)
+              # v5.0.0 3.3.9-D split: this binary owns UnboundedSipsic
+              # at 1p1c. No MVP adapters live here (sipsic is SPSC only
+              # and has no Loony/Crossbeam-SegQueue/MoodyCamel analog).
+              nim c -d:release -d:danger --threads:on \
                 -d:UnboundedSipsicMessageCount=200000 \
                 -d:UnboundedSipsicRuns=3 \
+                -d:BenchUnboundedWarmup=1 \
+                benchmarks/nim/bench_unbounded_sipsic.nim
+              ;;
+            bench_unbounded_sipmuc)
+              # v5.0.0 3.3.9-D split: this binary owns UnboundedSipmuc
+              # at 1p{1,2,4}c. No MVP adapters live here. Stays on `nim
+              # c` because no imported types require C++.
+              nim c -d:release -d:danger --threads:on \
                 -d:UnboundedSipmucMessageCount=100000 \
                 -d:UnboundedSipmucRuns=2 \
+                -d:BenchUnboundedWarmup=1 \
+                -d:BenchSkipOversubscribed \
+                benchmarks/nim/bench_unbounded_sipmuc.nim
+              ;;
+            bench_unbounded_mupsic)
+              # v5.0.0 3.3.9-D split: this binary owns UnboundedMupsic
+              # at {1,2,4}p1c. No MVP adapters live here.
+              nim c -d:release -d:danger --threads:on \
                 -d:UnboundedMupsicMessageCount=100000 \
                 -d:UnboundedMupsicRuns=2 \
+                -d:BenchUnboundedWarmup=1 \
+                benchmarks/nim/bench_unbounded_mupsic.nim
+              ;;
+            bench_unbounded_mupmuc)
+              # v5.0.0 3.3.9-D split: this binary owns UnboundedMupmuc
+              # at the full {1,2,4}p{1,2,4}c grid PLUS the MVP
+              # comparison adapters whose slug shape matches the mupmuc
+              # unbounded grid: loony (Nim, plain `nim c`), Crossbeam
+              # SegQueue (Rust/cdylib via the existing link wrapper),
+              # and PR 4's MoodyCamel (C++ vendored header, requires
+              # `nim cpp`). NIM_MODE is "cpp" iff ADAPTER_MOODYCAMEL was
+              # set; otherwise it stays "c". loony and Crossbeam
+              # SegQueue are mode-neutral.
+              nim "$NIM_MODE" -d:release -d:danger --threads:on \
                 -d:UnboundedMupmucMessageCount=50000 \
                 -d:UnboundedMupmucRuns=2 \
                 -d:BenchUnboundedWarmup=1 \
                 -d:BenchSkipOversubscribed \
                 $ADAPTER_FLAGS \
-                benchmarks/nim/bench_unbounded.nim
+                benchmarks/nim/bench_unbounded_mupmuc.nim
               ;;
             bench_latency)
               nim c -d:release -d:danger --threads:on \
@@ -643,10 +679,13 @@ jobs:
         # Pattern matches every per-binary artifact uploaded by the
         # bench matrix (`bench-bench_spsc-bmf`, `bench-bench_mpsc-bmf`,
         # `bench-bench_mpmc_mupmuc-bmf`, `bench-bench_mpmc_sipmuc-bmf`,
-        # `bench-bench_unbounded-bmf`, `bench-bench_latency-bmf`). Each
-        # artifact lands in its own subdir under `bmf-inputs/` (no
-        # `merge-multiple`) so any future filename overlap between
-        # binaries cannot silently overwrite.
+        # `bench-bench_unbounded_sipsic-bmf`,
+        # `bench-bench_unbounded_sipmuc-bmf`,
+        # `bench-bench_unbounded_mupsic-bmf`,
+        # `bench-bench_unbounded_mupmuc-bmf`,
+        # `bench-bench_latency-bmf`). Each artifact lands in its own
+        # subdir under `bmf-inputs/` (no `merge-multiple`) so any future
+        # filename overlap between binaries cannot silently overwrite.
         uses: actions/download-artifact@v4
         with:
           pattern: bench-*-bmf
@@ -787,6 +826,9 @@ jobs:
       # `--threshold-measure throughput`; the actual measure key emitted by
       # the per-topology bench binaries is `throughput_ops_ms`, so the
       # earlier threshold never matched any measure. Track 6 corrects this.
+      # v5.0.0 3.3.9-D split bench_unbounded into 4 per-family binaries
+      # (sipsic/sipmuc/mupsic/mupmuc); the throughput_ops_ms key is
+      # unchanged.
       #
       # NOTE on continue-on-error (v4.2.0): the Bencher CLI is currently
       # rejecting the multi-measure threshold configuration with

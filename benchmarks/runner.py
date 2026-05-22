@@ -4,12 +4,17 @@
 Orchestrates benchmark execution across languages and collects results.
 PR 2 (bench-rollup) replaced the single `bench_throughput` driver with
 topology-split binaries; v5.0.0 B3 further split the MPMC slice into a
-per-family pair (bench_mpmc_mupmuc + bench_mpmc_sipmuc) so that the
-Mupmuc grid and the Sipmuc shapes no longer share a release binary
-(cross-family iCache contention previously produced a -39.6%
-sipmuc/mpmc/1p1c throughput artifact). This runner builds + runs all
-six in sequence and merges the BMF fragments via `merge_bmf.py` so
-callers keep getting one combined JSON file.
+per-family pair (bench_mpmc_mupmuc + bench_mpmc_sipmuc); v5.0.0 3.3.9-D
+applied the same mitigation to the unbounded slice, fanning the legacy
+`bench_unbounded` binary out into four per-family binaries
+(bench_unbounded_sipsic + bench_unbounded_sipmuc +
+bench_unbounded_mupsic + bench_unbounded_mupmuc) so each unbounded
+family no longer shares a release binary (cross-family iCache contention
+reproduced -17% to -34% throughput regressions on unbounded_mupmuc/2p2c,
+unbounded_mupsic/2p1c, and unbounded_mupsic/4p1c in 3.3.9 retry #4).
+This runner builds + runs all nine binaries in sequence and merges the
+BMF fragments via `merge_bmf.py` so callers keep getting one combined
+JSON file.
 """
 
 import argparse
@@ -23,16 +28,20 @@ BENCHMARK_DIR = Path(__file__).parent
 PROJECT_ROOT = BENCHMARK_DIR.parent
 RESULTS_DIR = BENCHMARK_DIR / "results"
 
-# Track 2 PR 2 + v5.0.0 B3 split: topology-split binaries with the
-# MPMC slice further split per family. Each is built and run
-# separately; merge_bmf.py unions the fragments before downstream
-# consumers see a single JSON.
+# Track 2 PR 2 + v5.0.0 B3 split + v5.0.0 3.3.9-D split: topology-split
+# binaries with the MPMC slice further split per family AND the
+# unbounded slice fanned out into four per-family binaries. Each is
+# built and run separately; merge_bmf.py unions the fragments before
+# downstream consumers see a single JSON.
 NIM_BINARIES = (
     "bench_spsc",
     "bench_mpsc",
     "bench_mpmc_mupmuc",
     "bench_mpmc_sipmuc",
-    "bench_unbounded",
+    "bench_unbounded_sipsic",
+    "bench_unbounded_sipmuc",
+    "bench_unbounded_mupsic",
+    "bench_unbounded_mupmuc",
     "bench_latency",
 )
 

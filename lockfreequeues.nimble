@@ -67,16 +67,21 @@ task benchmarks, "Runs the benchmark suite":
   # PR 2 (bench-rollup) replaced bench_throughput.nim with topology-
   # split binaries. v5.0.0 B3 further split the MPMC binary into a
   # per-family pair (bench_mpmc_mupmuc + bench_mpmc_sipmuc) to remove
-  # cross-family iCache contention; see the bench_mpmc_*.nim headers
-  # for the diagnostic that motivated the split. Each binary emits its
-  # own Bencher Metric Format JSON fragment; merge_bmf.py unions them
-  # into one final file. Binaries land in `.tmp/` per the project
-  # nim.cfg (`--outdir:.tmp`).
+  # cross-family iCache contention; v5.0.0 3.3.9-D applied the same
+  # mitigation to the unbounded binary, fanning it out into four
+  # per-family binaries (bench_unbounded_{sipsic,sipmuc,mupsic,mupmuc}).
+  # See the bench_mpmc_*.nim and bench_unbounded_*.nim headers for the
+  # diagnostic that motivated each split. Each binary emits its own
+  # Bencher Metric Format JSON fragment; merge_bmf.py unions them into
+  # one final file. Binaries land in `.tmp/` per the project nim.cfg
+  # (`--outdir:.tmp`).
   mkDir "benchmarks/results"
   for binName in [
     "bench_spsc", "bench_mpsc",
     "bench_mpmc_mupmuc", "bench_mpmc_sipmuc",
-    "bench_unbounded", "bench_latency",
+    "bench_unbounded_sipsic", "bench_unbounded_sipmuc",
+    "bench_unbounded_mupsic", "bench_unbounded_mupmuc",
+    "bench_latency",
   ]:
     exec "nim c -d:release --threads:on benchmarks/nim/" & binName & ".nim"
     exec ".tmp/" & binName & " --bmf-out=benchmarks/results/" & binName & ".json"
@@ -86,7 +91,10 @@ task benchmarks, "Runs the benchmark suite":
        "benchmarks/results/bench_mpsc.json " &
        "benchmarks/results/bench_mpmc_mupmuc.json " &
        "benchmarks/results/bench_mpmc_sipmuc.json " &
-       "benchmarks/results/bench_unbounded.json " &
+       "benchmarks/results/bench_unbounded_sipsic.json " &
+       "benchmarks/results/bench_unbounded_sipmuc.json " &
+       "benchmarks/results/bench_unbounded_mupsic.json " &
+       "benchmarks/results/bench_unbounded_mupmuc.json " &
        "benchmarks/results/bench_latency.json"
 
 
