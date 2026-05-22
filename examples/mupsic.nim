@@ -3,19 +3,20 @@
 ##
 ## v5.0.0 cascade migration: the legacy `Mupsic[N, P, T]` family was
 ## collapsed into `Queue[T, ccMulti, ccSingle, stEager, rkNone, N, P,
-## 0, 0, 0]`. Producers are obtained via `q.getProducer()` (one per
-## thread) and push through the returned `QueueProducer`.
+## 0, 0, 0]`. The constructor short form below uses the
+## `newMupsicQueue[T, N, P]()` smart-constructor added in v5.0.0
+## (Doc C §3.0.4). Producers are obtained via `q.getProducer()` (one
+## per thread) and push through the returned `QueueProducer`.
 
 import options
 import random
 
 import lockfreequeues
-import lockfreequeues/queue as q_mod
 
 var
   # Queue that can hold 8 ints at a time,
   # with 32 producer workers
-  q = q_mod.initQueue[int, ccMulti, ccSingle, stEager, 8, 32, 0]()
+  q = newMupsicQueue[int, 8, 32]()
 
 
 proc consumerFunc() {.thread.} =

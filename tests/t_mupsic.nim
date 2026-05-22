@@ -6,7 +6,7 @@ import ./t_integration
 import ./t_mup
 import ./t_sic
 
-var queue = initMupsic[8, 4, int]()
+var queue = newMupsicQueue[int, 8, 4]()
 
 suite "Mupsic[N, P, T]":
   test "capacity":

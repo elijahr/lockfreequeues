@@ -2,8 +2,12 @@ import lockfreequeues/atomic_dsl
 import options
 import unittest2
 
-import debra
-import lockfreequeues/unbounded_mupsic
+import lockfreequeues/queue
+import lockfreequeues/strategy
+import lockfreequeues/reclamation
+import lockfreequeues/internal/pinscope_stub
+
+from debra import initDebraManager, registerThread
 
 const
   ItemCount = 10000
@@ -12,28 +16,30 @@ const
   MaxThreads = 8
 
 type
-  ProducerContext[S: static int] = object
-    queue: ptr UnboundedMupsic[S, int, MaxThreads]
-    manager: ptr DebraManager[MaxThreads]
+  ProducerContext[ST: static DeallocationStrategy, S: static int] = object
+    queue: ptr Queue[int, ccMulti, ccSingle, ST, rkEbr, 0, 0, 0, S, MaxThreads]
     producersDone: ptr Atomic[int]
     producerIdx: int
 
-  ConsumerContext[S: static int] = object
-    queue: ptr UnboundedMupsic[S, int, MaxThreads]
+  ConsumerContext[ST: static DeallocationStrategy, S: static int] = object
+    queue: ptr Queue[int, ccMulti, ccSingle, ST, rkEbr, 0, 0, 0, S, MaxThreads]
     received: ptr array[ItemCount, Atomic[bool]]
     duplicateFound: ptr Atomic[bool]
     producersDone: ptr Atomic[int]
 
-proc producer[S: static int](ctx: ptr ProducerContext[S]) {.thread.} =
+proc producer[ST: static DeallocationStrategy, S: static int](
+    ctx: ptr ProducerContext[ST, S]
+) {.thread.} =
   {.cast(gcsafe).}:
-    let handle = registerThread(ctx.manager[])
-    var p = ctx.queue[].getProducer(handle)
+    var p = ctx.queue[].getProducer()
     let base = ctx.producerIdx * ItemsPerProducer
     for i in 1 .. ItemsPerProducer:
       p.push(base + i)
     discard ctx.producersDone[].fetchAdd(1, moRelease)
 
-proc consumer[S: static int](ctx: ptr ConsumerContext[S]) {.thread.} =
+proc consumer[ST: static DeallocationStrategy, S: static int](
+    ctx: ptr ConsumerContext[ST, S]
+) {.thread.} =
   {.cast(gcsafe).}:
     var consumed = 0
     while consumed < ItemCount:
@@ -62,30 +68,30 @@ suite "UnboundedMupsic threaded":
   test "high segment turnover":
     var manager = initDebraManager[MaxThreads]()
     let consumerHandle = registerThread(manager)
-    var queue = newUnboundedMupsic[8, int, MaxThreads](addr manager, consumerHandle)
+    var queue =
+      newUnboundedMupsicQueue[int, stEager, 8, MaxThreads](addr manager, consumerHandle)
 
-    var prodContexts: array[ProducerCount, ProducerContext[8]]
+    var prodContexts: array[ProducerCount, ProducerContext[stEager, 8]]
     for i in 0 ..< ProducerCount:
-      prodContexts[i] = ProducerContext[8](
+      prodContexts[i] = ProducerContext[stEager, 8](
         queue: addr queue,
-        manager: addr manager,
         producersDone: addr producersDone,
         producerIdx: i,
       )
 
-    var consCtx = ConsumerContext[8](
+    var consCtx = ConsumerContext[stEager, 8](
       queue: addr queue,
       received: addr received,
       duplicateFound: addr duplicateFound,
       producersDone: addr producersDone,
     )
 
-    var prodThreads: array[ProducerCount, Thread[ptr ProducerContext[8]]]
-    var consThread: Thread[ptr ConsumerContext[8]]
+    var prodThreads: array[ProducerCount, Thread[ptr ProducerContext[stEager, 8]]]
+    var consThread: Thread[ptr ConsumerContext[stEager, 8]]
 
     for i in 0 ..< ProducerCount:
-      createThread(prodThreads[i], producer[8], addr prodContexts[i])
-    createThread(consThread, consumer[8], addr consCtx)
+      createThread(prodThreads[i], producer[stEager, 8], addr prodContexts[i])
+    createThread(consThread, consumer[stEager, 8], addr consCtx)
 
     for i in 0 ..< ProducerCount:
       joinThread(prodThreads[i])
@@ -98,30 +104,30 @@ suite "UnboundedMupsic threaded":
   test "normal segment size":
     var manager = initDebraManager[MaxThreads]()
     let consumerHandle = registerThread(manager)
-    var queue = newUnboundedMupsic[64, int, MaxThreads](addr manager, consumerHandle)
+    var queue =
+      newUnboundedMupsicQueue[int, stEager, 64, MaxThreads](addr manager, consumerHandle)
 
-    var prodContexts: array[ProducerCount, ProducerContext[64]]
+    var prodContexts: array[ProducerCount, ProducerContext[stEager, 64]]
     for i in 0 ..< ProducerCount:
-      prodContexts[i] = ProducerContext[64](
+      prodContexts[i] = ProducerContext[stEager, 64](
         queue: addr queue,
-        manager: addr manager,
         producersDone: addr producersDone,
         producerIdx: i,
       )
 
-    var consCtx = ConsumerContext[64](
+    var consCtx = ConsumerContext[stEager, 64](
       queue: addr queue,
       received: addr received,
       duplicateFound: addr duplicateFound,
       producersDone: addr producersDone,
     )
 
-    var prodThreads: array[ProducerCount, Thread[ptr ProducerContext[64]]]
-    var consThread: Thread[ptr ConsumerContext[64]]
+    var prodThreads: array[ProducerCount, Thread[ptr ProducerContext[stEager, 64]]]
+    var consThread: Thread[ptr ConsumerContext[stEager, 64]]
 
     for i in 0 ..< ProducerCount:
-      createThread(prodThreads[i], producer[64], addr prodContexts[i])
-    createThread(consThread, consumer[64], addr consCtx)
+      createThread(prodThreads[i], producer[stEager, 64], addr prodContexts[i])
+    createThread(consThread, consumer[stEager, 64], addr consCtx)
 
     for i in 0 ..< ProducerCount:
       joinThread(prodThreads[i])
@@ -134,12 +140,12 @@ suite "UnboundedMupsic threaded":
   test "segment retirement (Manual)":
     var manager = initDebraManager[MaxThreads]()
     let consumerHandle = registerThread(manager)
-    var queue =
-      newUnboundedMupsic[8, int, MaxThreads](addr manager, consumerHandle, Manual)
+    var queue = newUnboundedMupsicQueue[int, stManual, 8, MaxThreads](
+      addr manager, consumerHandle
+    )
 
     # Push items to create segments
-    let producerHandle = registerThread(manager)
-    var p = queue.getProducer(producerHandle)
+    var p = queue.getProducer()
     for i in 1 .. 1000:
       p.push(i)
     let peakSegments = queue.segmentCount()
@@ -154,12 +160,12 @@ suite "UnboundedMupsic threaded":
   test "segment retirement (Eager)":
     var manager = initDebraManager[MaxThreads]()
     let consumerHandle = registerThread(manager)
-    var queue =
-      newUnboundedMupsic[8, int, MaxThreads](addr manager, consumerHandle, Eager)
+    var queue = newUnboundedMupsicQueue[int, stEager, 8, MaxThreads](
+      addr manager, consumerHandle
+    )
 
     # Push items to create segments
-    let producerHandle = registerThread(manager)
-    var p = queue.getProducer(producerHandle)
+    var p = queue.getProducer()
     for i in 1 .. 1000:
       p.push(i)
 

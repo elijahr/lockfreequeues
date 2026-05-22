@@ -10,7 +10,7 @@ const
   ItemsPerProducer = ItemCount div ProducerCount
 
 type TestContext[N: static int] = object
-  queue: ptr Mupsic[N, ProducerCount, int]
+  queue: ptr Queue[int, ccMulti, ccSingle, stEager, rkNone, N, ProducerCount, 0, 0, 0]
   received: ptr array[ItemCount, Atomic[bool]]
   duplicateFound: ptr Atomic[bool]
   producersDone: ptr Atomic[int]
@@ -50,7 +50,7 @@ suite "Mupsic threaded":
     producersDone.store(0, moRelaxed)
 
   test "high contention":
-    var queue = initMupsic[16, ProducerCount, int]()
+    var queue = newMupsicQueue[int, 16, ProducerCount]()
 
     var contexts: array[ProducerCount, TestContext[16]]
     for i in 0 ..< ProducerCount:
@@ -86,7 +86,7 @@ suite "Mupsic threaded":
       check(received[i].load(moRelaxed))
 
   test "normal capacity":
-    var queue = initMupsic[64, ProducerCount, int]()
+    var queue = newMupsicQueue[int, 64, ProducerCount]()
 
     var contexts: array[ProducerCount, TestContext[64]]
     for i in 0 ..< ProducerCount:

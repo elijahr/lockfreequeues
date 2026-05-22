@@ -24,8 +24,12 @@ import random
 import std/monotimes
 import times
 
-import debra
-import lockfreequeues
+import lockfreequeues/queue as lfq_queue
+import lockfreequeues/strategy
+import lockfreequeues/reclamation
+import lockfreequeues/internal/pinscope_stub
+
+from debra import DebraManager, ThreadHandle, initDebraManager, registerThread
 
 const
   SegmentSize = 64
@@ -47,20 +51,21 @@ type
     value: int
 
   SourceContext = object
-    queue: ptr UnboundedMupsic[SegmentSize, Event, MaxThreads]
-    manager: ptr DebraManager[MaxThreads]
+    queue:
+      ptr Queue[Event, ccMulti, ccSingle, stEager, rkEbr, 0, 0, 0, SegmentSize, MaxThreads]
     sourceId: int
     startTime: MonoTime
 
   ProcessorContext = object
-    queue: ptr UnboundedMupsic[SegmentSize, Event, MaxThreads]
-    manager: ptr DebraManager[MaxThreads]
-    consumerHandle: ThreadHandle[MaxThreads]
+    queue:
+      ptr Queue[Event, ccMulti, ccSingle, stEager, rkEbr, 0, 0, 0, SegmentSize, MaxThreads]
 
 var
   manager = initDebraManager[MaxThreads]()
   consumerHandle = registerThread(manager)
-  queue = newUnboundedMupsic[SegmentSize, Event, MaxThreads](addr manager, consumerHandle)
+  queue = newUnboundedMupsicQueue[Event, stEager, SegmentSize, MaxThreads](
+    addr manager, consumerHandle
+  )
   running: Atomic[bool]
   eventsProduced: array[NumSources, Atomic[int]]
   eventsConsumed: Atomic[int]
@@ -71,8 +76,7 @@ proc eventSourceThread(ctx: ptr SourceContext) {.thread.} =
   ## Simulates an event source generating events at variable rates.
   ## Sources occasionally burst to simulate real traffic patterns.
   {.cast(gcsafe).}:
-    let handle = registerThread(ctx.manager[])
-    var producer = ctx.queue[].getProducer(handle)
+    var producer = ctx.queue[].getProducer()
     var produced = 0
 
     while running.load(moAcquire):
@@ -100,11 +104,11 @@ proc eventSourceThread(ctx: ptr SourceContext) {.thread.} =
 
 proc processorThread(ctx: ptr ProcessorContext) {.thread.} =
   ## Single processor consumes and processes all events.
-  ## Periodically triggers memory reclamation.
+  ## Periodic memory reclamation is now driven internally by the queue's
+  ## `stEager` strategy (per-pop `advanceEvery` + `reclaimNow`).
   {.cast(gcsafe).}:
     var consumed = 0
     var maxDepth = 0
-    var lastReclaim = getMonoTime()
     var eventCounts: array[EventKind, int]
 
     while running.load(moAcquire) or ctx.queue[].len() > 0:
@@ -119,12 +123,6 @@ proc processorThread(ctx: ptr ProcessorContext) {.thread.} =
         let depth = ctx.queue[].len()
         if depth > maxDepth:
           maxDepth = depth
-
-        # Periodic memory reclamation (every 10ms)
-        if (getMonoTime() - lastReclaim).inMilliseconds > 10:
-          ctx.manager[].advance()
-          discard reclaimNow(ctx.consumerHandle)
-          lastReclaim = getMonoTime()
       else:
         # No events, brief pause
         sleep(1)
@@ -157,11 +155,7 @@ when isMainModule:
   let startTime = getMonoTime()
 
   # Start processor
-  var procCtx = ProcessorContext(
-    queue: addr queue,
-    manager: addr manager,
-    consumerHandle: consumerHandle,
-  )
+  var procCtx = ProcessorContext(queue: addr queue)
   var processor: Thread[ptr ProcessorContext]
   createThread(processor, processorThread, addr procCtx)
 
@@ -170,7 +164,6 @@ when isMainModule:
   for i in 0..<NumSources:
     sourceContexts[i] = SourceContext(
       queue: addr queue,
-      manager: addr manager,
       sourceId: i,
       startTime: startTime,
     )
