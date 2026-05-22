@@ -15,7 +15,19 @@ requires "typestates >= 0.9.0"
 requires "debra >= 0.8.0"
 
 # Tasks
+task should_fail, "Verifies compile-fail negative controls (Doc C §6.3)":
+  # Driver iterates the 5-case table and runs `nim c --compileOnly` per
+  # case, asserting expected exit + pinned substring. Ported from
+  # nim-debra 0.8.0's `tests/should_fail/runner.nim` harness.
+  exec "nim r --hints:off --warnings:off --path:src tests/should_fail/runner.nim"
+
 task test, "Runs the test suite":
+  # Compile-fail negative controls (Doc C §6.3). Runs first so a
+  # regression in the (γ) bounded-asymmetry guard or Strategy/cardinality
+  # phantom-param surface trips the suite before the positive matrix
+  # masks it with downstream noise.
+  exec "nim r --hints:off --warnings:off --path:src tests/should_fail/runner.nim"
+
   # C with default MM (orc)
   exec "nim c --threads:on -r -f tests/test.nim"
 
