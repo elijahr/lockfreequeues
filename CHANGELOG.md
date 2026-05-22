@@ -648,6 +648,16 @@ param-coherence guards active; the v5.0.0 RC adds `RK = rkEbr`
   `newUnboundedSipmuc(mgr)` and `newUnboundedMupmuc(mgr)` ergonomics
   under the smart-constructor surface; the handle-taking overload
   remains canonical for direct `newQueue` callers.
+- rkEbr batch wrappers (Step 3.3.6.5). `QueueProducer.push(openArray[T])`
+  and `pop(count: int): Option[seq[T]]` (on `Queue` for ccCons ==
+  ccSingle, on `QueueConsumer` for ccCons == ccMulti). Thin loop
+  wrappers mirroring the legacy unbounded API
+  (`unbounded_mupsic.nim:301-306` and `:383-402`) and the bounded
+  counterparts at queue.nim:855-1029. Pure additive; no algorithm
+  change; wrappers reuse the existing single-item rkEbr push/pop
+  bodies and add no new retire-bearing sites. A
+  `Queue.pop(count: int)` trap on bare `Queue` for ccCons == ccMulti
+  matches the single-item trap shape.
 
 ### Documentation (v5.0.0 reframe audit trail)
 

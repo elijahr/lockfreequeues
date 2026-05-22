@@ -1708,6 +1708,26 @@ proc push*[
       # `PinnedScopeAlive -> PinnedScopeDestroyed` via the registered
       # `{.destructorTransition.}` (typestates 0.9.2 accepts).
 
+# --- rkEbr batch push (openArray) — all 4 cardinality combos -------------
+proc push*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var QueueProducer[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads],
+    items: openArray[T],
+) {.raises: [].} =
+  ## Batch push for rkEbr (Step 3.3.6.5). Thin loop over single-item
+  ## push. Mirrors the legacy `unbounded_mupsic.nim:301-306` shape; the
+  ## same shape applies across all 4 rkEbr cardinality combos because
+  ## the single-item push dispatches per (ccProd, ccCons) internally.
+  ##
+  ## Returns void: rkEbr push never fails (the queue grows by segment
+  ## allocation on the slow path).
+  for item in items:
+    self.push(item)
+
 ## ----------------------------------------------------------------------
 ## rkEbr pop body — Track E / Step 3.3.4.
 ##
@@ -1875,6 +1895,36 @@ proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
     if self.handle.advanceEvery(LockFreeQueuesAdvanceEvery):
       discard reclaimNow(self.handle)
 
+# --- rkEbr batch pop (ccCons == ccSingle, direct on Queue) ---------------
+# Step 3.3.6.5. Covers sipsic-equiv (ccSingle × ccSingle) + mupsic-equiv
+# (ccMulti × ccSingle). Mirrors the legacy `unbounded_mupsic.nim:383-402`
+# shape and the bounded counterpart at queue.nim:968-984. ccCons ==
+# ccMulti has a separate `QueueConsumer.pop(count)` overload below.
+proc pop*[
+    T;
+    ccProd: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Queue[T, ccProd, ccSingle, ST, rkEbr, 0, 0, 0, S, MaxThreads], count: int
+): Option[seq[T]] =
+  ## Batch pop for ccCons == ccSingle. Thin loop over single-item pop;
+  ## inherits the single-item pop's pin/retire surface (sipsic-equiv:
+  ## no pin, no retire; mupsic-equiv: pin + retireOnPublish), and adds
+  ## no new retire-bearing site.
+  if unlikely(count <= 0):
+    return none(seq[T])
+  var items = newSeqOfCap[T](count)
+  for _ in 0 ..< count:
+    let v = self.pop()
+    if v.isNone:
+      break
+    items.add(v.get)
+  if items.len == 0:
+    none(seq[T])
+  else:
+    some(items)
+
 # --- sipmuc-equiv pop (ccSingle × ccMulti, via QueueConsumer, retireOnCAS)
 proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
     self: var QueueConsumer[T, ccSingle, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads]
@@ -2032,6 +2082,36 @@ proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
     if self.handle.advanceEvery(LockFreeQueuesAdvanceEvery):
       discard reclaimNow(self.handle)
 
+# --- rkEbr batch pop (ccCons == ccMulti, via QueueConsumer) --------------
+# Step 3.3.6.5. Covers sipmuc-equiv (ccSingle × ccMulti) + mupmuc-equiv
+# (ccMulti × ccMulti). Mirrors the legacy `unbounded_mupsic.nim:383-402`
+# shape and the bounded counterparts at queue.nim:986-1020.
+proc pop*[
+    T;
+    ccProd: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var QueueConsumer[T, ccProd, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads],
+    count: int,
+): Option[seq[T]] =
+  ## Batch pop for ccCons == ccMulti. Thin loop over single-item pop;
+  ## inherits the single-item pop's pin + retireOnCAS surface
+  ## (sipmuc-equiv §3.5.3, mupmuc-equiv §3.5.2) and adds no new
+  ## retire-bearing site.
+  if unlikely(count <= 0):
+    return none(seq[T])
+  var items = newSeqOfCap[T](count)
+  for _ in 0 ..< count:
+    let v = self.pop()
+    if v.isNone:
+      break
+    items.add(v.get)
+  if items.len == 0:
+    none(seq[T])
+  else:
+    some(items)
+
 # --- ccMulti-consumer trap on bare Queue.pop for rkEbr -------------------
 # Mirrors the rkNone ccMulti-consumer trap at queue.nim:770 (which uses
 # `raise newException(InvalidCallDefect, ...)`). The trap raises at
@@ -2047,6 +2127,22 @@ proc pop*[
 ](self: var Queue[T, ccProd, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads]): Option[T] =
   ## Raises `InvalidCallDefect`. Use `QueueConsumer.pop()` instead.
   raise newException(InvalidCallDefect, "Use QueueConsumer.pop()")
+
+# --- ccMulti-consumer batch-pop trap on bare Queue for rkEbr -------------
+# Step 3.3.6.5. Mirrors the single-item trap above; routes ccCons ==
+# ccMulti callers to `QueueConsumer.pop(count)` instead of the bare
+# `Queue.pop(count)`. Matches the bounded counterpart at
+# queue.nim:1022-1032.
+proc pop*[
+    T;
+    ccProd: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Queue[T, ccProd, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads], count: int
+): Option[seq[T]] =
+  ## Raises `InvalidCallDefect`. Use `QueueConsumer.pop(count)` instead.
+  raise newException(InvalidCallDefect, "Use QueueConsumer.pop(count)")
 
 proc `=destroy`*[
     T;
