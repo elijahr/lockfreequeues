@@ -10,7 +10,7 @@ import lockfreequeues/sipmuc
 import ./t_integration
 import ./t_suc
 
-var queue = initSipmuc[8, 4, int]()
+var queue = newSipmucQueue[int, 8, 4]()
 
 suite "Sipmuc[N, C, T]":
   test "capacity":
