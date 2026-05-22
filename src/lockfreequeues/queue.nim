@@ -2453,3 +2453,63 @@ when defined(testing):
       check(self.tail.load(moRelaxed) == tail)
       for i in 0 ..< N:
         check(self.cells.cells[i].payload.data == data[i])
+
+  ## --------------------------------------------------------------------
+  ## Test-only introspection helpers for the unbounded Segment layout.
+  ## Relocated from legacy `unbounded_{mupsic,sipmuc,mupmuc}.nim` in
+  ## Step 3.3.7a-prep ahead of those modules' deletion in 3.3.7b.
+  ##
+  ## UnboundedSipsic stays in its own module per Doc C §3.0.3 so its
+  ## helpers stay there too — these are for the unified-Queue rkEbr
+  ## branch (which covers the sipmuc / mupsic / mupmuc shapes).
+  ##
+  ## The legacy helpers returned a tuple of all relevant offsets per
+  ## family; the relocated helpers expose each offset as a separate proc
+  ## so cardinality-gated fields compile-fail at the call site for
+  ## shapes that lack them (e.g. `committed` only exists when
+  ## `ccProd == ccMulti`, `prevConsumerIdx` only when `ccCons == ccMulti`,
+  ## `head` only on rkEbr (ccProd × ccSingle) shapes).
+  ## --------------------------------------------------------------------
+
+  proc headSegmentForTest*[
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      ST: static DeallocationStrategy,
+      S, MaxThreads: static int,
+  ](self: var Queue[T, ccProd, ccCons, ST, rkEbr, 0, 0, 0, S, MaxThreads]): pointer =
+    ## Test-only accessor: returns the queue's current head-segment
+    ## pointer so the cache-line padding audit can verify base alignment.
+    result = cast[pointer](self.headSegment.load(moRelaxed))
+
+  proc segmentTailOffsetForTest*[
+      T; ccProd, ccCons: static PinScopeCardinality, S: static int
+  ](_: typedesc[Segment[T, ccProd, ccCons, S]]): int =
+    ## Test-only accessor: returns offset of the cache-line-padded `tail`
+    ## field within the unified Segment for any rkEbr cardinality.
+    offsetOf(Segment[T, ccProd, ccCons, S], tail)
+
+  proc segmentHeadOffsetForTest*[
+      T; ccProd, ccCons: static PinScopeCardinality, S: static int
+  ](_: typedesc[Segment[T, ccProd, ccCons, S]]): int =
+    ## Test-only accessor: returns offset of `head` for cardinality
+    ## combos that carry it. For shapes that lack `head` Nim's `offsetOf`
+    ## will compile-fail at the call site — that's the desired behavior
+    ## (field-presence is cardinality-gated in the Segment definition).
+    offsetOf(Segment[T, ccProd, ccCons, S], head)
+
+  proc segmentCommittedOffsetForTest*[
+      T; ccProd, ccCons: static PinScopeCardinality, S: static int
+  ](_: typedesc[Segment[T, ccProd, ccCons, S]]): int =
+    ## Test-only accessor: returns offset of `committed` for cardinality
+    ## combos that carry it (`ccProd == ccMulti`). For shapes that lack
+    ## `committed` Nim's `offsetOf` will compile-fail at the call site.
+    offsetOf(Segment[T, ccProd, ccCons, S], committed)
+
+  proc segmentPrevConsumerIdxOffsetForTest*[
+      T; ccProd, ccCons: static PinScopeCardinality, S: static int
+  ](_: typedesc[Segment[T, ccProd, ccCons, S]]): int =
+    ## Test-only accessor: returns offset of `prevConsumerIdx` for
+    ## cardinality combos that carry it (`ccCons == ccMulti`). For shapes
+    ## that lack `prevConsumerIdx` Nim's `offsetOf` will compile-fail at
+    ## the call site.
+    offsetOf(Segment[T, ccProd, ccCons, S], prevConsumerIdx)
