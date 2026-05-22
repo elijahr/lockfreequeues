@@ -497,18 +497,22 @@ proc push*[T; N, P, C: static int](
         backoffOnRetry(spins)
         continue
 
-# --- ccMulti-producer trap on bare BQueue.push ---------------------------
-# Bundle E (sub-dispatch B.2) replaces this runtime raise with a
-# compile-time `{.error.}` overload. The traps are kept in B.1 so the
-# behavioral contract is byte-identical with the legacy Queue.push trap
-# at queue.nim:741 — tests asserting the trap still pass against BQueue.
+# --- ccMulti-producer compile-time gate on bare BQueue.push --------------
+# Bundle E (sub-dispatch B.2): compile-time `{.error.}` overload. The
+# error string references the user-visible alias name `BQueueProducer`
+# (per M5 R9 — no `*Multi`/`*Single` backing-type leakage in diagnostic
+# strings). Replaces the prior runtime `InvalidCallDefect` raise so the
+# cardinality-illegal call is caught at compile time instead of at the
+# first call site.
 proc push*[
     T;
     ccCons: static PinScopeCardinality,
     N, P, C: static int,
-](self: var BQueue[T, ccMulti, ccCons, N, P, C], item: T): bool =
-  ## Raises `InvalidCallDefect`. Use `BQueueProducer.push()` instead.
-  raise newException(InvalidCallDefect, "Use BQueueProducer.push()")
+](self: var BQueue[T, ccMulti, ccCons, N, P, C], item: T): bool {.error:
+    "Direct push on a multi-producer BQueue is not allowed. " &
+    "Use BQueue.getProducer().push(item) to obtain a per-thread " &
+    "BQueueProducer and push through it.".} =
+  discard
 
 # --- SPSC pop (direct on BQueue) -----------------------------------------
 proc pop*[T; N: static int](
@@ -590,15 +594,18 @@ proc pop*[T; N, P, C: static int](
         backoffOnRetry(spins)
         continue
 
-# --- ccMulti-consumer trap on bare BQueue.pop ----------------------------
-# Bundle E replaces with `{.error.}` overload.
+# --- ccMulti-consumer compile-time gate on bare BQueue.pop ---------------
+# Bundle E: compile-time `{.error.}` overload. References user-visible
+# alias name `BQueueConsumer` per M5 R9.
 proc pop*[
     T;
     ccProd: static PinScopeCardinality,
     N, P, C: static int,
-](self: var BQueue[T, ccProd, ccMulti, N, P, C]): Option[T] =
-  ## Raises `InvalidCallDefect`. Use `BQueueConsumer.pop()` instead.
-  raise newException(InvalidCallDefect, "Use BQueueConsumer.pop()")
+](self: var BQueue[T, ccProd, ccMulti, N, P, C]): Option[T] {.error:
+    "Direct pop on a multi-consumer BQueue is not allowed. " &
+    "Use BQueue.getConsumer().pop() to obtain a per-thread " &
+    "BQueueConsumer and pop through it.".} =
+  discard
 
 ## ----------------------------------------------------------------------
 ## Batch push / pop — `openArray` and `count`-style overloads.
@@ -679,17 +686,20 @@ proc push*[T; N, P, C: static int](
       return some(i .. items.len - 1)
   NoSlice
 
-# --- ccMulti-producer trap on bare BQueue.push openArray -----------------
-# Bundle E replaces with `{.error.}` overload.
+# --- ccMulti-producer compile-time gate on bare BQueue.push openArray ----
+# Bundle E: compile-time `{.error.}` overload. References user-visible
+# alias name `BQueueProducer` per M5 R9.
 proc push*[
     T;
     ccCons: static PinScopeCardinality,
     N, P, C: static int,
 ](
     self: var BQueue[T, ccMulti, ccCons, N, P, C], items: openArray[T]
-): Option[HSlice[int, int]] =
-  ## Raises `InvalidCallDefect`. Use `BQueueProducer.push()` instead.
-  raise newException(InvalidCallDefect, "Use BQueueProducer.push()")
+): Option[HSlice[int, int]] {.error:
+    "Direct batch push on a multi-producer BQueue is not allowed. " &
+    "Use BQueue.getProducer().push(items) to obtain a per-thread " &
+    "BQueueProducer and batch-push through it.".} =
+  discard
 
 # --- SPSC batch pop (direct on BQueue) -----------------------------------
 proc pop*[T; N: static int](
@@ -773,17 +783,20 @@ proc pop*[T; N, P, C: static int](
   else:
     some(items)
 
-# --- ccMulti-consumer trap on bare BQueue.pop count ----------------------
-# Bundle E replaces with `{.error.}` overload.
+# --- ccMulti-consumer compile-time gate on bare BQueue.pop count ---------
+# Bundle E: compile-time `{.error.}` overload. References user-visible
+# alias name `BQueueConsumer` per M5 R9.
 proc pop*[
     T;
     ccProd: static PinScopeCardinality,
     N, P, C: static int,
 ](
     self: var BQueue[T, ccProd, ccMulti, N, P, C], count: int
-): Option[seq[T]] =
-  ## Raises `InvalidCallDefect`. Use `BQueueConsumer.pop()` instead.
-  raise newException(InvalidCallDefect, "Use BQueueConsumer.pop()")
+): Option[seq[T]] {.error:
+    "Direct batch pop on a multi-consumer BQueue is not allowed. " &
+    "Use BQueue.getConsumer().pop(count) to obtain a per-thread " &
+    "BQueueConsumer and batch-pop through it.".} =
+  discard
 
 ## ----------------------------------------------------------------------
 ## Test-only introspection helpers.

@@ -735,17 +735,19 @@ proc push*[T; ST: static DeallocationStrategy, N, P, C: static int](
         backoffOnRetry(spins)
         continue
 
-# --- ccMulti-producer trap on bare Queue.push ----------------------------
-# Mirror the legacy Mupsic/Mupmuc bare-receiver `push` that raises
-# InvalidCallDefect to steer callers toward `producer.push`.
+# --- ccMulti-producer compile-time gate on bare Queue.push ---------------
+# Bundle E (sub-dispatch B.2): compile-time `{.error.}` overload.
+# References user-visible alias name `QueueProducer` per M5 R9.
 proc push*[
     T;
     ccCons: static PinScopeCardinality,
     ST: static DeallocationStrategy,
     N, P, C: static int,
-](self: var Queue[T, ccMulti, ccCons, ST, rkNone, N, P, C, 0, 0], item: T): bool =
-  ## Raises `InvalidCallDefect`. Use `QueueProducer.push()` instead.
-  raise newException(InvalidCallDefect, "Use QueueProducer.push()")
+](self: var Queue[T, ccMulti, ccCons, ST, rkNone, N, P, C, 0, 0], item: T): bool {.error:
+    "Direct push on a multi-producer Queue is not allowed. " &
+    "Use Queue.getProducer().push(item) to obtain a per-thread " &
+    "QueueProducer and push through it.".} =
+  discard
 
 # --- SPSC pop (direct on Queue) ------------------------------------------
 proc pop*[T; ST: static DeallocationStrategy, N: static int](
@@ -830,17 +832,19 @@ proc pop*[T; ST: static DeallocationStrategy, N, P, C: static int](
         backoffOnRetry(spins)
         continue
 
-# --- ccMulti-consumer trap on bare Queue.pop -----------------------------
-# Mirror the legacy Sipmuc/Mupmuc bare-receiver `pop` that raises
-# InvalidCallDefect to steer callers toward `consumer.pop`.
+# --- ccMulti-consumer compile-time gate on bare Queue.pop ----------------
+# Bundle E: compile-time `{.error.}` overload. References user-visible
+# alias name `QueueConsumer` per M5 R9.
 proc pop*[
     T;
     ccProd: static PinScopeCardinality,
     ST: static DeallocationStrategy,
     N, P, C: static int,
-](self: var Queue[T, ccProd, ccMulti, ST, rkNone, N, P, C, 0, 0]): Option[T] =
-  ## Raises `InvalidCallDefect`. Use `QueueConsumer.pop()` instead.
-  raise newException(InvalidCallDefect, "Use QueueConsumer.pop()")
+](self: var Queue[T, ccProd, ccMulti, ST, rkNone, N, P, C, 0, 0]): Option[T] {.error:
+    "Direct pop on a multi-consumer Queue is not allowed. " &
+    "Use Queue.getConsumer().pop() to obtain a per-thread " &
+    "QueueConsumer and pop through it.".} =
+  discard
 
 ## ----------------------------------------------------------------------
 ## Batch push / pop — `openArray` and `count`-style overloads.
@@ -925,7 +929,9 @@ proc push*[T; ST: static DeallocationStrategy, N, P, C: static int](
       return some(i .. items.len - 1)
   NoSlice
 
-# --- ccMulti-producer trap on bare Queue.push openArray ------------------
+# --- ccMulti-producer compile-time gate on bare Queue.push openArray -----
+# Bundle E: compile-time `{.error.}` overload. References user-visible
+# alias name `QueueProducer` per M5 R9.
 proc push*[
     T;
     ccCons: static PinScopeCardinality,
@@ -933,9 +939,11 @@ proc push*[
     N, P, C: static int,
 ](
     self: var Queue[T, ccMulti, ccCons, ST, rkNone, N, P, C, 0, 0], items: openArray[T]
-): Option[HSlice[int, int]] =
-  ## Raises `InvalidCallDefect`. Use `QueueProducer.push()` instead.
-  raise newException(InvalidCallDefect, "Use QueueProducer.push()")
+): Option[HSlice[int, int]] {.error:
+    "Direct batch push on a multi-producer Queue is not allowed. " &
+    "Use Queue.getProducer().push(items) to obtain a per-thread " &
+    "QueueProducer and batch-push through it.".} =
+  discard
 
 # --- SPSC batch pop (direct on Queue) ------------------------------------
 proc pop*[T; ST: static DeallocationStrategy, N: static int](
@@ -1019,7 +1027,9 @@ proc pop*[T; ST: static DeallocationStrategy, N, P, C: static int](
   else:
     some(items)
 
-# --- ccMulti-consumer trap on bare Queue.pop count -----------------------
+# --- ccMulti-consumer compile-time gate on bare Queue.pop count ----------
+# Bundle E: compile-time `{.error.}` overload. References user-visible
+# alias name `QueueConsumer` per M5 R9.
 proc pop*[
     T;
     ccProd: static PinScopeCardinality,
@@ -1027,9 +1037,11 @@ proc pop*[
     N, P, C: static int,
 ](
     self: var Queue[T, ccProd, ccMulti, ST, rkNone, N, P, C, 0, 0], count: int
-): Option[seq[T]] =
-  ## Raises `InvalidCallDefect`. Use `QueueConsumer.pop()` instead.
-  raise newException(InvalidCallDefect, "Use QueueConsumer.pop()")
+): Option[seq[T]] {.error:
+    "Direct batch pop on a multi-consumer Queue is not allowed. " &
+    "Use Queue.getConsumer().pop(count) to obtain a per-thread " &
+    "QueueConsumer and batch-pop through it.".} =
+  discard
 
 ## ----------------------------------------------------------------------
 ## Unbounded body (RK = rkEbr) — Track E / Step 3.3.2.
@@ -2112,27 +2124,23 @@ proc pop*[
   else:
     some(items)
 
-# --- ccMulti-consumer trap on bare Queue.pop for rkEbr -------------------
-# Mirrors the rkNone ccMulti-consumer trap at queue.nim:770 (which uses
-# `raise newException(InvalidCallDefect, ...)`). The trap raises at
-# runtime if a caller mistakenly pops on the bare Queue rather than via
-# `QueueConsumer.pop()`. Doc C §3.0.2 routing requires the QueueConsumer
-# carrier for the multi-consumer rkEbr case (§3.5.2 mupmuc-equiv,
-# §3.5.3 sipmuc-equiv).
+# --- ccMulti-consumer compile-time gate on bare Queue.pop for rkEbr ------
+# Bundle E: compile-time `{.error.}` overload. References user-visible
+# alias name `QueueConsumer` per M5 R9. Doc C §3.0.2 routing requires
+# the QueueConsumer carrier for the multi-consumer rkEbr case
+# (§3.5.2 mupmuc-equiv, §3.5.3 sipmuc-equiv).
 proc pop*[
     T;
     ccProd: static PinScopeCardinality,
     ST: static DeallocationStrategy,
     S, MaxThreads: static int,
-](self: var Queue[T, ccProd, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads]): Option[T] =
-  ## Raises `InvalidCallDefect`. Use `QueueConsumer.pop()` instead.
-  raise newException(InvalidCallDefect, "Use QueueConsumer.pop()")
+](self: var Queue[T, ccProd, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads]): Option[T] {.error:
+    "Direct pop on a multi-consumer Queue is not allowed. " &
+    "Use Queue.getConsumer().pop() to obtain a per-thread " &
+    "QueueConsumer and pop through it.".} =
+  discard
 
-# --- ccMulti-consumer batch-pop trap on bare Queue for rkEbr -------------
-# Step 3.3.6.5. Mirrors the single-item trap above; routes ccCons ==
-# ccMulti callers to `QueueConsumer.pop(count)` instead of the bare
-# `Queue.pop(count)`. Matches the bounded counterpart at
-# queue.nim:1022-1032.
+# --- ccMulti-consumer compile-time gate on bare Queue batch pop for rkEbr ---
 proc pop*[
     T;
     ccProd: static PinScopeCardinality,
@@ -2140,9 +2148,11 @@ proc pop*[
     S, MaxThreads: static int,
 ](
     self: var Queue[T, ccProd, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads], count: int
-): Option[seq[T]] =
-  ## Raises `InvalidCallDefect`. Use `QueueConsumer.pop(count)` instead.
-  raise newException(InvalidCallDefect, "Use QueueConsumer.pop(count)")
+): Option[seq[T]] {.error:
+    "Direct batch pop on a multi-consumer Queue is not allowed. " &
+    "Use Queue.getConsumer().pop(count) to obtain a per-thread " &
+    "QueueConsumer and batch-pop through it.".} =
+  discard
 
 proc `=destroy`*[
     T;

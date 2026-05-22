@@ -138,10 +138,9 @@ suite "rkEbr pop smoke — sipmuc-equiv (ccSingle × ccMulti)":
       check r.get == i
     check c.pop().isNone
 
-  test "bare Queue.pop trap raises InvalidCallDefect":
-    var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, rkEbr, 0, 0, 0, 8, 4])
-    expect InvalidCallDefect:
-      discard q.pop()
+  # B.2 Bundle E: direct pop on a ccMulti-consumer Queue is now a
+  # compile-time `{.error.}`. Bundle J compile-fail negative-controls
+  # under tests/should_fail/ exercise the gate (added in 3.3.11-B.3).
 
 suite "rkEbr pop smoke — mupmuc-equiv (ccMulti × ccMulti)":
   ## §3.5.2 retire-bearing site (retireOnCAS, strong
@@ -172,10 +171,9 @@ suite "rkEbr pop smoke — mupmuc-equiv (ccMulti × ccMulti)":
       check r.get == i
     check c.pop().isNone
 
-  test "bare Queue.pop trap raises InvalidCallDefect":
-    var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, rkEbr, 0, 0, 0, 8, 4])
-    expect InvalidCallDefect:
-      discard q.pop()
+  # B.2 Bundle E: direct pop on a ccMulti-consumer Queue is now a
+  # compile-time `{.error.}`. Bundle J compile-fail negative-controls
+  # under tests/should_fail/ exercise the gate (added in 3.3.11-B.3).
 
 suite "rkEbr bounded-asymmetry guard (γ)":
   ## Bounded `Queue[..., rkNone, ...]` callers MUST fail UFCS lookup

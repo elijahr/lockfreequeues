@@ -148,10 +148,9 @@ suite "rkEbr batch pop (count) — sipmuc-equiv (ccSingle × ccMulti)":
       check got[i] == items[i]
     check c.pop().isNone
 
-  test "bare Queue.pop(count) trap raises InvalidCallDefect":
-    var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, rkEbr, 0, 0, 0, 8, 4])
-    expect InvalidCallDefect:
-      discard q.pop(3)
+  # B.2 Bundle E: direct batch pop on a ccMulti-consumer Queue is now
+  # a compile-time `{.error.}`. Bundle J compile-fail negative-controls
+  # under tests/should_fail/ exercise the gate (added in 3.3.11-B.3).
 
 suite "rkEbr batch pop (count) — mupmuc-equiv (ccMulti × ccMulti)":
   test "push then pop(count) via QueueConsumer returns some(seq)":
@@ -168,7 +167,6 @@ suite "rkEbr batch pop (count) — mupmuc-equiv (ccMulti × ccMulti)":
       check got[i] == items[i]
     check c.pop().isNone
 
-  test "bare Queue.pop(count) trap raises InvalidCallDefect":
-    var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, rkEbr, 0, 0, 0, 8, 4])
-    expect InvalidCallDefect:
-      discard q.pop(3)
+  # B.2 Bundle E: direct batch pop on a ccMulti-consumer Queue is now
+  # a compile-time `{.error.}`. Bundle J compile-fail negative-controls
+  # under tests/should_fail/ exercise the gate (added in 3.3.11-B.3).

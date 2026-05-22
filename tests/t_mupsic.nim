@@ -38,13 +38,10 @@ suite "push(Mupsic[N, P, T])":
   setup:
     queue.reset()
 
-  test "seq[T] should fail":
-    expect InvalidCallDefect:
-      discard queue.push(1)
-
-  test "T should fail":
-    expect InvalidCallDefect:
-      discard queue.push(@[1])
+  # B.2 Bundle E: direct push on a ccMulti Queue is now a compile-time
+  # `{.error.}`. The former runtime `InvalidCallDefect` smoke-tests are
+  # superseded by Bundle J compile-fail negative-controls under
+  # tests/should_fail/ (added in 3.3.11-B.3).
 
 suite "push(Producer[N, P, T], T)":
   setup:
