@@ -3,10 +3,8 @@
 ## corresponds to the legacy `Mupmuc[N, P, C, T]` shape.
 ##
 ## Mechanical conversion per Doc C 5 (migration table):
-##   Mupmuc[N, P, C, T] -> Queue[T, ccMulti, ccMulti, stEager, rkNone,
-##                                N, P, C, 0, 0]
-##   initMupmuc[N, P, C, T]() -> initQueue[T, ccMulti, ccMulti, stEager,
-##                                          N, P, C]()
+##   Mupmuc[N, P, C, T] -> BQueue[T, ccMulti, ccMulti, ##                                N, P, C]
+##   initMupmuc[N, P, C, T]() -> newBQueue[T, ccMulti, ccMulti, ##                                          N, P, C]()
 ##
 ## Test count parity: 28 tests (matches t_mupmuc.nim).
 ## Track B / Task B2. Doc C 3.7, 5, 6.1.
@@ -17,7 +15,7 @@ import sequtils
 import unittest2
 
 import lockfreequeues
-import lockfreequeues/queue as q_mod
+import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
@@ -25,9 +23,9 @@ import ./t_integration
 import ./t_muc
 import ./t_mup
 
-var q = q_mod.initQueue[int, ccMulti, ccMulti, stEager, 8, 4, 4]()
+var q = q_mod.newBQueue[int, ccMulti, ccMulti, 8, 4, 4]()
 
-suite "Queue[int, ccMulti, ccMulti, stEager, rkNone, 8, 4, 4, 0, 0]":
+suite "BQueue[int, ccMulti, ccMulti, 8, 4, 4]":
   test "capacity":
     check(q.capacity == 8)
 

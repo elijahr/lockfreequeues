@@ -19,10 +19,10 @@ const topologiesSupported*: set[Topology] = {tSpsc}
 
 type
   SipsicAdapter*[N: static int, T] = object
-    queue: Queue[T, ccSingle, ccSingle, stEager, rkNone, N, 0, 0, 0, 0]
+    queue: BQueue[T, ccSingle, ccSingle, N, 0, 0]
 
 proc initSipsicAdapter*[N: static int, T](): SipsicAdapter[N, T] =
-  result.queue = initQueue[T, ccSingle, ccSingle, stEager, N, 0, 0]()
+  result.queue = newBQueue[T, ccSingle, ccSingle, N, 0, 0]()
 
 proc push*[N: static int, T](a: var SipsicAdapter[N, T], item: T): PushResult =
   if a.queue.push(item): prSuccess else: prFull

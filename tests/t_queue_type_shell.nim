@@ -1,155 +1,100 @@
-## Smoke tests for the v5.0.0 unified Queue generic's TYPE SHELL.
+## Smoke tests for the v5.0.0 type shell — BQueue + Queue.
 ##
-## A2 ships the 10-param generic type declaration plus the 9 Doc C
-## §3.0.2.4 param-coherence guards lifted into a sibling template
-## (`assertQueueParams`) invoked via the `validateQueueParams` proc.
-## No method bodies yet — those live in Track B (rkNone) and Track E
-## (rkEbr).
+## Step 3.3.11-B (sub-dispatch B.2.5) reshaped the legacy 10-param
+## unified `Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]`
+## into two narrower types:
 ##
-## The rkEbr-branch field declarations are mode-(a) stubs: the queue's
-## RK=rkEbr fields are wrapped in `when false:` so the type instantiates
-## without requiring nim-debra 0.8.0 types (DebraManager, ThreadHandle,
-## Segment, CacheLineBytes). Manager E rewrites those field decls with
-## real debra types when guava's nim-debra worktree linkage lands.
+##   - `BQueue[T, ccProd, ccCons, N, P, C]` — bounded, no debra.
+##   - `Queue[T, ccProd, ccCons, ST, S, MaxThreads]` — unbounded,
+##     with the `(ccSingle, ccSingle)` branch absorbing the standalone
+##     `UnboundedSipsic[S, T]` (debra-free).
 ##
 ## What IS exercised here:
-##   - All 9 static:assert param-coherence guards from Doc C §3.0.2.4
-##     are PRESENT and ACTIVE; positive smoke instantiations confirm
-##     they pass for valid shapes via `validateQueueParams`.
-##   - The 10-param signature compiles with Doc C §3.0.1's exact param
-##     order: T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads.
-##   - Negative-control `compiles()` checks confirm each guard FIRES
-##     for the corresponding invalid instantiation (the
-##     `validateQueueParams` invocation fails to compile when an
-##     assert is violated).
-##
-## What is NOT exercised here:
-##   - push / pop / retireOnCAS / retireOnPublish: Tracks B and E.
-##   - rkEbr-branch field offsets / =destroy hooks: Manager E.
-##   - The full `nim check` expected-fail shell harness: Task A4.
-##
-## Impl plan: Track A, Task A2. Doc C §3.0.1, §3.0.2.4, §5.
+##   - All 4 cardinality combos instantiate under both BQueue and Queue.
+##   - `validateBQueueParams` + `validateQueueParams` succeed on valid
+##     shapes and FAIL via `not compiles(...)` on invalid shapes.
+##   - 6 BQueue-side guards (N>0, P>0/=0 by cardinality, C>0/=0 by
+##     cardinality) and 2 Queue-side guards (S>0, MaxThreads>0).
 
 import unittest2
 
+import lockfreequeues/bqueue
 import lockfreequeues/queue
 import lockfreequeues/strategy
-import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
 
-suite "Queue type shell — positive instantiations (rkNone)":
+suite "BQueue type shell — positive instantiations":
 
   test "bounded mupsic-equivalent shape compiles and validates":
-    var q: Queue[int, ccMulti, ccSingle, stEager, rkNone, 16, 4, 0, 0, 0]
+    var q: BQueue[int, ccMulti, ccSingle, 16, 4, 0]
     discard addr q
-    validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, rkNone,
-                              16, 4, 0, 0, 0])
+    validateBQueueParams(BQueue[int, ccMulti, ccSingle, 16, 4, 0])
 
   test "bounded sipmuc-equivalent shape compiles and validates":
-    var q: Queue[int, ccSingle, ccMulti, stEager, rkNone, 16, 0, 4, 0, 0]
+    var q: BQueue[int, ccSingle, ccMulti, 16, 0, 4]
     discard addr q
-    validateQueueParams(Queue[int, ccSingle, ccMulti, stEager, rkNone,
-                              16, 0, 4, 0, 0])
+    validateBQueueParams(BQueue[int, ccSingle, ccMulti, 16, 0, 4])
 
   test "bounded mupmuc-equivalent shape compiles and validates":
-    var q: Queue[int, ccMulti, ccMulti, stEager, rkNone, 16, 4, 4, 0, 0]
+    var q: BQueue[int, ccMulti, ccMulti, 16, 4, 4]
     discard addr q
-    validateQueueParams(Queue[int, ccMulti, ccMulti, stEager, rkNone,
-                              16, 4, 4, 0, 0])
+    validateBQueueParams(BQueue[int, ccMulti, ccMulti, 16, 4, 4])
 
   test "bounded sipsic-equivalent shape compiles and validates":
-    var q: Queue[int, ccSingle, ccSingle, stEager, rkNone, 16, 0, 0, 0, 0]
+    var q: BQueue[int, ccSingle, ccSingle, 16, 0, 0]
     discard addr q
-    validateQueueParams(Queue[int, ccSingle, ccSingle, stEager, rkNone,
-                              16, 0, 0, 0, 0])
+    validateBQueueParams(BQueue[int, ccSingle, ccSingle, 16, 0, 0])
 
-suite "Queue type shell — positive instantiations (rkEbr, mode-(a) stubs)":
+suite "Queue type shell — positive instantiations (unbounded)":
+
+  test "unbounded sipsic-absorbed shape compiles and validates":
+    var q: Queue[int, ccSingle, ccSingle, stEager, 16, 4]
+    discard addr q
+    validateQueueParams(Queue[int, ccSingle, ccSingle, stEager, 16, 4])
 
   test "unbounded mupsic-equivalent shape compiles and validates":
-    var q: Queue[int, ccMulti, ccSingle, stEager, rkEbr, 0, 0, 0, 16, 4]
+    var q: Queue[int, ccMulti, ccSingle, stEager, 16, 4]
     discard addr q
-    validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, rkEbr,
-                              0, 0, 0, 16, 4])
+    validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, 16, 4])
 
   test "unbounded sipmuc-equivalent shape compiles and validates":
-    var q: Queue[int, ccSingle, ccMulti, stEager, rkEbr, 0, 0, 0, 16, 4]
+    var q: Queue[int, ccSingle, ccMulti, stEager, 16, 4]
     discard addr q
-    validateQueueParams(Queue[int, ccSingle, ccMulti, stEager, rkEbr,
-                              0, 0, 0, 16, 4])
+    validateQueueParams(Queue[int, ccSingle, ccMulti, stEager, 16, 4])
 
   test "unbounded mupmuc-equivalent shape compiles and validates":
-    var q: Queue[int, ccMulti, ccMulti, stEager, rkEbr, 0, 0, 0, 16, 4]
+    var q: Queue[int, ccMulti, ccMulti, stEager, 16, 4]
     discard addr q
-    validateQueueParams(Queue[int, ccMulti, ccMulti, stEager, rkEbr,
-                              0, 0, 0, 16, 4])
+    validateQueueParams(Queue[int, ccMulti, ccMulti, stEager, 16, 4])
 
-suite "Queue type shell — positive controls confirm valid shapes compile":
-  ## These compiles() checks are positive controls paired with the
-  ## negative controls in the next suite. Each pair differs in EXACTLY
-  ## one parameter (the property the guard targets).
+suite "BQueue type shell — guard reachability (negative controls)":
 
-  test "rkNone valid shape passes validateQueueParams via compiles()":
-    check compiles(
-      validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, rkNone,
-                                16, 4, 0, 0, 0]))
-
-  test "rkEbr valid shape passes validateQueueParams via compiles()":
-    check compiles(
-      validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, rkEbr,
-                                0, 0, 0, 16, 4]))
-
-suite "Queue type shell — 9 static:assert guards (negative controls)":
-  ## Each `not compiles(...)` here is paired with a positive control in
-  ## the preceding suite that differs only in the parameter the guard
-  ## targets. This is the Doc C §3.0.2.4 reachability check at the
-  ## smoke-test level (Task A4 adds a full nim-check shell harness).
-
-  test "rkNone requires N > 0 (catches N=0)":
+  test "BQueue requires N > 0":
     check not compiles(
-      validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, rkNone,
-                                0, 4, 0, 0, 0]))
+      validateBQueueParams(BQueue[int, ccMulti, ccSingle, 0, 4, 0]))
 
-  test "rkNone must have S = 0 (catches S != 0)":
+  test "BQueue + ccProd=ccMulti requires P > 0":
     check not compiles(
-      validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, rkNone,
-                                16, 4, 0, 8, 0]))
+      validateBQueueParams(BQueue[int, ccMulti, ccSingle, 16, 0, 0]))
 
-  test "rkNone must have MaxThreads = 0 (catches MT != 0)":
+  test "BQueue + ccProd=ccSingle must have P == 0":
     check not compiles(
-      validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, rkNone,
-                                16, 4, 0, 0, 4]))
+      validateBQueueParams(BQueue[int, ccSingle, ccSingle, 16, 4, 0]))
 
-  test "rkNone + ccProd=ccMulti requires P > 0":
+  test "BQueue + ccCons=ccMulti requires C > 0":
     check not compiles(
-      validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, rkNone,
-                                16, 0, 0, 0, 0]))
+      validateBQueueParams(BQueue[int, ccSingle, ccMulti, 16, 0, 0]))
 
-  test "rkNone + ccProd=ccSingle must have P == 0":
+  test "BQueue + ccCons=ccSingle must have C == 0":
     check not compiles(
-      validateQueueParams(Queue[int, ccSingle, ccSingle, stEager, rkNone,
-                                16, 4, 0, 0, 0]))
+      validateBQueueParams(BQueue[int, ccMulti, ccSingle, 16, 4, 4]))
 
-  test "rkNone + ccCons=ccMulti requires C > 0":
-    check not compiles(
-      validateQueueParams(Queue[int, ccSingle, ccMulti, stEager, rkNone,
-                                16, 0, 0, 0, 0]))
+suite "Queue type shell — guard reachability (negative controls)":
 
-  test "rkNone + ccCons=ccSingle must have C == 0":
+  test "Queue requires S > 0":
     check not compiles(
-      validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, rkNone,
-                                16, 4, 4, 0, 0]))
+      validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, 0, 4]))
 
-  test "rkEbr requires S > 0":
+  test "Queue requires MaxThreads > 0":
     check not compiles(
-      validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, rkEbr,
-                                0, 0, 0, 0, 4]))
-
-  test "rkEbr requires MaxThreads > 0":
-    check not compiles(
-      validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, rkEbr,
-                                0, 0, 0, 16, 0]))
-
-  test "rkEbr must have N == 0, P == 0, C == 0 (catches N != 0)":
-    check not compiles(
-      validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, rkEbr,
-                                8, 0, 0, 16, 4]))
+      validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, 16, 0]))

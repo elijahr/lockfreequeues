@@ -41,9 +41,11 @@
 ##   - `ccSingle × ccMulti`  (SPMC):   direct push / consumer.pop.
 ##   - `ccMulti  × ccMulti`  (MPMC):   producer.push / consumer.pop.
 ##
-## Multi-side direct-on-queue calls land on the `InvalidCallDefect`
-## traps below; Bundle E (sub-dispatch B.2) replaces those traps with
-## compile-time `{.error.}` overloads.
+## Multi-side direct-on-queue calls are gated by compile-time
+## `{.error.}` overloads — calling `BQueue.push(item)` on a
+## `ccProd == ccMulti` queue (or `BQueue.pop()` on `ccCons == ccMulti`)
+## fails at compile time with a message pointing the caller at
+## `BQueue.getProducer().push(item)` / `BQueue.getConsumer().pop()`.
 
 import ./internal/pinscope_stub
 import ./internal/aligned_alloc
@@ -283,11 +285,58 @@ proc initBQueue*[
   ## head/tail, and clears any producer/consumer thread-id registry
   ## tables (multi-cardinality only).
   ##
-  ## `initBQueue` parallels the legacy `initQueue` (queue.nim L506) for
-  ## the bounded shape. The B.2 sub-dispatch's Bundle D introduces a
-  ## smart `newBQueue` constructor on top of this primitive.
+  ## `initBQueue` is the primitive that returns a freshly cleared
+  ## `BQueue` value. `newBQueue` is the canonical smart constructor and
+  ## forwards verbatim — callers should prefer `newBQueue`.
   validateBQueueParams(BQueue[T, ccProd, ccCons, N, P, C])
   result.clear()
+
+proc newBQueue*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    N, P, C: static int,
+](): BQueue[T, ccProd, ccCons, N, P, C] {.inline.} =
+  ## Canonical bounded-queue smart constructor (M4 alias-return lock —
+  ## returns the user-visible `BQueue` alias, never a backing type).
+  ##
+  ## Forwards to `initBQueue`. The family-named helpers
+  ## (`newSipsicQueue` / `newMupsicQueue` / `newSipmucQueue` /
+  ## `newMupmucQueue`) are thin wrappers around this generic ctor with
+  ## the cardinality pre-bound; they exist for ergonomic continuity with
+  ## the v3.x → v4.x naming and minimize churn in the test suite.
+  initBQueue[T, ccProd, ccCons, N, P, C]()
+
+## ----------------------------------------------------------------------
+## Family-named bounded smart constructors.
+##
+## Thin wrappers around `newBQueue` with cardinality pre-bound. M4
+## alias-return lock honored — every signature returns the user-visible
+## `BQueue` alias, never a backing `*Multi`/`*Single` type. The wrappers
+## stay because the test suite (and downstream user code) reach
+## `newSipsicQueue`/`newMupsicQueue`/`newSipmucQueue`/`newMupmucQueue`
+## widely; replacing them all with raw `newBQueue[...]` invocations
+## would be a large mechanical change with no semantic benefit.
+## ----------------------------------------------------------------------
+
+proc newSipsicQueue*[T; N: static int](): BQueue[T, ccSingle, ccSingle, N, 0, 0] {.inline.} =
+  ## Bounded sipsic-equivalent (`ccSingle × ccSingle`) smart-constructor.
+  newBQueue[T, ccSingle, ccSingle, N, 0, 0]()
+
+proc newMupsicQueue*[T; N, P: static int](): BQueue[T, ccMulti, ccSingle, N, P, 0] {.inline.} =
+  ## Bounded mupsic-equivalent (`ccMulti × ccSingle`) smart-constructor.
+  ## `P` is the producer-registry capacity.
+  newBQueue[T, ccMulti, ccSingle, N, P, 0]()
+
+proc newSipmucQueue*[T; N, C: static int](): BQueue[T, ccSingle, ccMulti, N, 0, C] {.inline.} =
+  ## Bounded sipmuc-equivalent (`ccSingle × ccMulti`) smart-constructor.
+  ## `C` is the consumer-registry capacity.
+  newBQueue[T, ccSingle, ccMulti, N, 0, C]()
+
+proc newMupmucQueue*[T; N, P, C: static int](): BQueue[T, ccMulti, ccMulti, N, P, C] {.inline.} =
+  ## Bounded mupmuc-equivalent (`ccMulti × ccMulti`) smart-constructor.
+  ## `P` is the producer-registry capacity, `C` is the consumer-registry
+  ## capacity.
+  newBQueue[T, ccMulti, ccMulti, N, P, C]()
 
 proc capacity*[
     T;

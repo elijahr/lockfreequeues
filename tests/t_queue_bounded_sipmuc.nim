@@ -3,10 +3,8 @@
 ## corresponds to the legacy `Sipmuc[N, C, T]` shape.
 ##
 ## Mechanical conversion per Doc C 5 (migration table):
-##   Sipmuc[N, C, T] -> Queue[T, ccSingle, ccMulti, stEager, rkNone,
-##                             N, 0, C, 0, 0]
-##   initSipmuc[N, C, T]() -> initQueue[T, ccSingle, ccMulti, stEager,
-##                                       N, 0, C]()
+##   Sipmuc[N, C, T] -> BQueue[T, ccSingle, ccMulti, ##                             N, 0, C]
+##   initSipmuc[N, C, T]() -> newBQueue[T, ccSingle, ccMulti, ##                                       N, 0, C]()
 ##
 ## Test count parity: 27 tests (matches t_sipmuc.nim).
 ## Track B / Task B2. Doc C 3.7, 5, 6.1.
@@ -18,16 +16,16 @@ import unittest2
 
 import lockfreequeues
 import lockfreequeues/exceptions
-import lockfreequeues/queue as q_mod
+import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
 import ./t_integration
 import ./t_suc
 
-var q = q_mod.initQueue[int, ccSingle, ccMulti, stEager, 8, 0, 4]()
+var q = q_mod.newBQueue[int, ccSingle, ccMulti, 8, 0, 4]()
 
-suite "Queue[int, ccSingle, ccMulti, stEager, rkNone, 8, 0, 4, 0, 0]":
+suite "BQueue[int, ccSingle, ccMulti, 8, 0, 4]":
   test "capacity":
     check(q.capacity == 8)
 

@@ -43,16 +43,15 @@ import ./adapters/channels_adapter
 import lockfreequeues/backoff
 # v5.0.0 cascade Step 3.3.8c: the legacy `lockfreequeues/mupmuc` module
 # was deleted in 3.3.7; the "mupmuc" variant below now drives the unified
-# `Queue[T, ccMulti, ccMulti, stEager, rkNone, N, P, C, 0, 0]` generic
+# `BQueue[T, ccMulti, ccMulti, N, P, C]` generic
 # via the smart-constructor `newMupmucQueue` / `initQueue`. The legacy
 # variant slug + measure shape are preserved verbatim; the queue_bounded
 # parity variant below uses the same underlying generic at the same
 # Queue instantiation (semantically redundant post-deletion but kept so
 # the B3 cascade slug set remains stable across the 3.3 implementation
 # steps).
-import lockfreequeues/queue as q_mod
+import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
-import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
 
 # MVP comparison adapters (Track 3). Gated by per-library defines.
@@ -89,14 +88,14 @@ const
 # ---------- Mupmuc bespoke harness ----------
 
 type
-  # Unified Queue[T, ccMulti, ccMulti, stEager, rkNone, N, P, C, 0, 0]
+  # Unified BQueue[T, ccMulti, ccMulti, N, P, C]
   # instantiation alias — replaces legacy `Mupmuc[N, P, C, T]`.
   MupmucQueueT[N, P, C: static int; T] =
-    Queue[T, ccMulti, ccMulti, stEager, rkNone, N, P, C, 0, 0]
+    BQueue[T, ccMulti, ccMulti, N, P, C]
   MupmucProducerT[N, P, C: static int; T] =
-    QueueProducer[T, ccMulti, ccMulti, stEager, rkNone, N, P, C, 0, 0]
+    BQueueProducer[T, ccMulti, ccMulti, N, P, C]
   MupmucConsumerT[N, P, C: static int; T] =
-    QueueConsumer[T, ccMulti, ccMulti, stEager, rkNone, N, P, C, 0, 0]
+    BQueueConsumer[T, ccMulti, ccMulti, N, P, C]
 
   MupmucProducerCtx[N, P, C: static int; T] = object
     producer: MupmucProducerT[N, P, C, T]
@@ -177,11 +176,11 @@ proc runMupmucShape[N, P, C: static int; T](
   let slug = "lockfreequeues_mupmuc/mpmc/" & $P & "p" & $C & "c"
   echo fmt"Mupmuc {P}p{C}c ({slug}):"
   for _ in 0 ..< warmup:
-    var q = q_mod.initQueue[T, ccMulti, ccMulti, stEager, N, P, C]()
+    var q = q_mod.newBQueue[T, ccMulti, ccMulti, N, P, C]()
     discard runOneMupmucRun(q, messageCount)
   var samples: seq[float] = @[]
   for _ in 0 ..< runs:
-    var q = q_mod.initQueue[T, ccMulti, ccMulti, stEager, N, P, C]()
+    var q = q_mod.newBQueue[T, ccMulti, ccMulti, N, P, C]()
     samples.add(runOneMupmucRun(q, messageCount))
   let m = mean(samples)
   let s = stddev(samples)
@@ -198,14 +197,12 @@ proc runMupmucShape[N, P, C: static int; T](
 
 type
   QBoundedMupmucProducerCtx[N, P, C: static int; T] = object
-    producer: QueueProducer[T, ccMulti, ccMulti, stEager, rkNone,
-                            N, P, C, 0, 0]
+    producer: BQueueProducer[T, ccMulti, ccMulti, N, P, C]
     startIdx: int
     count: int
 
   QBoundedMupmucConsumerCtx[N, P, C: static int; T] = object
-    consumer: QueueConsumer[T, ccMulti, ccMulti, stEager, rkNone,
-                            N, P, C, 0, 0]
+    consumer: BQueueConsumer[T, ccMulti, ccMulti, N, P, C]
     count: int
 
 proc qBoundedMupmucProducerThread[N, P, C: static int; T](
@@ -227,7 +224,7 @@ proc qBoundedMupmucConsumerThread[N, P, C: static int; T](
       backoffOnPeerWait()
 
 proc runOneQBoundedMupmucRun[N, P, C: static int; T](
-    queue: var Queue[T, ccMulti, ccMulti, stEager, rkNone, N, P, C, 0, 0],
+    queue: var BQueue[T, ccMulti, ccMulti, N, P, C],
     messageCount: int,
 ): float =
   let baseP = messageCount div P
@@ -282,11 +279,11 @@ proc runQBoundedMupmucShape[N, P, C: static int; T](
     "lockfreequeues_queue_bounded_mupmuc/mpmc/" & $P & "p" & $C & "c"
   echo fmt"QueueBoundedMupmuc {P}p{C}c ({slug}):"
   for _ in 0 ..< warmup:
-    var q = q_mod.initQueue[T, ccMulti, ccMulti, stEager, N, P, C]()
+    var q = q_mod.newBQueue[T, ccMulti, ccMulti, N, P, C]()
     discard runOneQBoundedMupmucRun(q, messageCount)
   var samples: seq[float] = @[]
   for _ in 0 ..< runs:
-    var q = q_mod.initQueue[T, ccMulti, ccMulti, stEager, N, P, C]()
+    var q = q_mod.newBQueue[T, ccMulti, ccMulti, N, P, C]()
     samples.add(runOneQBoundedMupmucRun(q, messageCount))
   let m = mean(samples)
   let s = stddev(samples)

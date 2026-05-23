@@ -8,8 +8,7 @@
 ## Mechanical conversion per Doc C 5:
 ##   ptr Mupmuc[N, P, C, int] -> ptr Queue[int, ccMulti, ccMulti, stEager,
 ##                                          rkNone, N, P, C, 0, 0]
-##   initMupmuc[N, P, C, int]() -> initQueue[int, ccMulti, ccMulti, stEager,
-##                                            N, P, C]()
+##   initMupmuc[N, P, C, int]() -> newBQueue[int, ccMulti, ccMulti, ##                                            N, P, C]()
 ##
 ## Test count parity: 2 tests (matches the legacy file).
 ## Track B / Task B2. Doc C 3.7, 5, 6.1.
@@ -19,7 +18,7 @@ import options
 import unittest2
 
 import lockfreequeues
-import lockfreequeues/queue as q_mod
+import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
@@ -32,14 +31,12 @@ const
 
 type
   ProducerContext[N: static int] = object
-    queue: ptr Queue[int, ccMulti, ccMulti, stEager, rkNone,
-                      N, ProducerCount, ConsumerCount, 0, 0]
+    queue: ptr BQueue[int, ccMulti, ccMulti, N, ProducerCount, ConsumerCount]
     producersDone: ptr Atomic[int]
     producerIdx: int
 
   ConsumerContext[N: static int] = object
-    queue: ptr Queue[int, ccMulti, ccMulti, stEager, rkNone,
-                      N, ProducerCount, ConsumerCount, 0, 0]
+    queue: ptr BQueue[int, ccMulti, ccMulti, N, ProducerCount, ConsumerCount]
     received: ptr array[ItemCount, Atomic[bool]]
     duplicateFound: ptr Atomic[bool]
     producersDone: ptr Atomic[int]
@@ -82,8 +79,7 @@ suite "Queue MPMC threaded":
     totalConsumed.store(0, moRelaxed)
 
   test "high contention":
-    var queue = q_mod.initQueue[int, ccMulti, ccMulti, stEager,
-                                 16, ProducerCount, ConsumerCount]()
+    var queue = q_mod.newBQueue[int, ccMulti, ccMulti, 16, ProducerCount, ConsumerCount]()
 
     var prodContexts: array[ProducerCount, ProducerContext[16]]
     for i in 0 ..< ProducerCount:
@@ -119,8 +115,7 @@ suite "Queue MPMC threaded":
       check(received[i].load(moRelaxed))
 
   test "normal capacity":
-    var queue = q_mod.initQueue[int, ccMulti, ccMulti, stEager,
-                                 64, ProducerCount, ConsumerCount]()
+    var queue = q_mod.newBQueue[int, ccMulti, ccMulti, 64, ProducerCount, ConsumerCount]()
 
     var prodContexts: array[ProducerCount, ProducerContext[64]]
     for i in 0 ..< ProducerCount:

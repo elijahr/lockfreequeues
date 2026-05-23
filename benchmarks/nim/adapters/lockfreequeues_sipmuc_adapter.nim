@@ -31,9 +31,9 @@ const topologiesSupported* = {tMpmc}
 
 type
   SipmucQueue*[N, C: static int, T] =
-    Queue[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0, 0]
+    BQueue[T, ccSingle, ccMulti, N, 0, C]
   SipmucConsumerView*[N, C: static int, T] =
-    QueueConsumer[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0, 0]
+    BQueueConsumer[T, ccSingle, ccMulti, N, 0, C]
 
   LockfreequeuesSipmucAdapter*[N, C: static int, T] = object
     queue*: ptr SipmucQueue[N, C, T]
@@ -63,7 +63,7 @@ proc makeLockfreequeuesSipmucAdapter*[N, C: static int, T](
   ## bounded queues.
   doAssert capacity == N, "capacity must equal static N"
   result.queue = create(SipmucQueue[N, C, T])
-  result.queue[] = initQueue[T, ccSingle, ccMulti, stEager, N, 0, C]()
+  result.queue[] = newBQueue[T, ccSingle, ccMulti, N, 0, C]()
   # Pre-allocate consumer 0; bench code that drives multiple consumers
   # registers its own per-thread Consumer via getConsumer(idx = i).
   result.consumer = result.queue[].getConsumer(idx = 0)

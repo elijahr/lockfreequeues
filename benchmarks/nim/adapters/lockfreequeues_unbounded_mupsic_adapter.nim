@@ -53,7 +53,7 @@ const topologiesSupported*: set[Topology] = {tMpscUnbounded}
 type
   UnboundedMupsicAdapterQueue*[S: static int, T;
                                MaxThreads: static int] =
-    Queue[T, ccMulti, ccSingle, stEager, rkEbr, 0, 0, 0, S, MaxThreads]
+    Queue[T, ccMulti, ccSingle, stEager, S, MaxThreads]
 
   UnboundedMupsicAdapter*[S: static int, T;
                           MaxThreads: static int] = object

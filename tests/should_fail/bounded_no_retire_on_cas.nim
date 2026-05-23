@@ -1,18 +1,16 @@
 ## §6.3 condition (4) / γ bounded-asymmetry guard: `q.retireOnCAS(...)`
-## on a bounded queue (`Queue[..., RK = rkNone, ...]`) must fail to
-## compile.
+## on a bounded queue (`BQueue`) must fail to compile.
 ##
-## Per Doc C §3.0.2, `retireOnCAS` / `retireOnPublish` are defined only
-## for `RK == rkEbr` (the receiver-type overload constraint). The γ
-## guard fires via UFCS lookup failure: no `proc retireOnCAS` overload
-## accepts a `Queue[..., rkNone, ...]` receiver, so the dot-call cannot
-## resolve.
+## Post-3.3.11-B.2.5: BQueue (bounded) and Queue (unbounded) are
+## separate types. `retireOnCAS` is defined only on `Queue` — there is
+## no `retireOnCAS` overload on `BQueue` at all, so the dot-call cannot
+## resolve and compilation fails with method-not-defined.
 
 import std/atomics
 
+import lockfreequeues/bqueue
 import lockfreequeues/queue
 import lockfreequeues/strategy
-import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
 
 import debra as debra_mod

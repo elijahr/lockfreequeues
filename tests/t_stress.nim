@@ -130,13 +130,13 @@ suite "Stress - Sipsic (SPSC)":
 
 type
   MupmucPCtx[N, P, C: static int, T] = object
-    queue: ptr Queue[T, ccMulti, ccMulti, stEager, rkNone, N, P, C, 0, 0]
+    queue: ptr BQueue[T, ccMulti, ccMulti, N, P, C]
     count: int
     producerIdx: int
     sent: ptr Atomic[int]
 
   MupmucCCtx[N, P, C: static int, T] = object
-    queue: ptr Queue[T, ccMulti, ccMulti, stEager, rkNone, N, P, C, 0, 0]
+    queue: ptr BQueue[T, ccMulti, ccMulti, N, P, C]
     count: int
     consumerIdx: int
     received: ptr Atomic[int]
@@ -262,7 +262,7 @@ suite "Stress - Mupmuc (MPMC)":
 # =============================================================================
 
 type SipmucCCtx[N, C: static int, T] = object
-  queue: ptr Queue[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0, 0]
+  queue: ptr BQueue[T, ccSingle, ccMulti, N, 0, C]
   count: int
   consumerIdx: int
   received: ptr Atomic[int]
@@ -311,7 +311,7 @@ suite "Stress - Sipmuc (SPMC)":
 # =============================================================================
 
 type MupsicPCtx[N, P: static int, T] = object
-  queue: ptr Queue[T, ccMulti, ccSingle, stEager, rkNone, N, P, 0, 0, 0]
+  queue: ptr BQueue[T, ccMulti, ccSingle, N, P, 0]
   count: int
   producerIdx: int
   sent: ptr Atomic[int]

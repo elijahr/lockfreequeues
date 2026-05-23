@@ -60,7 +60,7 @@ when defined(BenchUnboundedTestCompileTime):
 
 type
   UMupmucQueueT[S: static int; T; MaxT: static int] =
-    Queue[T, ccMulti, ccMulti, stEager, rkEbr, 0, 0, 0, S, MaxT]
+    Queue[T, ccMulti, ccMulti, stEager, S, MaxT]
 
   UMupmucProducerCtx[S: static int; T; MaxT: static int] = object
     queue: ptr UMupmucQueueT[S, T, MaxT]

@@ -7,7 +7,7 @@ import lockfreequeues
 const ItemCount = 10000
 
 type TestContext[N: static int] = object
-  queue: ptr Queue[int, ccSingle, ccSingle, stEager, rkNone, N, 0, 0, 0, 0]
+  queue: ptr BQueue[int, ccSingle, ccSingle, N, 0, 0]
   received: ptr array[ItemCount, Atomic[bool]]
   duplicateFound: ptr Atomic[bool]
   producerDone: ptr Atomic[bool]

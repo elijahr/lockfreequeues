@@ -10,7 +10,7 @@ const
   ItemsPerProducer = ItemCount div ProducerCount
 
 type TestContext[N: static int] = object
-  queue: ptr Queue[int, ccMulti, ccSingle, stEager, rkNone, N, ProducerCount, 0, 0, 0]
+  queue: ptr BQueue[int, ccMulti, ccSingle, N, ProducerCount, 0]
   received: ptr array[ItemCount, Atomic[bool]]
   duplicateFound: ptr Atomic[bool]
   producersDone: ptr Atomic[int]

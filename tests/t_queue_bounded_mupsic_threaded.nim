@@ -17,7 +17,7 @@ import options
 import unittest2
 
 import lockfreequeues
-import lockfreequeues/queue as q_mod
+import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
@@ -28,8 +28,7 @@ const
   ItemsPerProducer = ItemCount div ProducerCount
 
 type TestContext[N: static int] = object
-  queue: ptr Queue[int, ccMulti, ccSingle, stEager, rkNone,
-                    N, ProducerCount, 0, 0, 0]
+  queue: ptr BQueue[int, ccMulti, ccSingle, N, ProducerCount, 0]
   received: ptr array[ItemCount, Atomic[bool]]
   duplicateFound: ptr Atomic[bool]
   producersDone: ptr Atomic[int]
@@ -68,8 +67,7 @@ suite "Queue MPSC threaded":
     producersDone.store(0, moRelaxed)
 
   test "high contention":
-    var queue = q_mod.initQueue[int, ccMulti, ccSingle, stEager,
-                                 16, ProducerCount, 0]()
+    var queue = q_mod.newBQueue[int, ccMulti, ccSingle, 16, ProducerCount, 0]()
 
     var contexts: array[ProducerCount, TestContext[16]]
     for i in 0 ..< ProducerCount:
@@ -105,8 +103,7 @@ suite "Queue MPSC threaded":
       check(received[i].load(moRelaxed))
 
   test "normal capacity":
-    var queue = q_mod.initQueue[int, ccMulti, ccSingle, stEager,
-                                 64, ProducerCount, 0]()
+    var queue = q_mod.newBQueue[int, ccMulti, ccSingle, 64, ProducerCount, 0]()
 
     var contexts: array[ProducerCount, TestContext[64]]
     for i in 0 ..< ProducerCount:

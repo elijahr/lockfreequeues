@@ -2,7 +2,7 @@
 ## SPMC, single producer + N consumers).
 ##
 ## Topology: `mpmc_unbounded` with shapes `1p<C>c`. The unified
-## Queue[T, ccSingle, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads]
+## Queue[T, ccSingle, ccMulti, ST, S, MaxThreads]
 ## requires a `DebraManager[MaxThreads, ccMulti]` for epoch-based
 ## segment reclamation; consumers register against the manager via
 ## `queue.getConsumer()` ON THEIR OWN THREAD (the unified
@@ -40,7 +40,7 @@ const topologiesSupported* = {tMpmcUnbounded}
 type
   UnboundedSipmucAdapterQueue[S: static int, T;
                               MaxThreads: static int] =
-    Queue[T, ccSingle, ccMulti, stEager, rkEbr, 0, 0, 0, S, MaxThreads]
+    Queue[T, ccSingle, ccMulti, stEager, S, MaxThreads]
   UnboundedSipmucAdapterProducer[S: static int, T;
                                  MaxThreads: static int] =
     QueueProducer[T, ccSingle, ccMulti, stEager, rkEbr,

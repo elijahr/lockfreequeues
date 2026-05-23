@@ -23,11 +23,11 @@ const topologiesSupported*: set[Topology] = {tMpmc}
 
 type
   MupmucAdapterQueue[N: static int, T] =
-    Queue[T, ccMulti, ccMulti, stEager, rkNone, N, 1, 1, 0, 0]
+    BQueue[T, ccMulti, ccMulti, N, 1, 1]
   MupmucAdapterProducer[N: static int, T] =
-    QueueProducer[T, ccMulti, ccMulti, stEager, rkNone, N, 1, 1, 0, 0]
+    BQueueProducer[T, ccMulti, ccMulti, N, 1, 1]
   MupmucAdapterConsumer[N: static int, T] =
-    QueueConsumer[T, ccMulti, ccMulti, stEager, rkNone, N, 1, 1, 0, 0]
+    BQueueConsumer[T, ccMulti, ccMulti, N, 1, 1]
 
   MupmucAdapter*[N: static int, T] = object
     queue: ptr MupmucAdapterQueue[N, T]
@@ -36,7 +36,7 @@ type
 
 proc initMupmucAdapter*[N: static int, T](): MupmucAdapter[N, T] =
   result.queue = create(MupmucAdapterQueue[N, T])
-  result.queue[] = initQueue[T, ccMulti, ccMulti, stEager, N, 1, 1]()
+  result.queue[] = newBQueue[T, ccMulti, ccMulti, N, 1, 1]()
   # Use idx parameter to manually assign producer/consumer for single-threaded
   # use AND for multi-threaded ping-pong (bench_common.runLatencyHarness):
   # `getProducer(idx = 0)` skips the threadId-based registration path, so the

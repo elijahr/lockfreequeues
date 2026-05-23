@@ -20,16 +20,15 @@ import ./bench_common
 import lockfreequeues/backoff
 # v5.0.0 cascade Step 3.3.8c: the legacy `lockfreequeues/mupsic` module
 # was deleted in 3.3.7; the "mupsic" variant below now drives the unified
-# `Queue[T, ccMulti, ccSingle, stEager, rkNone, N, P, 0, 0, 0]` generic
+# `BQueue[T, ccMulti, ccSingle, N, P, 0]` generic
 # via the smart-constructor `newMupsicQueue` / `initQueue`. The legacy
 # variant slug + measure shape are preserved verbatim; the queue_bounded
 # parity variant below uses the same underlying generic at the same
 # Queue instantiation (semantically redundant post-deletion but kept so
 # the B3 cascade slug set remains stable across the 3.3 implementation
 # steps).
-import lockfreequeues/queue as q_mod
+import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
-import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
 
 # PR 4 comparison adapter (Track 4 §4.6). Nim's stdlib system.Channel
@@ -68,12 +67,12 @@ const
 # ship them into worker contexts.
 
 type
-  # Unified Queue[T, ccMulti, ccSingle, stEager, rkNone, N, P, 0, 0, 0]
+  # Unified BQueue[T, ccMulti, ccSingle, N, P, 0]
   # instantiation alias — replaces legacy `Mupsic[N, P, T]`.
   MupsicQueueT[N, P: static int; T] =
-    Queue[T, ccMulti, ccSingle, stEager, rkNone, N, P, 0, 0, 0]
+    BQueue[T, ccMulti, ccSingle, N, P, 0]
   MupsicProducerT[N, P: static int; T] =
-    QueueProducer[T, ccMulti, ccSingle, stEager, rkNone, N, P, 0, 0, 0]
+    BQueueProducer[T, ccMulti, ccSingle, N, P, 0]
 
   MupsicProducerCtx[N, P: static int; T] = object
     producer: MupsicProducerT[N, P, T]
@@ -152,11 +151,11 @@ proc runMupsicShape[N, P: static int; T](
   let slug = "lockfreequeues_mupsic/mpsc/" & $P & "p1c"
   echo fmt"Mupsic {P}p1c ({slug}):"
   for _ in 0 ..< warmup:
-    var q = q_mod.initQueue[T, ccMulti, ccSingle, stEager, N, P, 0]()
+    var q = q_mod.newBQueue[T, ccMulti, ccSingle, N, P, 0]()
     discard runOneMupsicRun(q, messageCount)
   var samples: seq[float] = @[]
   for _ in 0 ..< runs:
-    var q = q_mod.initQueue[T, ccMulti, ccSingle, stEager, N, P, 0]()
+    var q = q_mod.newBQueue[T, ccMulti, ccSingle, N, P, 0]()
     samples.add(runOneMupsicRun(q, messageCount))
   let m = mean(samples)
   let s = stddev(samples)
@@ -169,21 +168,19 @@ proc runMupsicShape[N, P: static int; T](
 # ---------- v5.0.0 cascade D3.6: Queue-based MPSC parity harness ----------
 #
 # Parallel to the Mupsic harness above, but exercises the unified
-# `Queue[uint64, ccMulti, ccSingle, stEager, rkNone, N, P, 0, 0, 0]`
+# `BQueue[uint64, ccMulti, ccSingle, N, P, 0]`
 # generic. Slug `lockfreequeues_queue_bounded_mupsic/mpsc/<P>p1c`.
 # Output metric / units (throughput_ops_ms) match the Mupsic baseline
 # so B3 can compute a per-shape % delta.
 
 type
   QMpscProducerCtx[N, P: static int; T] = object
-    producer: QueueProducer[T, ccMulti, ccSingle, stEager, rkNone,
-                            N, P, 0, 0, 0]
+    producer: BQueueProducer[T, ccMulti, ccSingle, N, P, 0]
     startIdx: int
     count: int
 
   QMpscConsumerCtx[N, P: static int; T] = object
-    queue: ptr Queue[T, ccMulti, ccSingle, stEager, rkNone,
-                     N, P, 0, 0, 0]
+    queue: ptr BQueue[T, ccMulti, ccSingle, N, P, 0]
     count: int
 
 proc qMpscProducerThread[N, P: static int; T](
@@ -205,7 +202,7 @@ proc qMpscConsumerThread[N, P: static int; T](
       backoffOnPeerWait()
 
 proc runOneQMpscRun[N, P: static int; T](
-    queue: var Queue[T, ccMulti, ccSingle, stEager, rkNone, N, P, 0, 0, 0],
+    queue: var BQueue[T, ccMulti, ccSingle, N, P, 0],
     messageCount: int,
 ): float =
   let baseP = messageCount div P
@@ -252,11 +249,11 @@ proc runQMpscShape[N, P: static int; T](
   let slug = "lockfreequeues_queue_bounded_mupsic/mpsc/" & $P & "p1c"
   echo fmt"QueueBoundedMupsic {P}p1c ({slug}):"
   for _ in 0 ..< warmup:
-    var q = q_mod.initQueue[T, ccMulti, ccSingle, stEager, N, P, 0]()
+    var q = q_mod.newBQueue[T, ccMulti, ccSingle, N, P, 0]()
     discard runOneQMpscRun(q, messageCount)
   var samples: seq[float] = @[]
   for _ in 0 ..< runs:
-    var q = q_mod.initQueue[T, ccMulti, ccSingle, stEager, N, P, 0]()
+    var q = q_mod.newBQueue[T, ccMulti, ccSingle, N, P, 0]()
     samples.add(runOneQMpscRun(q, messageCount))
   let m = mean(samples)
   let s = stddev(samples)

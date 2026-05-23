@@ -8,8 +8,7 @@
 ## Mechanical conversion per Doc C 5:
 ##   ptr Sipmuc[N, C, int] -> ptr Queue[int, ccSingle, ccMulti, stEager,
 ##                                       rkNone, N, 0, C, 0, 0]
-##   initSipmuc[N, C, int]() -> initQueue[int, ccSingle, ccMulti, stEager,
-##                                          N, 0, C]()
+##   initSipmuc[N, C, int]() -> newBQueue[int, ccSingle, ccMulti, ##                                          N, 0, C]()
 ##
 ## Test count parity: 2 tests (matches the legacy file).
 ## Track B / Task B2. Doc C 3.7, 5, 6.1.
@@ -19,7 +18,7 @@ import options
 import unittest2
 
 import lockfreequeues
-import lockfreequeues/queue as q_mod
+import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
@@ -29,8 +28,7 @@ const
   ConsumerCount = 4
 
 type TestContext[N: static int] = object
-  queue: ptr Queue[int, ccSingle, ccMulti, stEager, rkNone,
-                    N, 0, ConsumerCount, 0, 0]
+  queue: ptr BQueue[int, ccSingle, ccMulti, N, 0, ConsumerCount]
   received: ptr array[ItemCount, Atomic[bool]]
   duplicateFound: ptr Atomic[bool]
   producerDone: ptr Atomic[bool]
@@ -71,8 +69,7 @@ suite "Queue SPMC threaded":
     totalConsumed.store(0, moRelaxed)
 
   test "high contention":
-    var queue = q_mod.initQueue[int, ccSingle, ccMulti, stEager,
-                                 16, 0, ConsumerCount]()
+    var queue = q_mod.newBQueue[int, ccSingle, ccMulti, 16, 0, ConsumerCount]()
     var ctx = TestContext[16](
       queue: addr queue,
       received: addr received,
@@ -97,8 +94,7 @@ suite "Queue SPMC threaded":
       check(received[i].load(moRelaxed))
 
   test "normal capacity":
-    var queue = q_mod.initQueue[int, ccSingle, ccMulti, stEager,
-                                 64, 0, ConsumerCount]()
+    var queue = q_mod.newBQueue[int, ccSingle, ccMulti, 64, 0, ConsumerCount]()
     var ctx = TestContext[64](
       queue: addr queue,
       received: addr received,

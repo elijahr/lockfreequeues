@@ -32,14 +32,14 @@ import lockfreequeues/internal/pinscope_stub
 
 suite "rkEbr push smoke — sipsic-equiv (ccSingle × ccSingle)":
   test "single item push increments len":
-    var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, rkEbr, 0, 0, 0, 8, 4])
+    var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
     var p = q.getProducer()
     p.push(42)
     check q.len() == 1
     check q.segmentCount() == 1
 
   test "fills first segment without growth":
-    var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, rkEbr, 0, 0, 0, 8, 4])
+    var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
     var p = q.getProducer()
     for i in 0 ..< 8:
       p.push(i)
@@ -47,7 +47,7 @@ suite "rkEbr push smoke — sipsic-equiv (ccSingle × ccSingle)":
     check q.segmentCount() == 1
 
   test "crosses segment boundary on item SEGSIZE+1":
-    var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, rkEbr, 0, 0, 0, 8, 4])
+    var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
     var p = q.getProducer()
     for i in 0 ..< 9: # SEGSIZE=8 → item 9 forces growth.
       p.push(i)
@@ -56,14 +56,14 @@ suite "rkEbr push smoke — sipsic-equiv (ccSingle × ccSingle)":
 
 suite "rkEbr push smoke — sipmuc-equiv (ccSingle × ccMulti)":
   test "single item push increments len":
-    var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, rkEbr, 0, 0, 0, 8, 4])
+    var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, 8, 4])
     var p = q.getProducer()
     p.push(42)
     check q.len() == 1
     check q.segmentCount() == 1
 
   test "crosses segment boundary":
-    var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, rkEbr, 0, 0, 0, 8, 4])
+    var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, 8, 4])
     var p = q.getProducer()
     for i in 0 ..< 17: # crosses 2 boundaries (8 → 16 → 17)
       p.push(i)
@@ -74,7 +74,7 @@ suite "rkEbr push smoke — mupsic-equiv (ccMulti × ccSingle)":
   ## §3.5.4 pin-only site. Pin acquired BEFORE segment-pointer load
   ## (§3.5.6 Pin-Claim Ordering).
   test "single producer pushes items, pin/unpin cycle clean":
-    var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, rkEbr, 0, 0, 0, 8, 4])
+    var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 8, 4])
     var p = q.getProducer()
     for i in 0 ..< 5:
       p.push(i)
@@ -82,7 +82,7 @@ suite "rkEbr push smoke — mupsic-equiv (ccMulti × ccSingle)":
     check q.segmentCount() == 1
 
   test "single producer crosses segment boundary":
-    var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, rkEbr, 0, 0, 0, 8, 4])
+    var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 8, 4])
     var p = q.getProducer()
     for i in 0 ..< 17:
       p.push(i)
@@ -93,7 +93,7 @@ suite "rkEbr push smoke — mupmuc-equiv (ccMulti × ccMulti)":
   ## §3.5.5 pin-only site. Pin acquired BEFORE segment-pointer load
   ## (§3.5.6 Pin-Claim Ordering).
   test "single producer pushes items, pin/unpin cycle clean":
-    var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, rkEbr, 0, 0, 0, 8, 4])
+    var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, 8, 4])
     var p = q.getProducer()
     for i in 0 ..< 5:
       p.push(i)
@@ -101,7 +101,7 @@ suite "rkEbr push smoke — mupmuc-equiv (ccMulti × ccMulti)":
     check q.segmentCount() == 1
 
   test "single producer crosses segment boundary":
-    var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, rkEbr, 0, 0, 0, 8, 4])
+    var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, 8, 4])
     var p = q.getProducer()
     for i in 0 ..< 17:
       p.push(i)

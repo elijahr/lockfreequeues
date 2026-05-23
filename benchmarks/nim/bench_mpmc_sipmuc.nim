@@ -36,16 +36,15 @@ import ./bench_common
 import lockfreequeues/backoff
 # v5.0.0 cascade Step 3.3.8c: the legacy `lockfreequeues/sipmuc` module
 # was deleted in 3.3.7; the "sipmuc" variant below now drives the unified
-# `Queue[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0, 0]` generic
+# `BQueue[T, ccSingle, ccMulti, N, 0, C]` generic
 # via the smart-constructor `newSipmucQueue` / `initQueue`. The legacy
 # variant slug + measure shape are preserved verbatim; the queue_bounded
 # parity variant below uses the same underlying generic at the same
 # Queue instantiation (semantically redundant post-deletion but kept so
 # the B3 cascade slug set remains stable across the 3.3 implementation
 # steps).
-import lockfreequeues/queue as q_mod
+import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
-import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
 
 const
@@ -74,12 +73,12 @@ const
 # pre-assigned `Consumer[N, C, T]` value via `getConsumer(idx = i)`.
 
 type
-  # Unified Queue[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0, 0]
+  # Unified BQueue[T, ccSingle, ccMulti, N, 0, C]
   # instantiation alias — replaces legacy `Sipmuc[N, C, T]`.
   SipmucQueueT[N, C: static int; T] =
-    Queue[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0, 0]
+    BQueue[T, ccSingle, ccMulti, N, 0, C]
   SipmucConsumerT[N, C: static int; T] =
-    QueueConsumer[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0, 0]
+    BQueueConsumer[T, ccSingle, ccMulti, N, 0, C]
 
   SipmucProducerCtx[N, C: static int; T] = object
     queue: ptr SipmucQueueT[N, C, T]
@@ -150,11 +149,11 @@ proc runSipmucShape[N, C: static int; T](
   let slug = "lockfreequeues_sipmuc/mpmc/1p" & $C & "c"
   echo fmt"Sipmuc 1p{C}c ({slug}):"
   for _ in 0 ..< warmup:
-    var q = q_mod.initQueue[T, ccSingle, ccMulti, stEager, N, 0, C]()
+    var q = q_mod.newBQueue[T, ccSingle, ccMulti, N, 0, C]()
     discard runOneSipmucRun(q, messageCount)
   var samples: seq[float] = @[]
   for _ in 0 ..< runs:
-    var q = q_mod.initQueue[T, ccSingle, ccMulti, stEager, N, 0, C]()
+    var q = q_mod.newBQueue[T, ccSingle, ccMulti, N, 0, C]()
     samples.add(runOneSipmucRun(q, messageCount))
   let m = mean(samples)
   let s = stddev(samples)
@@ -173,13 +172,12 @@ proc runSipmucShape[N, C: static int; T](
 
 type
   QBoundedSipmucProducerCtx[N, C: static int; T] = object
-    queue: ptr Queue[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0, 0]
+    queue: ptr BQueue[T, ccSingle, ccMulti, N, 0, C]
     startIdx: int
     count: int
 
   QBoundedSipmucConsumerCtx[N, C: static int; T] = object
-    consumer: QueueConsumer[T, ccSingle, ccMulti, stEager, rkNone,
-                            N, 0, C, 0, 0]
+    consumer: BQueueConsumer[T, ccSingle, ccMulti, N, 0, C]
     count: int
 
 proc qBoundedSipmucProducerThread[N, C: static int; T](
@@ -201,7 +199,7 @@ proc qBoundedSipmucConsumerThread[N, C: static int; T](
       backoffOnPeerWait()
 
 proc runOneQBoundedSipmucRun[N, C: static int; T](
-    queue: var Queue[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0, 0],
+    queue: var BQueue[T, ccSingle, ccMulti, N, 0, C],
     messageCount: int,
 ): float =
   let baseC = messageCount div C
@@ -244,11 +242,11 @@ proc runQBoundedSipmucShape[N, C: static int; T](
   let slug = "lockfreequeues_queue_bounded_sipmuc/mpmc/1p" & $C & "c"
   echo fmt"QueueBoundedSipmuc 1p{C}c ({slug}):"
   for _ in 0 ..< warmup:
-    var q = q_mod.initQueue[T, ccSingle, ccMulti, stEager, N, 0, C]()
+    var q = q_mod.newBQueue[T, ccSingle, ccMulti, N, 0, C]()
     discard runOneQBoundedSipmucRun(q, messageCount)
   var samples: seq[float] = @[]
   for _ in 0 ..< runs:
-    var q = q_mod.initQueue[T, ccSingle, ccMulti, stEager, N, 0, C]()
+    var q = q_mod.newBQueue[T, ccSingle, ccMulti, N, 0, C]()
     samples.add(runOneQBoundedSipmucRun(q, messageCount))
   let m = mean(samples)
   let s = stddev(samples)

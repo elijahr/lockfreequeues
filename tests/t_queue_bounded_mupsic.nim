@@ -3,10 +3,8 @@
 ## corresponds to the legacy `Mupsic[N, P, T]` shape.
 ##
 ## Mechanical conversion per Doc C 5 (migration table):
-##   Mupsic[N, P, T] -> Queue[T, ccMulti, ccSingle, stEager, rkNone,
-##                            N, P, 0, 0, 0]
-##   initMupsic[N, P, T]() -> initQueue[T, ccMulti, ccSingle, stEager,
-##                                       N, P, 0]()
+##   Mupsic[N, P, T] -> BQueue[T, ccMulti, ccSingle, ##                            N, P, 0]
+##   initMupsic[N, P, T]() -> newBQueue[T, ccMulti, ccSingle, ##                                       N, P, 0]()
 ##
 ## NOTE: the queue variable is named `q` (not `queue`) to avoid the
 ## name-collision with the imported `lockfreequeues/queue` module.
@@ -18,7 +16,7 @@ import options
 import unittest2
 
 import lockfreequeues
-import lockfreequeues/queue as q_mod
+import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
@@ -26,9 +24,9 @@ import ./t_integration
 import ./t_mup
 import ./t_sic
 
-var q = q_mod.initQueue[int, ccMulti, ccSingle, stEager, 8, 4, 0]()
+var q = q_mod.newBQueue[int, ccMulti, ccSingle, 8, 4, 0]()
 
-suite "Queue[int, ccMulti, ccSingle, stEager, rkNone, 8, 4, 0, 0, 0]":
+suite "BQueue[int, ccMulti, ccSingle, 8, 4, 0]":
   test "capacity":
     check(q.capacity == 8)
 

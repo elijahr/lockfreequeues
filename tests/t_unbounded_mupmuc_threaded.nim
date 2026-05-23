@@ -19,12 +19,12 @@ const
 
 type
   ProducerContext[ST: static DeallocationStrategy, S: static int] = object
-    queue: ptr Queue[int, ccMulti, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads]
+    queue: ptr Queue[int, ccMulti, ccMulti, ST, S, MaxThreads]
     producersDone: ptr Atomic[int]
     producerIdx: int
 
   ConsumerContext[ST: static DeallocationStrategy, S: static int] = object
-    queue: ptr Queue[int, ccMulti, ccMulti, ST, rkEbr, 0, 0, 0, S, MaxThreads]
+    queue: ptr Queue[int, ccMulti, ccMulti, ST, S, MaxThreads]
     received: ptr array[ItemCount, Atomic[bool]]
     duplicateFound: ptr Atomic[bool]
     producersDone: ptr Atomic[int]

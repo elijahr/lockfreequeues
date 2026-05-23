@@ -35,7 +35,7 @@ const topologiesSupported* = {tMpmcUnbounded}
 type
   UnboundedMupmucAdapterQueue[S: static int, T;
                               MaxThreads: static int] =
-    Queue[T, ccMulti, ccMulti, stEager, rkEbr, 0, 0, 0, S, MaxThreads]
+    Queue[T, ccMulti, ccMulti, stEager, S, MaxThreads]
   UnboundedMupmucAdapterProducer[S: static int, T;
                                  MaxThreads: static int] =
     QueueProducer[T, ccMulti, ccMulti, stEager, rkEbr,

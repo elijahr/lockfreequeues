@@ -42,7 +42,7 @@ when defined(BenchUnboundedTestCompileTime):
 
 type
   UMupsicQueueT[S: static int; T; MaxT: static int] =
-    Queue[T, ccMulti, ccSingle, stEager, rkEbr, 0, 0, 0, S, MaxT]
+    Queue[T, ccMulti, ccSingle, stEager, S, MaxT]
 
   UMupsicProducerCtx2[S: static int; T; MaxT: static int] = object
     queue: ptr UMupsicQueueT[S, T, MaxT]

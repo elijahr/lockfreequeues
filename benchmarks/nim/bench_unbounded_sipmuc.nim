@@ -41,7 +41,7 @@ when defined(BenchUnboundedTestCompileTime):
 
 type
   USipmucQueueT[S: static int; T; MaxT: static int] =
-    Queue[T, ccSingle, ccMulti, stEager, rkEbr, 0, 0, 0, S, MaxT]
+    Queue[T, ccSingle, ccMulti, stEager, S, MaxT]
 
   USipmucProducerCtx[S: static int; T; MaxT: static int] = object
     queue: ptr USipmucQueueT[S, T, MaxT]

@@ -39,7 +39,7 @@ suite "rkEbr pop smoke — sipsic-equiv (ccSingle × ccSingle)":
   ## retire — direct slot read + segment advance + freeAligned.
 
   test "push then pop returns same value":
-    var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, rkEbr, 0, 0, 0, 8, 4])
+    var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
     var p = q.getProducer()
     p.push(42)
     let r = q.pop()
@@ -48,7 +48,7 @@ suite "rkEbr pop smoke — sipsic-equiv (ccSingle × ccSingle)":
     check q.len() == 0
 
   test "drains in FIFO order":
-    var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, rkEbr, 0, 0, 0, 8, 4])
+    var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
     var p = q.getProducer()
     for i in 0 ..< 5:
       p.push(i)
@@ -59,7 +59,7 @@ suite "rkEbr pop smoke — sipsic-equiv (ccSingle × ccSingle)":
     check q.pop().isNone
 
   test "multi-segment drain (1 → 0 segments via multiple advances)":
-    var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, rkEbr, 0, 0, 0, 4, 4])
+    var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 4, 4])
     var p = q.getProducer()
     for i in 0 ..< 9: # 3 segments (sizes 4 + 4 + 1)
       p.push(i)
@@ -75,7 +75,7 @@ suite "rkEbr pop smoke — sipsic-equiv (ccSingle × ccSingle)":
     check q.pop().isNone
 
   test "pop on empty queue returns none":
-    var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, rkEbr, 0, 0, 0, 8, 4])
+    var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
     check q.pop().isNone
 
 suite "rkEbr pop smoke — mupsic-equiv (ccMulti × ccSingle)":
@@ -84,7 +84,7 @@ suite "rkEbr pop smoke — mupsic-equiv (ccMulti × ccSingle)":
   ## pinScope FIRST, segment-pointer load NEXT.
 
   test "single-consumer pop returns FIFO order":
-    var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, rkEbr, 0, 0, 0, 8, 4])
+    var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 8, 4])
     var p = q.getProducer()
     for i in 0 ..< 5:
       p.push(i)
@@ -95,7 +95,7 @@ suite "rkEbr pop smoke — mupsic-equiv (ccMulti × ccSingle)":
     check q.pop().isNone
 
   test "boundary-crossing pop drains across segments":
-    var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, rkEbr, 0, 0, 0, 4, 4])
+    var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 4, 4])
     var p = q.getProducer()
     for i in 0 ..< 10: # crosses 2 boundaries (4 → 8 → 10)
       p.push(i)
@@ -106,7 +106,7 @@ suite "rkEbr pop smoke — mupsic-equiv (ccMulti × ccSingle)":
     check q.pop().isNone
 
   test "pop on empty queue returns none":
-    var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, rkEbr, 0, 0, 0, 8, 4])
+    var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 8, 4])
     check q.pop().isNone
 
 suite "rkEbr pop smoke — sipmuc-equiv (ccSingle × ccMulti)":
@@ -115,7 +115,7 @@ suite "rkEbr pop smoke — sipmuc-equiv (ccSingle × ccMulti)":
   ## NEXT.
 
   test "single-consumer pop returns FIFO order":
-    var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, rkEbr, 0, 0, 0, 8, 4])
+    var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, 8, 4])
     var p = q.getProducer()
     var c = q.getConsumer()
     for i in 0 ..< 5:
@@ -127,7 +127,7 @@ suite "rkEbr pop smoke — sipmuc-equiv (ccSingle × ccMulti)":
     check c.pop().isNone
 
   test "boundary-crossing pop drains across segments":
-    var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, rkEbr, 0, 0, 0, 4, 4])
+    var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, 4, 4])
     var p = q.getProducer()
     var c = q.getConsumer()
     for i in 0 ..< 10:
@@ -148,7 +148,7 @@ suite "rkEbr pop smoke — mupmuc-equiv (ccMulti × ccMulti)":
   ## FIRST, segment-pointer load NEXT.
 
   test "single-consumer pop returns FIFO order":
-    var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, rkEbr, 0, 0, 0, 8, 4])
+    var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, 8, 4])
     var p = q.getProducer()
     var c = q.getConsumer()
     for i in 0 ..< 5:
@@ -160,7 +160,7 @@ suite "rkEbr pop smoke — mupmuc-equiv (ccMulti × ccMulti)":
     check c.pop().isNone
 
   test "boundary-crossing pop drains across segments":
-    var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, rkEbr, 0, 0, 0, 4, 4])
+    var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, 4, 4])
     var p = q.getProducer()
     var c = q.getConsumer()
     for i in 0 ..< 10:
@@ -186,7 +186,7 @@ suite "rkEbr bounded-asymmetry guard (γ)":
     # Use a positive control (rkEbr ok) + negative control (rkNone fail).
     check not compiles(
       block:
-        var bq: Queue[int, ccMulti, ccMulti, stEager, rkNone, 16, 4, 4, 0, 0]
+        var bq: BQueue[int, ccMulti, ccMulti, 16, 4, 4]
         # Garbage args; we only care that lookup fails.
         var dummyAtomic: Atomic[ptr int]
         var dummyScope: PinnedScope[4, ccSingle]
@@ -196,7 +196,7 @@ suite "rkEbr bounded-asymmetry guard (γ)":
   test "retireOnPublish not defined on bounded Queue (rkNone)":
     check not compiles(
       block:
-        var bq: Queue[int, ccMulti, ccSingle, stEager, rkNone, 16, 4, 0, 0, 0]
+        var bq: BQueue[int, ccMulti, ccSingle, 16, 4, 0]
         var dummyAtomic: Atomic[ptr int]
         var dummyScope: PinnedScope[4, ccSingle]
         bq.retireOnPublish(dummyScope, dummyAtomic, nil, nil)

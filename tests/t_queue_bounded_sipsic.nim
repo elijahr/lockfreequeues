@@ -3,10 +3,8 @@
 ## corresponds to the legacy `Sipsic[N, T]` shape.
 ##
 ## Mechanical conversion per Doc C 5 (migration table):
-##   Sipsic[N, T] -> Queue[T, ccSingle, ccSingle, stEager, rkNone,
-##                          N, 0, 0, 0, 0]
-##   initSipsic[N, T]() -> initQueue[T, ccSingle, ccSingle, stEager,
-##                                    N, 0, 0]()
+##   Sipsic[N, T] -> BQueue[T, ccSingle, ccSingle, ##                          N, 0, 0]
+##   initSipsic[N, T]() -> newBQueue[T, ccSingle, ccSingle, ##                                    N, 0, 0]()
 ##
 ## Test count parity: 21 tests (matches t_sipsic.nim).
 ## Track B / Task B2. Doc C 3.7, 5, 6.1.
@@ -16,7 +14,7 @@ import sequtils
 import unittest2
 
 import lockfreequeues
-import lockfreequeues/queue as q_mod
+import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
@@ -24,9 +22,9 @@ import ./t_integration
 import ./t_sic
 import ./t_sip
 
-var q = q_mod.initQueue[int, ccSingle, ccSingle, stEager, 8, 0, 0]()
+var q = q_mod.newBQueue[int, ccSingle, ccSingle, 8, 0, 0]()
 
-suite "Queue[int, ccSingle, ccSingle, stEager, rkNone, 8, 0, 0, 0, 0]":
+suite "BQueue[int, ccSingle, ccSingle, 8, 0, 0]":
   test "capacity":
     check(q.capacity == 8)
 

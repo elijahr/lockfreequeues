@@ -49,7 +49,7 @@ suite "Unbounded queue Segment cache-line padding":
     check off.tail mod Cl == 0
 
   test "Segment field offsets are CacheLineBytes-aligned (sipmuc)":
-    # Queue[T, ccSingle, ccMulti, _, rkEbr, 0, 0, 0, 64, 4] — Segment for
+    # Queue[T, ccSingle, ccMulti, _, 64, 4] — Segment for
     # the sipmuc-equiv shape carries `tail` and `prevConsumerIdx` as
     # cache-line-padded fields. `head` and `committed` are not present
     # on this shape (their helpers would compile-fail here).

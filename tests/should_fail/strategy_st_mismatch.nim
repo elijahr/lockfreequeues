@@ -8,7 +8,6 @@
 
 import lockfreequeues/queue
 import lockfreequeues/strategy
-import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
 
 # A proc that only accepts a stManual consumer view. Calling this with
@@ -17,9 +16,8 @@ import lockfreequeues/internal/pinscope_stub
 proc requireManualConsumer[
     T;
     ccProd, ccCons: static PinScopeCardinality,
-    RK: static ReclamationKind,
-    N, P, C, S, MaxThreads: static int,
-](_: QueueConsumer[T, ccProd, ccCons, stManual, RK, N, P, C, S, MaxThreads]) =
+    S, MaxThreads: static int,
+](_: QueueConsumer[T, ccProd, ccCons, stManual, S, MaxThreads]) =
   discard
 
 proc main() =

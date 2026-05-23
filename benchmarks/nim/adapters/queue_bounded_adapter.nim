@@ -1,31 +1,27 @@
-## Consolidated adapter for lockfreequeues' unified `Queue` generic at
-## the bounded (rkNone) cardinality grid. Replaces the 4 parallel
-## `lockfreequeues_queue_bounded_{sipsic,mupsic,sipmuc,mupmuc}_adapter.nim`
-## files added in Track D3.6 with a single type parameterized over
-## `ccProd, ccCons, ST, N, P, C, T` per the cascade-mapping table
-## (D-early §4).
+## Consolidated adapter for lockfreequeues' bounded `BQueue` generic.
+## Replaces the 4 parallel `lockfreequeues_queue_bounded_*` adapters
+## with a single type parameterized over `ccProd, ccCons, N, P, C, T`.
 ##
-## v5.0.0 cascade Track D3.6.5.
+## v5.0.0 cascade Track D3.6.5; B.2.5 rewired from the legacy 10-param
+## `Queue[..., rkNone, ...]` to the dedicated 6-param `BQueue`.
+##
+## **ST phantom retention.** Pre-B.2.5 the adapter carried an `ST`
+## (`DeallocationStrategy`) phantom param to match the unified Queue's
+## bounded shape. BQueue has no `ST` axis (deallocation strategy is an
+## unbounded-only concern), but the bench harness call sites still pass
+## an `ST` value through the adapter's type list. Keep `ST` as a
+## tag-only phantom — it is consumed by the call-site type-list but
+## never reaches BQueue itself.
 ##
 ## Dispatch:
 ##   - push: when `ccProd == ccSingle`, push goes through the queue
-##     directly (`q.push(item)`). When `ccProd == ccMulti`, push goes
-##     through the cached `producer` slot (slot 0) acquired at
-##     construction; multi-producer bench shapes register additional
-##     producers per-thread via `adapter.getProducer(idx = i)`.
-##   - pop: mirror for `ccCons`. When `ccCons == ccSingle`, pop on the
-##     queue. When `ccCons == ccMulti`, pop on the cached `consumer`
-##     slot (slot 0).
-##
-## All Queue type parameters are required at the call site (P/C take
-## sentinel value 0 when the cardinality is `ccSingle`), to keep the
-## generic parameter list aligned with `Queue[T, ccProd, ccCons, ST,
-## rkNone, N, P, C, 0, 0]`.
+##     directly. When `ccProd == ccMulti`, push goes through the cached
+##     `producer` slot acquired at construction.
+##   - pop: mirror for `ccCons`.
 
 import options
-import lockfreequeues/queue as q_mod
+import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
-import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
 import ../bench_common
 
@@ -35,13 +31,13 @@ type
       ST: static DeallocationStrategy;
       N, P, C: static int;
       T] = object
-    queue*: ptr Queue[T, ccProd, ccCons, ST, rkNone, N, P, C, 0, 0]
+    ## `ST` is a tag-only phantom retained for call-site compatibility
+    ## with the pre-B.2.5 adapter shape.
+    queue*: ptr BQueue[T, ccProd, ccCons, N, P, C]
     when ccProd == ccMulti:
-      producer: QueueProducer[T, ccProd, ccCons, ST, rkNone,
-                              N, P, C, 0, 0]
+      producer: BQueueProducer[T, ccProd, ccCons, N, P, C]
     when ccCons == ccMulti:
-      consumer: QueueConsumer[T, ccProd, ccCons, ST, rkNone,
-                              N, P, C, 0, 0]
+      consumer: BQueueConsumer[T, ccProd, ccCons, N, P, C]
 
 proc getProducer*[
     ccProd, ccCons: static PinScopeCardinality;
@@ -49,9 +45,7 @@ proc getProducer*[
     N, P, C: static int;
     T](
     a: var QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T], idx: int
-): QueueProducer[T, ccProd, ccCons, ST, rkNone, N, P, C, 0, 0] =
-  ## Acquire a per-thread producer (only meaningful when
-  ## `ccProd == ccMulti`; for ccSingle the queue is the producer).
+): BQueueProducer[T, ccProd, ccCons, N, P, C] =
   a.queue[].getProducer(idx = idx)
 
 proc getConsumer*[
@@ -60,9 +54,7 @@ proc getConsumer*[
     N, P, C: static int;
     T](
     a: var QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T], idx: int
-): QueueConsumer[T, ccProd, ccCons, ST, rkNone, N, P, C, 0, 0] =
-  ## Acquire a per-thread consumer (only meaningful when
-  ## `ccCons == ccMulti`; for ccSingle the queue is the consumer).
+): BQueueConsumer[T, ccProd, ccCons, N, P, C] =
   a.queue[].getConsumer(idx = idx)
 
 proc makeQueueBoundedAdapter*[
@@ -73,10 +65,8 @@ proc makeQueueBoundedAdapter*[
     capacity: int = N
 ): QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T] =
   doAssert capacity == N, "capacity must equal static N"
-  result.queue =
-    create(Queue[T, ccProd, ccCons, ST, rkNone, N, P, C, 0, 0])
-  result.queue[] =
-    q_mod.initQueue[T, ccProd, ccCons, ST, N, P, C]()
+  result.queue = create(BQueue[T, ccProd, ccCons, N, P, C])
+  result.queue[] = q_mod.newBQueue[T, ccProd, ccCons, N, P, C]()
   when ccProd == ccMulti:
     result.producer = result.queue[].getProducer(idx = 0)
   when ccCons == ccMulti:
@@ -129,5 +119,5 @@ proc name*[
     T](
     a: QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T]
 ): string =
-  "lockfreequeues/Queue[" & $ccProd & "," & $ccCons & ",rkNone," &
+  "lockfreequeues/BQueue[" & $ccProd & "," & $ccCons & "," &
     $N & "," & $P & "," & $C & "]"
