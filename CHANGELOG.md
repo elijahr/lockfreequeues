@@ -19,6 +19,90 @@ are NOT carried forward as tags). The substantive work from both windows
 is consolidated into v5.0.0 below, deduplicated against the unified Queue
 reframe and against each other.
 
+> **3.3.11-B reshape note (final v5.0.0 surface).** The original
+> v5.0.0 plan landed a single unified
+> `Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]` (10
+> params) plus a standalone `UnboundedSipsic[S, T]`. Phase 3.3.11-B
+> reshaped that further:
+>
+> - **Bounded surface** split into a dedicated
+>   `BQueue[T, ccProd, ccCons, N, P, C]` (6 params, no debra, no
+>   `RK`/`ST`/`S`/`MaxThreads`).
+> - **Unbounded surface** became
+>   `Queue[T, ccProd, ccCons, ST, S, MaxThreads]` (also 6 params).
+>   The `(ccSingle, ccSingle)` arm of `Queue` absorbs the standalone
+>   `UnboundedSipsic` body verbatim (debra-free, committed-flag
+>   protocol). The standalone `UnboundedSipsic` module is deleted.
+> - **Smart constructors** collapse from 11 family-prefixed entry
+>   points to two generic ones (`newBQueue`, `newQueue`) plus
+>   family-named thin wrappers (`newSipsicQueue`, `newMupsicQueue`,
+>   `newSipmucQueue`, `newMupmucQueue`, `newUnboundedSipsicQueue`,
+>   `newUnboundedMupsicQueue`, `newUnboundedSipmucQueue`,
+>   `newUnboundedMupmucQueue`) retained as ergonomic aliases.
+> - **Runtime `InvalidCallDefect` traps** (6 cardinality-illegal
+>   call sites in the old unified Queue) lifted to compile-time
+>   `{.error.}` overloads with user-visible-alias-only diagnostic
+>   strings (M5 R9 gate).
+> - **Middle-axis typestates** (Lifecycle on the queue value,
+>   Claim-state on the `ccMulti` producer/consumer view) are
+>   designed and reserved in the brief but DEFERRED to a follow-up
+>   sub-dispatch (B.4). The structural restructure landed in
+>   3.3.11-B.1 / B.2 / B.2.5 / B.3; the typestate-attachment plumbing
+>   is the only outstanding piece.
+>
+> Doc C and the design-queue-collapse-v5.0.0 doc still describe the
+> older 10-param shape; the canonical reference for the current
+> surface is `docs/v5.0.0-migration/3.3.11-B-final-shape.md`.
+>
+> **Worked example — primary surface (3.3.11-B / M7 lock).** For new
+> code, prefer the two generic constructors:
+>
+> ```nim
+> import lockfreequeues
+>
+> # Bounded mupsic-equivalent (multi-producer, single-consumer):
+> var q1 = newBQueue[int, ccMulti, ccSingle, N = 8, P = 4, C = 0]()
+> let p1 = q1.getProducer()
+> discard p1.push(42)
+> discard q1.pop()                 # SPSC pop on single-consumer side
+>
+> # Unbounded mupmuc-equivalent (multi-producer, multi-consumer):
+> var q2 = newQueue[
+>   int, ccMulti, ccMulti, stEager, S = 64, MaxThreads = 8
+> ]()
+> let p2 = q2.getProducer()
+> let c2 = q2.getConsumer()
+> discard p2.push(99)
+> discard c2.pop()
+> ```
+>
+> The family-named thin-wrappers (`newMupsicQueue`,
+> `newUnboundedMupmucQueue`, …) stay for grep continuity with the
+> v3.x/v4.x naming and to minimize churn in downstream call sites
+> and benchmark adapters. For new code, prefer the two generic
+> constructors above. Both styles compile to the same underlying
+> type; the wrappers are pure ergonomic aliases.
+>
+> **Worked example — two-type alias dispatch (M1/M3 reservation,
+> Bundle F / B.4).** When Lifecycle / Claim-state typestates land in
+> B.4, the view types follow a two-type alias pattern:
+>
+> ```nim
+> type
+>   BQueueProducer*[T, ccCons, N, P, C; ccProd: static Cardinality] = (
+>     when ccProd is ccMulti: BQueueProducerMulti[T, ccCons, N, P, C]
+>     else: BQueueProducerSingle[T, ccCons, N, P, C]
+>   )
+> ```
+>
+> Only the `*Multi` backing carries the Claim-state attachment
+> pragma; the `*Single` backing is plain. The split is invisible to
+> users — `q.getProducer()` returns `BQueueProducer[...]` either way.
+> All `{.error.}` strings and (post-B.4) `transitionError` messages
+> reference the user-visible alias name (`BQueueProducer`,
+> `QueueProducer`, …) and never leak the backing `*Multi`/`*Single`
+> type name (M5 R9 grep gate).
+
 The reframe consolidates 7+ typestate queue families (`Sipsic`, `Sipmuc`,
 `Mupsic`, `Mupmuc`, `UnboundedSipmuc`, `UnboundedMupsic`, `UnboundedMupmuc`,
 plus their phantom variants) into a single unified
@@ -26,7 +110,9 @@ plus their phantom variants) into a single unified
 `UnboundedSipsic[S, T]` SPSC type stays separate (no EBR integration
 required). See `docs/v5.0.0-migration/reframe-rationale.md` for the full
 inflection-point rationale and `docs/v5.0.0-migration/design-queue-collapse-v5.0.0.md`
-(Doc C) for the complete surface specification.
+(Doc C) for the complete surface specification. **Doc C describes the
+older 10-param shape**; the 3.3.11-B final shape is summarized in the
+addendum above.
 
 v5.0.0 ships in two stages: the base release lands `RK = rkNone`
 (bounded) under the unified `Queue` shell with the 9 Doc C §3.0.2.4
