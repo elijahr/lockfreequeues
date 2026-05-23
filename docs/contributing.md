@@ -20,7 +20,6 @@ lockfreequeues/
 ├── tests/                   # unittest2 suites + the `test.nim` aggregator
 ├── examples/                # runnable examples (driven by `nimble examples`)
 ├── benchmarks/              # bench harness (Nim binaries + Python merge)
-├── stress-tests/            # long-running multi-thread shakedown
 ├── docs/                    # mkdocs source (this site)
 ├── .github/workflows/       # CI: build, docs, bench, release
 ├── lockfreequeues.nimble    # package manifest + tasks
