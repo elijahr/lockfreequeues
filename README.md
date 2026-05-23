@@ -8,6 +8,23 @@ All variants cover SPSC, SPMC, MPSC, and MPMC.
 
 API documentation: <https://elijahr.github.io/lockfreequeues>
 
+> **v5.0.0 breaking change — Quick Start examples below are pre-v5.0.0.**
+> v5.0.0 collapses the seven typestate queue families plus the standalone
+> `UnboundedSipsic` into two generic types: `BQueue[T, ccProd, ccCons, N, P, C]`
+> (bounded) and `Queue[T, ccProd, ccCons, ST, S, MaxThreads]` (unbounded, with
+> the `(ccSingle, ccSingle)` arm absorbing the standalone `UnboundedSipsic`
+> body). Smart constructors collapse from 11 family-prefixed entry points to
+> two generics (`newBQueue`, `newQueue`) plus family-named thin wrappers
+> (`newSipsicQueue`, `newMupsicQueue`, `newUnboundedMupmucQueue`, …) for
+> ergonomic continuity. See [`CHANGELOG.md`](CHANGELOG.md) for the v5.0.0
+> reshape note with worked examples, and
+> [`docs/v5.0.0-migration/3.3.11-B-final-shape.md`](docs/v5.0.0-migration/3.3.11-B-final-shape.md)
+> for the canonical surface reference. The Quick Start examples in this README
+> still use the legacy v4.x constructor names (`initSipsic`, `newUnboundedMupmuc`,
+> …) and will be rewritten before v5.0.0 ships — the conceptual diagrams
+> further down (bounded/unbounded tables, ordering guarantees, etc.) remain
+> accurate.
+
 ## Why this library
 
 If two threads need to hand items to each other and you cannot afford a mutex,
