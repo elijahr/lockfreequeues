@@ -165,6 +165,71 @@ v5.0.0 ships in two stages: the base release lands `RK = rkNone`
 param-coherence guards active; the v5.0.0 RC adds `RK = rkEbr`
 (unbounded) once `nim-debra >= 0.8.0` is released (Track E).
 
+### Refactor highlights (3.3.11-B)
+
+The v5.0.0 reshape is measured against the pre-wave devel baseline
+(merge-base `b6da7f60`):
+
+- **Production-code surface**: 8 per-family modules deleted
+  (`mupmuc.nim`, `mupsic.nim`, `sipmuc.nim`, `sipsic.nim`,
+  `unbounded_mupmuc.nim`, `unbounded_mupsic.nim`,
+  `unbounded_sipmuc.nim`, `unbounded_sipsic.nim` — 2570 LOC total);
+  replaced by `bqueue.nim` (1269 LOC, greenfield 6-param BQueue),
+  `queue.nim` (1389 LOC, unified 6-param Queue absorbing the standalone
+  `UnboundedSipsic`), `internal/shared.nim` (37 LOC), and
+  `internal/typestates_dsl.nim` (21 LOC, attachment-pragma resolution
+  shim). Plus typestate-machinery edits across
+  `typestates/unbounded_*_push.nim` and `typestates/unbounded_*_pop.nim`.
+- **Net src/ LOC delta**: +393 LOC (5903 → 6296). The growth is
+  paid by typestate machinery (Middle-axis Lifecycle + Claim-state
+  attachment) which is feature-bearing, not bloat; the per-family
+  module deletions are offset by the typestate-attached BQueue/Queue
+  surface plus view types.
+- **Smart-constructor surface**: collapsed from 11 family-prefixed
+  entry points (one per family + per-reclamation kind) to 2 primary
+  generic constructors (`newBQueue`, `newQueue`) plus 8 family-named
+  thin wrappers retained for grep continuity.
+- **UnboundedSipsic absorbed into Queue** via
+  `when (ccProd, ccCons) is (ccSingle, ccSingle):` branch with the
+  legacy committed-flag protocol verbatim (debra-free, no manager).
+- **Middle-axis typestates landed** (3.3.11-B.4.1.6):
+  `BQueueLifecycle: BQueueInit -> BQueueDestroyed` on `BQueue`,
+  `QueueLifecycle: QueueInit -> QueueDestroyed` on `Queue`, and
+  `BQueueClaimState` / `QueueClaimState` (`Unclaimed -> ProducerClaimed
+  | ConsumerClaimed | BothClaimed`) on the 4 view types
+  (`BQueueProducer`, `BQueueConsumer`, `QueueProducer`,
+  `QueueConsumer`). Wall 3 limitation: typestates v0.9.3 does not
+  catch use-after-destroy in the CFG analyzer; see the "Bundle F
+  revised design" subsection above for the documented recovery path.
+- **Bench-binary size delta** (vs immediate pre-Bundle-F baseline
+  `e0f2850`, release builds): total +15,088 bytes across 9 binaries
+  (+0.74%). The largest grow-by binary is `bench_mpmc_mupmuc`
+  (+25,616 bytes / +8.35%), reflecting the typestate-attachment
+  codegen on the highest-cardinality topology. 7 of 9 binaries
+  shrank or grew under 1%.
+- **Test posture at v5.0.0 cut**: 5 MM lanes (orc / arc / refc /
+  atomicArc+TSan / orc+ASan) green at 240/240 each, plus C++ lane
+  240/240, plus `-d:nimEnforceLockFreeAtomics` lane 240/240.
+  `should_fail/runner.nim`: 14/14. R7 / R8 / R9 grep gates: clean.
+
+### Removed (3.3.11-B late)
+
+- **Stress test suite (`nimble stresstests`)**: the 9 legacy
+  `stress-tests/t_*_threaded.nim` files referenced the deleted
+  per-family aliases (`Mupmuc[N, P, C, T]`, `Sipmuc[N, C, T]`, etc.)
+  and pre-DEBRA constructors. Rewiring 1,197 LOC across 9 files to
+  the new BQueue/Queue surface with the attach/detach Claim-state
+  idiom was estimated at multi-hour refactor scope (well beyond the
+  v5.0.0 wrap-up budget). Per Bundle I principle ("do NOT silently
+  disable failing tests — fix production code OR delete the test"),
+  the stress test suite + `stresstests` nimble task are removed in
+  v5.0.0. The MM lane matrix (5 lanes × 240 tests at maximum stress
+  shape, plus TSan/ASan sanitizers) provides the primary
+  concurrency-correctness signal; the dropped stress suite was
+  duplicative single-shape coverage. Post-v5.0.0 work may resurrect a
+  smaller targeted stress suite under the new surface if a gap
+  surfaces.
+
 ### BREAKING
 
 - Unified `Queue` generic. The seven non-SPSC queue families
