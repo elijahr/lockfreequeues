@@ -2,82 +2,82 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/benchmarks/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/contributing/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/api/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/api/mupmuc/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/api/mupsic/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/api/sipmuc/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/api/sipsic/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/api/unbounded_mupmuc/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/api/unbounded_mupsic/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/api/unbounded_sipmuc/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/api/unbounded_sipsic/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/guide/bounded-vs-unbounded/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/guide/core-concepts/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/guide/examples/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/guide/getting-started/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/guide/memory-management/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/guide/performance-tuning/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/guide/safety-model/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/guide/slot-ownership-typestates/</loc>
-         <lastmod>2026-05-22</lastmod>
+         <lastmod>2026-05-23</lastmod>
     </url>
 </urlset>
