@@ -67,6 +67,36 @@ const cases = @[
     outcome: eoCompileFails,
     substring: "retireOnPublish",
   ),
+  # 3.3.11-B Bundle J + M8 (family-level coverage of Bundle E
+  # `{.error.}` cardinality gates). One case per BQueue/Queue * push/pop
+  # family, exercising the cardinality `{.error.}` overload through the
+  # family-named thin-wrappers (`newMupsicQueue`, `newSipmucQueue`,
+  # `newMupmucQueue`, `newUnboundedSipmucQueue`). Family-level rather
+  # than per-individual-wrapper per the M8 light-touch policy.
+  Case(
+    name: "t_bqueue_cardinality §6.3 (6) — direct push on ccProd=ccMulti BQueue is forbidden",
+    file: "tests/should_fail/bqueue_multi_producer_direct_push.nim",
+    outcome: eoCompileFails,
+    substring: "multi-producer BQueue",
+  ),
+  Case(
+    name: "t_bqueue_cardinality §6.3 (7) — direct pop on ccCons=ccMulti BQueue is forbidden",
+    file: "tests/should_fail/bqueue_multi_consumer_direct_pop.nim",
+    outcome: eoCompileFails,
+    substring: "multi-consumer BQueue",
+  ),
+  Case(
+    name: "t_queue_cardinality §6.3 (8) — direct pop on ccCons=ccMulti Queue is forbidden",
+    file: "tests/should_fail/queue_multi_consumer_direct_pop.nim",
+    outcome: eoCompileFails,
+    substring: "multi-consumer Queue",
+  ),
+  Case(
+    name: "t_bqueue_cardinality §6.3 (9) — direct batch push on ccProd=ccMulti BQueue is forbidden",
+    file: "tests/should_fail/bqueue_multi_producer_batch_push.nim",
+    outcome: eoCompileFails,
+    substring: "batch push on a multi-producer BQueue",
+  ),
 ]
 
 proc runCase(c: Case): bool =
