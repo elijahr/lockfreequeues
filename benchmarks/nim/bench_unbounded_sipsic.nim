@@ -25,7 +25,9 @@ import std/[monotimes, options, os, parseopt, sets, strformat,
             syncio, times]
 import ./bench_common
 import lockfreequeues/backoff
-import lockfreequeues/unbounded_sipsic
+import lockfreequeues/queue
+import lockfreequeues/strategy
+import lockfreequeues/internal/pinscope_stub
 
 const
   UnboundedSipsicRuns* {.intdefine.} = 3
@@ -33,6 +35,8 @@ const
   BenchUnboundedWarmup* {.intdefine.} = 2
 
   SegmentSize = 64
+  SipsicMaxThreads = 4
+    ## Type-uniform phantom for the sipsic-absorbed `Queue` branch.
 
 when defined(BenchUnboundedTestCompileTime):
   static:
@@ -42,19 +46,23 @@ when defined(BenchUnboundedTestCompileTime):
 # ---------- UnboundedSipsic harness (no DEBRA, plain SPSC) ----------
 
 type
+  USipsicQueue[S: static int; T] =
+    Queue[T, ccSingle, ccSingle, stEager, S, SipsicMaxThreads]
+
   USipsicProducerCtx[S: static int; T] = object
-    queue: ptr UnboundedSipsic[S, T]
+    queue: ptr USipsicQueue[S, T]
     count: int
 
   USipsicConsumerCtx[S: static int; T] = object
-    queue: ptr UnboundedSipsic[S, T]
+    queue: ptr USipsicQueue[S, T]
     count: int
 
 proc usipsicProducerThread[S: static int; T](
     ctx: ptr USipsicProducerCtx[S, T]
 ) {.thread.} =
+  var producer = ctx.queue[].getProducer()
   for i in 0 ..< ctx.count:
-    ctx.queue[].push(T(i))
+    producer.push(T(i))
 
 proc usipsicConsumerThread[S: static int; T](
     ctx: ptr USipsicConsumerCtx[S, T]
@@ -68,7 +76,7 @@ proc usipsicConsumerThread[S: static int; T](
       backoffOnPeerWait()
 
 proc runOneUSipsicRun[S: static int; T](
-    queue: ptr UnboundedSipsic[S, T], messageCount: int
+    queue: ptr USipsicQueue[S, T], messageCount: int
 ): float =
   var producerThread: Thread[ptr USipsicProducerCtx[S, T]]
   var consumerThread: Thread[ptr USipsicConsumerCtx[S, T]]
@@ -87,11 +95,11 @@ proc runUSipsicShape(em: var BMFEmitter, runs, warmup, messageCount: int) =
   let slug = "lockfreequeues_unbounded_sipsic/spsc_unbounded/1p1c"
   echo fmt"UnboundedSipsic 1p1c ({slug}):"
   for _ in 0 ..< warmup:
-    var q = newUnboundedSipsic[SegmentSize, uint64]()
+    var q = newUnboundedSipsicQueue[uint64, stEager, SegmentSize, SipsicMaxThreads]()
     discard runOneUSipsicRun(addr q, messageCount)
   var samples: seq[float] = @[]
   for _ in 0 ..< runs:
-    var q = newUnboundedSipsic[SegmentSize, uint64]()
+    var q = newUnboundedSipsicQueue[uint64, stEager, SegmentSize, SipsicMaxThreads]()
     samples.add(runOneUSipsicRun(addr q, messageCount))
   let m = mean(samples)
   let s = stddev(samples)

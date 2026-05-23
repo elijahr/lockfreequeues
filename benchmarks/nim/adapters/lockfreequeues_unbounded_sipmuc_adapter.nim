@@ -43,12 +43,10 @@ type
     Queue[T, ccSingle, ccMulti, stEager, S, MaxThreads]
   UnboundedSipmucAdapterProducer[S: static int, T;
                                  MaxThreads: static int] =
-    QueueProducer[T, ccSingle, ccMulti, stEager, rkEbr,
-                  0, 0, 0, S, MaxThreads]
+    QueueProducer[T, ccSingle, ccMulti, stEager, S, MaxThreads]
   UnboundedSipmucAdapterConsumer[S: static int, T;
                                  MaxThreads: static int] =
-    QueueConsumer[T, ccSingle, ccMulti, stEager, rkEbr,
-                  0, 0, 0, S, MaxThreads]
+    QueueConsumer[T, ccSingle, ccMulti, stEager, S, MaxThreads]
 
   LockfreequeuesUnboundedSipmucAdapter*[S: static int, T;
                                         MaxThreads: static int] = object

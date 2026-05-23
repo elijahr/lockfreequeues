@@ -1,14 +1,13 @@
 ## Smoke fixtures for the v5.0.0 Step 3.3.5b smart-constructor surface
-## (4 bounded + 3 unbounded). Each smart-constructor is exercised with
+## (4 bounded + 4 unbounded). Each smart-constructor is exercised with
 ## a single construct + push/pop round-trip; the deeper push/pop
 ## behaviour is already pinned by the sibling smoke gates
 ## (`t_queue_bounded_*.nim`, `t_queue_unbounded_push_smoke.nim`,
 ## `t_queue_unbounded_pop_smoke.nim`) and the §3.0.2.4 soundness gates.
 ##
-## DELIBERATELY NO `newUnboundedSipsicQueue`: per Doc C §3.0.3 the
-## separate `UnboundedSipsic[S, T]` type stays in `unbounded_sipsic.nim`
-## as the recommended SPSC-unbounded path. This test file mirrors that
-## exclusion.
+## Post-3.3.11-B.2.5: the standalone `UnboundedSipsic[S, T]` was absorbed
+## into `Queue[T, ccSingle, ccSingle, stEager, S, MaxThreads]` and now
+## ships its own smart-ctor (`newUnboundedSipsicQueue`) exercised below.
 ##
 ## **Push-uniform / pop-asymmetric**: `push` always goes through
 ## `QueueProducer.push` for `ccProd == ccMulti` and through
@@ -21,6 +20,7 @@
 import std/options
 import unittest2
 
+import lockfreequeues/bqueue
 import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
@@ -68,6 +68,21 @@ suite "bounded smart-constructors (RK = rkNone)":
     let r = c.pop()
     check r.isSome
     check r.get == 123
+
+suite "unbounded smart-constructors — newUnboundedSipsicQueue":
+  ## Sipsic-absorbed branch: no debra, no manager. Only an auto-create
+  ## overload is supported (manager-borrow is `{.error.}`-gated since
+  ## sipsic has no debra integration).
+  test "auto-create: construct + push + pop":
+    var q = newUnboundedSipsicQueue[int, stEager, 8, 4]()
+    var p = q.getProducer()
+    p.push(10)
+    p.push(20)
+    let r1 = q.pop()
+    let r2 = q.pop()
+    check r1.isSome and r1.get == 10
+    check r2.isSome and r2.get == 20
+    check q.pop().isNone
 
 suite "unbounded smart-constructors — newUnboundedMupsicQueue":
   test "auto-create: construct + push + pop":

@@ -38,12 +38,10 @@ type
     Queue[T, ccMulti, ccMulti, stEager, S, MaxThreads]
   UnboundedMupmucAdapterProducer[S: static int, T;
                                  MaxThreads: static int] =
-    QueueProducer[T, ccMulti, ccMulti, stEager, rkEbr,
-                  0, 0, 0, S, MaxThreads]
+    QueueProducer[T, ccMulti, ccMulti, stEager, S, MaxThreads]
   UnboundedMupmucAdapterConsumer[S: static int, T;
                                  MaxThreads: static int] =
-    QueueConsumer[T, ccMulti, ccMulti, stEager, rkEbr,
-                  0, 0, 0, S, MaxThreads]
+    QueueConsumer[T, ccMulti, ccMulti, stEager, S, MaxThreads]
 
   LockfreequeuesUnboundedMupmucAdapter*[S: static int, T;
                                         MaxThreads: static int] = object

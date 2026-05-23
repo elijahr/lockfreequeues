@@ -1,20 +1,34 @@
+## UnboundedSipsic threaded tests — post-3.3.11-B.2.5 the standalone
+## `UnboundedSipsic[S, T]` is absorbed into
+## `Queue[T, ccSingle, ccSingle, stEager, S, MaxThreads]`.
+
 import lockfreequeues/atomic_dsl
 import options
 import unittest2
 
-import lockfreequeues/unbounded_sipsic
+import lockfreequeues/queue
+import lockfreequeues/strategy
+import lockfreequeues/internal/pinscope_stub
 
-const ItemCount = 10000
+const
+  ItemCount = 10000
+  MT = 4
+    ## Type-uniform MaxThreads phantom for the sipsic-absorbed branch.
 
-type TestContext[S: static int] = object
-  queue: ptr UnboundedSipsic[S, int]
-  received: ptr array[ItemCount, Atomic[bool]]
-  duplicateFound: ptr Atomic[bool]
-  producerDone: ptr Atomic[bool]
+type
+  SipsicQ[S: static int] =
+    Queue[int, ccSingle, ccSingle, stEager, S, MT]
+
+  TestContext[S: static int] = object
+    queue: ptr SipsicQ[S]
+    received: ptr array[ItemCount, Atomic[bool]]
+    duplicateFound: ptr Atomic[bool]
+    producerDone: ptr Atomic[bool]
 
 proc producer[S: static int](ctx: ptr TestContext[S]) {.thread.} =
+  var p = ctx.queue[].getProducer()
   for i in 1 .. ItemCount:
-    ctx.queue[].push(i)
+    p.push(i)
   ctx.producerDone[].store(true, moRelease)
 
 proc consumer[S: static int](ctx: ptr TestContext[S]) {.thread.} =
@@ -43,7 +57,7 @@ suite "UnboundedSipsic threaded":
     producerDone.store(false, moRelaxed)
 
   test "high segment turnover":
-    var queue = newUnboundedSipsic[8, int]()
+    var queue = newUnboundedSipsicQueue[int, stEager, 8, MT]()
     var ctx = TestContext[8](
       queue: addr queue,
       received: addr received,
@@ -63,7 +77,7 @@ suite "UnboundedSipsic threaded":
       check(received[i].load(moRelaxed))
 
   test "normal segment size":
-    var queue = newUnboundedSipsic[64, int]()
+    var queue = newUnboundedSipsicQueue[int, stEager, 64, MT]()
     var ctx = TestContext[64](
       queue: addr queue,
       received: addr received,
@@ -83,13 +97,14 @@ suite "UnboundedSipsic threaded":
       check(received[i].load(moRelaxed))
 
   test "segment retirement bounded after drain":
-    # UnboundedSipsic deallocates segments inline (no strategy). After draining
+    # Sipsic deallocates segments inline (no strategy). After draining
     # the queue, segment count should be small (only the active tail segment).
-    var queue = newUnboundedSipsic[8, int]()
+    var queue = newUnboundedSipsicQueue[int, stEager, 8, MT]()
+    var p = queue.getProducer()
 
     # Push items to create segments
     for i in 1 .. 1000:
-      queue.push(i)
+      p.push(i)
 
     # Pop all items
     for i in 1 .. 1000:

@@ -1,23 +1,39 @@
+## UnboundedSipsic threaded stress — currently disabled in stress_test.nim
+## (see the comment block there). Kept on disk so that re-enabling is a
+## one-line change. Post-3.3.11-B.2.5 the standalone
+## `UnboundedSipsic[S, T]` was absorbed into
+## `Queue[T, ccSingle, ccSingle, stEager, S, MaxThreads]`.
+
 import options
 import unittest2
 
-import lockfreequeues/unbounded_sipsic
+import lockfreequeues/atomic_dsl
+import lockfreequeues/queue
+import lockfreequeues/strategy
+import lockfreequeues/internal/pinscope_stub
 
 
-const ItemCount = 10000
+const
+  ItemCount = 10000
+  MT = 4
+    ## Type-uniform MaxThreads phantom for the sipsic-absorbed branch.
 
 
 type
+  SipsicQ[S: static int] =
+    Queue[int, ccSingle, ccSingle, stEager, S, MT]
+
   TestContext[S: static int] = object
-    queue: ptr UnboundedSipsic[S, int]
+    queue: ptr SipsicQ[S]
     received: ptr array[ItemCount, Atomic[bool]]
     duplicateFound: ptr Atomic[bool]
     producerDone: ptr Atomic[bool]
 
 
 proc producer[S: static int](ctx: ptr TestContext[S]) {.thread.} =
+  var p = ctx.queue[].getProducer()
   for i in 1..ItemCount:
-    ctx.queue[].push(i)
+    p.push(i)
   ctx.producerDone[].store(true, moRelease)
 
 
@@ -49,8 +65,7 @@ suite "UnboundedSipsic threaded":
     producerDone.store(false, moRelaxed)
 
   test "high segment turnover":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipsic[8, int](manager)
+    var queue = newUnboundedSipsicQueue[int, stEager, 8, MT]()
     var ctx = TestContext[8](
       queue: addr queue,
       received: addr received,
@@ -70,8 +85,7 @@ suite "UnboundedSipsic threaded":
       check(received[i].load(moRelaxed))
 
   test "normal segment size":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipsic[64, int](manager)
+    var queue = newUnboundedSipsicQueue[int, stEager, 64, MT]()
     var ctx = TestContext[64](
       queue: addr queue,
       received: addr received,
@@ -90,33 +104,19 @@ suite "UnboundedSipsic threaded":
     for i in 0..<ItemCount:
       check(received[i].load(moRelaxed))
 
-  test "segment retirement (Manual)":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipsic[8, int](manager, Manual)
+  test "segment retirement after drain":
+    # Sipsic deallocates segments inline (no manager). After draining
+    # the queue, segment count should be small (only the active tail).
+    var queue = newUnboundedSipsicQueue[int, stEager, 8, MT]()
+    var p = queue.getProducer()
 
     # Push items to create segments
     for i in 1..1000:
-      queue.push(i)
-    let peakSegments = queue.segmentCount()
+      p.push(i)
 
     # Pop all items
     for i in 1..1000:
       discard queue.pop()
 
-    # Segments should NOT be freed with Manual
-    check(queue.segmentCount() == peakSegments)
-
-  test "segment retirement (Eager)":
-    let manager = newEpochManager()
-    var queue = newUnboundedSipsic[8, int](manager, Eager)
-
-    # Push items to create segments
-    for i in 1..1000:
-      queue.push(i)
-
-    # Pop all items
-    for i in 1..1000:
-      discard queue.pop()
-
-    # Segments SHOULD be freed with Eager
+    # Segments should be freed inline.
     check(queue.segmentCount() <= 3)
