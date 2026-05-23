@@ -43,12 +43,13 @@ reframe and against each other.
 >   call sites in the old unified Queue) lifted to compile-time
 >   `{.error.}` overloads with user-visible-alias-only diagnostic
 >   strings (M5 R9 gate).
-> - **Middle-axis typestates** (Lifecycle on the queue value,
->   Claim-state on the `ccMulti` producer/consumer view) are
->   designed and reserved in the brief but DEFERRED to a follow-up
->   sub-dispatch (B.4). The structural restructure landed in
->   3.3.11-B.1 / B.2 / B.2.5 / B.3; the typestate-attachment plumbing
->   is the only outstanding piece.
+> - **Middle-axis typestates landed in 3.3.11-B.4.1.6 (Bundle F).**
+>   Lifecycle (`BQueueInit -> BQueueDestroyed` on `BQueue`;
+>   `QueueInit -> QueueDestroyed` on `Queue`) and Claim-state
+>   (`Unclaimed -> ProducerClaimed | ConsumerClaimed | BothClaimed`
+>   on view types) ship under a REVISED design relative to the
+>   original brief — see the "Bundle F revised design" section
+>   below for the Wall 1 / Wall 2 / Wall 3 deviations.
 >
 > Doc C and the design-queue-collapse-v5.0.0 doc still describe the
 > older 10-param shape; the canonical reference for the current
@@ -83,25 +84,70 @@ reframe and against each other.
 > constructors above. Both styles compile to the same underlying
 > type; the wrappers are pure ergonomic aliases.
 >
-> **Worked example — two-type alias dispatch (M1/M3 reservation,
-> Bundle F / B.4).** When Lifecycle / Claim-state typestates land in
-> B.4, the view types follow a two-type alias pattern:
+> **Bundle F revised design (3.3.11-B.4.1.6).** The original Bundle
+> F brief called for (a) self-loop `{.transition.}` pragmas on every
+> state-preserving op to keep the queue value in `QueueInit` across
+> push/pop and (b) a two-type alias dispatch (`BQueueProducer =
+> when ccProd is ccMulti: BQueueProducerMulti else:
+> BQueueProducerSingle`) so Claim-state attached only on the multi
+> side. A pre-implementation probe step (B.4.1.5) empirically
+> validated revised patterns against typestates v0.9.3:
 >
-> ```nim
-> type
->   BQueueProducer*[T, ccCons, N, P, C; ccProd: static Cardinality] = (
->     when ccProd is ccMulti: BQueueProducerMulti[T, ccCons, N, P, C]
->     else: BQueueProducerSingle[T, ccCons, N, P, C]
->   )
-> ```
+> - **Wall 1 fix — no self-loop transitions.** State-preserving
+>   methods (`push`, `pop`, `getProducer`, `getConsumer`, `attach`,
+>   `detach`, batch variants) declare NO `{.transition.}` pragma.
+>   The typestate verifier accepts same-module non-transition procs
+>   as state-preserving operations that mutate runtime fields
+>   without changing the static typestate. Self-loop transitions
+>   would be rejected by `validateTransitionsRespectInitialTerminal`
+>   in the typestates parser. Terminal transitions are emitted
+>   exclusively by `=destroy` via `destructorTransition`, mirroring
+>   nim-debra's `pinned_scope.nim:178-180` verbatim.
 >
-> Only the `*Multi` backing carries the Claim-state attachment
-> pragma; the `*Single` backing is plain. The split is invisible to
-> users — `q.getProducer()` returns `BQueueProducer[...]` either way.
-> All `{.error.}` strings and (post-B.4) `transitionError` messages
-> reference the user-visible alias name (`BQueueProducer`,
-> `QueueProducer`, …) and never leak the backing `*Multi`/`*Single`
-> type name (M5 R9 grep gate).
+> - **Wall 2 fix — single object type with internal `when` switch.**
+>   `BQueueProducer` / `BQueueConsumer` / `QueueProducer` /
+>   `QueueConsumer` are single user-facing object types per view
+>   (no Multi/Single split). The optional `claimed: bool` field
+>   exists only under `when ccProd == ccMulti:` (or `ccCons ==
+>   ccMulti` for consumers). The typestate attaches uniformly; the
+>   ccSingle path has the typestate statically attached but no
+>   `attach` / `detach` overloads, so it is functionally dormant.
+>   `attach` / `detach` are declared with `BQueueProducer[T,
+>   ccMulti, ccCons, N, P, C]` (or analogue) in the param
+>   signature; the compiler statically excludes ccSingle from the
+>   overload set and produces a clean "type mismatch" diagnostic
+>   that references the user-visible alias name. No `*Multi` /
+>   `*Single` backing types exist (M5 R9 grep gate trivially
+>   satisfied — there is no backing-type name to leak).
+>
+> - **Wall 3 acceptance — documented limitation.** typestates v0.9.3
+>   does NOT statically catch use-after-destroy. The CFG analyzer
+>   enforces "reaches terminal by end of scope," not "no method
+>   calls on a value already in terminal state." Concretely:
+>   `=destroy(q); q.push(item)` does NOT fail compile (the typestate
+>   is in `QueueDestroyed`, but the push proc has no transition
+>   pragma and the verifier sees no rule violation). Similarly, an
+>   explicit `=destroy(q); =destroy(q)` double-destroy is not caught
+>   by the destructor's `destructorTransition` because the second
+>   call still treats the value as a fresh entry into the destructor
+>   surface.
+>
+>   **Recovery path**: typestates v0.10+ post-terminal CFG mode (open
+>   feature request) OR design pivot to consume-on-transition
+>   destructors. For must-not-double-use sites where the failure
+>   mode warrants runtime instrumentation, mirror
+>   `pinned_scope.nim:128-131`'s `doAssert(not consumed, ...)`
+>   pattern. v5.0.0 does NOT blanket-instrument BQueue or Queue
+>   destructors so hot-path push/pop stays allocation-free and
+>   branch-free.
+>
+> The user-visible API is unchanged from the original brief: smart
+> constructors return `BQueue[...]` / `Queue[...]` aliases;
+> `getProducer()` / `getConsumer()` return `BQueueProducer[...]` /
+> view aliases; cardinality-illegal direct calls are still gated by
+> Bundle E's `{.error.}` overloads (which take precedence over the
+> typestate's destructor-only transition because the `{.error.}`
+> overload is more-specific).
 
 The reframe consolidates 7+ typestate queue families (`Sipsic`, `Sipmuc`,
 `Mupsic`, `Mupmuc`, `UnboundedSipmuc`, `UnboundedMupsic`, `UnboundedMupmuc`,

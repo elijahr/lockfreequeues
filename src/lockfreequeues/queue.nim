@@ -31,6 +31,13 @@ import ./reclamation
 import ./internal/pinscope_stub
 import ./internal/aligned_alloc
 import ./internal/shared
+import ./internal/typestates_dsl
+# Bundle F (3.3.11-B.4.1.6): upstream `typestates` package's
+# `typestate` / `destructorTransition` / `transitionError` DSL macros
+# pulled in via `./internal/typestates_dsl` for the same name-shadow
+# reason documented in `bqueue.nim` — a direct `import typestates`
+# from this file would resolve to the local sibling
+# `./typestates.nim` re-export module.
 import ./atomic_dsl
 import ./backoff
 import options
@@ -73,6 +80,158 @@ static:
   assert LockFreeQueuesAdvanceEvery > 0,
     "LockFreeQueuesAdvanceEvery must be a positive integer"
 
+## ----------------------------------------------------------------------
+## Middle-axis Lifecycle typestate (Bundle F.1, 3.3.11-B.4.1.6).
+##
+## Tracks `QueueInit -> QueueDestroyed` on the unbounded Queue value.
+## Parallel to `BQueue`'s Lifecycle typestate in `bqueue.nim` — same
+## structural pattern, distinct context / state types because typestate
+## attachments are unique per type (TA-004) and the bqueue/queue split
+## demands independent lifecycles. Mirrors nim-debra
+## `pinned_scope.nim:67-93` verbatim in shape.
+##
+## State-preserving discipline (Wall 1 fix from B.4.1.5): every Queue
+## state-preserving op (`push`, `pop`, `getProducer`, `getConsumer`,
+## `retireOnCAS`, `retireOnPublish`, batch variants) declares NO
+## `{.transition.}` pragma. They live in this module (queue.nim) so
+## the same-module discipline is satisfied without `{.notATransition.}`.
+##
+## The terminal `QueueInit -> QueueDestroyed` transition is emitted by
+## `=destroy` (further below in the file) via `destructorTransition`.
+## ----------------------------------------------------------------------
+
+type
+  QueueLifecycleCtx*[
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      ST: static DeallocationStrategy,
+      S, MaxThreads: static int,
+  ] = object of RootObj
+    ## Phantom context type for the Queue Lifecycle typestate.
+
+  QueueInit*[
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      ST: static DeallocationStrategy,
+      S, MaxThreads: static int,
+  ] = distinct QueueLifecycleCtx[T, ccProd, ccCons, ST, S, MaxThreads]
+    ## Initial Lifecycle state for an unbounded Queue.
+
+  QueueDestroyed*[
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      ST: static DeallocationStrategy,
+      S, MaxThreads: static int,
+  ] = distinct QueueLifecycleCtx[T, ccProd, ccCons, ST, S, MaxThreads]
+    ## Terminal Lifecycle state for an unbounded Queue.
+
+typestate QueueLifecycle[
+    T,
+    ccProd: static PinScopeCardinality,
+    ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S: static int,
+    MaxThreads: static int,
+]:
+  inheritsFromRootObj = true
+  consumeOnTransition = false
+  strictTransitions = false
+  states:
+    QueueInit[T, ccProd, ccCons, ST, S, MaxThreads]
+    QueueDestroyed[T, ccProd, ccCons, ST, S, MaxThreads]
+  initial:
+    QueueInit[T, ccProd, ccCons, ST, S, MaxThreads]
+  terminal:
+    QueueDestroyed[T, ccProd, ccCons, ST, S, MaxThreads]
+  transitions:
+    QueueInit[T, ccProd, ccCons, ST, S, MaxThreads] ->
+      QueueDestroyed[T, ccProd, ccCons, ST, S, MaxThreads]
+
+## ----------------------------------------------------------------------
+## Middle-axis Claim-state typestate (Bundle F.2, 3.3.11-B.4.1.6).
+##
+## Tracks `QueueClaimUnclaimed -> QueueClaimBothClaimed` on the
+## QueueProducer / QueueConsumer view types. Parallel to the BQueue
+## Claim-state in `bqueue.nim`. The state-type names carry a `QC`
+## prefix (`QCUnclaimed` / `QCProducerClaimed` / ...) to disambiguate
+## from BQueue's state types, which live in this build's same import
+## graph via the `lockfreequeues` aggregator.
+##
+## Wall 2 fix (B.4.1.5): single object type per view, uniform
+## attachment, ccMulti-only attach/detach methods. ccSingle callers
+## hit a clean type-mismatch diagnostic with no `*Multi` / `*Single`
+## leakage.
+## ----------------------------------------------------------------------
+
+type
+  QueueClaimCtx*[
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      ST: static DeallocationStrategy,
+      S, MaxThreads: static int,
+  ] = object of RootObj
+    ## Phantom context for the QueueProducer / QueueConsumer Claim-state.
+
+  QCUnclaimed*[
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      ST: static DeallocationStrategy,
+      S, MaxThreads: static int,
+  ] = distinct QueueClaimCtx[T, ccProd, ccCons, ST, S, MaxThreads]
+
+  QCProducerClaimed*[
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      ST: static DeallocationStrategy,
+      S, MaxThreads: static int,
+  ] = distinct QueueClaimCtx[T, ccProd, ccCons, ST, S, MaxThreads]
+
+  QCConsumerClaimed*[
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      ST: static DeallocationStrategy,
+      S, MaxThreads: static int,
+  ] = distinct QueueClaimCtx[T, ccProd, ccCons, ST, S, MaxThreads]
+
+  QCBothClaimed*[
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      ST: static DeallocationStrategy,
+      S, MaxThreads: static int,
+  ] = distinct QueueClaimCtx[T, ccProd, ccCons, ST, S, MaxThreads]
+
+typestate QueueClaimState[
+    T,
+    ccProd: static PinScopeCardinality,
+    ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S: static int,
+    MaxThreads: static int,
+]:
+  inheritsFromRootObj = true
+  consumeOnTransition = false
+  strictTransitions = false
+  states:
+    QCUnclaimed[T, ccProd, ccCons, ST, S, MaxThreads]
+    QCProducerClaimed[T, ccProd, ccCons, ST, S, MaxThreads]
+    QCConsumerClaimed[T, ccProd, ccCons, ST, S, MaxThreads]
+    QCBothClaimed[T, ccProd, ccCons, ST, S, MaxThreads]
+  initial:
+    QCUnclaimed[T, ccProd, ccCons, ST, S, MaxThreads]
+  terminal:
+    QCBothClaimed[T, ccProd, ccCons, ST, S, MaxThreads]
+  transitions:
+    QCUnclaimed[T, ccProd, ccCons, ST, S, MaxThreads] ->
+      QCProducerClaimed[T, ccProd, ccCons, ST, S, MaxThreads]
+    QCUnclaimed[T, ccProd, ccCons, ST, S, MaxThreads] ->
+      QCConsumerClaimed[T, ccProd, ccCons, ST, S, MaxThreads]
+    QCUnclaimed[T, ccProd, ccCons, ST, S, MaxThreads] ->
+      QCBothClaimed[T, ccProd, ccCons, ST, S, MaxThreads]
+    QCProducerClaimed[T, ccProd, ccCons, ST, S, MaxThreads] ->
+      QCBothClaimed[T, ccProd, ccCons, ST, S, MaxThreads]
+    QCConsumerClaimed[T, ccProd, ccCons, ST, S, MaxThreads] ->
+      QCBothClaimed[T, ccProd, ccCons, ST, S, MaxThreads]
+
 type
   Segment*[T; ccProd, ccCons: static PinScopeCardinality, S: static int] = object
     ## Unbounded-queue segment. One linked-segment payload, parameterized
@@ -108,11 +267,11 @@ type
       prevConsumerIdx* {.align: CacheLineBytes.}: Atomic[int]
 
   Queue*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S, MaxThreads: static int,
-  ] = object
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      ST: static DeallocationStrategy,
+      S, MaxThreads: static int,
+  ] {.QueueLifecycle: QueueInit.} = object
     ## Unbounded lock-free queue, parameterized by producer/consumer
     ## cardinality, deallocation strategy `ST`, segment size `S`, and
     ## the debra registry capacity `MaxThreads`.
@@ -188,11 +347,11 @@ proc validateQueueParams*[
 
 type
   QueueProducer*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S, MaxThreads: static int,
-  ] = object
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      ST: static DeallocationStrategy,
+      S, MaxThreads: static int,
+  ] {.QueueClaimState: QCUnclaimed.} = object
     ## Per-thread producer handle for an unbounded `Queue`. Retrieved
     ## via `Queue.getProducer()`. Defined for every (ccProd, ccCons)
     ## shape for type uniformity.
@@ -201,6 +360,12 @@ type
     ## `ThreadHandle[MaxThreads, ...]` for the pin/unpin cycle in
     ## `push`. For `ccProd == ccSingle` the producer carries no
     ## handle (sipsic/sipmuc-equiv have no pin requirement on push).
+    ##
+    ## Claim-state typestate (Bundle F.2): every view begins in
+    ## `QCUnclaimed`. The optional `claimed` runtime flag (ccMulti
+    ## only) tracks attach/detach state-preservingly (no static
+    ## typestate transition). See `bqueue.nim` for the symmetric
+    ## BQueueProducer pattern.
     idx*: int
     queue*: ptr Queue[T, ccProd, ccCons, ST, S, MaxThreads]
     when ccProd == ccMulti:
@@ -209,13 +374,14 @@ type
         handle*: ThreadHandle[MaxThreads, debra.ccMulti]
       else:
         handle*: ThreadHandle[MaxThreads, debra.ccSingle]
+      claimed*: bool
 
   QueueConsumer*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S, MaxThreads: static int,
-  ] = object
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      ST: static DeallocationStrategy,
+      S, MaxThreads: static int,
+  ] {.QueueClaimState: QCUnclaimed.} = object
     ## Per-thread consumer handle for an unbounded `Queue`. Retrieved
     ## via `Queue.getConsumer()`. Defined for every (ccProd, ccCons)
     ## shape for type uniformity; only meaningful when
@@ -225,6 +391,7 @@ type
     queue*: ptr Queue[T, ccProd, ccCons, ST, S, MaxThreads]
     when ccCons == ccMulti:
       handle*: ThreadHandle[MaxThreads, debra.ccMulti]
+      claimed*: bool
 
 ## ----------------------------------------------------------------------
 ## Unbounded-queue body — Track E (Steps 3.3.2-3.3.4), absorbed sipsic
@@ -970,16 +1137,84 @@ proc pop*[
     "QueueConsumer and batch-pop through it.".} =
   discard
 
+## ----------------------------------------------------------------------
+## Claim-state attach / detach for QueueProducer / QueueConsumer
+## (Bundle F.2, 3.3.11-B.4.1.6).
+##
+## Per the Wall 2 fix from B.4.1.5: signatures bind ccMulti only;
+## ccSingle callers receive a clean type-mismatch diagnostic with no
+## `*Multi` / `*Single` backing-type leakage (M5 R9). State-preserving
+## per Wall 1 — no `{.transition.}` pragma; same-module discipline
+## satisfied since QueueClaimState is declared in this file.
+## ----------------------------------------------------------------------
+
+proc attach*[
+    T;
+    ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var QueueProducer[T, ccMulti, ccCons, ST, S, MaxThreads]
+) {.raises: [].} =
+  ## Mark a multi-producer QueueProducer view as claimed. Runtime-only
+  ## (no static typestate transition).
+  self.claimed = true
+
+proc detach*[
+    T;
+    ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var QueueProducer[T, ccMulti, ccCons, ST, S, MaxThreads]
+) {.raises: [].} =
+  ## Release a multi-producer QueueProducer view's claim.
+  self.claimed = false
+
+proc attach*[
+    T;
+    ccProd: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var QueueConsumer[T, ccProd, ccMulti, ST, S, MaxThreads]
+) {.raises: [].} =
+  ## Mark a multi-consumer QueueConsumer view as claimed.
+  self.claimed = true
+
+proc detach*[
+    T;
+    ccProd: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var QueueConsumer[T, ccProd, ccMulti, ST, S, MaxThreads]
+) {.raises: [].} =
+  ## Release a multi-consumer QueueConsumer view's claim.
+  self.claimed = false
+
+## ----------------------------------------------------------------------
+## Destructors driving Lifecycle / Claim-state terminal transitions
+## (Bundle F.1 + F.2, 3.3.11-B.4.1.6). Mirror BQueue's pattern.
+## ----------------------------------------------------------------------
+
 proc `=destroy`*[
     T;
     ccProd, ccCons: static PinScopeCardinality,
     ST: static DeallocationStrategy,
     S, MaxThreads: static int,
-](self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]) =
+](self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]) {.
+    destructorTransition: QueueInit -> QueueDestroyed,
+    transitionError:
+      "Queue used after =destroy (lifecycle: QueueInit -> QueueDestroyed).",
+.} =
   ## Destructor. Walks `headSegment` → `next` → ... freeing each
   ## segment. For non-sipsic cardinalities, additionally unbinds the
   ## client refcount on the manager and (when `ownsManager`) runs the
   ## manager's destructor.
+  ##
+  ## Bundle F.1: also drives the Lifecycle terminal transition
+  ## (`QueueInit -> QueueDestroyed`) via `destructorTransition`.
   var seg = self.headSegment.load(moRelaxed)
   while seg != nil:
     let nextSeg = seg.next.load(moRelaxed)
@@ -995,6 +1230,37 @@ proc `=destroy`*[
       if self.ownsManager:
         reset(self.manager[])
         freeAligned(self.manager)
+
+proc `=destroy`*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](self: var QueueProducer[T, ccProd, ccCons, ST, S, MaxThreads]) {.
+    destructorTransition: QCUnclaimed -> QCBothClaimed,
+    transitionError:
+      "QueueProducer used after =destroy (claim-state: QCUnclaimed -> QCBothClaimed).",
+    raises: [],
+.} =
+  ## QueueProducer destructor — drives the Claim-state terminal
+  ## transition. View carries no owned heap state; the underlying
+  ## ThreadHandle is borrow-only (released via the parent Queue).
+  discard
+
+proc `=destroy`*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](self: var QueueConsumer[T, ccProd, ccCons, ST, S, MaxThreads]) {.
+    destructorTransition: QCUnclaimed -> QCBothClaimed,
+    transitionError:
+      "QueueConsumer used after =destroy (claim-state: QCUnclaimed -> QCBothClaimed).",
+    raises: [],
+.} =
+  ## QueueConsumer destructor — drives the Claim-state terminal
+  ## transition.
+  discard
 
 ## ----------------------------------------------------------------------
 ## Family-named unbounded smart constructors (Bundle D — kept as thin

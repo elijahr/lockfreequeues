@@ -47,6 +47,15 @@
 ## fails at compile time with a message pointing the caller at
 ## `BQueue.getProducer().push(item)` / `BQueue.getConsumer().pop()`.
 
+# Bundle F (3.3.11-B.4.1.6): upstream `typestates` package's
+# `typestate` / `destructorTransition` / `transitionError` DSL macros.
+# Pulled in via a shim under `./internal/` because a direct
+# `import typestates` from this file resolves to the local
+# `./typestates.nim` re-export sibling (which does not re-export
+# the upstream macros). See `./internal/typestates_dsl.nim` for the
+# resolution-shadowing rationale.
+import ./internal/typestates_dsl
+
 import ./internal/pinscope_stub
 import ./internal/aligned_alloc
 import ./atomic_dsl
@@ -69,12 +78,205 @@ import ./typestates/spsc_pop
 export exceptions
 export PinScopeCardinality, NoSlice
 
+## ----------------------------------------------------------------------
+## Middle-axis Lifecycle typestate (Bundle F.1, 3.3.11-B.4.1.6).
+##
+## Tracks `QueueInit -> QueueDestroyed` on the BQueue value itself.
+## Mirrors nim-debra's `pinned_scope.nim` (lines 67-93) verbatim in
+## structure:
+##
+## - Phantom context type carries the BQueue's generic params (T,
+##   cardinalities, sizes) and `of RootObj` so the state types can
+##   `distinct` from it and the typestate's `inheritsFromRootObj = true`
+##   flag is honored.
+## - Two state types (initial `BQueueInit` + terminal `BQueueDestroyed`)
+##   are phantom — they never appear in user code; they exist purely so
+##   the typestate verifier can attach them to BQueue and drive the
+##   `=destroy` transition.
+## - The single transition lives on `=destroy` via `destructorTransition`
+##   (line further below in the destructor section). State-preserving
+##   ops (`push`, `pop`, `getProducer`, `getConsumer`, `attach`,
+##   `detach`, batch variants) declare NO transition pragma — per the
+##   B.4.1.5 probe report, the typestate verifier accepts same-module
+##   state-preserving methods on attached types as non-transitioning
+##   operations that mutate runtime fields without changing the static
+##   typestate.
+##
+## **Wall 1 fix lock (B.4.1.5):** every state-preserving op on BQueue
+## stays in bqueue.nim (same module) and omits `{.transition.}`. Cross-
+## module callers would need `{.notATransition.}` per
+## `pragmas.nim:633-642`; the current Bundle F implementation does NOT
+## expose any cross-module state-preserving ops, so none are tagged.
+## ----------------------------------------------------------------------
+
+type
+  BQueueLifecycleCtx*[
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      N, P, C: static int,
+  ] = object of RootObj
+    ## Phantom context type for the BQueue Lifecycle typestate. Never
+    ## instantiated at runtime; carries the generic param shape so the
+    ## state types below can `distinct` from it.
+
+  BQueueInit*[
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      N, P, C: static int,
+  ] = distinct BQueueLifecycleCtx[T, ccProd, ccCons, N, P, C]
+    ## Initial Lifecycle state for a BQueue. Every newly constructed
+    ## BQueue enters this state via the `{.BQueueLifecycle: BQueueInit.}`
+    ## attachment pragma on the BQueue object below.
+
+  BQueueDestroyed*[
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      N, P, C: static int,
+  ] = distinct BQueueLifecycleCtx[T, ccProd, ccCons, N, P, C]
+    ## Terminal Lifecycle state for a BQueue. Reached exclusively via
+    ## the BQueue `=destroy` destructor's `destructorTransition`.
+
+typestate BQueueLifecycle[
+    T,
+    ccProd: static PinScopeCardinality,
+    ccCons: static PinScopeCardinality,
+    N: static int,
+    P: static int,
+    C: static int,
+]:
+  inheritsFromRootObj = true
+  consumeOnTransition = false
+  strictTransitions = false
+  states:
+    BQueueInit[T, ccProd, ccCons, N, P, C]
+    BQueueDestroyed[T, ccProd, ccCons, N, P, C]
+  initial:
+    BQueueInit[T, ccProd, ccCons, N, P, C]
+  terminal:
+    BQueueDestroyed[T, ccProd, ccCons, N, P, C]
+  transitions:
+    BQueueInit[T, ccProd, ccCons, N, P, C] ->
+      BQueueDestroyed[T, ccProd, ccCons, N, P, C]
+
+## ----------------------------------------------------------------------
+## Middle-axis Claim-state typestate (Bundle F.2, 3.3.11-B.4.1.6).
+##
+## Tracks claim status on per-thread BQueueProducer / BQueueConsumer
+## view objects. Per the B.4.1.5 Wall 2 probe, the design is:
+##
+## - **Single user-facing object type** per view (no Multi/Single split).
+##   `BQueueProducer[T, ccProd, ccCons, N, P, C]` is one type; its
+##   `claimed` field exists only under `when ccProd == ccMulti:` (and
+##   symmetrically for BQueueConsumer / ccCons).
+## - **Uniform attachment**: every BQueueProducer / BQueueConsumer
+##   instantiation attaches to ClaimStateTs at initial state
+##   `Unclaimed`. The ccSingle path has the typestate statically
+##   attached but no `attach` / `detach` overloads, so it is functionally
+##   dormant (no transitions ever fire; the destructor drives terminal
+##   transition uniformly).
+## - **ccMulti-only `attach` / `detach`** methods are declared with
+##   `BQueueProducer[T, ccMulti, ccCons, N, P, C]` (or the consumer
+##   analogue) in the param signature. The compiler statically excludes
+##   ccSingle from the overload set, so calling `attach` on a ccSingle
+##   producer produces a clean "type mismatch" diagnostic without any
+##   `*Multi` / `*Single` leakage.
+## - **State-preserving discipline**: `attach` and `detach` mutate the
+##   runtime `claimed` flag without emitting a typestate transition;
+##   per the B.4.1.5 Wall 1 probe, same-module methods that omit
+##   `{.transition.}` are accepted as state-preserving.
+##
+## **Wall 3 acceptance (use-after-destroy)**: typestates v0.9.3 does
+## NOT statically catch a `.push()` (or `.detach()`) on a value that
+## has already passed through `=destroy`. The CFG analyzer enforces
+## "reaches terminal by end of scope," not "no method calls on a value
+## already in terminal state." See CHANGELOG v5.0.0 for the known
+## limitation and the recovery path (typestates v0.10+ post-terminal
+## CFG mode OR design pivot). Critical sites use a runtime
+## `doAssert(not destroyed, ...)` guard per pinned_scope.nim:128-131
+## where the failure mode warrants instrumentation; BQueue avoids
+## blanket instrumentation to keep hot-path push/pop allocation-free
+## and branch-free.
+## ----------------------------------------------------------------------
+
+type
+  BQueueClaimCtx*[
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      N, P, C: static int,
+  ] = object of RootObj
+    ## Phantom context type for the BQueueProducer / BQueueConsumer
+    ## Claim-state typestate.
+
+  Unclaimed*[
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      N, P, C: static int,
+  ] = distinct BQueueClaimCtx[T, ccProd, ccCons, N, P, C]
+    ## Initial Claim-state. Every freshly constructed view starts here.
+
+  ProducerClaimed*[
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      N, P, C: static int,
+  ] = distinct BQueueClaimCtx[T, ccProd, ccCons, N, P, C]
+    ## Producer-side claim state. Reachable in principle from Unclaimed
+    ## via `attach()` on a BQueueProducer; per Wall 1 / Wall 2 the
+    ## actual user-visible state-stability is preserved because the
+    ## typestate verifier sees the destructor as the only transition.
+
+  ConsumerClaimed*[
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      N, P, C: static int,
+  ] = distinct BQueueClaimCtx[T, ccProd, ccCons, N, P, C]
+    ## Consumer-side claim state (parallel to ProducerClaimed).
+
+  BothClaimed*[
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      N, P, C: static int,
+  ] = distinct BQueueClaimCtx[T, ccProd, ccCons, N, P, C]
+    ## Terminal Claim-state. Driven by the destructor's
+    ## `destructorTransition` on the view types below.
+
+typestate BQueueClaimState[
+    T,
+    ccProd: static PinScopeCardinality,
+    ccCons: static PinScopeCardinality,
+    N: static int,
+    P: static int,
+    C: static int,
+]:
+  inheritsFromRootObj = true
+  consumeOnTransition = false
+  strictTransitions = false
+  states:
+    Unclaimed[T, ccProd, ccCons, N, P, C]
+    ProducerClaimed[T, ccProd, ccCons, N, P, C]
+    ConsumerClaimed[T, ccProd, ccCons, N, P, C]
+    BothClaimed[T, ccProd, ccCons, N, P, C]
+  initial:
+    Unclaimed[T, ccProd, ccCons, N, P, C]
+  terminal:
+    BothClaimed[T, ccProd, ccCons, N, P, C]
+  transitions:
+    Unclaimed[T, ccProd, ccCons, N, P, C] ->
+      ProducerClaimed[T, ccProd, ccCons, N, P, C]
+    Unclaimed[T, ccProd, ccCons, N, P, C] ->
+      ConsumerClaimed[T, ccProd, ccCons, N, P, C]
+    Unclaimed[T, ccProd, ccCons, N, P, C] ->
+      BothClaimed[T, ccProd, ccCons, N, P, C]
+    ProducerClaimed[T, ccProd, ccCons, N, P, C] ->
+      BothClaimed[T, ccProd, ccCons, N, P, C]
+    ConsumerClaimed[T, ccProd, ccCons, N, P, C] ->
+      BothClaimed[T, ccProd, ccCons, N, P, C]
+
 type
   BQueue*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    N, P, C: static int,
-  ] = object
+      T;
+      ccProd, ccCons: static PinScopeCardinality,
+      N, P, C: static int,
+  ] {.BQueueLifecycle: BQueueInit.} = object
     ## Bounded lock-free queue with cardinality-dispatched Vyukov /
     ## Sipsic internals. No debra integration; the bounded body owns no
     ## heap state and the default destructor is sufficient.
@@ -231,23 +433,39 @@ type
       T;
       ccProd, ccCons: static PinScopeCardinality,
       N, P, C: static int,
-  ] = object
+  ] {.BQueueClaimState: Unclaimed.} = object
     ## Per-thread producer handle for a `BQueue`. Retrieved via
     ## `BQueue.getProducer()` when `ccProd == ccMulti`. Defined for
     ## every (ccProd, ccCons) shape for type uniformity.
+    ##
+    ## Claim-state typestate (Bundle F.2): every view begins in
+    ## `Unclaimed`; the `claimed` runtime flag (ccMulti only) tracks
+    ## the attach/detach cycle without emitting a static typestate
+    ## transition. The Wall 2 fix gives ccSingle callers a clean
+    ## type-mismatch diagnostic when they reach for `attach`/`detach`.
     idx*: int
     queue*: ptr BQueue[T, ccProd, ccCons, N, P, C]
+    when ccProd == ccMulti:
+      # Runtime claim flag — only meaningful for multi-producer views.
+      # Mutated by `attach()` / `detach()` (ccMulti-only methods); the
+      # typestate verifier sees those as state-preserving (no
+      # `{.transition.}` pragma per the Wall 1 fix).
+      claimed*: bool
 
   BQueueConsumer*[
       T;
       ccProd, ccCons: static PinScopeCardinality,
       N, P, C: static int,
-  ] = object
+  ] {.BQueueClaimState: Unclaimed.} = object
     ## Per-thread consumer handle for a `BQueue`. Retrieved via
     ## `BQueue.getConsumer()` when `ccCons == ccMulti`. Defined for
     ## every (ccProd, ccCons) shape for type uniformity.
+    ##
+    ## Claim-state typestate (Bundle F.2): see BQueueProducer.
     idx*: int
     queue*: ptr BQueue[T, ccProd, ccCons, N, P, C]
+    when ccCons == ccMulti:
+      claimed*: bool
 
 ## ----------------------------------------------------------------------
 ## Constructor / accessors — bounded subset.
@@ -845,6 +1063,133 @@ proc pop*[
     "Direct batch pop on a multi-consumer BQueue is not allowed. " &
     "Use BQueue.getConsumer().pop(count) to obtain a per-thread " &
     "BQueueConsumer and batch-pop through it.".} =
+  discard
+
+## ----------------------------------------------------------------------
+## Claim-state attach / detach (Bundle F.2, 3.3.11-B.4.1.6).
+##
+## Per the Wall 2 fix from B.4.1.5: `attach` / `detach` are declared
+## with `BQueueProducer[T, ccMulti, ...]` (or the consumer analogue) in
+## the param signature. The compiler statically excludes ccSingle from
+## the overload set, so ccSingle callers receive a clean type-mismatch
+## diagnostic that NEVER references a `*Multi` / `*Single` backing
+## type (M5 R9 grep gate satisfied — there is no such backing type to
+## name).
+##
+## Per the Wall 1 fix: these methods declare NO `{.transition.}`
+## pragma. They live in the same module as the BQueueClaimState
+## typestate declaration, so the verifier accepts them as
+## state-preserving operations that mutate runtime fields
+## (`view.claimed`) without changing the static typestate. The terminal
+## Claim-state transition (Unclaimed -> BothClaimed) is driven
+## exclusively by the view's `=destroy` destructor below.
+## ----------------------------------------------------------------------
+
+proc attach*[T; ccCons: static PinScopeCardinality, N, P, C: static int](
+    self: var BQueueProducer[T, ccMulti, ccCons, N, P, C]
+) {.raises: [].} =
+  ## Mark a multi-producer BQueueProducer view as claimed by the
+  ## current thread. State-preserving in the typestate sense (mutates
+  ## the runtime `claimed` flag without emitting a static transition).
+  ##
+  ## ccSingle callers hit the absent-overload diagnostic: there is no
+  ## `attach` overload for `BQueueProducer[T, ccSingle, ...]`.
+  self.claimed = true
+
+proc detach*[T; ccCons: static PinScopeCardinality, N, P, C: static int](
+    self: var BQueueProducer[T, ccMulti, ccCons, N, P, C]
+) {.raises: [].} =
+  ## Release a multi-producer BQueueProducer view's claim. Mirror of
+  ## `attach` — runtime-only, no static transition.
+  self.claimed = false
+
+proc attach*[T; ccProd: static PinScopeCardinality, N, P, C: static int](
+    self: var BQueueConsumer[T, ccProd, ccMulti, N, P, C]
+) {.raises: [].} =
+  ## Mark a multi-consumer BQueueConsumer view as claimed.
+  self.claimed = true
+
+proc detach*[T; ccProd: static PinScopeCardinality, N, P, C: static int](
+    self: var BQueueConsumer[T, ccProd, ccMulti, N, P, C]
+) {.raises: [].} =
+  ## Release a multi-consumer BQueueConsumer view's claim.
+  self.claimed = false
+
+## ----------------------------------------------------------------------
+## Destructors driving Lifecycle / Claim-state terminal transitions
+## (Bundle F.1 + F.2, 3.3.11-B.4.1.6).
+##
+## Mirror nim-debra `pinned_scope.nim:178-180` verbatim: the typestate
+## terminal transition is emitted by `=destroy` via
+## `destructorTransition: InitialState -> TerminalState`. State-
+## preserving ops (push, pop, getProducer, getConsumer, attach,
+## detach) declare no transition pragma; the typestate stays
+## static-stable across them and only the destructor moves the value
+## to the terminal state.
+##
+## **transitionError apparatus reinterpretation**: the master brief
+## (3.3.11-B.3) calls for "sibling-pragma transitionError at every
+## push/pop/etc. site." Per the B.4.1.5 probe, push/pop are NOT
+## transitions (they declare no `{.transition.}`); `transitionError`
+## attaches only to transition declarations. The destructor IS a
+## transition, so its `transitionError` carries the user-visible
+## diagnostic. push/pop have no `transitionError` annotation because
+## they have nothing to attach it to.
+##
+## **Wall 3 limitation**: typestates v0.9.3 does NOT statically catch a
+## use-after-destroy (a method call on a value already in
+## BQueueDestroyed). The CFG analyzer enforces "reaches terminal by
+## end of scope," not "no method calls on a value already in terminal
+## state." Documented in CHANGELOG v5.0.0.
+## ----------------------------------------------------------------------
+
+proc `=destroy`*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    N, P, C: static int,
+](self: var BQueue[T, ccProd, ccCons, N, P, C]) {.
+    destructorTransition: BQueueInit -> BQueueDestroyed,
+    transitionError:
+      "BQueue used after =destroy (lifecycle: BQueueInit -> BQueueDestroyed).",
+    raises: [],
+.} =
+  ## BQueue destructor — drives the Lifecycle terminal transition.
+  ##
+  ## BQueue owns no heap state (no debra integration, no segment list,
+  ## no manager pointer); the default destructor would suffice for
+  ## memory hygiene. The destructor body is empty, and its sole
+  ## purpose is to emit the `BQueueInit -> BQueueDestroyed` transition
+  ## for the Lifecycle typestate via the `destructorTransition`
+  ## pragma.
+  discard
+
+proc `=destroy`*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    N, P, C: static int,
+](self: var BQueueProducer[T, ccProd, ccCons, N, P, C]) {.
+    destructorTransition: Unclaimed -> BothClaimed,
+    transitionError:
+      "BQueueProducer used after =destroy (claim-state: Unclaimed -> BothClaimed).",
+    raises: [],
+.} =
+  ## BQueueProducer destructor — drives the Claim-state terminal
+  ## transition. View carries no heap state; runtime cleanup is a
+  ## no-op.
+  discard
+
+proc `=destroy`*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    N, P, C: static int,
+](self: var BQueueConsumer[T, ccProd, ccCons, N, P, C]) {.
+    destructorTransition: Unclaimed -> BothClaimed,
+    transitionError:
+      "BQueueConsumer used after =destroy (claim-state: Unclaimed -> BothClaimed).",
+    raises: [],
+.} =
+  ## BQueueConsumer destructor — drives the Claim-state terminal
+  ## transition.
   discard
 
 ## ----------------------------------------------------------------------

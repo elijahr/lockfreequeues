@@ -97,6 +97,44 @@ const cases = @[
     outcome: eoCompileFails,
     substring: "batch push on a multi-producer BQueue",
   ),
+  # 3.3.11-B.4.1.6 Bundle F deferred-from-B.3 J. Cases (10)-(14) cover
+  # the Middle-axis Claim-state typestate (Wall 2 fix from B.4.1.5)
+  # and F.3.5 deliberate-negative cross-module containment. The
+  # ccSingle-attach cases all assert the same substring fragment
+  # `BQueueProducer` / `BQueueConsumer` / `QueueProducer` /
+  # `QueueConsumer` — these are the user-visible alias names that
+  # appear in the Nim "type mismatch" diagnostic per the Wall 2 fix;
+  # no `*Multi`/`*Single` backing-type leakage (M5 R9 grep gate).
+  Case(
+    name: "t_bqueue_claimstate §6.3 (10) — ccSingle BQueueProducer cannot attach",
+    file: "tests/should_fail/bqueue_producer_attach_ccsingle.nim",
+    outcome: eoCompileFails,
+    substring: "BQueueProducer",
+  ),
+  Case(
+    name: "t_bqueue_claimstate §6.3 (11) — ccSingle BQueueConsumer cannot attach",
+    file: "tests/should_fail/bqueue_consumer_attach_ccsingle.nim",
+    outcome: eoCompileFails,
+    substring: "BQueueConsumer",
+  ),
+  Case(
+    name: "t_queue_claimstate §6.3 (12) — ccSingle QueueProducer cannot attach",
+    file: "tests/should_fail/queue_producer_attach_ccsingle.nim",
+    outcome: eoCompileFails,
+    substring: "QueueProducer",
+  ),
+  Case(
+    name: "t_queue_claimstate §6.3 (13) — ccSingle QueueConsumer cannot attach",
+    file: "tests/should_fail/queue_consumer_attach_ccsingle.nim",
+    outcome: eoCompileFails,
+    substring: "QueueConsumer",
+  ),
+  Case(
+    name: "t_bqueue_lifecycle §6.3 (14) — F.3.5 cross-module state-preserving op requires {.notATransition.}",
+    file: "tests/should_fail/bqueue_cross_module_no_notATransition.nim",
+    outcome: eoCompileFails,
+    substring: "notATransition",
+  ),
 ]
 
 proc runCase(c: Case): bool =
