@@ -67,7 +67,7 @@ when defined(adapter_kanal_available):
   proc push*[T](a: var KanalAdapter[T], item: T): PushResult =
     if a.queue == nil:
       return prFull
-    if kanal_push(a.queue, uint64(item)):
+    if kanal_push(a.queue, cast[uint64](item)):
       prSuccess
     else:
       prFull
@@ -77,7 +77,7 @@ when defined(adapter_kanal_available):
       return PopResult[T](success: false)
     var raw: uint64
     if kanal_pop(a.queue, addr raw):
-      PopResult[T](success: true, value: T(raw))
+      PopResult[T](success: true, value: cast[T](raw))
     else:
       PopResult[T](success: false)
 
@@ -103,7 +103,7 @@ when defined(adapter_kanal_available):
     ## Rust shim holds both halves alive in its Box.
     if a.queue == nil:
       return prFull
-    discard kanal_unbounded_push(a.queue, uint64(item))
+    discard kanal_unbounded_push(a.queue, cast[uint64](item))
     prSuccess
 
   proc pop*[T](a: var KanalUnboundedAdapter[T]): PopResult[T] =
@@ -111,7 +111,7 @@ when defined(adapter_kanal_available):
       return PopResult[T](success: false)
     var raw: uint64
     if kanal_unbounded_pop(a.queue, addr raw):
-      PopResult[T](success: true, value: T(raw))
+      PopResult[T](success: true, value: cast[T](raw))
     else:
       PopResult[T](success: false)
 

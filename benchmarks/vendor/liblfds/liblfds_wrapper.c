@@ -39,6 +39,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+/* `_aligned_malloc` / `_aligned_free` live in <malloc.h> on MSVC. */
+#include <malloc.h>
+#endif
+
 /* ----- shared util ----- */
 
 /* Round `n` up to the next power of two, with a minimum of 2 (the
@@ -128,15 +133,28 @@ void *bench_liblfds_bmm_init(unsigned long long capacity) {
    * is allocated at a 128-byte boundary. The bss variant does NOT need
    * this fix: `lfds711_queue_bss_state` is not over-aligned. */
   bench_liblfds_bmm_t *q = NULL;
+#ifdef _WIN32
+  /* `_aligned_malloc(size, alignment)` — note the argument order is the
+   * OPPOSITE of `aligned_alloc(alignment, size)` and the over-aligned
+   * pointer MUST be released with `_aligned_free`, not `free`. */
+  q = (bench_liblfds_bmm_t *)_aligned_malloc(
+      sizeof(*q), LFDS711_PAL_ATOMIC_ISOLATION_IN_BYTES);
+  if (q == NULL) return NULL;
+#else
   if (posix_memalign((void **)&q, LFDS711_PAL_ATOMIC_ISOLATION_IN_BYTES,
                      sizeof(*q)) != 0) {
     return NULL;
   }
   if (q == NULL) return NULL;
+#endif
   q->elements = (struct lfds711_queue_bmm_element *)malloc(
       sizeof(struct lfds711_queue_bmm_element) * cap);
   if (q->elements == NULL) {
+#ifdef _WIN32
+    _aligned_free(q);
+#else
     free(q);
+#endif
     return NULL;
   }
   q->capacity = cap;
@@ -168,5 +186,12 @@ void bench_liblfds_bmm_destroy(void *raw) {
   bench_liblfds_bmm_t *q = (bench_liblfds_bmm_t *)raw;
   lfds711_queue_bmm_cleanup(&q->state, NULL);
   free(q->elements);
+  /* `q` itself was over-aligned via `_aligned_malloc` on Windows and must
+   * be released with `_aligned_free`; `q->elements` came from plain
+   * `malloc` and is freed normally above. */
+#ifdef _WIN32
+  _aligned_free(q);
+#else
   free(q);
+#endif
 }

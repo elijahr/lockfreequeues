@@ -73,7 +73,7 @@ when defined(adapter_flume_available):
   proc push*[T](a: var FlumeAdapter[T], item: T): PushResult =
     if a.queue == nil:
       return prFull
-    if flume_push(a.queue, uint64(item)):
+    if flume_push(a.queue, cast[uint64](item)):
       prSuccess
     else:
       prFull
@@ -83,7 +83,7 @@ when defined(adapter_flume_available):
       return PopResult[T](success: false)
     var raw: uint64
     if flume_pop(a.queue, addr raw):
-      PopResult[T](success: true, value: T(raw))
+      PopResult[T](success: true, value: cast[T](raw))
     else:
       PopResult[T](success: false)
 
@@ -111,7 +111,7 @@ when defined(adapter_flume_available):
     ## to prFull (matches the other adapters' handle-dead convention).
     if a.queue == nil:
       return prFull
-    discard flume_unbounded_push(a.queue, uint64(item))
+    discard flume_unbounded_push(a.queue, cast[uint64](item))
     prSuccess
 
   proc pop*[T](a: var FlumeUnboundedAdapter[T]): PopResult[T] =
@@ -119,7 +119,7 @@ when defined(adapter_flume_available):
       return PopResult[T](success: false)
     var raw: uint64
     if flume_unbounded_pop(a.queue, addr raw):
-      PopResult[T](success: true, value: T(raw))
+      PopResult[T](success: true, value: cast[T](raw))
     else:
       PopResult[T](success: false)
 

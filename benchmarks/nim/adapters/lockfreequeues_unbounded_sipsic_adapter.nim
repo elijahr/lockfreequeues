@@ -33,12 +33,21 @@ const SipsicMaxThreads = 4
 type
   LockfreequeuesUnboundedSipsicAdapter*[S: static int, T] = object
     queue*: Queue[T, ccSingle, ccSingle, stEager, S, SipsicMaxThreads]
+    producer0*: QueueProducer[T, ccSingle, ccSingle, stEager, S,
+                              SipsicMaxThreads]
+      ## Cached producer view obtained ONCE on the init/operating
+      ## thread (mirrors `producer0` in
+      ## `lockfreequeues_unbounded_sipmuc_adapter`). The ccSingle
+      ## producer carries no per-thread handle and stores only a
+      ## `ptr Queue` into the inline queue, so it stays valid for every
+      ## `push` and avoids recreating the view per call.
 
 proc makeLockfreequeuesUnboundedSipsicAdapter*[S: static int, T](
     capacity: int = 0   # ignored for unbounded
 ): LockfreequeuesUnboundedSipsicAdapter[S, T] =
   result.queue =
     newUnboundedSipsicQueue[T, stEager, S, SipsicMaxThreads]()
+  result.producer0 = result.queue.getProducer()
 
 proc cleanup*[S: static int, T](
     a: var LockfreequeuesUnboundedSipsicAdapter[S, T]
@@ -48,8 +57,7 @@ proc cleanup*[S: static int, T](
 proc push*[S: static int, T](
     a: var LockfreequeuesUnboundedSipsicAdapter[S, T], item: T
 ): PushResult =
-  var producer = a.queue.getProducer()
-  producer.push(item)
+  a.producer0.push(item)
   prSuccess
 
 proc pop*[S: static int, T](
