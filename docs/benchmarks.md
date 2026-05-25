@@ -42,18 +42,19 @@ asterisk in mind.
 
 If your bottleneck is **single-producer single-consumer with a known capacity**
 — an audio callback handing buffers to a render thread, a GPU command queue,
-a network read loop feeding a worker — `Sipsic` is wait-free on both sides
-and clears around 7,600 ops/ms at `1p1c` on `ubuntu-latest`. There's no
-adapter for `system/Channel` at SPSC so the fixture has no head-to-head
-number, but the wait-free progress guarantee alone usually settles it.
+a network read loop feeding a worker — the bounded SPSC queue
+(`newSipsicQueue`) is wait-free on both sides and clears around 7,600 ops/ms
+at `1p1c` on `ubuntu-latest`. There's no adapter for `system/Channel` at SPSC
+so the fixture has no head-to-head number against it, but the wait-free
+progress guarantee alone usually settles it.
 
 If your bottleneck is **multi-producer multi-consumer at high contention** —
-a job scheduler with dozens of producer goroutines, an event collector
-funneling from many sources — `Mupmuc` is the right call. At `4p4c` it
-sustains around 18,200 ops/ms in the fixture, against 1,720 ops/ms for
-`system/Channel` at the same shape — roughly 10.6x faster. The MPSC variant
-`Mupsic` shows a similar gap (about 3.7x at `4p1c`) when only the producer
-side fans out.
+a job scheduler with dozens of producer threads, an event collector
+funneling from many sources — the bounded MPMC queue (`newMupmucQueue`) is
+the right call. At `4p4c` it sustains around 18,200 ops/ms in the fixture,
+against 1,720 ops/ms for `system/Channel` at the same shape — roughly 10.6x
+faster. The bounded MPSC queue (`newMupsicQueue`) shows a similar gap (about
+3.7x at `4p1c`) when only the producer side fans out.
 
 When NOT to reach for lockfreequeues:
 
@@ -69,9 +70,9 @@ When NOT to reach for lockfreequeues:
 - **DEBRA reclamation overhead matters more than throughput.** The unbounded
   variants pay a small per-pop bookkeeping cost for epoch advancement; on
   workloads dominated by tiny payloads at very high pop rates the bounded
-  variants will measure higher. The fixture shows unbounded `Mupmuc` at
-  about 9,860 ops/ms at `1p1c` versus bounded `Mupmuc` at about 24,070
-  ops/ms — a real gap, and the cost of "never blocks on full".
+  variants will measure higher. The fixture shows the unbounded MPMC queue
+  at about 9,860 ops/ms at `1p1c` versus the bounded MPMC queue at about
+  24,070 ops/ms — a real gap, and the cost of "never blocks on full".
 
 ## Methodology
 
@@ -99,23 +100,74 @@ python benchmarks/runner.py run --runs=33
 
 ## Queue Types Compared
 
-### Bounded Queues
+### lockfreequeues variants
 
-| Queue | Type | Implementation |
-|-------|------|----------------|
-| Sipsic | SPSC | lockfreequeues |
-| Sipmuc | SPMC | lockfreequeues |
-| Mupsic | MPSC | lockfreequeues |
-| Mupmuc | MPMC | lockfreequeues |
-| channels | MPMC | Nim stdlib |
+The in-tree queues are driven directly from the unified `BQueue` (bounded)
+and `Queue` (unbounded) generics. Each topology is benchmarked from the
+matching family-named smart constructor.
 
-### Unbounded Queues
+| Slug family                       | Topology      | Constructor               | Kind      |
+|-----------------------------------|---------------|---------------------------|-----------|
+| `lockfreequeues_sipsic`           | SPSC          | `newSipsicQueue`          | bounded   |
+| `lockfreequeues_sipmuc`           | SPMC (MPMC slug grid) | `newSipmucQueue`  | bounded   |
+| `lockfreequeues_mupsic`           | MPSC          | `newMupsicQueue`          | bounded   |
+| `lockfreequeues_mupmuc`           | MPMC          | `newMupmucQueue`          | bounded   |
+| `lockfreequeues_unbounded_sipsic` | SPSC          | `newUnboundedSipsicQueue` | unbounded |
+| `lockfreequeues_unbounded_sipmuc` | SPMC          | `newUnboundedSipmucQueue` | unbounded |
+| `lockfreequeues_unbounded_mupsic` | MPSC          | `newUnboundedMupsicQueue` | unbounded |
+| `lockfreequeues_unbounded_mupmuc` | MPMC          | `newUnboundedMupmucQueue` | unbounded |
 
-| Queue | Type | Implementation |
-|-------|------|----------------|
-| UnboundedSipsic | SPSC | lockfreequeues |
-| UnboundedMupmuc | MPMC | lockfreequeues |
-| LoonyQueue | MPMC | loony |
+A `lockfreequeues_queue_bounded_*` parity slug is emitted alongside each
+bounded family — it drives the same `BQueue` generic and exists only to
+guard the unification against per-shape throughput regressions.
+
+### Cross-library comparison set
+
+The comparison adapters (`benchmarks/nim/adapters/`) plot third-party
+queues on the same Bencher dashboard. All adapters are gated behind
+`-d:adapter_<library_slug>_available`; absent gates produce no symbol
+references and the production builds are unchanged. The set below was
+expanded for the v5.0.0 benchmark suite so every topology has multiple
+distinct external libraries.
+
+| Library                | Lang | Variant(s) benchmarked                                  | Topologies covered          |
+|------------------------|------|--------------------------------------------------------|-----------------------------|
+| MoodyCamel             | C++  | `ConcurrentQueue`                                       | unbounded MPMC              |
+| Boost.LockFree         | C++  | `boost::lockfree::queue`, `boost::lockfree::spsc_queue` | bounded MPMC, bounded SPSC  |
+| atomic_queue           | C++  | `AtomicQueueB`                                          | bounded SPSC + bounded MPMC |
+| rigtorp SPSCQueue      | C++  | `rigtorp::SPSCQueue`                                    | bounded SPSC                |
+| rigtorp MPMCQueue      | C++  | `rigtorp::mpmc::Queue`                                  | bounded MPMC                |
+| crossbeam              | Rust | `crossbeam_queue::ArrayQueue`, `crossbeam_queue::SegQueue` | bounded MPMC, unbounded MPMC |
+| flume                  | Rust | bounded + unbounded channel                            | bounded MPMC + unbounded MPMC |
+| kanal                  | Rust | bounded + unbounded channel                            | bounded SPSC + bounded MPMC + unbounded MPMC |
+| liblfds (soft-skip)    | C    | `lfds711_queue_bss_*` (SPSC), `lfds711_queue_bmm_*` (MPMC) | bounded SPSC + bounded MPMC |
+| Nim `system.Channel`   | Nim  | `system/channels.Channel` (blocking-on-full\*)         | MPSC + MPMC                 |
+| nimble `threading`     | Nim  | `threading.Chan` (non-blocking try)                    | bounded MPMC                |
+| Loony                  | Nim  | `LoonyQueue`                                            | unbounded MPMC              |
+
+\* The `system.Channel` adapter blocks the producer on a full channel
+instead of returning back-pressure, so its slugs are only loosely
+comparable to the non-blocking adapters; the chart marks them with a
+dotted bar and a `(blocking)` badge.
+
+**liblfds is a soft-skip adapter.** The vendored subset
+(`benchmarks/vendor/liblfds/`) carries the upstream C source and a C
+wrapper, but **not** the `gcc_gnumake` Makefile that builds
+`liblfds711.a`. The `bench-comparison.yml` install step is guarded by
+`test -f .../Makefile` with `continue-on-error: true`, so on a checkout
+that lacks the Makefile the liblfds adapter is simply omitted (a
+`::warning title=Adapter skipped::` annotation is emitted) rather than
+failing the workflow. CI environments that DO carry the full upstream
+tree build the archive and exercise the adapter. The same soft-skip
+pattern applies to every external adapter: install/build → smoke →
+set-define, each `continue-on-error`, so a missing toolchain or library
+drops that adapter's slugs instead of breaking the run.
+
+Library upstreams and licenses, the per-adapter compile gates, and the
+local run recipes are documented in
+[`benchmarks/README.md`](https://github.com/elijahr/lockfreequeues/blob/devel/benchmarks/README.md);
+per-library obligations are tracked in
+[`THIRD_PARTY_LICENSES.md`](https://github.com/elijahr/lockfreequeues/blob/devel/THIRD_PARTY_LICENSES.md).
 
 ## Results
 
@@ -177,9 +229,9 @@ between queue implementations under identical conditions.
 Specific caveats:
 
 - **Cache-line padding asymmetry.** Some libraries (lockfreequeues, MoodyCamel,
-  Boost.LockFree) pad their head/tail/sequence fields to 64 bytes; others may
-  not. The lockfreequeues MPMC types were padding-audited as part of PR 3 (see
-  audit checklist).
+  Boost.LockFree, atomic_queue, rigtorp) pad their head/tail/sequence fields to
+  64 bytes; others may not. The lockfreequeues MPMC types were padding-audited
+  during the queue unification.
 - **Memory ordering.** lockfreequeues uses `acquire`/`release` ordering on its
   hot paths; some external libraries default to `seq_cst`, which is stricter
   and may show as higher latency.

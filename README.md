@@ -124,25 +124,31 @@ See [`examples/`](examples/) for full multi-threaded examples and patterns
 
 ### Bounded queues
 
-| Queue    | Producers | Consumers | Push      | Pop       |
-|----------|-----------|-----------|-----------|-----------|
-| `Sipsic` | 1         | 1         | wait-free | wait-free |
-| `Sipmuc` | 1         | many      | wait-free | lock-free |
-| `Mupsic` | many      | 1         | lock-free | wait-free |
-| `Mupmuc` | many      | many      | lock-free | lock-free |
+All bounded queues are the `BQueue` generic, built with a family-named
+smart constructor.
+
+| Topology | Constructor       | Producers | Consumers | Push      | Pop       |
+|----------|-------------------|-----------|-----------|-----------|-----------|
+| SPSC     | `newSipsicQueue`  | 1         | 1         | wait-free | wait-free |
+| SPMC     | `newSipmucQueue`  | 1         | many      | wait-free | lock-free |
+| MPSC     | `newMupsicQueue`  | many      | 1         | lock-free | wait-free |
+| MPMC     | `newMupmucQueue`  | many      | many      | lock-free | lock-free |
 
 Bounded queues are ring buffers with compile-time capacity. None require a `DebraManager` or per-thread handles.
 
 ### Unbounded queues
 
-| Queue              | Producers | Consumers | Push      | Pop       | `DebraManager` | Per-thread handle |
-|--------------------|-----------|-----------|-----------|-----------|----------------|-------------------|
-| `UnboundedSipsic`  | 1         | 1         | wait-free | wait-free | not needed     | not needed        |
-| `UnboundedSipmuc`  | 1         | many      | wait-free | lock-free | required       | consumer side     |
-| `UnboundedMupsic`  | many      | 1         | lock-free | wait-free | required       | producer side     |
-| `UnboundedMupmuc`  | many      | many      | lock-free | lock-free | required       | both              |
+All unbounded queues are the `Queue` generic, built with a family-named
+smart constructor.
 
-`UnboundedSipsic` is special: with one producer and one consumer the consumer is the only thread freeing segments, so it does not need DEBRA. Every other unbounded variant does, because multiple threads can race to detach a segment.
+| Topology | Constructor               | Producers | Consumers | Push      | Pop       | `DebraManager` | Per-thread handle |
+|----------|---------------------------|-----------|-----------|-----------|-----------|----------------|-------------------|
+| SPSC     | `newUnboundedSipsicQueue` | 1         | 1         | wait-free | wait-free | not needed     | not needed        |
+| SPMC     | `newUnboundedSipmucQueue` | 1         | many      | wait-free | lock-free | required       | consumer side     |
+| MPSC     | `newUnboundedMupsicQueue` | many      | 1         | lock-free | wait-free | required       | producer side     |
+| MPMC     | `newUnboundedMupmucQueue` | many      | many      | lock-free | lock-free | required       | both              |
+
+The unbounded SPSC queue is special: with one producer and one consumer the consumer is the only thread freeing segments, so it does not need DEBRA. Every other unbounded variant does, because multiple threads can race to detach a segment.
 
 ### Bounded vs unbounded
 
