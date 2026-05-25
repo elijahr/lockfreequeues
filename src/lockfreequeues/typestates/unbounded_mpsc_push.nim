@@ -111,7 +111,7 @@ proc startPush*[T; S, MT: static int, CC: static PinScopeCardinality](
 # Extract Pinned state from MPSCPushComplete for unpinning
 proc extractPinned*[T; S, MT: static int, CC: static PinScopeCardinality](
     complete: sink MPSCPushComplete[T, S, MT, CC]
-): Pinned[MT, CC] =
+): Pinned[MT, CC] {.notATransition.} =
   ## Extract DEBRA's Pinned state for unpinning.
   Pinned[MT, CC](
     EpochGuardContext[MT, CC](
@@ -222,7 +222,7 @@ proc allocateNewSegment*[T; S, MT: static int, CC: static PinScopeCardinality](
 # Helper that returns allocation status (for callers who need to know if they should free newSegment)
 proc tryAllocateNewSegment*[T; S, MT: static int, CC: static PinScopeCardinality](
     full: sink MPSCPushSegmentFull[T, S, MT, CC], newSegment: ptr MPSCSegment[S, T]
-): tuple[ready: MPSCPushReady[T, S, MT, CC], allocated: bool] =
+): tuple[ready: MPSCPushReady[T, S, MT, CC], allocated: bool] {.notATransition.} =
   ## Try to link new segment using CAS.
   ## Returns (ready state, true if we allocated, false if someone else did).
   ## This is a non-transition helper that wraps allocateNewSegment.

@@ -87,7 +87,7 @@ proc tryClaim*[N, P, C: static int, T](
 
 proc complete*[N, P, C: static int, T](
     op: MPMCPopSlotClaimed[N], queue: var MupmucBase[N, P, C, T]
-): T {.inline.} =
+): T {.inline, notATransition.} =
   ## Read value from the claimed slot, then re-arm the seq for the next
   ## generation. The `seq.store(pos+N, moRelease)` is the consumer->next-
   ## producer edge; the next producer at virtual position `pos + N` will

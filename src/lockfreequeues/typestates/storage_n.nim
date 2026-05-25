@@ -2,6 +2,7 @@
 ##
 ## Can ONLY be indexed with PhysicalSlotN[N], preventing index formula bugs.
 
+import typestates
 import ./virtual_values_n
 
 type StorageN*[N: static int, T] = object ## Storage with exactly N slots.
@@ -12,18 +13,20 @@ proc init*[N: static int, T](s: var StorageN[N, T]) =
   for i in 0 ..< N:
     s.data[i].reset()
 
-proc `[]`*[N: static int, T](s: StorageN[N, T], idx: PhysicalSlotN[N]): T {.inline.} =
+proc `[]`*[N: static int, T](
+    s: StorageN[N, T], idx: PhysicalSlotN[N]
+): T {.inline, notATransition.} =
   ## Read from storage (requires PhysicalSlotN).
   s.data[idx.slotValue]
 
 proc `[]`*[N: static int, T](
     s: var StorageN[N, T], idx: PhysicalSlotN[N]
-): var T {.inline.} =
+): var T {.inline, notATransition.} =
   ## Read as var (requires PhysicalSlotN).
   s.data[idx.slotValue]
 
 proc `[]=`*[N: static int, T](
     s: var StorageN[N, T], idx: PhysicalSlotN[N], val: T
-) {.inline.} =
+) {.inline, notATransition.} =
   ## Write to storage (requires PhysicalSlotN).
   s.data[idx.slotValue] = val

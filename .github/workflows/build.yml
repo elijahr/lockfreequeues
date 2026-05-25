@@ -30,7 +30,7 @@ jobs:
           nim-version: 'stable'
 
       - name: Install typestates
-        run: nimble install -y "typestates@0.7.2"
+        run: nimble install -y "typestates@>= 0.10.0"
 
       - name: Typestates verify
         run: typestates verify -W --format=github src/

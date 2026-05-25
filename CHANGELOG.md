@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 (No entries yet — post-5.0.0 work lands here.)
 
-## [5.0.0] - YYYY-MM-DD
+## [5.0.0] - 2026-05-25
 
 What was developed under the v4.2.0 and v4.3.0 banners ships for the
 first time as v5.0.0. Neither v4.2.0 nor v4.3.0 was tagged or merged to
@@ -754,6 +754,18 @@ The v5.0.0 reshape is measured against the pre-wave devel baseline
 ### Fixed (typestates 0.7 uplift)
 
 - 22 read-only typestate accessors across `src/lockfreequeues/typestates/` now carry `{.notATransition.}`. typestates' verifier flagged these once `typestates verify -W` was wired into CI; the procs are pure data extraction and were never transitions.
+
+### Dependencies & verification (typestates 0.10.0 AST verifier)
+
+- Bump minimum `typestates` to 0.10.0 and minimum `debra` to 0.8.0. The
+  transitive dependency chain is now `typestates >= 0.10.0`,
+  `debra >= 0.8.0`.
+- Re-audited the typestate model under the 0.10.0 AST verifier. The
+  pre-0.10.0 verifier used a line-by-line text scanner with a multi-line
+  silent-unscan defect; the AST verifier walks the parsed tree instead.
+  Re-auditing confirmed all 22 existing `{.notATransition.}` markings and
+  added 38 that the old text scanner had silently missed (0 spurious, 0
+  drift). The verifier now reports zero findings.
 
 ### Added (v5.0.0 unified Queue — Phase 1)
 

@@ -104,7 +104,7 @@ proc startPop*[T; S, MT: static int, CC: static PinScopeCardinality](
 # Extract Pinned state from terminal states
 proc extractPinned*[T; S, MT: static int, CC: static PinScopeCardinality](
     complete: sink MPSCPopComplete[T, S, MT, CC]
-): Pinned[MT, CC] =
+): Pinned[MT, CC] {.notATransition.} =
   ## Extract DEBRA's Pinned state for unpinning.
   Pinned[MT, CC](
     EpochGuardContext[MT, CC](
@@ -114,7 +114,7 @@ proc extractPinned*[T; S, MT: static int, CC: static PinScopeCardinality](
 
 proc extractPinned*[T; S, MT: static int, CC: static PinScopeCardinality](
     empty: sink MPSCPopEmpty[T, S, MT, CC]
-): Pinned[MT, CC] =
+): Pinned[MT, CC] {.notATransition.} =
   ## Extract DEBRA's Pinned state for unpinning.
   Pinned[MT, CC](
     EpochGuardContext[MT, CC](handle: empty.pinnedHandle, epoch: empty.pinnedEpoch)
@@ -122,7 +122,7 @@ proc extractPinned*[T; S, MT: static int, CC: static PinScopeCardinality](
 
 proc extractPinned*[T; S, MT: static int, CC: static PinScopeCardinality](
     uncommitted: sink MPSCPopSlotUncommitted[T, S, MT, CC]
-): Pinned[MT, CC] =
+): Pinned[MT, CC] {.notATransition.} =
   ## Extract DEBRA's Pinned state for unpinning.
   Pinned[MT, CC](
     EpochGuardContext[MT, CC](
@@ -237,6 +237,6 @@ proc advanceSegment*[T; S, MT: static int, CC: static PinScopeCardinality](
 # Get value from completed pop
 proc getValue*[T; S, MT: static int, CC: static PinScopeCardinality](
     complete: MPSCPopComplete[T, S, MT, CC]
-): T =
+): T {.notATransition.} =
   ## Extract the popped value.
   complete.value

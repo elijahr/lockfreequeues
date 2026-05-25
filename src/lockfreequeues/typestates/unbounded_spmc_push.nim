@@ -154,7 +154,7 @@ proc extractPinned*[
     S, MT: static int,
     ST: static DeallocationStrategy,
     CC: static PinScopeCardinality,
-](complete: sink SPMCPushComplete[T, S, MT, ST, CC]): Pinned[MT, CC] =
+](complete: sink SPMCPushComplete[T, S, MT, ST, CC]): Pinned[MT, CC] {.notATransition.} =
   ## Extract DEBRA's Pinned state for unpinning.
   Pinned[MT, CC](
     EpochGuardContext[MT, CC](

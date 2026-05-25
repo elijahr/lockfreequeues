@@ -67,7 +67,7 @@ proc checkEmpty*[N: static int](
 
 proc complete*[N: static int, T](
     op: SPSCPopNotEmpty[N], queue: var SipsicBase[N, T]
-): T {.inline.} =
+): T {.inline, notATransition.} =
   ## Read value, advance head. Returns the value.
   let value = queue.storage[op.slot]
   let newHead = op.head.incOrResetN1(1)
