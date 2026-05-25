@@ -58,6 +58,18 @@ when defined(adapter_flume_available):
       queue*: pointer
 
   proc makeFlumeAdapter*[T](capacity: int = 1024): FlumeAdapter[T] =
+    ## The FFI shim is hardcoded to a `uint64` payload, so `T` MUST be
+    ## exactly 8 bytes; push/pop bit-cast via `cast[uint64](item)` /
+    ## `cast[T](raw)`. Same constraint as the atomic_queue / liblfds
+    ## adapters.
+    static:
+      assert sizeof(T) == 8,
+        "FlumeAdapter requires sizeof(T) == 8 (the FFI shim transports " &
+        "a uint64 payload); got sizeof(" & $T & ") = " & $sizeof(T)
+      assert not (T is ref),
+        "FlumeAdapter cannot transport ref types: the Rust channel " &
+        "bypasses Nim's GC, so refcounts wouldn't be maintained across " &
+        "the boundary. Use a non-ref 64-bit payload (uint64, ptr, etc)."
     doAssert capacity > 0,
       "FlumeAdapter (bounded) requires capacity > 0 " &
       "(zero would null-init at the FFI boundary)"
@@ -95,6 +107,18 @@ when defined(adapter_flume_available):
     ## `capacity` is ignored — flume's unbounded variant grows on demand.
     ## Default arg matches the other adapters' shape so the wire-up
     ## sites can pass the same `capacity` uniformly without conditionals.
+    ##
+    ## Same payload constraint as the bounded variant: the FFI shim
+    ## transports a `uint64`, so `T` MUST be exactly 8 bytes and non-ref.
+    static:
+      assert sizeof(T) == 8,
+        "FlumeUnboundedAdapter requires sizeof(T) == 8 (the FFI shim " &
+        "transports a uint64 payload); got sizeof(" & $T & ") = " &
+        $sizeof(T)
+      assert not (T is ref),
+        "FlumeUnboundedAdapter cannot transport ref types: the Rust " &
+        "channel bypasses Nim's GC, so refcounts wouldn't be maintained " &
+        "across the boundary. Use a non-ref 64-bit payload (uint64, ptr)."
     discard capacity
     result.queue = flume_unbounded_init()
     doAssert result.queue != nil, "flume_unbounded_init returned null"
