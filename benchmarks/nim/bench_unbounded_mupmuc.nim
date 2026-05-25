@@ -43,6 +43,15 @@ when defined(adapter_crossbeam_seg_queue_available):
 when defined(adapter_moodycamel_available):
   import ./adapters/moodycamel_adapter
 
+# v4.2.0 Stage 5.2 Tier 2 Rust comparison adapters: flume + kanal
+# unbounded channels. Both go through runThroughputHarness over the
+# {1,2,4} P x {1,2,4} C grid.
+when defined(adapter_flume_available):
+  import ./adapters/flume_adapter
+
+when defined(adapter_kanal_available):
+  import ./adapters/kanal_adapter
+
 const
   UnboundedMupmucRuns* {.intdefine.} = 3
   UnboundedMupmucMessageCount* {.intdefine.} = 500_000
@@ -196,6 +205,16 @@ when defined(adapter_moodycamel_available):
   proc initMoodycamelQ(capacity: int): MoodycamelAdapter[uint64] =
     makeMoodycamelAdapter[uint64](capacity)
 
+when defined(adapter_flume_available):
+  proc initFlumeUnboundedQ(capacity: int): FlumeUnboundedAdapter[uint64] =
+    discard capacity
+    makeFlumeUnboundedAdapter[uint64]()
+
+when defined(adapter_kanal_available):
+  proc initKanalUnboundedQ(capacity: int): KanalUnboundedAdapter[uint64] =
+    discard capacity
+    makeKanalUnboundedAdapter[uint64]()
+
 proc runMvpUnboundedShape[A](
     em: var BMFEmitter,
     slugPrefix: string,
@@ -235,6 +254,10 @@ proc supportedVariantsList(): seq[string] {.compileTime.} =
     result.add("crossbeam_seg_queue")
   when declared(initMoodycamelQ):
     result.add("moodycamel")
+  when declared(initFlumeUnboundedQ):
+    result.add("flume_unbounded")
+  when declared(initKanalUnboundedQ):
+    result.add("kanal_unbounded")
 
 const SupportedVariants = supportedVariantsList()
 
@@ -285,6 +308,24 @@ proc runVariant(variant: string, em: var BMFEmitter) =
           for c in [1, 2, 4]:
             runMvpUnboundedShape[MoodycamelAdapter[uint64]](
               em, "moodycamel", initMoodycamelQ,
+              p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
+              UnboundedMupmucMessageCount)
+        return
+    when declared(initFlumeUnboundedQ):
+      if variant == "flume_unbounded":
+        for p in [1, 2, 4]:
+          for c in [1, 2, 4]:
+            runMvpUnboundedShape[FlumeUnboundedAdapter[uint64]](
+              em, "flume_unbounded", initFlumeUnboundedQ,
+              p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
+              UnboundedMupmucMessageCount)
+        return
+    when declared(initKanalUnboundedQ):
+      if variant == "kanal_unbounded":
+        for p in [1, 2, 4]:
+          for c in [1, 2, 4]:
+            runMvpUnboundedShape[KanalUnboundedAdapter[uint64]](
+              em, "kanal_unbounded", initKanalUnboundedQ,
               p, c, UnboundedMupmucRuns, BenchUnboundedWarmup,
               UnboundedMupmucMessageCount)
         return

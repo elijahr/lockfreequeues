@@ -66,6 +66,29 @@ when defined(adapter_crossbeam_array_queue_available):
 when defined(adapter_threading_channels_available):
   import ./adapters/threading_channels_adapter
 
+# v4.2.0 Stage 5.1 Tier 1 vendored comparison adapters (header-only C++).
+# atomic_queue is general MPMC (registered here at the {1,2,4} P x {1,2,4}
+# C grid); rigtorp_mpmc is Vyukov-style bounded MPMC.
+when defined(adapter_atomic_queue_available):
+  import ./adapters/atomic_queue_adapter
+
+when defined(adapter_rigtorp_mpmc_available):
+  import ./adapters/rigtorp_mpmc_adapter
+
+# v4.2.0 Stage 5.2 Tier 2 Rust comparison adapters (flume + kanal,
+# bounded variants).
+when defined(adapter_flume_available):
+  import ./adapters/flume_adapter
+
+when defined(adapter_kanal_available):
+  import ./adapters/kanal_adapter
+
+# v4.2.0 Stage 5.3 Tier 3 vendored adapter: liblfds 7.1.1 (C library,
+# license-verified). The adapter routes the MPMC topology to the
+# upstream `lfds711_queue_bmm_*` Vyukov-style bounded MPMC queue.
+when defined(adapter_liblfds_available):
+  import ./adapters/liblfds_adapter
+
 const
   BenchMpmcRuns* {.intdefine.} = 33
   BenchMpmcMessageCount* {.intdefine.} = 1_000_000
@@ -342,6 +365,28 @@ when defined(adapter_threading_channels_available):
   proc initThreadingChannelsQ(capacity: int): ThreadingChannelsAdapter[uint64] =
     makeThreadingChannelsAdapter[uint64](capacity)
 
+when defined(adapter_atomic_queue_available):
+  proc initAtomicQueueMpmcQ(capacity: int): AtomicQueueAdapter[uint64] =
+    makeAtomicQueueAdapter[uint64](capacity)
+
+when defined(adapter_rigtorp_mpmc_available):
+  proc initRigtorpMpmcQ(capacity: int): RigtorpMpmcAdapter[uint64] =
+    makeRigtorpMpmcAdapter[uint64](capacity)
+
+when defined(adapter_flume_available):
+  proc initFlumeMpmcQ(capacity: int): FlumeAdapter[uint64] =
+    makeFlumeAdapter[uint64](capacity)
+
+when defined(adapter_kanal_available):
+  proc initKanalMpmcQ(capacity: int): KanalAdapter[uint64] =
+    makeKanalAdapter[uint64](capacity)
+
+when defined(adapter_liblfds_available):
+  proc initLiblfdsMpmcQ(capacity: int): LiblfdsAdapter[uint64] =
+    # MPMC slot uses the bounded many-producer / many-consumer queue
+    # (`lfds711_queue_bmm_*`).
+    makeLiblfdsAdapter[uint64](kind = lkBmm, capacity = capacity)
+
 proc runMvpMpmcShape[A](
     em: var BMFEmitter,
     slugPrefix: string,
@@ -381,6 +426,16 @@ proc supportedVariantsList(): seq[string] {.compileTime.} =
     result.add("crossbeam_array_queue")
   when declared(initThreadingChannelsQ):
     result.add("threading_channels")
+  when declared(initAtomicQueueMpmcQ):
+    result.add("atomic_queue")
+  when declared(initRigtorpMpmcQ):
+    result.add("rigtorp_mpmc")
+  when declared(initFlumeMpmcQ):
+    result.add("flume")
+  when declared(initKanalMpmcQ):
+    result.add("kanal")
+  when declared(initLiblfdsMpmcQ):
+    result.add("liblfds")
 
 const SupportedVariants = supportedVariantsList()
 
@@ -462,6 +517,53 @@ proc runVariant(variant: string, em: var BMFEmitter) =
           for c in [1, 2, 4]:
             runMvpMpmcShape[ThreadingChannelsAdapter[uint64]](
               em, "threading_channels", initThreadingChannelsQ,
+              p, c, BenchMpmcRuns, BenchMpmcWarmup,
+              BenchMpmcMessageCount, MpmcCapacity)
+        return
+    when declared(initAtomicQueueMpmcQ):
+      if variant == "atomic_queue":
+        for p in [1, 2, 4]:
+          for c in [1, 2, 4]:
+            runMvpMpmcShape[AtomicQueueAdapter[uint64]](
+              em, "atomic_queue", initAtomicQueueMpmcQ,
+              p, c, BenchMpmcRuns, BenchMpmcWarmup,
+              BenchMpmcMessageCount, MpmcCapacity)
+        return
+    when declared(initRigtorpMpmcQ):
+      if variant == "rigtorp_mpmc":
+        for p in [1, 2, 4]:
+          for c in [1, 2, 4]:
+            runMvpMpmcShape[RigtorpMpmcAdapter[uint64]](
+              em, "rigtorp_mpmc", initRigtorpMpmcQ,
+              p, c, BenchMpmcRuns, BenchMpmcWarmup,
+              BenchMpmcMessageCount, MpmcCapacity)
+        return
+    when declared(initFlumeMpmcQ):
+      if variant == "flume":
+        for p in [1, 2, 4]:
+          for c in [1, 2, 4]:
+            runMvpMpmcShape[FlumeAdapter[uint64]](
+              em, "flume", initFlumeMpmcQ,
+              p, c, BenchMpmcRuns, BenchMpmcWarmup,
+              BenchMpmcMessageCount, MpmcCapacity)
+        return
+    when declared(initKanalMpmcQ):
+      if variant == "kanal":
+        for p in [1, 2, 4]:
+          for c in [1, 2, 4]:
+            runMvpMpmcShape[KanalAdapter[uint64]](
+              em, "kanal", initKanalMpmcQ,
+              p, c, BenchMpmcRuns, BenchMpmcWarmup,
+              BenchMpmcMessageCount, MpmcCapacity)
+        return
+    when declared(initLiblfdsMpmcQ):
+      if variant == "liblfds":
+        # Impl plan slug grid: liblfds/mpmc/{1,2,4}p{1,2,4}c (the same
+        # 9-shape grid every other MVP MPMC adapter emits).
+        for p in [1, 2, 4]:
+          for c in [1, 2, 4]:
+            runMvpMpmcShape[LiblfdsAdapter[uint64]](
+              em, "liblfds", initLiblfdsMpmcQ,
               p, c, BenchMpmcRuns, BenchMpmcWarmup,
               BenchMpmcMessageCount, MpmcCapacity)
         return

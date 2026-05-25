@@ -30,6 +30,28 @@ import lockfreequeues/internal/pinscope_stub
 when defined(adapter_boost_lockfree_spsc_available):
   import ./adapters/boost_lockfree_spsc_adapter
 
+# v4.2.0 Stage 5.1 Tier 1 vendored comparison adapters (header-only C++).
+# Both `atomic_queue` (max0x7ba) and `rigtorp::SPSCQueue` are bounded
+# rings; gated by per-library defines. atomic_queue runs at SPSC here
+# (it is general MPMC, but the SPSC slot exercises its 1p1c path).
+when defined(adapter_atomic_queue_available):
+  import ./adapters/atomic_queue_adapter
+
+when defined(adapter_rigtorp_spsc_available):
+  import ./adapters/rigtorp_spsc_adapter
+
+# v4.2.0 Stage 5.2 Tier 2 Rust comparison adapter: kanal exposes a
+# bounded MPMC channel that we exercise here at the 1p1c (SPSC) shape.
+when defined(adapter_kanal_available):
+  import ./adapters/kanal_adapter
+
+# v4.2.0 Stage 5.3 Tier 3 vendored adapter: liblfds 7.1.1 (C library,
+# license-verified public-domain + permissive grant). The adapter
+# routes the SPSC topology to the upstream `lfds711_queue_bss_*`
+# bounded single-producer / single-consumer queue.
+when defined(adapter_liblfds_available):
+  import ./adapters/liblfds_adapter
+
 const
   ## Per-binary intdefines for SPSC wall-time control. Override at compile
   ## time with `-d:BenchSpscRuns=N` etc. Defaults match design §2.5.
@@ -74,12 +96,39 @@ when defined(adapter_boost_lockfree_spsc_available):
   proc initBoostSpscQ(capacity: int): BoostLockfreeSpscAdapter[uint64] =
     makeBoostLockfreeSpscAdapter[uint64](capacity)
 
+when defined(adapter_atomic_queue_available):
+  proc initAtomicQueueQ(capacity: int): AtomicQueueAdapter[uint64] =
+    makeAtomicQueueAdapter[uint64](capacity)
+
+when defined(adapter_rigtorp_spsc_available):
+  proc initRigtorpSpscQ(capacity: int): RigtorpSpscAdapter[uint64] =
+    makeRigtorpSpscAdapter[uint64](capacity)
+
+when defined(adapter_kanal_available):
+  proc initKanalSpscQ(capacity: int): KanalAdapter[uint64] =
+    makeKanalAdapter[uint64](capacity)
+
+when defined(adapter_liblfds_available):
+  proc initLiblfdsSpscQ(capacity: int): LiblfdsAdapter[uint64] =
+    # SPSC slot uses the bounded single-producer / single-consumer queue
+    # (`lfds711_queue_bss_*`); see the adapter doc-comment for the
+    # ringbuffer-vs-bounded-queue rationale.
+    makeLiblfdsAdapter[uint64](kind = lkBss, capacity = capacity)
+
 # MVP variants are added to SupportedVariants only when the matching
 # adapter symbol is in scope (i.e. its compile-time gate is set).
 proc supportedVariantsList(): seq[string] {.compileTime.} =
   result = @["sipsic", "queue_bounded_sipsic"]
   when declared(initBoostSpscQ):
     result.add("boost_lockfree_spsc")
+  when declared(initAtomicQueueQ):
+    result.add("atomic_queue")
+  when declared(initRigtorpSpscQ):
+    result.add("rigtorp_spsc")
+  when declared(initKanalSpscQ):
+    result.add("kanal")
+  when declared(initLiblfdsSpscQ):
+    result.add("liblfds")
 
 const SupportedVariants = supportedVariantsList()
 
@@ -173,6 +222,42 @@ proc runVariant(variant: string, em: var BMFEmitter) =
           em,
           slug = "boost_lockfree_queue/spsc/1p1c",
           queueInit = initBoostSpscQ,
+          capacity = SpscCapacity,
+        )
+        return
+    when declared(initAtomicQueueQ):
+      if variant == "atomic_queue":
+        runMvpVariant[AtomicQueueAdapter[uint64]](
+          em,
+          slug = "atomic_queue/spsc/1p1c",
+          queueInit = initAtomicQueueQ,
+          capacity = SpscCapacity,
+        )
+        return
+    when declared(initRigtorpSpscQ):
+      if variant == "rigtorp_spsc":
+        runMvpVariant[RigtorpSpscAdapter[uint64]](
+          em,
+          slug = "rigtorp_spsc/spsc/1p1c",
+          queueInit = initRigtorpSpscQ,
+          capacity = SpscCapacity,
+        )
+        return
+    when declared(initKanalSpscQ):
+      if variant == "kanal":
+        runMvpVariant[KanalAdapter[uint64]](
+          em,
+          slug = "kanal/spsc/1p1c",
+          queueInit = initKanalSpscQ,
+          capacity = SpscCapacity,
+        )
+        return
+    when declared(initLiblfdsSpscQ):
+      if variant == "liblfds":
+        runMvpVariant[LiblfdsAdapter[uint64]](
+          em,
+          slug = "liblfds/spsc/1p1c",
+          queueInit = initLiblfdsSpscQ,
           capacity = SpscCapacity,
         )
         return
