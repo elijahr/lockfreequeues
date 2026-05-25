@@ -94,15 +94,8 @@ nav:
     - Examples: guide/examples.md
   - API Reference:
     - Overview: api/index.md
-    - Bounded Queues:
-      - Sipsic: api/sipsic.md
-      - Sipmuc: api/sipmuc.md
-      - Mupsic: api/mupsic.md
-      - Mupmuc: api/mupmuc.md
-    - Unbounded Queues:
-      - UnboundedSipmuc: api/unbounded_sipmuc.md
-      - UnboundedMupsic: api/unbounded_mupsic.md
-      - UnboundedMupmuc: api/unbounded_mupmuc.md
+    - Bounded Queue (BQueue): api/bqueue.md
+    - Unbounded Queue (Queue): api/queue.md
   - Benchmarks: benchmarks.md
   - Contributing: contributing.md
 
