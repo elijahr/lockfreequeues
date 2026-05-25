@@ -163,7 +163,7 @@ proc runSipmucShape[N, C: static int; T](
   echo ""
   em.addMeasure(slug, "throughput_ops_ms", m, m - s, m + s)
 
-# ---------- v5.0.0 cascade D3.6: Queue ccSingle x ccMulti harness ----------
+# ---------- v5.0.0 cascade D3.6: BQueue ccSingle x ccMulti harness ----------
 #
 # Slug `lockfreequeues_queue_bounded_sipmuc/mpmc/1p<C>c`. Output metric /
 # units (throughput_ops_ms) match the legacy Sipmuc baseline so B3

@@ -188,8 +188,9 @@ proc runVariant(variant: string, em: var BMFEmitter) =
     )
   of "queue_bounded_sipsic":
     # v5.0.0 cascade D3.6: same shape as `sipsic` variant above, but
-    # backed by the unified `Queue[T, ccSingle, ccSingle, stEager,
-    # rkNone, N, 0, 0, 0, 0]` generic. Slug + metric mirror so B3
+    # backed by the unified `BQueue[T, ccSingle, ccSingle, stEager,
+    # rkNone, N, 0, 0, 0, 0]` generic via `QueueBoundedAdapter`. Slug +
+    # metric mirror so B3
     # parity delta is a simple per-shape division across the two
     # emitted measures.
     let slug = "lockfreequeues_queue_bounded_sipsic/spsc/1p1c"

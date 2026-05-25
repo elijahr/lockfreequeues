@@ -165,7 +165,7 @@ proc runMupsicShape[N, P: static int; T](
   echo ""
   em.addMeasure(slug, "throughput_ops_ms", m, m - s, m + s)
 
-# ---------- v5.0.0 cascade D3.6: Queue-based MPSC parity harness ----------
+# ---------- v5.0.0 cascade D3.6: BQueue-based MPSC parity harness ----------
 #
 # Parallel to the Mupsic harness above, but exercises the unified
 # `BQueue[uint64, ccMulti, ccSingle, N, P, 0]`

@@ -86,7 +86,7 @@ proc initMupsic(): LockfreequeuesMupsicAdapter[LatencyCapacity, 1, uint64] =
 proc initMupmuc(): MupmucAdapter[LatencyCapacity, uint64] =
   initMupmucAdapter[LatencyCapacity, uint64]()
 
-# v5.0.0 cascade D3.6.5: consolidated Queue-based parity factories.
+# v5.0.0 cascade D3.6.5: consolidated BQueue-based parity factories.
 # All 4 cardinality combos route through the unified
 # `QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T]` type. Slugs
 # preserve the per-family naming for B3 % delta computation.

@@ -213,7 +213,7 @@ proc runMupmucShape[N, P, C: static int; T](
   echo ""
   em.addMeasure(slug, "throughput_ops_ms", m, m - s, m + s)
 
-# ---------- v5.0.0 cascade D3.6: Queue ccMulti x ccMulti harness ----------
+# ---------- v5.0.0 cascade D3.6: BQueue ccMulti x ccMulti harness ----------
 #
 # Slug `lockfreequeues_queue_bounded_mupmuc/mpmc/<P>p<C>c`. Output
 # metric / units (throughput_ops_ms) match the legacy Mupmuc baseline.
