@@ -1,0 +1,39 @@
+liblfds 7.1.1 — license / public-domain dedication
+====================================================
+
+The upstream liblfds source tree (https://liblfds.org/) does NOT ship a
+LICENSE file. The canonical license declaration is published on the
+project's website (https://www.liblfds.org/, "license" section) and is
+quoted verbatim below.
+
+Quoted verbatim from <https://www.liblfds.org/>, retrieved 2026-05-06:
+---------------------------------------------------------------------
+
+    Welcome to liblfds, a portable, license-free, lock-free data
+    structure library written in C.
+
+    license
+
+    You are free to use this library in any way. Go forth and create
+    wealth!
+
+    If for legal reasons a custom licence is required, the license of
+    your choice will be granted, and license is hereby granted up front
+    for a range of popular licenses : the MIT license, the BSD license,
+    the Apache license, the GPL and LPGL (all versions thereof) and the
+    Creative Commons licenses (all of them). Additionally, everything
+    is also placed in the public domain.
+
+---------------------------------------------------------------------
+
+`lockfreequeues` consumes liblfds under the Apache-2.0 grant from the
+list above (compatible with `lockfreequeues`'s own Apache-2.0 license)
+and under the public-domain dedication. No source modifications were
+made to the vendored tree; the wrapper / adapter code in this directory
+and under `benchmarks/nim/` is original `lockfreequeues` source under
+its own Apache-2.0 license.
+
+See `THIRD_PARTY_LICENSES.md` at the repo root and
+`benchmarks/vendor/liblfds/README.md` in this directory for the
+upgrade procedure and the cross-checks performed at vendoring time
+(Repology project page, GitHub mirrors, upstream homepage).
