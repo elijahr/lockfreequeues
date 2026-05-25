@@ -1006,7 +1006,9 @@ honoured regardless of build mode.
   call-site: `newSipsicQueue[T, N]`, `newMupsicQueue[T, N, P]`,
   `newSipmucQueue[T, N, C]`, `newMupmucQueue[T, N, P, C]` (bounded,
   `RK = rkNone`); `newUnboundedMupsicQueue[T, S, MaxThreads]` (borrow
-  takes `(mgr, consumerHandle)`; auto-create takes `()`),
+  takes `(mgr, consumerHandle)` to register the single consumer at
+  construction, or manager-only `(mgr)` with the consumer registering
+  itself later via `attachConsumer()`; auto-create takes `()`),
   `newUnboundedSipmucQueue[T, S, MaxThreads]` and
   `newUnboundedMupmucQueue[T, S, MaxThreads]` (borrow takes `(mgr)`;
   auto-create takes `()`) (unbounded, debra-integrated). (Phase-1 framed
