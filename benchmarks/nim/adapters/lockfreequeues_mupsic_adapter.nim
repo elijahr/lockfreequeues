@@ -66,8 +66,8 @@ proc cleanup*[N, P: static int, T](
   # `=destroy` that would otherwise run at adapter scope exit (after this
   # proc returns and the queue is freed), touching freed memory. reset()
   # runs its destructor now, while the queue is still valid.
-  reset(a.producer)
   if a.queue != nil:
+    reset(a.producer)
     reset(a.queue[])
     dealloc(a.queue)
     a.queue = nil

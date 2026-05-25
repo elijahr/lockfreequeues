@@ -162,6 +162,7 @@ proc runUMupmucShape[P: static int; C: static int](
   echo fmt"UnboundedMupmuc {P}p{C}c ({slug}):"
   for _ in 0 ..< warmup:
     var manager = create(DebraManager[MaxThreads, debra.ccMulti])
+    wasMoved(manager[])
     manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
     var q =
       newUnboundedMupmucQueue[uint64, stEager, SegmentSize, MaxThreads](manager)
@@ -173,6 +174,7 @@ proc runUMupmucShape[P: static int; C: static int](
   var samples: seq[float] = @[]
   for _ in 0 ..< runs:
     var manager = create(DebraManager[MaxThreads, debra.ccMulti])
+    wasMoved(manager[])
     manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
     var q =
       newUnboundedMupmucQueue[uint64, stEager, SegmentSize, MaxThreads](manager)

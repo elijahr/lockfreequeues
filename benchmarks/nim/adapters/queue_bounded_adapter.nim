@@ -91,11 +91,11 @@ proc cleanup*[
   # freed memory (use-after-free). reset() runs each view's `=destroy` now,
   # while the queue is still alive, and leaves the field in a moved-from
   # state whose later scope-exit destructor is a no-op.
-  when ccProd == ccMulti:
-    reset(a.producer)
-  when ccCons == ccMulti:
-    reset(a.consumer)
   if a.queue != nil:
+    when ccProd == ccMulti:
+      reset(a.producer)
+    when ccCons == ccMulti:
+      reset(a.consumer)
     reset(a.queue[])
     dealloc(a.queue)
     a.queue = nil

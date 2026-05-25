@@ -117,6 +117,7 @@ proc runUSipmucShape[C: static int](
   echo fmt"UnboundedSipmuc 1p{C}c ({slug}):"
   for _ in 0 ..< warmup:
     var manager = create(DebraManager[MaxThreads, debra.ccMulti])
+    wasMoved(manager[])
     manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
     var q =
       newUnboundedSipmucQueue[uint64, stEager, SegmentSize, MaxThreads](manager)
@@ -128,6 +129,7 @@ proc runUSipmucShape[C: static int](
   var samples: seq[float] = @[]
   for _ in 0 ..< runs:
     var manager = create(DebraManager[MaxThreads, debra.ccMulti])
+    wasMoved(manager[])
     manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
     var q =
       newUnboundedSipmucQueue[uint64, stEager, SegmentSize, MaxThreads](manager)
