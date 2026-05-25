@@ -325,8 +325,6 @@ type
           # operating thread matches. `when defined(debug):` so release
           # builds carry NO field — zero layout change, zero cost.
           attachedTid*: ThreadId
-      when ccCons == ccMulti:
-        consumerHeads*: array[MaxThreads, Atomic[int]]
 
 ## ----------------------------------------------------------------------
 ## Param-coherence guards — unbounded subset of legacy Doc C §3.0.2.4.

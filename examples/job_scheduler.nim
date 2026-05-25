@@ -51,8 +51,8 @@ type
     priority: Priority
     workMs: int  # Simulated work duration
 
-  JobQueue = lfq_queue.Queue[Job, ccMulti, ccMulti, stEager, rkEbr, 0, 0, 0,
-                             SegmentSize, MaxThreads]
+  JobQueue = lfq_queue.Queue[Job, ccMulti, ccMulti, stEager, SegmentSize,
+                             MaxThreads]
 
   SubmitterContext = object
     queue: ptr JobQueue
@@ -80,6 +80,8 @@ proc submitterThread(ctx: ptr SubmitterContext) {.thread.} =
   ## Job submitter - creates and enqueues jobs.
   {.cast(gcsafe).}:
     var producer = ctx.queue[].getProducer()
+    # Register THIS submitter thread with debra before any push.
+    producer.attach()
     var submitted = 0
 
     for i in 0..<JobsPerSubmitter:
@@ -116,6 +118,8 @@ proc workerThread(ctx: ptr WorkerContext) {.thread.} =
   ## Worker - fetches and executes jobs.
   {.cast(gcsafe).}:
     var consumer = ctx.queue[].getConsumer()
+    # Register THIS worker thread with debra before any pop.
+    consumer.attach()
     var completed = 0
     var workTime: int64 = 0
 

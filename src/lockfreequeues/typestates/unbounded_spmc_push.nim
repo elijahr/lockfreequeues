@@ -39,7 +39,6 @@ type
     itemCount*: Atomic[int]
     segments*: Atomic[int]
     consumerCount*: Atomic[int]
-    consumerHeads*: array[MaxThreads, Atomic[int]]
 
   # Base context - carries pinned state and queue pointer
   SPMCPushContext*[

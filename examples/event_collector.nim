@@ -29,7 +29,7 @@ import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
 
-from debra import DebraManager, ThreadHandle, initDebraManager, registerThread
+from debra import DebraManager, initDebraManager
 
 const
   SegmentSize = 64
@@ -52,19 +52,22 @@ type
 
   SourceContext = object
     queue:
-      ptr Queue[Event, ccMulti, ccSingle, stEager, rkEbr, 0, 0, 0, SegmentSize, MaxThreads]
+      ptr Queue[Event, ccMulti, ccSingle, stEager, SegmentSize, MaxThreads]
     sourceId: int
     startTime: MonoTime
 
   ProcessorContext = object
     queue:
-      ptr Queue[Event, ccMulti, ccSingle, stEager, rkEbr, 0, 0, 0, SegmentSize, MaxThreads]
+      ptr Queue[Event, ccMulti, ccSingle, stEager, SegmentSize, MaxThreads]
 
 var
+  # v5.0.0 registration model: no thread is registered at construction.
+  # Each producer thread calls `getProducer().attach()` and the single
+  # consumer thread calls `attachConsumer()` on its OWN thread before its
+  # first push/pop (thread-affine debra registration).
   manager = initDebraManager[MaxThreads]()
-  consumerHandle = registerThread(manager)
   queue = newUnboundedMupsicQueue[Event, stEager, SegmentSize, MaxThreads](
-    addr manager, consumerHandle
+    addr manager
   )
   running: Atomic[bool]
   eventsProduced: array[NumSources, Atomic[int]]
@@ -77,6 +80,8 @@ proc eventSourceThread(ctx: ptr SourceContext) {.thread.} =
   ## Sources occasionally burst to simulate real traffic patterns.
   {.cast(gcsafe).}:
     var producer = ctx.queue[].getProducer()
+    # Register THIS producer thread with debra before any push.
+    producer.attach()
     var produced = 0
 
     while running.load(moAcquire):
@@ -107,6 +112,11 @@ proc processorThread(ctx: ptr ProcessorContext) {.thread.} =
   ## Periodic memory reclamation is now driven internally by the queue's
   ## `stEager` strategy (per-pop `advanceEvery` + `reclaimNow`).
   {.cast(gcsafe).}:
+    # CRITICAL thread-affinity fix: the single consumer must register its
+    # debra handle on the CONSUMING thread (here), not on the main thread,
+    # before the first pop. Registering elsewhere mis-routes the handle.
+    ctx.queue[].attachConsumer()
+
     var consumed = 0
     var maxDepth = 0
     var eventCounts: array[EventKind, int]
