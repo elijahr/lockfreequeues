@@ -13,6 +13,8 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 crossbeam-queue = "0.3"
+flume = "0.11"
+kanal = "0.1"
 
 [profile.release]
 # Unwinding a Rust panic across the C-ABI boundary into Nim is undefined

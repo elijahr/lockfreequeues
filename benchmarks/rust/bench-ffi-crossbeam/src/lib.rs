@@ -153,3 +153,228 @@ pub unsafe extern "C" fn cb_seg_destroy(q: *mut c_void) {
     }
     drop(unsafe { Box::from_raw(q as *mut SegQueue<u64>) });
 }
+
+// ============================================================
+// flume bounded + unbounded
+// ============================================================
+
+/// Pair of (sender, receiver) for a single flume channel. Both halves
+/// are kept live for the lifetime of the bench so we never close the
+/// channel by dropping a side mid-run; that would force `try_send` to
+/// fail with `Disconnected` (not `Full`) and the bench harness would
+/// see false "full" returns. The Nim adapter calls `flume_destroy`
+/// only after all producer / consumer threads have joined.
+struct FlumePair {
+    tx: flume::Sender<u64>,
+    rx: flume::Receiver<u64>,
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn flume_init(capacity: usize) -> *mut c_void {
+    if capacity == 0 {
+        return std::ptr::null_mut();
+    }
+    let (tx, rx) = flume::bounded::<u64>(capacity);
+    let pair = Box::new(FlumePair { tx, rx });
+    Box::into_raw(pair) as *mut c_void
+}
+
+/// # Safety
+/// `q` must be a live FlumePair pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn flume_push(q: *mut c_void, item: u64) -> bool {
+    if q.is_null() {
+        return false;
+    }
+    let pair = unsafe { &*(q as *const FlumePair) };
+    pair.tx.try_send(item).is_ok()
+}
+
+/// # Safety
+/// `q` must be a live FlumePair pointer; `out` must be writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn flume_pop(q: *mut c_void, out: *mut u64) -> bool {
+    if q.is_null() || out.is_null() {
+        return false;
+    }
+    let pair = unsafe { &*(q as *const FlumePair) };
+    match pair.rx.try_recv() {
+        Ok(v) => {
+            unsafe {
+                std::ptr::write(out, v);
+            }
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+/// # Safety
+/// `q` must be a pointer previously returned by `flume_init`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn flume_destroy(q: *mut c_void) {
+    if q.is_null() {
+        return;
+    }
+    drop(unsafe { Box::from_raw(q as *mut FlumePair) });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn flume_unbounded_init() -> *mut c_void {
+    let (tx, rx) = flume::unbounded::<u64>();
+    let pair = Box::new(FlumePair { tx, rx });
+    Box::into_raw(pair) as *mut c_void
+}
+
+/// # Safety
+/// `q` must be a live FlumePair pointer (unbounded variant).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn flume_unbounded_push(q: *mut c_void, item: u64) -> bool {
+    if q.is_null() {
+        return false;
+    }
+    let pair = unsafe { &*(q as *const FlumePair) };
+    // Unbounded send only fails on Disconnected; we keep both halves
+    // alive in the Box so disconnection is impossible during the run.
+    pair.tx.send(item).is_ok()
+}
+
+/// # Safety
+/// See `flume_pop`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn flume_unbounded_pop(q: *mut c_void, out: *mut u64) -> bool {
+    if q.is_null() || out.is_null() {
+        return false;
+    }
+    let pair = unsafe { &*(q as *const FlumePair) };
+    match pair.rx.try_recv() {
+        Ok(v) => {
+            unsafe {
+                std::ptr::write(out, v);
+            }
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+/// # Safety
+/// `q` must be a pointer previously returned by `flume_unbounded_init`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn flume_unbounded_destroy(q: *mut c_void) {
+    if q.is_null() {
+        return;
+    }
+    drop(unsafe { Box::from_raw(q as *mut FlumePair) });
+}
+
+// ============================================================
+// kanal bounded + unbounded
+// ============================================================
+
+/// Same lifetime invariants as `FlumePair`: keep both sender and
+/// receiver alive in the Box so the channel never disconnects mid-run.
+struct KanalPair {
+    tx: kanal::Sender<u64>,
+    rx: kanal::Receiver<u64>,
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn kanal_init(capacity: usize) -> *mut c_void {
+    if capacity == 0 {
+        return std::ptr::null_mut();
+    }
+    let (tx, rx) = kanal::bounded::<u64>(capacity);
+    let pair = Box::new(KanalPair { tx, rx });
+    Box::into_raw(pair) as *mut c_void
+}
+
+/// # Safety
+/// `q` must be a live KanalPair pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kanal_push(q: *mut c_void, item: u64) -> bool {
+    if q.is_null() {
+        return false;
+    }
+    let pair = unsafe { &*(q as *const KanalPair) };
+    pair.tx.try_send(item).unwrap_or(false)
+}
+
+/// # Safety
+/// `q` must be a live KanalPair pointer; `out` must be writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kanal_pop(q: *mut c_void, out: *mut u64) -> bool {
+    if q.is_null() || out.is_null() {
+        return false;
+    }
+    let pair = unsafe { &*(q as *const KanalPair) };
+    match pair.rx.try_recv() {
+        Ok(Some(v)) => {
+            unsafe {
+                std::ptr::write(out, v);
+            }
+            true
+        }
+        // `Ok(None)` means the channel is currently empty;
+        // `Err(_)` means the channel is closed (impossible during a
+        // bench run, since we hold both halves alive in the Box).
+        Ok(None) | Err(_) => false,
+    }
+}
+
+/// # Safety
+/// `q` must be a pointer previously returned by `kanal_init`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kanal_destroy(q: *mut c_void) {
+    if q.is_null() {
+        return;
+    }
+    drop(unsafe { Box::from_raw(q as *mut KanalPair) });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn kanal_unbounded_init() -> *mut c_void {
+    let (tx, rx) = kanal::unbounded::<u64>();
+    let pair = Box::new(KanalPair { tx, rx });
+    Box::into_raw(pair) as *mut c_void
+}
+
+/// # Safety
+/// `q` must be a live KanalPair pointer (unbounded variant).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kanal_unbounded_push(q: *mut c_void, item: u64) -> bool {
+    if q.is_null() {
+        return false;
+    }
+    let pair = unsafe { &*(q as *const KanalPair) };
+    pair.tx.try_send(item).unwrap_or(false)
+}
+
+/// # Safety
+/// See `kanal_pop`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kanal_unbounded_pop(q: *mut c_void, out: *mut u64) -> bool {
+    if q.is_null() || out.is_null() {
+        return false;
+    }
+    let pair = unsafe { &*(q as *const KanalPair) };
+    match pair.rx.try_recv() {
+        Ok(Some(v)) => {
+            unsafe {
+                std::ptr::write(out, v);
+            }
+            true
+        }
+        Ok(None) | Err(_) => false,
+    }
+}
+
+/// # Safety
+/// `q` must be a pointer previously returned by `kanal_unbounded_init`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kanal_unbounded_destroy(q: *mut c_void) {
+    if q.is_null() {
+        return;
+    }
+    drop(unsafe { Box::from_raw(q as *mut KanalPair) });
+}
