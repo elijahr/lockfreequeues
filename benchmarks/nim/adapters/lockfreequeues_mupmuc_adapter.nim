@@ -36,6 +36,10 @@ type
 
 proc initMupmucAdapter*[N: static int, T](): MupmucAdapter[N, T] =
   result.queue = create(MupmucAdapterQueue[N, T])
+  # wasMoved before the deref-assign: `create`'s zero-fill is not tracked by
+  # ARC/ORC, so `result.queue[] = ...` would run the BQueue typestate
+  # `=destroy` on uninitialized storage. Mark the slot moved-from first.
+  wasMoved(result.queue[])
   result.queue[] = newBQueue[T, ccMulti, ccMulti, N, 1, 1]()
   # Use idx parameter to manually assign producer/consumer for single-threaded
   # use AND for multi-threaded ping-pong (bench_common.runLatencyHarness):
@@ -47,6 +51,13 @@ proc initMupmucAdapter*[N: static int, T](): MupmucAdapter[N, T] =
   result.consumer = result.queue[].getConsumer(idx = 0)
 
 proc deinitMupmucAdapter*[N: static int, T](a: var MupmucAdapter[N, T]) =
+  # Reset the cached producer/consumer views BEFORE deallocating the queue
+  # they borrow from. Both views hold a pointer into `a.queue[]` and carry a
+  # typestate `=destroy` that would otherwise run at adapter scope exit
+  # (after this proc returns and the queue is freed), touching freed memory.
+  # reset() runs their destructors now, while the queue is still valid.
+  reset(a.producer)
+  reset(a.consumer)
   if a.queue != nil:
     reset(a.queue[])
     dealloc(a.queue)

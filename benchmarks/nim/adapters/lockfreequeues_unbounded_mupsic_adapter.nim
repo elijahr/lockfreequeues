@@ -75,9 +75,16 @@ proc initUnboundedMupsicAdapter*[S: static int, T; MaxThreads: static int](
   ## threads. The smart-constructor pins ST to stEager at the type
   ## level (matches the legacy 3.2.x default).
   result.manager = create(DebraManager[MaxThreads, debra.ccSingle])
+  # wasMoved before the deref-assign: `create`'s zero-fill is not tracked by
+  # ARC/ORC, so `result.manager[] = ...` would run the DebraManager
+  # `=destroy` on uninitialized storage. Mark the slot moved-from first.
+  wasMoved(result.manager[])
   result.manager[] = initDebraManager[MaxThreads, debra.ccSingle]()
 
   result.queue = create(UnboundedMupsicAdapterQueue[S, T, MaxThreads])
+  # Same rationale for the queue: the unified Queue carries a typestate
+  # `=destroy`, so mark the created slot moved-from before assigning into it.
+  wasMoved(result.queue[])
   result.queue[] =
     newUnboundedMupsicQueue[T, stEager, S, MaxThreads](result.manager)
 

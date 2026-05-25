@@ -63,6 +63,10 @@ proc makeLockfreequeuesSipmucAdapter*[N, C: static int, T](
   ## bounded queues.
   doAssert capacity == N, "capacity must equal static N"
   result.queue = create(SipmucQueue[N, C, T])
+  # wasMoved before the deref-assign: `create`'s zero-fill is not tracked by
+  # ARC/ORC, so `result.queue[] = ...` would run the BQueue typestate
+  # `=destroy` on uninitialized storage. Mark the slot moved-from first.
+  wasMoved(result.queue[])
   result.queue[] = newBQueue[T, ccSingle, ccMulti, N, 0, C]()
   # Pre-allocate consumer 0; bench code that drives multiple consumers
   # registers its own per-thread Consumer via getConsumer(idx = i).
@@ -71,6 +75,12 @@ proc makeLockfreequeuesSipmucAdapter*[N, C: static int, T](
 proc cleanup*[N, C: static int, T](
     a: var LockfreequeuesSipmucAdapter[N, C, T]
 ) =
+  # Reset the cached consumer view BEFORE deallocating the queue it borrows
+  # from. The view holds a pointer into `a.queue[]` and carries a typestate
+  # `=destroy` that would otherwise run at adapter scope exit (after this
+  # proc returns and the queue is freed), touching freed memory. reset()
+  # runs its destructor now, while the queue is still valid.
+  reset(a.consumer)
   if a.queue != nil:
     reset(a.queue[])
     dealloc(a.queue)

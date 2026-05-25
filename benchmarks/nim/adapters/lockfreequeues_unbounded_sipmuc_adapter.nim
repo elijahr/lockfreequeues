@@ -75,6 +75,12 @@ proc makeLockfreequeuesUnboundedSipmucAdapter*[S: static int, T;
     capacity: int = 0    # ignored for unbounded
 ): LockfreequeuesUnboundedSipmucAdapter[S, T, MaxThreads] =
   result.manager = create(DebraManager[MaxThreads, debra.ccMulti])
+  # wasMoved before the deref-assign: `create`'s zero-fill is not tracked by
+  # ARC/ORC, so `result.manager[] = ...` would run the DebraManager
+  # `=destroy` on uninitialized storage. Mark the slot moved-from first.
+  # (The queue here is an inline field, not a `create`d pointer, so it needs
+  # no wasMoved — only the heap manager does.)
+  wasMoved(result.manager[])
   result.manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
   result.queue =
     newUnboundedSipmucQueue[T, stEager, S, MaxThreads](result.manager)
@@ -92,12 +98,20 @@ proc makeLockfreequeuesUnboundedSipmucAdapter*[S: static int, T;
 proc cleanup*[S: static int, T; MaxThreads: static int](
     a: var LockfreequeuesUnboundedSipmucAdapter[S, T, MaxThreads]
 ) =
-  ## Order matters: the inline queue's `=destroy` calls
-  ## `unbindClient(manager[])`, so the manager must outlive the queue.
-  ## Reset the queue first (running its destructor while `manager` is
-  ## still valid), then free the manager. After this proc returns the
-  ## queue is destroyed; callers must not keep using `a.queue`.
+  ## Order matters on two axes:
+  ##  1. The cached `producer0` / `consumer0` views borrow a pointer into
+  ##     the inline `queue` and carry typestate `=destroy`s. They must be
+  ##     reset BEFORE the queue is reset, else their scope-exit destructors
+  ##     would touch a destroyed queue (use-after-free).
+  ##  2. The inline queue's `=destroy` calls `unbindClient(manager[])`, so
+  ##     the manager must outlive the queue. Reset the queue (running its
+  ##     destructor while `manager` is still valid), then free the manager.
+  ## After this proc returns the queue is destroyed; callers must not keep
+  ## using `a.queue`. The view-reset additions go ahead of the existing
+  ## queue-before-manager teardown, which is preserved.
   if a.manager != nil:
+    reset(a.producer0)
+    reset(a.consumer0)
     reset(a.queue)
     reset(a.manager[])
     dealloc(a.manager)

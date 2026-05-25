@@ -66,6 +66,11 @@ proc makeQueueBoundedAdapter*[
 ): QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T] =
   doAssert capacity == N, "capacity must equal static N"
   result.queue = create(BQueue[T, ccProd, ccCons, N, P, C])
+  # wasMoved before the deref-assign: `create` zero-fills but the BQueue
+  # typestate `=destroy` is still untracked-untrusted by ARC/ORC, so the
+  # `result.queue[] = ...` would otherwise run `=destroy` on uninitialized
+  # storage. wasMoved marks the slot as moved-from so no destructor fires.
+  wasMoved(result.queue[])
   result.queue[] = q_mod.newBQueue[T, ccProd, ccCons, N, P, C]()
   when ccProd == ccMulti:
     result.producer = result.queue[].getProducer(idx = 0)
@@ -79,6 +84,17 @@ proc cleanup*[
     T](
     a: var QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T]
 ) =
+  # Reset the cached producer/consumer views BEFORE deallocating the queue
+  # they borrow from. Each view holds a pointer into `a.queue[]` and has a
+  # typestate `=destroy` that runs at adapter scope exit (after this proc
+  # returns). Without resetting them here, those destructors would touch
+  # freed memory (use-after-free). reset() runs each view's `=destroy` now,
+  # while the queue is still alive, and leaves the field in a moved-from
+  # state whose later scope-exit destructor is a no-op.
+  when ccProd == ccMulti:
+    reset(a.producer)
+  when ccCons == ccMulti:
+    reset(a.consumer)
   if a.queue != nil:
     reset(a.queue[])
     dealloc(a.queue)

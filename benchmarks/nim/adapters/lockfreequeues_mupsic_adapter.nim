@@ -51,12 +51,22 @@ proc makeLockfreequeuesMupsicAdapter*[N, P: static int, T](
   ## per-thread via `queue.getProducer(idx = i)`.
   doAssert capacity == N, "capacity must equal static N"
   result.queue = create(MupsicQueue[N, P, T])
+  # wasMoved before the deref-assign: `create`'s zero-fill is not tracked by
+  # ARC/ORC, so `result.queue[] = ...` would run the BQueue typestate
+  # `=destroy` on uninitialized storage. Mark the slot moved-from first.
+  wasMoved(result.queue[])
   result.queue[] = newBQueue[T, ccMulti, ccSingle, N, P, 0]()
   result.producer = result.queue[].getProducer(idx = 0)
 
 proc cleanup*[N, P: static int, T](
     a: var LockfreequeuesMupsicAdapter[N, P, T]
 ) =
+  # Reset the cached producer view BEFORE deallocating the queue it borrows
+  # from. The view holds a pointer into `a.queue[]` and carries a typestate
+  # `=destroy` that would otherwise run at adapter scope exit (after this
+  # proc returns and the queue is freed), touching freed memory. reset()
+  # runs its destructor now, while the queue is still valid.
+  reset(a.producer)
   if a.queue != nil:
     reset(a.queue[])
     dealloc(a.queue)
