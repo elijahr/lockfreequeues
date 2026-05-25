@@ -15,18 +15,18 @@ By default, `lockfreequeues` requires queue item types to be lock-free.
 import lockfreequeues
 
 # These work — lock-free types.
-var q1 = newUnboundedSipsic[64, int]()
-var q2 = newUnboundedSipsic[64, uint64]()
-var q3 = newUnboundedSipsic[64, pointer]()
+var q1 = newUnboundedSipsicQueue[int, stEager, 64, 4]()
+var q2 = newUnboundedSipsicQueue[uint64, stEager, 64, 4]()
+var q3 = newUnboundedSipsicQueue[pointer, stEager, 64, 4]()
 
 type NodeObj = object
   value: int
-var q4 = newUnboundedSipsic[64, ptr NodeObj]()
+var q4 = newUnboundedSipsicQueue[ptr NodeObj, stEager, 64, 4]()
 
 # This fails on arc/orc — `ref` uses spinlocks for refcounting.
 type Node = ref object
   value: int
-var q5 = newUnboundedSipsic[64, Node]()  # Compile error
+var q5 = newUnboundedSipsicQueue[Node, stEager, 64, 4]()  # Compile error
 ```
 
 ### Why this matters
@@ -67,28 +67,30 @@ nim c -r --mm:orc  tests/mytest.nim
 
 ## Queue-level guarantees
 
-- **Bounded queues** (`Sipsic`, `Sipmuc`, `Mupsic`, `Mupmuc`) are ring buffers
+- **Bounded queues** (the `BQueue` generic, via `newSipsicQueue` /
+  `newSipmucQueue` / `newMupsicQueue` / `newMupmucQueue`) are ring buffers
   with compile-time capacity. SPSC operations are wait-free; SPMC, MPSC, and
-  MPMC variants are lock-free on the contended side.
-- **Unbounded queues** (`UnboundedSipsic`, `UnboundedSipmuc`,
-  `UnboundedMupsic`, `UnboundedMupmuc`) are linked segments. The unbounded
-  multi-thread variants use [DEBRA](https://github.com/elijahr/nim-debra) to
+  MPMC shapes are lock-free on the contended side.
+- **Unbounded queues** (the `Queue` generic, via `newUnboundedSipsicQueue` /
+  `newUnboundedSipmucQueue` / `newUnboundedMupsicQueue` /
+  `newUnboundedMupmucQueue`) are linked segments. The multi-cardinality
+  unbounded shapes use [DEBRA](https://github.com/elijahr/nim-debra) to
   reclaim retired segments safely.
 - All multi-producer / multi-consumer queues publish a slot's data with a
   release store *before* the slot becomes visible to consumers. Consumers
   always observe a fully-written slot.
-  - **Bounded variants** (`Sipmuc`, `Mupsic`, `Mupmuc`) use per-slot sequence
-    counters following the Vyukov bounded-MPMC protocol. Each slot carries an
-    `Atomic[uint64]` whose value encodes both the slot's generation and its
-    producer/consumer phase. Producers and consumers CAS the head/tail cursor
-    only when the target slot's sequence counter matches the expected
-    generation, which makes generation-rollover races structurally impossible
-    (a stale claimant from a previous generation cannot win the CAS against
-    a current-generation slot).
-  - **Unbounded variants** (`UnboundedSipmuc`, `UnboundedMupsic`,
-    `UnboundedMupmuc`) retain the per-slot `committed` flag inside each
-    segment. Segments are single-use linked nodes (no generation rollover),
-    so the simpler one-shot committed flag is sufficient.
+  - **Bounded multi-cardinality shapes** (SPMC, MPSC, MPMC) use per-slot
+    sequence counters following the Vyukov bounded-MPMC protocol. Each slot
+    carries an `Atomic[uint64]` whose value encodes both the slot's
+    generation and its producer/consumer phase. Producers and consumers CAS
+    the head/tail cursor only when the target slot's sequence counter matches
+    the expected generation, which makes generation-rollover races
+    structurally impossible (a stale claimant from a previous generation
+    cannot win the CAS against a current-generation slot).
+  - **Unbounded multi-cardinality shapes** (SPMC, MPSC, MPMC) retain the
+    per-slot `committed` flag inside each segment. Segments are single-use
+    linked nodes (no generation rollover), so the simpler one-shot committed
+    flag is sufficient.
 
 ## Test matrix
 

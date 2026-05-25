@@ -1,11 +1,19 @@
 # Memory Management
 
-> Current as of v4.2.0; DEBRA integration patterns may evolve.
+> Current as of v5.0.0; reflects the shipped live-EBR attach model.
 
 How `lockfreequeues` interacts with the memory model, what guarantees the
 queues provide vs. what the user must guarantee, the role of cache-line
 padding, item-type constraints under ARC / ORC, and the DEBRA epoch-based
-reclamation hooks used by the unbounded multi-thread variants.
+reclamation hooks used by the multi-cardinality unbounded shapes.
+
+In v5.0.0 the reclamation model is cardinality-driven: single-cardinality
+arms (both ends `ccSingle`) are debra-free, while any arm with a multi
+producer or multi consumer is wired to live epoch-based reclamation (EBR)
+via DEBRA. Multi-cardinality views register with the queue's epoch
+manager at *attach time* on their operating thread, and the unbounded
+`Queue` is non-copyable (its `=copy` hook is `{.error.}`-gated) because it
+owns a segment chain and a `ptr DebraManager`.
 
 For the broader thread-safety contract, see [Safety Model](safety-model.md).
 
@@ -17,14 +25,14 @@ The queues serialize slot access with C++11-style acquire / release
 atomics, so a successful `push` happens-before the matching `pop` in
 the modification-order sense. Concretely:
 
-- The slot's data is written before the cursor (`tail` for bounded,
-  `seq` counter for the multi-thread bounded variants, `committed` flag
-  for the unbounded multi-thread variants) is published with a release
-  store.
+- The slot's data is written before the cursor (`tail` for the bounded
+  SPSC shape, `seq` counter for the multi-cardinality bounded shapes,
+  `committed` flag for the multi-cardinality unbounded shapes) is
+  published with a release store.
 - The matching consumer reads the cursor with an acquire load, then
   reads the slot's data. The acquire pairs with the producer's release
   to guarantee the consumer sees the fully-initialized slot.
-- For the multi-producer / multi-consumer bounded variants, head and
+- For the multi-producer / multi-consumer bounded shapes, head and
   tail advance via CAS — the CAS-success edge synchronizes claimants.
 
 The pairing is lifted from `debra/atomics`, which `lockfreequeues`
@@ -46,7 +54,7 @@ import lockfreequeues
 type Payload = object
   data: array[64, int]
 
-var queue = initSipsic[16, ptr Payload]()
+var queue = newSipsicQueue[ptr Payload, 16]()
 
 # WRONG: consumer might read uninitialized data through the pointer.
 # proc badProducer(slot: ptr Payload, value: int) =
@@ -82,7 +90,7 @@ A practical mental model:
 
 `lockfreequeues` uses sequential-consistency (`moSequential`) only where
 the protocol genuinely needs total ordering — for example, the head /
-tail cross-load dance in `Sipsic`'s push that prevents a producer from
+tail cross-load dance in the SPSC push that prevents a producer from
 missing a freshly drained slot. Most of the hot path uses the cheaper
 acquire / release pair.
 
@@ -95,12 +103,15 @@ producer thread writing the tail invalidates the consumer thread's
 cached copy of the head, and vice versa. On x86_64 a single false-share
 event costs tens to hundreds of cycles; on a hot loop, it dominates.
 
-The queue types pin head, tail, and (for the multi-thread variants)
+The queue types pin head, tail, and (for the multi-cardinality shapes)
 the per-slot sequence array onto separate cache lines using Nim's
-`{.align: CacheLineBytes.}` pragma. From `src/lockfreequeues/sipsic.nim`:
+`{.align: CacheLineBytes.}` pragma. From the SPSC body of
+`BQueue` in `src/lockfreequeues/bqueue.nim`:
 
 ```text
-type Sipsic*[N: static int, T] = object
+type BQueue*[T; ccProd, ccCons: static PinScopeCardinality,
+             N, P, C: static int] = object
+  # SPSC body (ccProd == ccCons == ccSingle):
   head* {.align: CacheLineBytes.}: Atomic[int]
   tail* {.align: CacheLineBytes.}: Atomic[int]
   storage*: StorageN1[N, T]
@@ -184,7 +195,7 @@ type Node = ref object
 #   "Queue item type 'Node' is a ref type. Slots are stored in a shared
 #    array; `=copy`/`=sink` hooks mutate the refcount on the same object
 #    multiple threads can read or write..."
-var queue = newUnboundedSipsic[64, Node]()
+var queue = newUnboundedSipsicQueue[Node, stEager, 64, 4]()
 ```
 
 ### Why the rejection is a feature
@@ -207,10 +218,10 @@ type Node = object
   value: int
 
 # Pointer to a heap-allocated Node, lifetime managed by the producer.
-var q1 = newUnboundedSipsic[64, ptr Node]()
+var q1 = newUnboundedSipsicQueue[ptr Node, stEager, 64, 4]()
 
 # Index into a shared side-table.
-var q2 = newUnboundedSipsic[64, int]()
+var q2 = newUnboundedSipsicQueue[int, stEager, 64, 4]()
 ```
 
 ### `-d:allowNonLockFreeQueueItems` escape hatch
@@ -229,9 +240,12 @@ genuinely lock-free atomics". For everything else, prefer `ptr T`.
 
 ## DEBRA integration
 
-DEBRA is the epoch-based reclamation scheme used by the unbounded
-multi-thread variants (`UnboundedSipmuc`, `UnboundedMupsic`,
-`UnboundedMupmuc`) to retire and free segments safely under contention.
+DEBRA is the epoch-based reclamation (EBR) scheme used by the
+multi-cardinality unbounded shapes (any unbounded `Queue` with a multi
+producer or multi consumer — MPSC, SPMC, MPMC) to retire and free
+segments safely under contention. The single-cardinality unbounded shape
+(SPSC, `newUnboundedSipsicQueue`) is debra-free: it owns no
+`DebraManager` and reclaims segments directly.
 
 ### What DEBRA solves (epoch-based reclamation)
 
@@ -241,61 +255,104 @@ that consumer is a use-after-free. DEBRA defers the actual `free` until
 every active thread has crossed an epoch boundary, at which point no
 thread can possibly be holding a pointer into the retired segment.
 
-The mechanism is invisible at the API level for typical use. Each
-multi-thread unbounded queue carries its own `DebraManager`, threads
-register and unregister themselves, and reclamation happens implicitly
-on `push` and `pop` (Eager strategy) or on demand (Manual strategy).
+The mechanism is invisible on the hot path once threads are registered.
+Each multi-cardinality unbounded queue carries its own `DebraManager`,
+each operating thread registers itself once (at *attach time*), and
+reclamation happens implicitly on `push` and `pop` (`stEager` strategy)
+or on demand (`stManual` strategy).
 
-### Hooks lockfreequeues exposes
+### Attach-time registration
 
-The producer / consumer types carry handles that bind a thread to the
-queue's manager. Two registration patterns:
+The v5.0.0 registration model is thread-affine: no thread is registered
+at construction. Each multi-cardinality view registers the *calling*
+thread with the queue's `DebraManager` on its first use, via `attach()`.
+The single consumer of an unbounded MPSC queue uses `attachConsumer()` on
+its own consuming thread instead. Registration MUST happen on the thread
+that will subsequently `push()` / `pop()` through the view; registering on
+one thread and operating from another mis-routes the debra handle and
+raises `DebraRegistrationError`.
 
 ```nim
+import options
 import lockfreequeues
 
-# Auto-register: the queue picks the next available slot and registers
-# the calling thread on first use. Sufficient for most cases.
-var queue = newUnboundedMupmuc[64, int, 8]()
-var producer = queue.getProducer()
-var consumer = queue.getConsumer()
+# Auto-create: the queue owns its DebraManager. `stEager` strategy,
+# segment size 64, debra registry capacity 8.
+var queue = newUnboundedMupmucQueue[int, stEager, 64, 8]()
 
+# On the producer thread:
+var producer = queue.getProducer()
+producer.attach()       # register THIS thread before the first push
 producer.push(42)
+
+# On the consumer thread:
+var consumer = queue.getConsumer()
+consumer.attach()       # register THIS thread before the first pop
 let item = consumer.pop()
 ```
 
-Or explicitly, when multiple queues share a manager:
+For an unbounded MPSC queue the single consumer attaches through the
+queue directly:
 
 ```nim
-import debra
+import options
 import lockfreequeues
 
-var manager = initDebraManager[8]()
-var queue = newUnboundedMupmuc[64, int, 8](addr manager)
-let producerHandle = registerThread(manager)
-let consumerHandle = registerThread(manager)
-var producer = queue.getProducer(producerHandle)
-var consumer = queue.getConsumer(consumerHandle)
+var queue = newUnboundedMupsicQueue[int, stEager, 64, 8]()
+
+# Single consumer registers on its own thread:
+queue.attachConsumer()
+
+# Each producer thread attaches its own view:
+var producer = queue.getProducer()
+producer.attach()
+producer.push(7)
+let item = queue.pop()
 ```
 
-The shared-manager pattern matters when you have several queues that
-should observe a unified epoch — typically a pipeline where a segment
-retired from queue A might still be referenced via queue B.
+### Slot accounting and the non-copyable contract
 
-### When to enable
+Each `attach()` consumes one `MaxThreads` registration slot for the
+lifetime of the owned `DebraManager` (DEBRA 0.8.0 has no per-thread
+unregister; `detach()` does not free the slot). Size `MaxThreads` for the
+total number of *distinct* threads that will ever operate the queue, not
+the peak concurrent count.
 
-Reclamation strategy is a compile-time choice via the
-`DeallocationStrategy` enum: `Eager` calls `tryReclaim()` after every
-segment retirement (best for GC environments where the extra check is
-cheap); `Manual` retires only, leaving the user to call `tryReclaim()`
-when convenient (best for `--mm:none` and embedded targets).
+Because a multi-cardinality `Queue` owns a `ptr Segment` chain and a
+`ptr DebraManager`, it is non-copyable: its `=copy` hook is
+`{.error.}`-gated to prevent aliasing the owned pointers (which would
+double-free at `=destroy`). Move the `Queue`, or share it by `ptr` / `var`
+parameter into thread procs.
 
-The default is `Eager` everywhere except `--mm:none`, where `Manual` is
-the default. Override per queue at construction.
+### Borrowing an external manager
+
+When several queues should observe a unified epoch — typically a pipeline
+where a segment retired from queue A might still be referenced via queue
+B — construct the queue against an externally owned `DebraManager`:
+
+```nim
+import lockfreequeues
+from debra import DebraManager, initDebraManager
+
+# Manager owned by the caller; the queue borrows it (ownsManager = false).
+var manager = initDebraManager[8, debra.ccMulti]()
+var queue = newUnboundedMupmucQueue[int, stEager, 64, 8](addr manager)
+var producer = queue.getProducer()
+producer.attach()
+producer.push(1)
+```
+
+### When to enable each strategy
+
+Reclamation strategy is a compile-time choice via the `ST` (deallocation
+strategy) generic parameter: `stEager` reclaims after segment retirement
+(best for GC environments where the extra check is cheap); `stManual`
+retires only, deferring the actual reclamation (best for `--mm:none` and
+embedded targets where reclamation timing must be controlled).
 
 ### Versioning note
 
 DEBRA internals may change; treat the patterns documented here as
-current-as-of-v4.2.0. See the
+current-as-of-v5.0.0. See the
 [DEBRA repository](https://github.com/elijahr/nim-debra) for upstream
 changes.

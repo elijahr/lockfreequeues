@@ -30,10 +30,10 @@ is the right place:
 
 ```text
 # In yourproject.nimble
-requires "lockfreequeues == 4.2.0"
+requires "lockfreequeues == 5.0.0"
 ```
 
-Use `>= 4.2.0` only if you are willing to ride minor-version changes; the
+Use `>= 5.0.0` only if you are willing to ride minor-version changes; the
 public API is stable across patches but new minor versions sometimes
 extend the surface (new constructors, new typestate hooks).
 
@@ -46,7 +46,7 @@ A six-line file is enough to confirm the install compiles, links, and runs:
 import options
 import lockfreequeues
 
-var q = initSipsic[16, int]()
+var q = newSipsicQueue[int, 16]()
 discard q.push(42)
 echo q.pop()  # prints "Some(42)"
 ```
@@ -67,8 +67,9 @@ The smallest useful program: one producer, one consumer, one bounded queue.
 
 ### A 10-line "push and pop" example
 
-`Sipsic` is the single-producer / single-consumer bounded ring buffer. One
-thread pushes; one other thread pops; capacity `N` is a compile-time integer.
+The SPSC (single-producer / single-consumer) shape is a bounded ring
+buffer built with `newSipsicQueue[T, N]()` — `T` is the item type and `N`
+is the compile-time capacity. One thread pushes; one other thread pops.
 Both `push` and `pop` are wait-free, so a slow consumer never stalls the
 producer beyond what the buffer's fullness implies.
 
@@ -81,7 +82,7 @@ import lockfreequeues
 # Capacity 16, item type int. The queue is a global `var` so both threads
 # can reach it; in production code prefer `ptr` or a shared object that
 # you pass into thread procs explicitly.
-var queue = initSipsic[16, int]()
+var queue = newSipsicQueue[int, 16]()
 
 proc producerFunc() {.thread.} =
   for i in 1 .. 8:
@@ -106,7 +107,7 @@ joinThreads(threads)
 ```
 
 The producer sends the integers 1 through 8; the consumer prints them in
-order. Because `Sipsic` is FIFO, output is deterministic: `got 1` ...
+order. Because the SPSC queue is FIFO, output is deterministic: `got 1` ...
 `got 8`. Run it twice and you'll see the same lines.
 
 ### Running with `--threads:on`
@@ -157,7 +158,7 @@ type Node = ref object
   value: int
 
 # Compile error under arc/orc with default settings.
-var q = newUnboundedSipsic[64, Node]()
+var q = newUnboundedSipsicQueue[Node, stEager, 64, 4]()
 ```
 
 The fix in 95% of cases is to use `ptr T` and manage the lifetime yourself,
@@ -179,8 +180,8 @@ is done with modulo against the (possibly non-power-of-two) capacity.
 import lockfreequeues
 
 # Both compile and work fine.
-var qa = initSipsic[1024, int]()  # power of 2
-var qb = initSipsic[1000, int]()  # arbitrary
+var qa = newSipsicQueue[int, 1024]()  # power of 2
+var qb = newSipsicQueue[int, 1000]()  # arbitrary
 ```
 
 There is still a slight performance preference for powers of two on hot

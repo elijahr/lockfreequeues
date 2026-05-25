@@ -116,7 +116,7 @@ consumer ownership transitions; the underlying mechanism that decides when a
 slot is "claimable" or "available" differs between bounded and unbounded
 queues.
 
-### Bounded variants (`Sipmuc`, `Mupsic`, `Mupmuc`)
+### Bounded multi-cardinality shapes (SPMC, MPSC, MPMC)
 
 Bounded queues use the **Vyukov per-slot sequence counter** protocol. Each
 slot carries an `Atomic[uint64]` whose value encodes the slot's generation
@@ -138,7 +138,7 @@ and phase:
 - Implementation lives in `src/lockfreequeues/typestates/slot_seq_n.nim`
   and is paired with `MPMCCellArrayN` for slot storage.
 
-### Unbounded variants (`UnboundedSipmuc`, `UnboundedMupsic`, `UnboundedMupmuc`)
+### Unbounded multi-cardinality shapes (SPMC, MPSC, MPMC)
 
 Unbounded queues use a **per-slot single-bit committed flag** inside each
 segment. The segment-local view is unchanged from the 3.x layout because
@@ -175,71 +175,44 @@ let committed = commitSlot(claimed)  # Need SlotWritten, not SlotClaimed!
 let data = readItem(segment, 0)  # No SlotAvailable token!
 ```
 
-## Integration with DEBRA Typestates
+## Integration with DEBRA epoch states
 
-Slot ownership states compose with DEBRA pin/unpin states:
+The slot-ownership typestates are an internal implementation detail; they
+are not part of the user-facing v5.0.0 surface. They live under
+`src/lockfreequeues/typestates/` and are composed by the unified `Queue`
+generic's `push` / `pop` implementations, not invoked directly by
+application code.
 
-```nim
-type
-  MPSCPushContext[T; S, MT: static int] = object
-    pinnedHandle: ThreadHandle[MT]
-    pinnedEpoch: uint64
-    queue: ptr UnboundedMupsicBase[S, T, MT]
-    slotOwnership: SlotClaimed[T, S]  # Embedded slot state
-```
+For the multi-cardinality unbounded shapes, the push-side typestate
+progression is woven together with DEBRA's pin / unpin epoch states: a
+push context carries the pinned thread handle and epoch alongside the
+slot-ownership token, so the type system enforces all of these at once:
 
-This ensures:
-- Must be pinned to push
-- Must claim slot to write
-- All invariants enforced together
+- **Must be pinned to push** — the context only exists after the calling
+  thread has registered (via `attach()` / `attachConsumer()`) and pinned
+  an epoch.
+- **Must claim a slot to write** — `writeItem` requires the
+  slot-claimed token produced by a successful CAS.
+- **Invariants are enforced together** — the epoch pin and the slot
+  ownership are threaded through the same linear typestate chain, so
+  neither can be dropped without the other.
 
-## MPSC Implementation Example
+## MPSC implementation progression
 
-The unbounded MPSC queue uses the following typestate progression:
+The unbounded MPSC push path moves through this typestate sequence
+(defined in `src/lockfreequeues/typestates/unbounded_mpsc_push.nim`):
 
-### Push Operation States
+1. **MPSCPushReady**: initial state with pinned DEBRA context
+2. **MPSCPushSegmentLoaded**: segment and tail position loaded
+3. **MPSCPushSlotClaimed**: slot claimed via CAS (or SegmentFull/Retry)
+4. **MPSCPushItemWritten**: data written to slot
+5. **MPSCPushComplete**: committed flag set, data visible to consumers
 
-1. **MPSCPushReady**: Initial state with pinned DEBRA context
-2. **MPSCPushSegmentLoaded**: Segment and tail position loaded
-3. **MPSCPushSlotClaimed**: Slot claimed via CAS (or SegmentFull/Retry)
-4. **MPSCPushItemWritten**: Data written to slot
-5. **MPSCPushComplete**: Committed flag set, data visible to consumers
-
-### Example Usage
-
-```nim
-import debra
-import lockfreequeues/typestates/unbounded_mpsc_push
-
-# Setup
-var manager = initDebraManager[4]()
-let handle = registerThread(manager)
-var queue: UnboundedMupsicBase[64, int, 4]
-# ... initialize queue ...
-
-# Push operation
-let pinned = unpinned(handle).pin()
-let ready = startPush(pinned, addr queue)
-let loaded = ready.loadSegment()
-
-let claimResult = loaded.tryClaimSlot()
-case claimResult.kind:
-of mMPSCPushSlotClaimed:
-  let claimed = claimResult.mpscpushslotclaimed
-  let written = claimed.writeItem(42)
-  let complete = written.markCommitted()
-  discard complete.extractPinned().unpin()
-
-of mMPSCPushSegmentFull:
-  # Handle segment allocation
-  let newSeg = newSegment()
-  let ready = claimResult.mpscpushsegmentfull.allocateNewSegment(newSeg)
-  # Retry...
-
-of mMPSCPushReady:
-  # CAS failed, retry
-  discard
-```
+Each transition consumes its predecessor (a `sink` parameter), so a stale
+token cannot be reused — the compiler rejects any code path that skips a
+state or double-uses a claim. Application code never touches these states
+directly; they are the compile-time scaffolding behind a single
+`producer.push(item)` call on a `Queue` built with `newUnboundedMupsicQueue`.
 
 ## Performance
 

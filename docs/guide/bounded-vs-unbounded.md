@@ -1,9 +1,11 @@
 # Bounded vs Unbounded
 
-A decision guide for picking between the bounded ring-buffer queues
-(`Sipsic`, `Sipmuc`, `Mupsic`, `Mupmuc`) and the unbounded segment-linked
-variants (`UnboundedSipsic`, `UnboundedSipmuc`, `UnboundedMupsic`,
-`UnboundedMupmuc`).
+A decision guide for picking between the bounded ring-buffer queue
+(`BQueue`, constructed via `newSipsicQueue` / `newSipmucQueue` /
+`newMupsicQueue` / `newMupmucQueue`) and the unbounded segment-linked
+queue (`Queue`, constructed via `newUnboundedSipsicQueue` /
+`newUnboundedSipmucQueue` / `newUnboundedMupsicQueue` /
+`newUnboundedMupmucQueue`).
 
 If you have not yet read the conceptual overview, start with
 [Core Concepts](core-concepts.md). The high-level "bounded means fixed
@@ -22,12 +24,12 @@ until the consumer eventually catches up. A 64-sample buffer at 44.1 kHz
 gives the producer 1.45 ms to publish; if it misses, the audio system
 absorbs a glitch and moves on.
 
-`Sipsic` returns `false` from `push` exactly to enable that policy:
+The bounded `push` returns `false` exactly to enable that policy:
 
 ```nim
 import lockfreequeues
 
-var queue = initSipsic[64, float32]()
+var queue = newSipsicQueue[float32, 64]()
 var sample = 0.5'f32
 
 if not queue.push(sample):
@@ -53,7 +55,7 @@ import lockfreequeues
 
 # Total queue memory: ~(256 * 8) + 2 * 64 = 2176 bytes for an int64 queue.
 # Predictable enough to fit in an L2 cache budget.
-var q = initSipsic[256, int64]()
+var q = newSipsicQueue[int64, 256]()
 ```
 
 The number is exact, knowable at compile time, and visible in
@@ -64,10 +66,10 @@ during `push` or `pop`.
 
 Bounded queues run identically on every machine. There is no allocator
 to tune, no GC to interact with the segment linking, no platform-specific
-malloc behaviour to absorb. A test that fills a `Mupmuc[1024, 4, 4, int]`
-to capacity and asserts `push` starts returning `false` exhibits the
-same behaviour on a CI runner with 2 GB of RAM as on a developer laptop
-with 64 GB.
+malloc behaviour to absorb. A test that fills a
+`newMupmucQueue[int, 1024, 4, 4]()` to capacity and asserts `push` starts
+returning `false` exhibits the same behaviour on a CI runner with 2 GB of
+RAM as on a developer laptop with 64 GB.
 
 ## When to choose unbounded
 
@@ -83,8 +85,12 @@ signal:
 import options
 import lockfreequeues
 
-var queue = newUnboundedMupsic[64, int, 8]()
+# stEager strategy, segment size 64, debra registry capacity 8.
+var queue = newUnboundedMupsicQueue[int, stEager, 64, 8]()
 var producer = queue.getProducer()
+# Multi-cardinality unbounded views register with the queue's epoch
+# manager on first use. Call attach() on the thread that will push.
+producer.attach()
 producer.push(42)  # Always succeeds (until allocator fails).
 ```
 
@@ -114,14 +120,17 @@ for why this matters.
 Retired segments cannot be freed immediately. A consumer thread that
 has just advanced past a segment may still be holding a pointer into
 its data; freeing the segment under it would be a use-after-free. The
-multi-thread unbounded variants hand retired segments to DEBRA, which
+multi-cardinality unbounded shapes hand retired segments to DEBRA, which
 defers the actual `free` until every active thread has crossed an epoch
-boundary. The mechanism is invisible at the API level: producers and
-consumers do their thing, and reclamation happens in the background.
+boundary. The mechanism is invisible at the API level once threads have
+registered: each multi-cardinality view calls `attach()` (or
+`attachConsumer()` for the unbounded MPSC consumer) on its operating
+thread before its first op, and reclamation then happens in the
+background.
 
 See [Memory Management → DEBRA integration](memory-management.md#debra-integration)
-for the hook points (`registerThread`, `tryReclaim`, the `Manual` vs
-`Eager` strategy switch).
+for the attach-time registration model and the `stManual` vs `stEager`
+deallocation strategy switch.
 
 ## Capacity selection (bounded)
 
@@ -139,10 +148,10 @@ instruction instead of an integer divide.
 import lockfreequeues
 
 # Power-of-2: bitmask wrap is plausible.
-var q1 = initSipsic[1024, int]()
+var q1 = newSipsicQueue[int, 1024]()
 
 # Arbitrary: modulo wrap, slightly more work per push/pop.
-var q2 = initSipsic[1000, int]()
+var q2 = newSipsicQueue[int, 1000]()
 ```
 
 If you are at the throughput edge — millions of ops/s, every cycle
@@ -172,12 +181,13 @@ For empirical numbers and the throughput-vs-capacity curve, see
 
 ### Multiple producers: contention scaling
 
-`Mupsic` and `Mupmuc` add a CAS loop on the producer side. Under high
-contention — say 16 producer threads on a 16-core machine all hammering
-the same queue — retries multiply, throughput per thread drops, and
-you reach a regime where adding producers does not add throughput. The
-mitigation is partitioning: instead of one `Mupmuc[1024, 16, 16, int]`,
-use four `Mupmuc[1024, 4, 4, int]` queues with producer-side hashing.
+The multi-producer shapes (`newMupsicQueue` / `newMupmucQueue`) add a CAS
+loop on the producer side. Under high contention — say 16 producer threads
+on a 16-core machine all hammering the same queue — retries multiply,
+throughput per thread drops, and you reach a regime where adding producers
+does not add throughput. The mitigation is partitioning: instead of one
+`newMupmucQueue[int, 1024, 16, 16]()`, use four
+`newMupmucQueue[int, 1024, 4, 4]()` queues with producer-side hashing.
 The trade-off is a more complex consumer that drains all four.
 
 ## Segment size selection (unbounded)
@@ -208,11 +218,11 @@ Two regimes pull `S` in opposite directions:
 import lockfreequeues
 
 # Sustained ingest, 1 MHz event rate: minimize allocation churn.
-var ingest = newUnboundedMupsic[1024, int, 8]()
+var ingest = newUnboundedMupsicQueue[int, stEager, 1024, 8]()
 
 # Sporadic bursts of <100 events from each of 4 sources: smaller S
 # keeps the working set cache-friendly.
-var sporadic = newUnboundedMupsic[64, int, 4]()
+var sporadic = newUnboundedMupsicQueue[int, stEager, 64, 4]()
 ```
 
 If you are unsure, start at `256` and tune from measurement.
@@ -229,7 +239,7 @@ not starve the consumer:
 import os
 import lockfreequeues
 
-var queue = initSipsic[16, int]()
+var queue = newSipsicQueue[int, 16]()
 
 proc producePersistent(item: int) =
   while not queue.push(item):
@@ -249,7 +259,7 @@ The bounded queues' `push` returns `bool`; their `pop` returns
 import options
 import lockfreequeues
 
-var queue = initSipsic[16, int]()
+var queue = newSipsicQueue[int, 16]()
 
 if queue.push(42):
   echo "accepted"
@@ -276,7 +286,7 @@ not burn CPU:
 import os
 import lockfreequeues
 
-var queue = initSipsic[64, int]()
+var queue = newSipsicQueue[int, 64]()
 
 proc pushWithBackoff(item: int): bool =
   var delayMs = 0

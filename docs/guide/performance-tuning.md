@@ -32,13 +32,13 @@ A reasonable starting trio:
 import lockfreequeues
 
 # Audio frame queue: 64 samples × 4 bytes = 256 B; 1 cache line of slack.
-var audio = initSipsic[64, float32]()
+var audio = newSipsicQueue[float32, 64]()
 
-# HTTP request fan-in: 256 worker pool, 50% slack for burst.
-var requests = newUnboundedMupsic[256, int, 16]()
+# HTTP request fan-in: segment size 256, debra registry capacity 16.
+var requests = newUnboundedMupsicQueue[int, stEager, 256, 16]()
 
 # Sustained event ingest: large segments amortize alloc.
-var events = newUnboundedMupmuc[1024, int, 8]()
+var events = newUnboundedMupmucQueue[int, stEager, 1024, 8]()
 ```
 
 ### Empirical data
@@ -108,7 +108,7 @@ on the producer side and an integer count on the consumer side:
 import options
 import lockfreequeues
 
-var queue = initSipsic[256, int]()
+var queue = newSipsicQueue[int, 256]()
 let items = @[1, 2, 3, 4, 5, 6, 7, 8]
 
 # Single batch push — one cursor advance for the whole batch.
@@ -136,8 +136,8 @@ batch-size sweeps. The bench harness exposes per-shape overrides so you
 can probe a specific (producer-count, consumer-count, batch-size) cell
 without re-running the whole sweep.
 
-If your queue type does not expose batch overloads (for example, the
-unbounded multi-thread variants), batch at the application layer:
+If your queue shape does not expose batch overloads (for example, the
+multi-cardinality unbounded shapes), batch at the application layer:
 collect a small slice, publish it under a single producer mutex (or a
 per-thread staging buffer), and amortize the per-call cost outside the
 queue.

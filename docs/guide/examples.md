@@ -93,13 +93,13 @@ Dynamic job scheduling with multiple submitters and workers.
 
 ## Pattern Guide
 
-| Pattern | Queue Type | Example |
-|---------|------------|---------|
-| Real-time audio/video | Bounded Sipsic | Audio buffer |
-| Work distribution | Bounded Sipmuc | Task fan-out |
-| Event aggregation | Unbounded Mupsic | Event collector |
-| Job scheduling | Unbounded Mupmuc | Job scheduler |
-| Sensor data | Bounded Sipsic/Mupsic | - |
-| Request routing | Bounded Sipmuc | Task fan-out |
-| Log collection | Unbounded Mupsic | Event collector |
-| Thread pool | Unbounded Mupmuc | Job scheduler |
+| Pattern | Shape | Constructor | Example |
+|---------|-------|-------------|---------|
+| Real-time audio/video | Bounded SPSC | `newSipsicQueue` | Audio buffer |
+| Work distribution | Bounded SPMC | `newSipmucQueue` | Task fan-out |
+| Event aggregation | Unbounded MPSC | `newUnboundedMupsicQueue` | Event collector |
+| Job scheduling | Unbounded MPMC | `newUnboundedMupmucQueue` | Job scheduler |
+| Sensor data | Bounded SPSC/MPSC | `newSipsicQueue` / `newMupsicQueue` | - |
+| Request routing | Bounded SPMC | `newSipmucQueue` | Task fan-out |
+| Log collection | Unbounded MPSC | `newUnboundedMupsicQueue` | Event collector |
+| Thread pool | Unbounded MPMC | `newUnboundedMupmucQueue` | Job scheduler |
