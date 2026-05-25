@@ -1440,6 +1440,27 @@ proc attachConsumer*[
 ## (Bundle F.1 + F.2, 3.3.11-B.4.1.6). Mirror BQueue's pattern.
 ## ----------------------------------------------------------------------
 
+proc `=copy`*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    dst: var Queue[T, ccProd, ccCons, ST, S, MaxThreads],
+    src: Queue[T, ccProd, ccCons, ST, S, MaxThreads],
+) {.error:
+    "Queue is non-copyable: it owns a `ptr Segment` chain and (for " &
+    "non-sipsic cardinalities) a `ptr DebraManager`. Copying would " &
+    "alias these owned pointers and double-free / use-after-free at " &
+    "`=destroy`. Move the Queue (it has `=destroy` move semantics) or " &
+    "share it by `ptr`/`var` parameter instead.".}
+  ## Compile-time copy ban. A Queue owns heap state (segment chain +
+  ## optionally the debra manager, recorded by `ownsManager`) that is
+  ## reclaimed exactly once in `=destroy`. A field-wise copy would
+  ## duplicate the owning `ptr`s and reclaim them twice. Move semantics
+  ## (the implicit `=sink` synthesized alongside `=destroy`) remain
+  ## available; only copies are rejected.
+
 proc `=destroy`*[
     T;
     ccProd, ccCons: static PinScopeCardinality,

@@ -607,6 +607,8 @@ proc getProducer*[
   result.queue = addr(self)
 
   if idx >= 0:
+    assert idx < P,
+      "getProducer(idx) out of range: idx must be < P (producer count)"
     result.idx = idx
     return
 
