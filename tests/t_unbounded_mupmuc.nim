@@ -19,18 +19,21 @@ suite "UnboundedMupmuc":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
     var producer = queue.getProducer()
+    producer.attach()
     check(producer.idx >= 0)
 
   test "getConsumer returns valid consumer":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
     var consumer = queue.getConsumer()
+    consumer.attach()
     check(consumer.idx >= 0)
 
   test "producer push single item":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
     var producer = queue.getProducer()
+    producer.attach()
 
     producer.push(42)
     check(queue.len == 1)
@@ -39,7 +42,9 @@ suite "UnboundedMupmuc":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
     var producer = queue.getProducer()
+    producer.attach()
     var consumer = queue.getConsumer()
+    consumer.attach()
 
     producer.push(42)
     let item = consumer.pop()
@@ -51,6 +56,7 @@ suite "UnboundedMupmuc":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
     var consumer = queue.getConsumer()
+    consumer.attach()
 
     let item = consumer.pop()
     check(item.isNone)
@@ -59,7 +65,9 @@ suite "UnboundedMupmuc":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
     var producer = queue.getProducer()
+    producer.attach()
     var consumer = queue.getConsumer()
+    consumer.attach()
 
     for i in 1 .. 5:
       producer.push(i)
@@ -74,8 +82,11 @@ suite "UnboundedMupmuc":
     var queue = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
 
     var producer1 = queue.getProducer()
+    producer1.attach()
     var producer2 = queue.getProducer()
+    producer2.attach()
     var consumer = queue.getConsumer()
+    consumer.attach()
 
     for i in 1 .. 5:
       producer1.push(i)
@@ -95,12 +106,15 @@ suite "UnboundedMupmuc":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
     var producer = queue.getProducer()
+    producer.attach()
 
     for i in 1 .. 10:
       producer.push(i)
 
     var consumer1 = queue.getConsumer()
+    consumer1.attach()
     var consumer2 = queue.getConsumer()
+    consumer2.attach()
 
     var count1, count2 = 0
     var total = 0
@@ -122,7 +136,9 @@ suite "UnboundedMupmuc":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMupmucQueue[int, stEager, 4, 4](addr manager)
     var producer = queue.getProducer()
+    producer.attach()
     var consumer = queue.getConsumer()
+    consumer.attach()
 
     for i in 1 .. 10:
       producer.push(i)
@@ -138,7 +154,9 @@ suite "UnboundedMupmuc":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMupmucQueue[int, stEager, 8, 4](addr manager)
     var producer = queue.getProducer()
+    producer.attach()
     var consumer = queue.getConsumer()
+    consumer.attach()
 
     check(queue.len == 0)
 
@@ -160,7 +178,9 @@ suite "UnboundedMupmuc":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMupmucQueue[int, stEager, 8, 4](addr manager)
     var producer = queue.getProducer()
+    producer.attach()
     var consumer = queue.getConsumer()
+    consumer.attach()
 
     producer.push(@[1, 2, 3, 4, 5])
     check(queue.len == 5)
@@ -172,7 +192,9 @@ suite "UnboundedMupmuc":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMupmucQueue[int, stEager, 8, 4](addr manager)
     var producer = queue.getProducer()
+    producer.attach()
     var consumer = queue.getConsumer()
+    consumer.attach()
 
     for i in 1 .. 10:
       producer.push(i)
@@ -186,7 +208,9 @@ suite "UnboundedMupmuc":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMupmucQueue[int, stEager, 8, 4](addr manager)
     var producer = queue.getProducer()
+    producer.attach()
     var consumer = queue.getConsumer()
+    consumer.attach()
 
     producer.push(@[1, 2, 3])
 
@@ -199,6 +223,7 @@ suite "UnboundedMupmuc":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMupmucQueue[int, stEager, 8, 4](addr manager)
     var consumer = queue.getConsumer()
+    consumer.attach()
 
     let items = consumer.pop(5)
     check(items.isNone)

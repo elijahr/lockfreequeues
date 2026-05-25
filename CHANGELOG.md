@@ -67,13 +67,16 @@ reframe and against each other.
 > discard p1.push(42)
 > discard q1.pop()                 # SPSC pop on single-consumer side
 >
-> # Unbounded mupmuc-equivalent (multi-producer, multi-consumer):
-> var q2 = newQueue[
->   int, ccMulti, ccMulti, stEager, S = 64, MaxThreads = 8
-> ]()
-> let p2 = q2.getProducer()
-> let c2 = q2.getConsumer()
-> discard p2.push(99)
+> # Unbounded mupmuc-equivalent (multi-producer, multi-consumer).
+> # Each operating thread attaches before push/pop: debra thread
+> # registration happens at attach time, not at construction.
+> var q2 = newQueue(Queue[int, ccMulti, ccMulti, stEager, 64, 8])
+> var p2 = q2.getProducer()
+> p2.attach()                      # registers this thread; may raise
+>                                  #   DebraRegistrationError
+> var c2 = q2.getConsumer()
+> c2.attach()
+> p2.push(99)
 > discard c2.pop()
 > ```
 >
@@ -151,19 +154,28 @@ reframe and against each other.
 
 The reframe consolidates 7+ typestate queue families (`Sipsic`, `Sipmuc`,
 `Mupsic`, `Mupmuc`, `UnboundedSipmuc`, `UnboundedMupsic`, `UnboundedMupmuc`,
-plus their phantom variants) into a single unified
-`Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]` generic. The
-`UnboundedSipsic[S, T]` SPSC type stays separate (no EBR integration
-required). See `docs/v5.0.0-migration/reframe-rationale.md` for the full
+plus their phantom variants) into two 6-param generics per the 3.3.11-B
+reshape above: a bounded `BQueue[T, ccProd, ccCons, N, P, C]` and an
+unbounded `Queue[T, ccProd, ccCons, ST, S, MaxThreads]`. The standalone
+`UnboundedSipsic[S, T]` SPSC type was ABSORBED into `Queue`'s
+`(ccSingle, ccSingle)` arm (debra-free committed-flag-free protocol) and
+its module deleted — it is no longer a separate type. See
+`docs/v5.0.0-migration/reframe-rationale.md` for the full
 inflection-point rationale and `docs/v5.0.0-migration/design-queue-collapse-v5.0.0.md`
-(Doc C) for the complete surface specification. **Doc C describes the
-older 10-param shape**; the 3.3.11-B final shape is summarized in the
-addendum above.
+(Doc C) for the original surface specification. **Doc C describes the
+superseded 10-param shape**; the 3.3.11-B final shape (summarized in the
+addendum above) is canonical, with
+`docs/v5.0.0-migration/3.3.11-B-final-shape.md` as the authoritative
+reference.
 
-v5.0.0 ships in two stages: the base release lands `RK = rkNone`
-(bounded) under the unified `Queue` shell with the 9 Doc C §3.0.2.4
-param-coherence guards active; the v5.0.0 RC adds `RK = rkEbr`
-(unbounded) once `nim-debra >= 0.8.0` is released (Track E).
+Reclamation is cardinality-driven, not a phantom parameter. The
+`(ccSingle, ccSingle)` arm uses the debra-free committed-flag-free
+protocol; the multi-cardinality arms (mupsic-/sipmuc-/mupmuc-equiv) ship
+LIVE epoch-based reclamation via nim-debra 0.8.0 (the `nim-debra >= 0.8.0`
+precondition is met, so EBR ships in 5.0.0 — there is no deferred RC).
+`ReclamationKind` (`rkNone` / `rkEbr`) survives only as a vestigial
+re-export for bench-adapter / migration-shim compatibility; it is NOT a
+type parameter on either generic.
 
 ### Refactor highlights (3.3.11-B)
 
@@ -232,30 +244,157 @@ The v5.0.0 reshape is measured against the pre-wave devel baseline
 
 ### BREAKING
 
-- Unified `Queue` generic. The seven non-SPSC queue families
+- Two unified queue generics. The seven non-SPSC queue families
   (`Sipsic`, `Sipmuc`, `Mupsic`, `Mupmuc`, `UnboundedSipmuc`,
-  `UnboundedMupsic`, `UnboundedMupmuc`) collapse into a single
-  `Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]` generic
-  type. `PinScopeCardinality` (`ccSingle` / `ccMulti`) and
-  `ReclamationKind` (`rkNone` / `rkEbr`) are exposed as static phantom
-  parameters on the type. `DeallocationStrategy` (formerly a runtime
-  enum field) is now also a static phantom (`stManual` / `stEager`);
-  the legacy enum values `Manual` / `Eager` remain exported as `const`
-  aliases for grep continuity. `UnboundedSipsic[S, T]` is unchanged.
-  **No aliases are provided** — every typed call site
-  (`var q: Mupsic[...]`, `var u: UnboundedMupmuc[...]`, etc.) must
-  migrate mechanically to the unified `Queue[T, ...]` form. See
-  `docs/migration.md` for the full migration table.
-- `rkNone` (bounded) ships in the v5.0.0 base release; `rkEbr`
-  (unbounded) ships in the v5.0.0 RC alongside `nim-debra 0.8.0`. The
-  legacy unbounded `withPin:` ergonomics carry into `rkEbr` via the
-  `Queue` facade.
-- 9 compile-time param-coherence guards (Doc C §3.0.2.4) wired into
-  `validateQueueParams[Queue[T, ...]]()`. Calling a malformed
-  parametrisation (e.g. `ccProd = ccMulti` with `P = 1`,
-  `rkEbr` with no `MaxThreads`, `S` not a power of two, etc.) fails
-  at compile time with the verbatim Doc C §3.0.2.4 error messages.
+  `UnboundedMupsic`, `UnboundedMupmuc`) plus the standalone
+  `UnboundedSipsic` collapse into a bounded
+  `BQueue[T, ccProd, ccCons, N, P, C]` (6 params, debra-free) and an
+  unbounded `Queue[T, ccProd, ccCons, ST, S, MaxThreads]` (6 params).
+  `PinScopeCardinality` (`ccSingle` / `ccMulti`) is a static phantom on
+  both. There is NO `RK` / `ReclamationKind` type parameter: reclamation
+  is selected by cardinality (the `(ccSingle, ccSingle)` arm is
+  debra-free; the multi arms are debra-integrated). `DeallocationStrategy`
+  (formerly a runtime enum field on the unbounded queues) is now a static
+  phantom `ST` (`stManual` / `stEager`) on `Queue`; the legacy enum
+  values `Manual` / `Eager` remain exported as `const` aliases for grep
+  continuity. `UnboundedSipsic[S, T]` was ABSORBED into `Queue`'s
+  `(ccSingle, ccSingle)` arm and its module deleted. **No type aliases
+  are provided** — every typed call site (`var q: Mupsic[...]`,
+  `var u: UnboundedMupmuc[...]`, etc.) must migrate mechanically to the
+  `BQueue[...]` / `Queue[...]` form (family-named smart constructors such
+  as `newMupsicQueue` / `newUnboundedMupmucQueue` remain as ergonomic
+  aliases). See `docs/migration.md` for the full migration table.
+- Epoch-based reclamation ships LIVE in v5.0.0. The multi-cardinality
+  unbounded arms (mupsic-/sipmuc-/mupmuc-equiv) integrate nim-debra 0.8.0
+  (`>= 0.8.0`) directly; the `(ccSingle, ccSingle)` arm stays debra-free.
+  The legacy unbounded `withPin:` ergonomics carry into the debra-
+  integrated arms via the `Queue` facade. There is no deferred RC: the
+  nim-debra precondition is met and EBR ships in the base release.
+- Compile-time param-coherence guards split across the two generics:
+  bounded guards live in `assertBQueueParams` (`bqueue.nim`,
+  `validateBQueueParams[BQueue[T, ...]]()`); unbounded guards live in
+  `assertQueueParams` (`queue.nim`, `validateQueueParams[Queue[T, ...]]()`,
+  asserting `S > 0` and `MaxThreads > 0`). Calling a malformed
+  parametrisation (e.g. `ccProd = ccMulti` with `P = 1`, `S` not
+  positive, etc.) fails at compile time with the verbatim guard error
+  messages.
 - `CASAttempt` typestate restructured into a proper typestate union. `CASPending` now transitions to `CASSucceeded | CASFailed` (aliased as `CASResult`) via `executeCAS`, replacing the previous single-state design with `assumeSuccess` / `assumeFailure` escape hatches. The `assumeSuccess` and `assumeFailure` procs have been removed. Callers that drove `CASAttempt` outside the bundled MPMC machinery must migrate to the union return form. These helpers were only consumed by `tests/t_cas.nim`; the bundled MPMC machinery calls `compareExchangeWeak` directly and was unaffected. No public lock-free queue API is affected.
+
+### Registration & lifecycle (unbounded multi-cardinality arms)
+
+Debra thread registration moved to **attach time**. The auto-create
+`newQueue` / family-named constructors (and `getProducer` /
+`getConsumer`) no longer call `registerThread`; `registerThread` is
+thread-affine (it stamps the calling thread and installs a per-thread
+signal handler), so registering at construction would mis-route the
+handle when the queue is later operated on a different thread. Each
+operating thread now registers itself on its own thread before its first
+push/pop. This is a BREAKING change to the call sequence for the
+unbounded multi-cardinality arms.
+
+**Debug builds now assert thread affinity.** `attach()` /
+`attachConsumer()` stamp the registering thread's id (`attachedTid`, a
+`when defined(debug):` field — zero layout/hot-path cost in release), and
+the subsequent `push` / `pop` carries a `when defined(debug):` assert
+that the operating thread matches the thread that attached. Operating a
+view on a different thread than you attached on therefore fails fast in
+debug builds; release builds carry NO such check (the mis-routed handle
+would silently corrupt reclamation), so the affinity contract MUST be
+honoured regardless of build mode.
+
+- **Multi-producer / multi-consumer views must `attach()` before
+  push/pop.** `QueueProducer.attach()` (for `ccProd == ccMulti`) and
+  `QueueConsumer.attach()` (for `ccCons == ccMulti`) register the calling
+  thread and store its `ThreadHandle` on the view. Both are
+  `{.raises: [DebraRegistrationError].}`; the call is guarded
+  (`if not self.claimed: self.handle = registerThread(...)`) so a repeat
+  attach on the same view does not consume a second registry slot.
+  `detach()` releases the view's claim (`self.claimed = false`) and does
+  not raise. The `ccSingle` sides carry no `attach` / `detach` overload
+  (the compiler statically excludes them with a user-visible-alias type
+  mismatch).
+
+- **The unbounded mupsic-equiv single consumer must call
+  `attachConsumer()` before its first `pop`.** The single consumer pops
+  directly through `Queue.pop` (no view), so it registers via
+  `Queue.attachConsumer()` (`{.raises: [DebraRegistrationError].}`) on
+  the thread that will pop. Auto-create no longer registers the consumer
+  handle at construction. `pop` carries an `assert self.consumerAttached`
+  guard that fails fast in debug builds if `attachConsumer` was skipped.
+  `attachConsumer` is idempotent (guarded so a repeat call does not burn
+  a second slot).
+
+- **`MaxThreads` counts LIFETIME distinct operating threads, not the
+  live count.** nim-debra 0.8.0 has no per-thread unregister, so each
+  `attach()` / `attachConsumer()` consumes a registry slot for the
+  manager's entire lifetime; `detach()` releases the view's claim but
+  does NOT free the underlying slot. When the registry is exhausted,
+  `registerThread` raises `DebraRegistrationError` (surfaced, never
+  swallowed). Size `MaxThreads` for the total number of distinct threads
+  that will ever operate the queue, not the maximum concurrent count.
+  Repeated `detach()` / re-`attach()` on the same thread burns a fresh
+  slot each time (there is no slot to reclaim), so churning attach/detach
+  cycles will exhaust the registry even with a small live thread count.
+
+- **`DebraRegistrationError` is a NEW propagatable exception.**
+  `attach()` / `attachConsumer()` are `{.raises: [DebraRegistrationError].}`
+  and fire this exception on `MaxThreads` slot exhaustion. Because
+  registration moved out of the constructors and into these procs, the
+  error now surfaces at the call site instead of at queue construction.
+  Callers that previously declared `{.raises: [].}` around the code paths
+  that operate the unbounded multi-cardinality arms MUST widen their
+  raises set (or handle / convert the exception) to cover
+  `DebraRegistrationError`.
+
+- **Pre-v5 -> v5 migration.** Pre-v5.0.0, `get*()` (and the auto-create
+  constructors) registered the debra handle immediately on the
+  constructing / calling thread, so a view could be operated without any
+  further setup. v5.0.0 returns an UNREGISTERED view: the caller MUST
+  call `.attach()` on the operating thread before its first push/pop, and
+  the mupsic-equiv single consumer MUST call `attachConsumer()` on the
+  consumer thread before its first `pop` (auto-create no longer registers
+  the consumer handle at construction). Minimal corrected idiom:
+
+  ```nim
+  # Pre-v5.0.0 (registered at get-time — REMOVED):
+  #   var p = q.getProducer()      # already registered
+  #   p.push(5)
+  # v5.0.0 (register on the operating thread):
+  var p = q.getProducer()
+  p.attach()                       # on the producer thread, before push
+  p.push(5)
+  ```
+
+- **Borrow constructors remain the epoch-sharing escape hatch.** The
+  caller-provided-handle / caller-provided-manager `newQueue` overloads
+  (e.g. `newUnboundedMupsicQueue[T, ST, S, MaxThreads](addr mgr,
+  consumerHandle)`, `newUnboundedMupmucQueue[...](addr mgr)`) stay
+  available for multi-queue setups that share one `DebraManager`.
+  Callers using the handle-carrying mupsic borrow overload register the
+  consumer handle themselves and MUST NOT also call `attachConsumer`.
+
+  Auto-create idiom (mupmuc-equiv):
+
+  ```nim
+  var q = newUnboundedMupmucQueue[int, stEager, 8, 4]()
+  var p = q.getProducer()
+  p.attach()
+  var c = q.getConsumer()
+  c.attach()
+  p.push(5)
+  discard c.pop()
+  ```
+
+  Auto-create idiom (mupsic-equiv — single consumer pops via the queue):
+
+  ```nim
+  var q = newUnboundedMupsicQueue[int, stEager, 8, 4]()
+  q.attachConsumer()               # on the consuming thread, before pop
+  var p = q.getProducer()
+  p.attach()
+  p.push(1)
+  discard q.pop()
+  ```
 
 ### Added
 
@@ -769,6 +908,17 @@ The v5.0.0 reshape is measured against the pre-wave devel baseline
 
 ### Added (v5.0.0 unified Queue — Phase 1)
 
+> **Historical Phase-1 snapshot (superseded by 3.3.11-B).** The bullets
+> below describe the unified Queue *as built in Phase 1* — the 10-param
+> `Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]` shell with
+> the `when RK == rkEbr` body under a `when false:` carve-out. Phase
+> 3.3.11-B reshaped this into the two final 6-param generics (`BQueue`
+> bounded, `Queue[T, ccProd, ccCons, ST, S, MaxThreads]` unbounded),
+> dropped the `RK` parameter (reclamation is now cardinality-driven), and
+> absorbed `UnboundedSipsic` into `Queue`. See the 3.3.11-B reshape note
+> at the top of this release and `docs/v5.0.0-migration/3.3.11-B-final-shape.md`
+> for the shipped surface. The entries are retained for the audit trail.
+
 - `Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]` generic
   type shell at `src/lockfreequeues/queue.nim`. Field layout splits by
   cardinality: `ccSingle × ccSingle` uses `StorageN1[N, T]` (N+1 slots,
@@ -849,10 +999,13 @@ The v5.0.0 reshape is measured against the pre-wave devel baseline
   takes `(mgr, consumerHandle)`; auto-create takes `()`),
   `newUnboundedSipmucQueue[T, S, MaxThreads]` and
   `newUnboundedMupmucQueue[T, S, MaxThreads]` (borrow takes `(mgr)`;
-  auto-create takes `()`) (unbounded, `RK = rkEbr`). DELIBERATELY no
-  `newUnboundedSipsicQueue` per Doc C §3.0.3 — `UnboundedSipsic`
-  stays separate in `unbounded_sipsic.nim` as the recommended SPSC
-  path. A handle-free `ccCons == ccMulti` `newQueue` borrow overload
+  auto-create takes `()`) (unbounded, debra-integrated). (Phase-1 framed
+  these as `RK = rkEbr`; 3.3.11-B dropped the `RK` axis — these arms are
+  debra-integrated by cardinality.) Initially Doc C §3.0.3 kept
+  `UnboundedSipsic` separate in `unbounded_sipsic.nim`; 3.3.11-B
+  superseded this by ABSORBING it into `Queue`'s `(ccSingle, ccSingle)`
+  arm, and a `newUnboundedSipsicQueue` smart constructor now exists for
+  the absorbed SPSC path. A handle-free `ccCons == ccMulti` `newQueue` borrow overload
   is added alongside the smart-constructors to preserve legacy
   `newUnboundedSipmuc(mgr)` and `newUnboundedMupmuc(mgr)` ergonomics
   under the smart-constructor surface; the handle-taking overload
@@ -883,8 +1036,10 @@ The v5.0.0 reshape is measured against the pre-wave devel baseline
   have a captured audit trail.
 - `docs/migration.md` (commit `d6f6244`): full migration guide for
   4.1.x → 5.0.0, including the migration table for every retired
-  type, the two-stage release plan (base = `rkNone`, RC = `rkEbr`),
-  and explicit "no aliases" rule for typed call sites.
+  type and the explicit "no aliases" rule for typed call sites. (The
+  doc's two-stage `rkNone` base / `rkEbr` RC release plan was superseded
+  by 3.3.11-B — reclamation is cardinality-driven and EBR ships live in
+  5.0.0; the `RK` axis no longer exists.)
 - `docs/v5.0.0-migration/design-queue-collapse-v5.0.0.md`
   (Doc C, commit `ca24d63`): complete surface specification for the
   unified `Queue` generic. Defines §3.0 target shape, §3.0.1 uniform
@@ -903,10 +1058,10 @@ The v5.0.0 reshape is measured against the pre-wave devel baseline
   Track E preflight memo for M3. Documents the Task 11 LCRQ
   baseline rename `prevConsumerIdx → consumerHead` as orphan on
   `feat/v4.3-task-14`; the rename was NOT applied to v5.0.0-impl,
-  and the unbounded path on v5.0.0-impl is pre-Task-11 state. Track
-  E (rkEbr unbounded) will land the rename alongside the
-  consumer-claim relaxation when nim-debra 0.8.0 worktree linkage
-  lands.
+  and the unbounded path on v5.0.0-impl is pre-Task-11 state. The
+  unbounded debra-integrated body shipped live in 5.0.0 WITHOUT the
+  rename; the consumer-claim relaxation carries forward as a v5.x
+  post-release semantics change (see L5).
 - Phase 4.6 audit-trail clarifications (commit `9cde893`,
   I1+D2+N3): three coordinated docstring / cross-reference fixes
   surfaced by the Phase 4.6 self-review pass. Documented at the
@@ -987,13 +1142,14 @@ verdict.
   (`docs/v5.0.0-migration/track-e-preflight.md`, commit
   `dc4fcdc`), the Task 11 LCRQ baseline rename is orphan on
   `feat/v4.3-task-14` and was NOT applied to v5.0.0-impl.
-  Verification: `grep -rn prevConsumerIdx src/` returns 16
-  matches across `unbounded_mupmuc.nim`, `unbounded_sipmuc.nim`,
-  and the typestate modules — the pre-Task-11 state. Track E
-  (`RK = rkEbr` unbounded body) carries the semantic mandate and
-  will land the rename alongside the consumer-claim relaxation
-  when `nim-debra 0.8.0` worktree linkage lands. The v5.0.0 RC
-  closes this limitation.
+  Verification: `prevConsumerIdx` remains the multi-consumer CAS slot
+  field name in the shipped `Queue` (`queue.nim`, the `ccCons == ccMulti`
+  branches) — the pre-Task-11 state. The unbounded debra-integrated body
+  shipped LIVE in 5.0.0, but the strict-FIFO consumer-claim relaxation
+  (the `prevConsumerIdx → consumerHead` rename plus CAS-on-head
+  mechanism) was NOT included; it carries forward as a v5.x post-release
+  semantics change, not a release gate. (There is no v5.0.0 RC — the
+  two-stage plan was superseded by 3.3.11-B.)
 
 - **L6 — `neutralizeStalled` mid-call safety caveat (R5): (c) NO
   LONGER APPLICABLE per reframe.** v4.3.0 documented that queue
@@ -1019,24 +1175,26 @@ verdict.
   STILL OPEN; cross-platform CI for aarch64 is tracked as a v5.x
   post-release infrastructure candidate.
 
-### v4.3 work absorbed into v5.0.0 RC (Track E)
+### v4.3 work NOT carried into v5.0.0 (orphan on `feat/v4.3-task-14`)
 
-The v4.3.0 work that landed on `feat/v4.3-task-14` (TOCTOU item-loss
-fixes for unbounded SPMC / SPSC / MPSC pop at commits `bb50bc9` and
-`7296240`; facade-over-typestate-verbs migration of the four
-unbounded families; `typestates 0.8.0` uplift; the orphan SPMC
-`consumerHeads` field removal; 14 previously-orphan tests wired into
-`nimble test`) is NOT on v5.0.0-impl. Per the operator decision to
-abandon v4.2/v4.3 banners and roll the work into the v5.0.0
-narrative, and per the two-stage v5.0.0 release plan
-(`docs/migration.md` "Phase 3 — unbounded path availability"), this
-work is absorbed into the v5.0.0 RC alongside Track E (the
-`RK = rkEbr` unbounded body). The orphan branches remain on the
-remote as audit-trail artifacts; Track E will cite their commit
-SHAs when porting the substantive content. This is consistent with
-the v4.3-no-post-release-deferral rule because the v4.3 work is not
-silently dropped — it is explicitly scoped to the same release
-stream (v5.0.0 RC) that owns its destination subsystem.
+The unbounded debra-integrated body ships LIVE in v5.0.0 (the multi-
+cardinality arms integrate nim-debra 0.8.0 directly). However, a set of
+additional v4.3.0 refinements that landed on `feat/v4.3-task-14` (TOCTOU
+item-loss fixes for unbounded SPMC / SPSC / MPSC pop at commits `bb50bc9`
+and `7296240`; the facade-over-typestate-verbs organization of the four
+unbounded families; the orphan SPMC `consumerHeads` field removal — the
+field is still present at `queue.nim`, the `ccCons == ccMulti` branch;
+14 previously-orphan tests wired into `nimble test`) is NOT on
+v5.0.0-impl. Per the operator decision to abandon the v4.2/v4.3 banners
+and roll the work into the v5.0.0 narrative, these refinements were NOT
+ported into the shipped surface; the original two-stage RC plan that was
+to absorb them was superseded by 3.3.11-B (there is no v5.0.0 RC). The
+orphan branches remain on the remote as audit-trail artifacts; the
+substantive content is a v5.x post-release follow-up that will cite their
+commit SHAs when ported. This is consistent with the
+v4.3-no-post-release-deferral rule's spirit because the work is not
+silently dropped — it is explicitly tracked here as orphan with a named
+destination subsystem.
 
 ### References
 
@@ -1049,8 +1207,8 @@ Cross-references to v5.0.0 reframe documents (audit trail):
   release.
 - [Doc C — unified Queue surface
   specification](docs/v5.0.0-migration/design-queue-collapse-v5.0.0.md)
-  — full design surface; cited in BREAKING for the 9
-  param-coherence guards.
+  — original (superseded 10-param) design surface; cited in BREAKING
+  for the param-coherence guards.
 - [Track E preflight
   memo](docs/v5.0.0-migration/track-e-preflight.md) — `rkEbr`
   unbounded body preflight, `prevConsumerIdx → consumerHead`

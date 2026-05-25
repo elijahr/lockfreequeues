@@ -40,6 +40,7 @@ suite "Strategy phantom — mupsic-equiv (ccMulti × ccSingle)":
     let consumerHandle = registerThread(manager)
     var q = newUnboundedMupsicQueue[int, stManual, 4, 4](addr manager, consumerHandle)
     var p = q.getProducer()
+    p.attach()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3
@@ -56,6 +57,7 @@ suite "Strategy phantom — mupsic-equiv (ccMulti × ccSingle)":
     let consumerHandle = registerThread(manager)
     var q = newUnboundedMupsicQueue[int, stEager, 4, 4](addr manager, consumerHandle)
     var p = q.getProducer()
+    p.attach()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3
@@ -74,6 +76,7 @@ suite "Strategy phantom — sipmuc-equiv (ccSingle × ccMulti)":
     var q = newUnboundedSipmucQueue[int, stManual, 4, 4](addr manager)
     var p = q.getProducer()
     var c = q.getConsumer()
+    c.attach()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3
@@ -89,6 +92,7 @@ suite "Strategy phantom — sipmuc-equiv (ccSingle × ccMulti)":
     var q = newUnboundedSipmucQueue[int, stEager, 4, 4](addr manager)
     var p = q.getProducer()
     var c = q.getConsumer()
+    c.attach()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3
@@ -104,7 +108,9 @@ suite "Strategy phantom — mupmuc-equiv (ccMulti × ccMulti)":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var q = newUnboundedMupmucQueue[int, stManual, 4, 4](addr manager)
     var p = q.getProducer()
+    p.attach()
     var c = q.getConsumer()
+    c.attach()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3
@@ -119,7 +125,9 @@ suite "Strategy phantom — mupmuc-equiv (ccMulti × ccMulti)":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var q = newUnboundedMupmucQueue[int, stEager, 4, 4](addr manager)
     var p = q.getProducer()
+    p.attach()
     var c = q.getConsumer()
+    c.attach()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3

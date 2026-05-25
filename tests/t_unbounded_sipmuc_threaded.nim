@@ -41,6 +41,8 @@ proc consumer[ST: static DeallocationStrategy, S: static int](
 ) {.thread.} =
   {.cast(gcsafe).}:
     var c = ctx.queue[].getConsumer()
+    # Register this consumer's debra handle on its own thread.
+    c.attach()
     while true:
       let item = c.pop()
       if item.isSome:
@@ -139,6 +141,7 @@ suite "UnboundedSipmuc threaded":
 
     # Pop all items
     var c = queue.getConsumer()
+    c.attach()
     for i in 1 .. 1000:
       discard c.pop()
 
@@ -156,6 +159,7 @@ suite "UnboundedSipmuc threaded":
 
     # Pop all items
     var c = queue.getConsumer()
+    c.attach()
     for i in 1 .. 1000:
       discard c.pop()
 

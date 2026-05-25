@@ -53,7 +53,8 @@ import ./exceptions
 # from the sipsic-only instantiation.
 from debra import
   DebraManager, ThreadHandle, PinnedScope, Destructor, initDebraManager, registerThread,
-  bindClient, unbindClient, unpinned, pinScope, advanceEvery, reclaimNow
+  bindClient, unbindClient, unpinned, pinScope, advanceEvery, reclaimNow,
+  DebraRegistrationError, ThreadId, currentThreadId, `==`
 
 from debra import retireOnCAS, retireOnPublish
 
@@ -311,6 +312,19 @@ type
         consumerCount*: Atomic[int]
       when ccProd == ccMulti and ccCons == ccSingle:
         handle*: ThreadHandle[MaxThreads, debra.ccSingle]
+        # mupsic-equiv: the single consumer's debra handle is registered
+        # at attach-time (`attachConsumer`) on the operating consumer
+        # thread, NOT at construction (registerThread is thread-affine).
+        # This flag records that attachConsumer has run; the mupsic
+        # `pop` asserts it in debug builds.
+        consumerAttached*: bool
+        when defined(debug):
+          # Debug-only thread-affinity stamp. Records the thread that ran
+          # `attachConsumer()` (which registered the debra handle via
+          # debra's `currentThreadId()`). The mupsic `pop()` asserts the
+          # operating thread matches. `when defined(debug):` so release
+          # builds carry NO field — zero layout change, zero cost.
+          attachedTid*: ThreadId
       when ccCons == ccMulti:
         consumerHeads*: array[MaxThreads, Atomic[int]]
 
@@ -375,6 +389,13 @@ type
       else:
         handle*: ThreadHandle[MaxThreads, debra.ccSingle]
       claimed*: bool
+      when defined(debug):
+        # Debug-only thread-affinity stamp. Records the thread that ran
+        # `attach()` (which registered the debra handle via debra's
+        # `currentThreadId()`). `push()` asserts the operating thread
+        # matches. `when defined(debug):` so release builds carry NO
+        # field — zero layout change, zero hot-path cost.
+        attachedTid*: ThreadId
 
   QueueConsumer*[
       T;
@@ -392,6 +413,13 @@ type
     when ccCons == ccMulti:
       handle*: ThreadHandle[MaxThreads, debra.ccMulti]
       claimed*: bool
+      when defined(debug):
+        # Debug-only thread-affinity stamp. Records the thread that ran
+        # `attach()` (which registered the debra handle via debra's
+        # `currentThreadId()`). `pop()` asserts the operating thread
+        # matches. `when defined(debug):` so release builds carry NO
+        # field — zero layout change, zero hot-path cost.
+        attachedTid*: ThreadId
 
 ## ----------------------------------------------------------------------
 ## Unbounded-queue body — Track E (Steps 3.3.2-3.3.4), absorbed sipsic
@@ -445,7 +473,8 @@ proc retireOnCAS*[
     q: var Queue[T, ccProd, ccCons, ST, S, MaxThreads],
     scope: var PinnedScope[MaxThreads, CC],
     atomic: var Atomic[U],
-    expected, desired: U,
+    expected: var U,
+    desired: U,
     dtor: Destructor,
 ): bool {.discardable.} =
   ## Per-queue `retireOnCAS` wrapper. Delegates to nim-debra's
@@ -533,8 +562,47 @@ proc newQueue*[
   when ccProd == ccMulti:
     result.producerCount.store(0, moRelaxed)
     result.handle = handle
+    # Escape hatch: the caller registered the consumer thread itself and
+    # supplied the handle, so the queue is already attached on the
+    # consumer side. Record it so the mupsic `pop` debug assert passes
+    # without requiring a redundant `attachConsumer` call. (The auto-
+    # create path leaves this false until `attachConsumer` runs.)
+    result.consumerAttached = true
+    when defined(debug):
+      # Stamp the thread-affinity tid for the debug pop assert. The
+      # escape-hatch contract is that the caller registered the consumer
+      # handle on the thread that will pop; that thread also runs this
+      # constructor, so `currentThreadId()` here is that pop thread.
+      result.attachedTid = currentThreadId()
   else:
     discard handle
+  let seg = newSegment[T, ccProd, ccSingle, S]()
+  result.headSegment.store(seg, moRelaxed)
+  result.tailSegment.store(seg, moRelaxed)
+  result.segments.store(1, moRelaxed)
+  bindClient(manager[])
+
+proc newQueue*[
+    T;
+    ccProd: static PinScopeCardinality,
+    ST: static DeallocationStrategy = DefaultDeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    _: typedesc[Queue[T, ccProd, ccSingle, ST, S, MaxThreads]],
+    manager: ptr DebraManager[MaxThreads, debra.ccSingle],
+): Queue[T, ccProd, ccSingle, ST, S, MaxThreads] =
+  ## Handle-free manager-borrowed unbounded `newQueue` overload for
+  ## ccCons == ccSingle (mupsic-equiv). The single consumer's debra
+  ## handle is NOT registered here; the consumer thread registers itself
+  ## via `attachConsumer()` before its first `pop`. The handle-carrying
+  ## overload above remains the escape hatch for callers who register
+  ## on the consumer thread and supply the handle directly.
+  validateQueueParams(Queue[T, ccProd, ccSingle, ST, S, MaxThreads])
+  result.manager = manager
+  result.ownsManager = false
+  result.itemCount.store(0, moRelaxed)
+  when ccProd == ccMulti:
+    result.producerCount.store(0, moRelaxed)
   let seg = newSegment[T, ccProd, ccSingle, S]()
   result.headSegment.store(seg, moRelaxed)
   result.tailSegment.store(seg, moRelaxed)
@@ -635,12 +703,17 @@ proc newQueue*[
   ## Auto-create unbounded `newQueue` overload. For the sipsic-absorbed
   ## `(ccSingle, ccSingle)` branch this skips manager allocation
   ## entirely. For the other three cardinality combos, allocates a
-  ## private `DebraManager[MaxThreads, ...]`, registers the calling
-  ## thread, and sets `ownsManager = true`.
+  ## private `DebraManager[MaxThreads, ...]` and sets `ownsManager =
+  ## true`.
   ##
-  ## **Caller must be the consumer thread for mupsic-equiv** —
-  ## constructing on a different thread than the future `pop` caller
-  ## would mis-route the consumer handle.
+  ## **No thread is registered at construction.** `registerThread` is
+  ## thread-affine (stamps the calling thread + installs a signal
+  ## handler on the calling OS thread), so registering here would
+  ## mis-route the handle when the queue is later operated on a
+  ## different thread. Each operating thread registers itself at
+  ## attach-time: producers/consumers via `getProducer().attach()` /
+  ## `getConsumer().attach()`, and the mupsic-equiv single consumer via
+  ## `attachConsumer()` before its first `pop`.
   validateQueueParams(Queue[T, ccProd, ccCons, ST, S, MaxThreads])
   when ccProd == ccSingle and ccCons == ccSingle:
     # Sipsic-absorbed: no manager, no debra. Allocate initial segment
@@ -659,11 +732,12 @@ proc newQueue*[
     try:
       when ccCons == ccMulti:
         mgr[] = initDebraManager[MaxThreads, debra.ccMulti]()
+        result = newQueue(Queue[T, ccProd, ccCons, ST, S, MaxThreads], mgr)
       else:
         mgr[] = initDebraManager[MaxThreads, debra.ccSingle]()
-      let consumerHandle = registerThread(mgr[])
-      result =
-        newQueue(Queue[T, ccProd, ccCons, ST, S, MaxThreads], mgr, consumerHandle)
+        # mupsic-equiv: no consumer handle registered here. The single
+        # consumer calls `attachConsumer()` on its own thread.
+        result = newQueue(Queue[T, ccProd, ccCons, ST, S, MaxThreads], mgr)
       result.ownsManager = true
       ok = true
     finally:
@@ -680,14 +754,18 @@ proc getProducer*[
     self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
 ): QueueProducer[T, ccProd, ccCons, ST, S, MaxThreads] =
   ## Returns a `QueueProducer` view bound to this queue. For
-  ## `ccProd == ccMulti` registers the calling thread against the
-  ## queue's `DebraManager` and stores the resulting `ThreadHandle`
-  ## on the producer view.
+  ## `ccProd == ccMulti` the view is created **unregistered**: the
+  ## calling thread reserves a producer index but does NOT register
+  ## against the queue's `DebraManager` here. Registration is
+  ## thread-affine and happens at `attach()`-time, on the thread that
+  ## will actually `push`. `attach()` therefore MUST be called on the
+  ## thread that will subsequently `push()` through the returned view;
+  ## registering on one thread and pushing from another mis-routes the
+  ## debra handle. See `attach`.
   result.queue = addr(self)
   when ccProd == ccMulti:
     let idx = self.producerCount.fetchAdd(1, moAcquire)
     result.idx = idx
-    result.handle = registerThread(self.manager[])
   else:
     result.idx = -1
 
@@ -700,13 +778,18 @@ proc getConsumer*[
     self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
 ): QueueConsumer[T, ccProd, ccCons, ST, S, MaxThreads] =
   ## Returns a `QueueConsumer` view bound to this queue. For
-  ## `ccCons == ccMulti` registers the calling thread against the
-  ## queue's `DebraManager`.
+  ## `ccCons == ccMulti` the view is created **unregistered**: the
+  ## calling thread reserves a consumer index but does NOT register
+  ## against the queue's `DebraManager` here. Registration is
+  ## thread-affine and happens at `attach()`-time, on the thread that
+  ## will actually `pop`. `attach()` therefore MUST be called on the
+  ## thread that will subsequently `pop()` through the returned view;
+  ## registering on one thread and popping from another mis-routes the
+  ## debra handle. See `attach`.
   result.queue = addr(self)
   when ccCons == ccMulti:
     let idx = self.consumerCount.fetchAdd(1, moAcquire)
     result.idx = idx
-    result.handle = registerThread(self.manager[])
   else:
     result.idx = -1
 
@@ -802,6 +885,18 @@ proc push*[
   else:
     # ccProd == ccMulti — mupsic-equiv + mupmuc-equiv share the push
     # body shape (the cardinality difference is on the consumer side).
+    # Debug precondition: the producer view must have been claimed via
+    # `attach()` on this thread (which registers the debra handle), so
+    # the handle pinned below routes to the calling thread's slot.
+    # Mirrors the mupsic-equiv `pop` assert form (bare `assert`,
+    # compiled out under `-d:release` / `--assertions:off`).
+    assert self.claimed,
+      "producer view: call attach() on this thread before push()"
+    when defined(debug):
+      assert self.attachedTid == currentThreadId(),
+        "producer view: attach() was called on a different thread than " &
+        "this push(); the operating thread must be the thread that " &
+        "registered the debra handle (thread-affinity contract)"
     # §3.5.6 Pin-Claim Ordering: `pinScope` MUST be acquired BEFORE
     # the first `tailSegment.load(...)`.
     block:
@@ -907,6 +1002,20 @@ proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
     self: var Queue[T, ccMulti, ccSingle, ST, S, MaxThreads]
 ): Option[T] =
   ## mupsic-equiv pop — §3.5.1 retire-bearing site.
+  ##
+  ## Debug precondition: the consumer thread must have registered its
+  ## debra handle via `attachConsumer()` (or supplied it through the
+  ## handle-carrying borrow constructor) before the first `pop`. The
+  ## assert is compiled out under `-d:release` / `--assertions:off`, so
+  ## it adds no hot-path cost in release builds.
+  assert self.consumerAttached,
+    "mupsic Queue.pop called before attachConsumer(): the consumer " &
+    "thread must register its debra handle on its own thread first"
+  when defined(debug):
+    assert self.attachedTid == currentThreadId(),
+      "mupsic Queue.pop: attachConsumer() was called on a different " &
+      "thread than this pop(); the operating thread must be the thread " &
+      "that registered the debra handle (thread-affinity contract)"
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
       when T is ref:
@@ -974,6 +1083,19 @@ proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
     self: var QueueConsumer[T, ccSingle, ccMulti, ST, S, MaxThreads]
 ): Option[T] =
   ## sipmuc-equiv pop — §3.5.3 retire-bearing site.
+  ##
+  ## Debug precondition: the consumer view must have been claimed via
+  ## `attach()` on this thread (which registers the debra handle), so the
+  ## handle pinned below routes to the calling thread's slot. Mirrors the
+  ## mupsic-equiv `pop` assert form (bare `assert`, compiled out under
+  ## `-d:release` / `--assertions:off`).
+  assert self.claimed,
+    "consumer view: call attach() on this thread before pop()"
+  when defined(debug):
+    assert self.attachedTid == currentThreadId(),
+      "sipmuc consumer view: attach() was called on a different thread " &
+      "than this pop(); the operating thread must be the thread that " &
+      "registered the debra handle (thread-affinity contract)"
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
       when T is ref:
@@ -1029,6 +1151,19 @@ proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
     self: var QueueConsumer[T, ccMulti, ccMulti, ST, S, MaxThreads]
 ): Option[T] =
   ## mupmuc-equiv pop — §3.5.2 retire-bearing site.
+  ##
+  ## Debug precondition: the consumer view must have been claimed via
+  ## `attach()` on this thread (which registers the debra handle), so the
+  ## handle pinned below routes to the calling thread's slot. Mirrors the
+  ## mupsic-equiv `pop` assert form (bare `assert`, compiled out under
+  ## `-d:release` / `--assertions:off`).
+  assert self.claimed,
+    "consumer view: call attach() on this thread before pop()"
+  when defined(debug):
+    assert self.attachedTid == currentThreadId(),
+      "mupmuc consumer view: attach() was called on a different thread " &
+      "than this pop(); the operating thread must be the thread that " &
+      "registered the debra handle (thread-affinity contract)"
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
       when T is ref:
@@ -1155,10 +1290,38 @@ proc attach*[
     S, MaxThreads: static int,
 ](
     self: var QueueProducer[T, ccMulti, ccCons, ST, S, MaxThreads]
-) {.raises: [].} =
-  ## Mark a multi-producer QueueProducer view as claimed. Runtime-only
-  ## (no static typestate transition).
-  self.claimed = true
+) {.raises: [DebraRegistrationError].} =
+  ## Claim a multi-producer QueueProducer view on the calling thread.
+  ##
+  ## Registers the calling thread against the queue's `DebraManager`
+  ## (thread-affine) and stores the resulting `ThreadHandle` on the
+  ## view, then marks it claimed. Guarded by `claimed` so a repeated
+  ## attach on the same view does not burn a second registry slot.
+  ## Runtime-only (no static typestate transition).
+  ##
+  ## **Thread-affinity contract:** MUST be called on the thread that
+  ## will subsequently `push()` through this view. Registering on one
+  ## thread and pushing from another mis-routes the debra handle (the
+  ## handle carries the registering thread's slot index; debra applies
+  ## it verbatim with no cross-thread check — see PART A / debra
+  ## `guard.pin`).
+  ##
+  ## **Slot accounting:** each `attach()` consumes one `MaxThreads`
+  ## registration slot for the lifetime of the owned `DebraManager`
+  ## (debra 0.8.0 has no per-thread unregister). `detach()` does NOT
+  ## free the slot. Size `MaxThreads` for the total number of DISTINCT
+  ## threads that will ever operate this queue, not the peak concurrent
+  ## count. Repeated `detach()` / re-`attach()` on the same thread burns
+  ## a slot each time.
+  ##
+  ## Raises `DebraRegistrationError` when the manager's `MaxThreads`
+  ## registry capacity is exhausted (the error is surfaced, never
+  ## swallowed).
+  if not self.claimed:
+    self.handle = registerThread(self.queue.manager[])
+    self.claimed = true
+    when defined(debug):
+      self.attachedTid = currentThreadId()
 
 proc detach*[
     T;
@@ -1169,6 +1332,11 @@ proc detach*[
     self: var QueueProducer[T, ccMulti, ccCons, ST, S, MaxThreads]
 ) {.raises: [].} =
   ## Release a multi-producer QueueProducer view's claim.
+  ##
+  ## Only clears the claim flag; it does NOT unregister the debra handle
+  ## (debra 0.8.0 has no per-thread unregister, so the `MaxThreads` slot
+  ## stays consumed). `detach()` is idempotent; calling it on an
+  ## already-detached view is a no-op.
   self.claimed = false
 
 proc attach*[
@@ -1178,9 +1346,34 @@ proc attach*[
     S, MaxThreads: static int,
 ](
     self: var QueueConsumer[T, ccProd, ccMulti, ST, S, MaxThreads]
-) {.raises: [].} =
-  ## Mark a multi-consumer QueueConsumer view as claimed.
-  self.claimed = true
+) {.raises: [DebraRegistrationError].} =
+  ## Claim a multi-consumer QueueConsumer view on the calling thread.
+  ##
+  ## Registers the calling thread against the queue's `DebraManager`
+  ## (thread-affine) and stores the resulting `ThreadHandle` on the
+  ## view, then marks it claimed. Guarded by `claimed` so a repeated
+  ## attach on the same view does not burn a second registry slot.
+  ## Runtime-only (no static typestate transition).
+  ##
+  ## **Thread-affinity contract:** MUST be called on the thread that
+  ## will subsequently `pop()` through this view. Registering on one
+  ## thread and popping from another mis-routes the debra handle.
+  ##
+  ## **Slot accounting:** each `attach()` consumes one `MaxThreads`
+  ## registration slot for the lifetime of the owned `DebraManager`
+  ## (debra 0.8.0 has no per-thread unregister). `detach()` does NOT
+  ## free the slot. Size `MaxThreads` for the total number of DISTINCT
+  ## threads that will ever operate this queue, not the peak concurrent
+  ## count. Repeated `detach()` / re-`attach()` on the same thread burns
+  ## a slot each time.
+  ##
+  ## Raises `DebraRegistrationError` when the manager's `MaxThreads`
+  ## registry capacity is exhausted.
+  if not self.claimed:
+    self.handle = registerThread(self.queue.manager[])
+    self.claimed = true
+    when defined(debug):
+      self.attachedTid = currentThreadId()
 
 proc detach*[
     T;
@@ -1191,7 +1384,58 @@ proc detach*[
     self: var QueueConsumer[T, ccProd, ccMulti, ST, S, MaxThreads]
 ) {.raises: [].} =
   ## Release a multi-consumer QueueConsumer view's claim.
+  ##
+  ## Only clears the claim flag; it does NOT unregister the debra handle
+  ## (debra 0.8.0 has no per-thread unregister, so the `MaxThreads` slot
+  ## stays consumed). `detach()` is idempotent; calling it on an
+  ## already-detached view is a no-op.
   self.claimed = false
+
+## ----------------------------------------------------------------------
+## mupsic-equiv (ccMulti × ccSingle) consumer attach.
+##
+## The single consumer pops directly through `Queue.pop` (no view), so
+## it has no `attach()`. Instead it registers its debra handle once, on
+## its own thread, via `attachConsumer` before its first `pop`. This is
+## the thread-affinity fix for the auto-create constructor, which no
+## longer registers the consumer handle at construction time.
+## ----------------------------------------------------------------------
+
+proc attachConsumer*[
+    T;
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Queue[T, ccMulti, ccSingle, ST, S, MaxThreads]
+) {.raises: [DebraRegistrationError].} =
+  ## Register the calling thread as the mupsic-equiv single consumer.
+  ##
+  ## **Thread-affinity contract:** MUST be called on the thread that
+  ## will subsequently `pop`, before the first `pop`. Registering on one
+  ## thread and popping from another mis-routes the debra handle (the
+  ## handle carries the registering thread's slot index; debra applies
+  ## it verbatim with no cross-thread check). Registers against the
+  ## queue's `DebraManager` (thread-affine) and stores the resulting
+  ## `ThreadHandle` on the queue, then records `consumerAttached = true`
+  ## (asserted at the top of `pop` in debug builds). Idempotent: a
+  ## repeat call is guarded so it does not burn a second registry slot.
+  ##
+  ## **Slot accounting:** this registration consumes one `MaxThreads`
+  ## registration slot for the lifetime of the owned `DebraManager`
+  ## (debra 0.8.0 has no per-thread unregister). There is no
+  ## consumer-side `detach()` to release it. Size `MaxThreads` for the
+  ## total number of DISTINCT threads that will ever operate this queue,
+  ## not the peak concurrent count.
+  ##
+  ## Raises `DebraRegistrationError` when `MaxThreads` is exhausted.
+  ## Callers using the handle-carrying borrow `newQueue` overload
+  ## (escape hatch) register the handle themselves and must NOT call
+  ## `attachConsumer`.
+  if not self.consumerAttached:
+    self.handle = registerThread(self.manager[])
+    self.consumerAttached = true
+    when defined(debug):
+      self.attachedTid = currentThreadId()
 
 ## ----------------------------------------------------------------------
 ## Destructors driving Lifecycle / Claim-state terminal transitions
@@ -1215,6 +1459,14 @@ proc `=destroy`*[
   ##
   ## Bundle F.1: also drives the Lifecycle terminal transition
   ## (`QueueInit -> QueueDestroyed`) via `destructorTransition`.
+  ##
+  ## **Precondition:** all worker threads that attached to this queue
+  ## must be joined before `=destroy` runs. debra 0.8.0 has no
+  ## per-thread unregister; thread handles live until the manager is
+  ## destroyed here. Destroying the queue while an attached worker is
+  ## still pinning/popping is undefined. For shared-manager queues
+  ## (`ownsManager == false`) the destructor only unbinds the client
+  ## refcount; the manager is left intact for its owner to free.
   var seg = self.headSegment.load(moRelaxed)
   while seg != nil:
     let nextSeg = seg.next.load(moRelaxed)
@@ -1297,11 +1549,26 @@ proc newUnboundedMupsicQueue*[
     T;
     ST: static DeallocationStrategy = DefaultDeallocationStrategy,
     S, MaxThreads: static int,
+](
+    manager: ptr DebraManager[MaxThreads, debra.ccSingle]
+): Queue[T, ccMulti, ccSingle, ST, S, MaxThreads] {.inline.} =
+  ## Unbounded mupsic-equivalent (`ccMulti × ccSingle`) borrow
+  ## smart-constructor — manager-only form. The consumer's debra handle
+  ## is NOT registered here; the consumer thread registers itself via
+  ## `attachConsumer()` before its first `pop`. Use the
+  ## `(manager, consumerHandle)` overload (escape hatch) to register the
+  ## consumer thread yourself and supply the handle at construction.
+  newQueue(Queue[T, ccMulti, ccSingle, ST, S, MaxThreads], manager)
+
+proc newUnboundedMupsicQueue*[
+    T;
+    ST: static DeallocationStrategy = DefaultDeallocationStrategy,
+    S, MaxThreads: static int,
 ](): Queue[T, ccMulti, ccSingle, ST, S, MaxThreads] {.inline.} =
   ## Unbounded mupsic-equivalent (`ccMulti × ccSingle`) auto-create
-  ## smart-constructor. **Caller must be the consumer thread** —
-  ## constructing on a different thread mis-routes the consumer
-  ## handle.
+  ## smart-constructor. No thread is registered at construction: the
+  ## consumer thread calls `attachConsumer()` and producer threads call
+  ## `getProducer().attach()` on their own threads.
   newQueue(Queue[T, ccMulti, ccSingle, ST, S, MaxThreads])
 
 proc newUnboundedSipmucQueue*[

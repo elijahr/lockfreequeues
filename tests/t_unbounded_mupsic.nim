@@ -17,6 +17,7 @@ suite "UnboundedMupsic":
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMupsicQueue[int, stEager, 16, 4](addr manager, consumerHandle)
     var producer = queue.getProducer()
+    producer.attach()
     check(producer.idx >= 0)
 
   test "producer push single item":
@@ -24,6 +25,7 @@ suite "UnboundedMupsic":
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMupsicQueue[int, stEager, 16, 4](addr manager, consumerHandle)
     var producer = queue.getProducer()
+    producer.attach()
 
     producer.push(42)
     check(queue.len == 1)
@@ -33,6 +35,7 @@ suite "UnboundedMupsic":
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMupsicQueue[int, stEager, 16, 4](addr manager, consumerHandle)
     var producer = queue.getProducer()
+    producer.attach()
 
     for i in 1 .. 10:
       producer.push(i)
@@ -43,6 +46,7 @@ suite "UnboundedMupsic":
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMupsicQueue[int, stEager, 16, 4](addr manager, consumerHandle)
     var producer = queue.getProducer()
+    producer.attach()
 
     producer.push(42)
     let item = queue.pop()
@@ -63,6 +67,7 @@ suite "UnboundedMupsic":
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMupsicQueue[int, stEager, 16, 4](addr manager, consumerHandle)
     var producer = queue.getProducer()
+    producer.attach()
 
     for i in 1 .. 5:
       producer.push(i)
@@ -78,7 +83,9 @@ suite "UnboundedMupsic":
     var queue = newUnboundedMupsicQueue[int, stEager, 16, 4](addr manager, consumerHandle)
 
     var producer1 = queue.getProducer()
+    producer1.attach()
     var producer2 = queue.getProducer()
+    producer2.attach()
 
     # Each producer pushes
     for i in 1 .. 5:
@@ -101,6 +108,7 @@ suite "UnboundedMupsic":
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMupsicQueue[int, stEager, 4, 4](addr manager, consumerHandle)
     var producer = queue.getProducer()
+    producer.attach()
 
     for i in 1 .. 10:
       producer.push(i)
@@ -117,6 +125,7 @@ suite "UnboundedMupsic":
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMupsicQueue[int, stEager, 8, 4](addr manager, consumerHandle)
     var producer = queue.getProducer()
+    producer.attach()
 
     check(queue.len == 0)
 
@@ -139,6 +148,7 @@ suite "UnboundedMupsic":
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMupsicQueue[int, stEager, 8, 4](addr manager, consumerHandle)
     var producer = queue.getProducer()
+    producer.attach()
 
     producer.push(@[1, 2, 3, 4, 5])
     check(queue.len == 5)
@@ -151,6 +161,7 @@ suite "UnboundedMupsic":
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMupsicQueue[int, stEager, 8, 4](addr manager, consumerHandle)
     var producer = queue.getProducer()
+    producer.attach()
 
     for i in 1 .. 10:
       producer.push(i)
@@ -165,6 +176,7 @@ suite "UnboundedMupsic":
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMupsicQueue[int, stEager, 8, 4](addr manager, consumerHandle)
     var producer = queue.getProducer()
+    producer.attach()
 
     producer.push(@[1, 2, 3])
 

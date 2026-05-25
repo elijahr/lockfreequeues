@@ -78,6 +78,8 @@ proc umupmucProducerThread[S: static int; T; MaxT: static int](
 ) {.thread.} =
   {.cast(gcsafe).}:
     var producer = ctx.queue[].getProducer()
+    # Register this producer's debra handle on its own thread.
+    producer.attach()
     for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
       producer.push(T(i))
 
@@ -86,6 +88,8 @@ proc umupmucConsumerThread[S: static int; T; MaxT: static int](
 ) {.thread.} =
   {.cast(gcsafe).}:
     var consumer = ctx.queue[].getConsumer()
+    # Register this consumer's debra handle on its own thread.
+    consumer.attach()
     var local = 0
     while local < ctx.count:
       let r = consumer.pop()

@@ -87,7 +87,9 @@ suite "unbounded smart-constructors — newUnboundedSipsicQueue":
 suite "unbounded smart-constructors — newUnboundedMupsicQueue":
   test "auto-create: construct + push + pop":
     var q = newUnboundedMupsicQueue[int, stEager, 8, 4]()
+    q.attachConsumer()
     var p = q.getProducer()
+    p.attach()
     p.push(1)
     p.push(2)
     let r1 = q.pop()
@@ -102,6 +104,7 @@ suite "unbounded smart-constructors — newUnboundedMupsicQueue":
     block:
       var q = newUnboundedMupsicQueue[int, stEager, 8, 4](addr mgr, consumerHandle)
       var p = q.getProducer()
+      p.attach()
       p.push(11)
       let r = q.pop()
       check r.isSome and r.get == 11
@@ -117,6 +120,7 @@ suite "unbounded smart-constructors — newUnboundedSipmucQueue":
     p.push(3)
     p.push(4)
     var c = q.getConsumer()
+    c.attach()
     let r1 = c.pop()
     let r2 = c.pop()
     check r1.isSome and r1.get == 3
@@ -130,6 +134,7 @@ suite "unbounded smart-constructors — newUnboundedSipmucQueue":
       var p = q.getProducer()
       p.push(22)
       var c = q.getConsumer()
+      c.attach()
       let r = c.pop()
       check r.isSome and r.get == 22
       check c.pop().isNone
@@ -138,9 +143,11 @@ suite "unbounded smart-constructors — newUnboundedMupmucQueue":
   test "auto-create: construct + push + pop":
     var q = newUnboundedMupmucQueue[int, stEager, 8, 4]()
     var p = q.getProducer()
+    p.attach()
     p.push(5)
     p.push(6)
     var c = q.getConsumer()
+    c.attach()
     let r1 = c.pop()
     let r2 = c.pop()
     check r1.isSome and r1.get == 5
@@ -152,8 +159,10 @@ suite "unbounded smart-constructors — newUnboundedMupmucQueue":
     block:
       var q = newUnboundedMupmucQueue[int, stEager, 8, 4](addr mgr)
       var p = q.getProducer()
+      p.attach()
       p.push(33)
       var c = q.getConsumer()
+      c.attach()
       let r = c.pop()
       check r.isSome and r.get == 33
       check c.pop().isNone
@@ -168,7 +177,9 @@ suite "smart-constructor =destroy soundness":
   test "newUnboundedMupsicQueue auto-create destructor runs cleanly":
     block:
       var q = newUnboundedMupsicQueue[int, stEager, 8, 4]()
+      q.attachConsumer()
       var p = q.getProducer()
+      p.attach()
       p.push(1)
       discard q.pop()
     check true # reached only if =destroy did not assert/crash
@@ -179,6 +190,7 @@ suite "smart-constructor =destroy soundness":
       var p = q.getProducer()
       p.push(1)
       var c = q.getConsumer()
+      c.attach()
       discard c.pop()
     check true
 
@@ -186,7 +198,9 @@ suite "smart-constructor =destroy soundness":
     block:
       var q = newUnboundedMupmucQueue[int, stEager, 8, 4]()
       var p = q.getProducer()
+      p.attach()
       p.push(1)
       var c = q.getConsumer()
+      c.attach()
       discard c.pop()
     check true

@@ -85,7 +85,9 @@ suite "rkEbr pop smoke — mupsic-equiv (ccMulti × ccSingle)":
 
   test "single-consumer pop returns FIFO order":
     var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 8, 4])
+    q.attachConsumer()
     var p = q.getProducer()
+    p.attach()
     for i in 0 ..< 5:
       p.push(i)
     for i in 0 ..< 5:
@@ -96,7 +98,9 @@ suite "rkEbr pop smoke — mupsic-equiv (ccMulti × ccSingle)":
 
   test "boundary-crossing pop drains across segments":
     var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 4, 4])
+    q.attachConsumer()
     var p = q.getProducer()
+    p.attach()
     for i in 0 ..< 10: # crosses 2 boundaries (4 → 8 → 10)
       p.push(i)
     for i in 0 ..< 10:
@@ -107,6 +111,7 @@ suite "rkEbr pop smoke — mupsic-equiv (ccMulti × ccSingle)":
 
   test "pop on empty queue returns none":
     var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 8, 4])
+    q.attachConsumer()
     check q.pop().isNone
 
 suite "rkEbr pop smoke — sipmuc-equiv (ccSingle × ccMulti)":
@@ -118,6 +123,7 @@ suite "rkEbr pop smoke — sipmuc-equiv (ccSingle × ccMulti)":
     var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, 8, 4])
     var p = q.getProducer()
     var c = q.getConsumer()
+    c.attach()
     for i in 0 ..< 5:
       p.push(i)
     for i in 0 ..< 5:
@@ -130,6 +136,7 @@ suite "rkEbr pop smoke — sipmuc-equiv (ccSingle × ccMulti)":
     var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, 4, 4])
     var p = q.getProducer()
     var c = q.getConsumer()
+    c.attach()
     for i in 0 ..< 10:
       p.push(i)
     for i in 0 ..< 10:
@@ -150,7 +157,9 @@ suite "rkEbr pop smoke — mupmuc-equiv (ccMulti × ccMulti)":
   test "single-consumer pop returns FIFO order":
     var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, 8, 4])
     var p = q.getProducer()
+    p.attach()
     var c = q.getConsumer()
+    c.attach()
     for i in 0 ..< 5:
       p.push(i)
     for i in 0 ..< 5:
@@ -162,7 +171,9 @@ suite "rkEbr pop smoke — mupmuc-equiv (ccMulti × ccMulti)":
   test "boundary-crossing pop drains across segments":
     var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, 4, 4])
     var p = q.getProducer()
+    p.attach()
     var c = q.getConsumer()
+    c.attach()
     for i in 0 ..< 10:
       p.push(i)
     for i in 0 ..< 10:

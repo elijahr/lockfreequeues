@@ -47,6 +47,7 @@ suite "rkEbr batch push (openArray) — sipmuc-equiv (ccSingle × ccMulti)":
     var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, 8, 4])
     var p = q.getProducer()
     var c = q.getConsumer()
+    c.attach()
     let items = [11, 21, 31, 41, 51]
     p.push(items)
     check q.len() == items.len
@@ -59,7 +60,9 @@ suite "rkEbr batch push (openArray) — sipmuc-equiv (ccSingle × ccMulti)":
 suite "rkEbr batch push (openArray) — mupsic-equiv (ccMulti × ccSingle)":
   test "openArray push then drain via single-item pop preserves FIFO":
     var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 8, 4])
+    q.attachConsumer()
     var p = q.getProducer()
+    p.attach()
     let items = [12, 22, 32, 42, 52]
     p.push(items)
     check q.len() == items.len
@@ -73,7 +76,9 @@ suite "rkEbr batch push (openArray) — mupmuc-equiv (ccMulti × ccMulti)":
   test "openArray push then drain via single-item pop preserves FIFO":
     var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, 8, 4])
     var p = q.getProducer()
+    p.attach()
     var c = q.getConsumer()
+    c.attach()
     let items = [13, 23, 33, 43, 53]
     p.push(items)
     check q.len() == items.len
@@ -122,7 +127,9 @@ suite "rkEbr batch pop (count) — sipsic-equiv (ccSingle × ccSingle)":
 suite "rkEbr batch pop (count) — mupsic-equiv (ccMulti × ccSingle)":
   test "push then pop(count) returns some(seq) with correct elements":
     var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 8, 4])
+    q.attachConsumer()
     var p = q.getProducer()
+    p.attach()
     let items = [200, 201, 202, 203, 204]
     p.push(items)
     let r = q.pop(items.len)
@@ -138,6 +145,7 @@ suite "rkEbr batch pop (count) — sipmuc-equiv (ccSingle × ccMulti)":
     var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, 8, 4])
     var p = q.getProducer()
     var c = q.getConsumer()
+    c.attach()
     let items = [300, 301, 302, 303, 304]
     p.push(items)
     let r = c.pop(items.len)
@@ -156,7 +164,9 @@ suite "rkEbr batch pop (count) — mupmuc-equiv (ccMulti × ccMulti)":
   test "push then pop(count) via QueueConsumer returns some(seq)":
     var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, 8, 4])
     var p = q.getProducer()
+    p.attach()
     var c = q.getConsumer()
+    c.attach()
     let items = [400, 401, 402, 403, 404]
     p.push(items)
     let r = c.pop(items.len)

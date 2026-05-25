@@ -65,6 +65,8 @@ proc usipmucConsumerThread[S: static int; T; MaxT: static int](
 ) {.thread.} =
   {.cast(gcsafe).}:
     var consumer = ctx.queue[].getConsumer()
+    # Register this consumer's debra handle on its own thread.
+    consumer.attach()
     var local = 0
     while local < ctx.count:
       let r = consumer.pop()

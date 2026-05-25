@@ -7,8 +7,6 @@ import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
 
-from debra import initDebraManager, registerThread
-
 const
   ItemCount = 10000
   ProducerCount = 4
@@ -32,6 +30,8 @@ proc producer[ST: static DeallocationStrategy, S: static int](
 ) {.thread.} =
   {.cast(gcsafe).}:
     var p = ctx.queue[].getProducer()
+    # Register this producer's debra handle on its own thread.
+    p.attach()
     let base = ctx.producerIdx * ItemsPerProducer
     for i in 1 .. ItemsPerProducer:
       p.push(base + i)
@@ -41,6 +41,8 @@ proc consumer[ST: static DeallocationStrategy, S: static int](
     ctx: ptr ConsumerContext[ST, S]
 ) {.thread.} =
   {.cast(gcsafe).}:
+    # Register the single-consumer debra handle on the popping thread.
+    ctx.queue[].attachConsumer()
     var consumed = 0
     while consumed < ItemCount:
       let item = ctx.queue[].pop()
@@ -66,10 +68,10 @@ suite "UnboundedMupsic threaded":
     producersDone.store(0, moRelaxed)
 
   test "high segment turnover":
-    var manager = initDebraManager[MaxThreads]()
-    let consumerHandle = registerThread(manager)
-    var queue =
-      newUnboundedMupsicQueue[int, stEager, 8, MaxThreads](addr manager, consumerHandle)
+    # Auto-create: no registration at construction. The producer threads
+    # and the consumer thread each register on their own thread (via
+    # attach() / attachConsumer()).
+    var queue = newUnboundedMupsicQueue[int, stEager, 8, MaxThreads]()
 
     var prodContexts: array[ProducerCount, ProducerContext[stEager, 8]]
     for i in 0 ..< ProducerCount:
@@ -102,10 +104,8 @@ suite "UnboundedMupsic threaded":
       check(received[i].load(moRelaxed))
 
   test "normal segment size":
-    var manager = initDebraManager[MaxThreads]()
-    let consumerHandle = registerThread(manager)
-    var queue =
-      newUnboundedMupsicQueue[int, stEager, 64, MaxThreads](addr manager, consumerHandle)
+    # Auto-create: registration happens per-thread at attach time.
+    var queue = newUnboundedMupsicQueue[int, stEager, 64, MaxThreads]()
 
     var prodContexts: array[ProducerCount, ProducerContext[stEager, 64]]
     for i in 0 ..< ProducerCount:
@@ -138,14 +138,14 @@ suite "UnboundedMupsic threaded":
       check(received[i].load(moRelaxed))
 
   test "segment retirement (Manual)":
-    var manager = initDebraManager[MaxThreads]()
-    let consumerHandle = registerThread(manager)
-    var queue = newUnboundedMupsicQueue[int, stManual, 8, MaxThreads](
-      addr manager, consumerHandle
-    )
+    # Single-threaded: the main thread is both producer and consumer, so
+    # it attaches both handles here.
+    var queue = newUnboundedMupsicQueue[int, stManual, 8, MaxThreads]()
+    queue.attachConsumer()
 
     # Push items to create segments
     var p = queue.getProducer()
+    p.attach()
     for i in 1 .. 1000:
       p.push(i)
     let peakSegments = queue.segmentCount()
@@ -158,14 +158,13 @@ suite "UnboundedMupsic threaded":
     check(queue.segmentCount() == peakSegments)
 
   test "segment retirement (Eager)":
-    var manager = initDebraManager[MaxThreads]()
-    let consumerHandle = registerThread(manager)
-    var queue = newUnboundedMupsicQueue[int, stEager, 8, MaxThreads](
-      addr manager, consumerHandle
-    )
+    # Single-threaded: the main thread is both producer and consumer.
+    var queue = newUnboundedMupsicQueue[int, stEager, 8, MaxThreads]()
+    queue.attachConsumer()
 
     # Push items to create segments
     var p = queue.getProducer()
+    p.attach()
     for i in 1 .. 1000:
       p.push(i)
 

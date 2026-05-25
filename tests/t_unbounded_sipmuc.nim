@@ -36,6 +36,7 @@ suite "UnboundedSipmuc":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedSipmucQueue[int, stEager, 16, 4](addr manager)
     var consumer = queue.getConsumer()
+    consumer.attach()
     check(consumer.idx >= 0)
 
   test "consumer pop single item":
@@ -45,6 +46,7 @@ suite "UnboundedSipmuc":
 
     producer.push(42)
     var consumer = queue.getConsumer()
+    consumer.attach()
     let item = consumer.pop()
     check(item.isSome)
     check(item.get == 42)
@@ -53,6 +55,7 @@ suite "UnboundedSipmuc":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedSipmucQueue[int, stEager, 16, 4](addr manager)
     var consumer = queue.getConsumer()
+    consumer.attach()
 
     let item = consumer.pop()
     check(item.isNone)
@@ -66,6 +69,7 @@ suite "UnboundedSipmuc":
       producer.push(i)
 
     var consumer = queue.getConsumer()
+    consumer.attach()
     for i in 1 .. 5:
       let item = consumer.pop()
       check(item.isSome)
@@ -80,7 +84,9 @@ suite "UnboundedSipmuc":
       producer.push(i)
 
     var consumer1 = queue.getConsumer()
+    consumer1.attach()
     var consumer2 = queue.getConsumer()
+    consumer2.attach()
 
     var count1, count2 = 0
     var total = 0
@@ -110,6 +116,7 @@ suite "UnboundedSipmuc":
     check(queue.segmentCount >= 3)
 
     var consumer = queue.getConsumer()
+    consumer.attach()
     for i in 1 .. 10:
       let item = consumer.pop()
       check(item.isSome)
@@ -120,6 +127,7 @@ suite "UnboundedSipmuc":
     var queue = newUnboundedSipmucQueue[int, stEager, 8, 4](addr manager)
     var producer = queue.getProducer()
     var consumer = queue.getConsumer()
+    consumer.attach()
 
     check(queue.len == 0)
 
@@ -146,6 +154,7 @@ suite "UnboundedSipmuc":
     check(queue.len == 5)
 
     var consumer = queue.getConsumer()
+    consumer.attach()
     for i in 1 .. 5:
       check(consumer.pop().get == i)
 
@@ -154,6 +163,7 @@ suite "UnboundedSipmuc":
     var queue = newUnboundedSipmucQueue[int, stEager, 8, 4](addr manager)
     var producer = queue.getProducer()
     var consumer = queue.getConsumer()
+    consumer.attach()
 
     for i in 1 .. 10:
       producer.push(i)
@@ -168,6 +178,7 @@ suite "UnboundedSipmuc":
     var queue = newUnboundedSipmucQueue[int, stEager, 8, 4](addr manager)
     var producer = queue.getProducer()
     var consumer = queue.getConsumer()
+    consumer.attach()
 
     producer.push(@[1, 2, 3])
 
@@ -180,6 +191,7 @@ suite "UnboundedSipmuc":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedSipmucQueue[int, stEager, 8, 4](addr manager)
     var consumer = queue.getConsumer()
+    consumer.attach()
 
     let items = consumer.pop(5)
     check(items.isNone)

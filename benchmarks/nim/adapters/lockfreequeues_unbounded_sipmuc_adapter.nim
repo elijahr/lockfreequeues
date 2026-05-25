@@ -78,12 +78,16 @@ proc makeLockfreequeuesUnboundedSipmucAdapter*[S: static int, T;
   result.manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
   result.queue =
     newUnboundedSipmucQueue[T, stEager, S, MaxThreads](result.manager)
-  # producer0 / consumer0 each (auto-)register the calling (init)
-  # thread against the queue's manager and store the handle on the
-  # returned view. Multi-consumer shapes obtain their own per-thread
-  # views via `queue.getConsumer()`.
+  # producer0 / consumer0 are the cached views for the smoke / 1p1c
+  # round-trip path, where the init thread IS the operating thread.
+  # getConsumer/getProducer no longer register; consumer0 registers its
+  # debra handle here via attach() on the (init == operating) thread.
+  # The single producer (ccSingle) needs no registration. Multi-consumer
+  # shapes obtain their own per-thread views via `queue.getConsumer()`
+  # and call `attach()` on their own threads.
   result.producer0 = result.queue.getProducer()
   result.consumer0 = result.queue.getConsumer()
+  result.consumer0.attach()
 
 proc cleanup*[S: static int, T; MaxThreads: static int](
     a: var LockfreequeuesUnboundedSipmucAdapter[S, T, MaxThreads]

@@ -62,11 +62,16 @@ proc makeLockfreequeuesUnboundedMupmucAdapter*[S: static int, T;
   result.manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
   result.queue =
     newUnboundedMupmucQueue[T, stEager, S, MaxThreads](result.manager)
-  # Pre-register producer-0 / consumer-0 on the init thread for the
-  # 1P/1C smoke path. Multi-thread shapes obtain their own per-thread
-  # views via `queue.getProducer()` / `queue.getConsumer()`.
+  # Cache producer-0 / consumer-0 for the 1P/1C smoke path, where the
+  # init thread IS the operating thread. getProducer/getConsumer no
+  # longer register; both views register their debra handles here via
+  # attach() on the (init == operating) thread. Multi-thread shapes
+  # obtain their own per-thread views via `queue.getProducer()` /
+  # `queue.getConsumer()` and call `attach()` on their own threads.
   result.producer0 = result.queue.getProducer()
+  result.producer0.attach()
   result.consumer0 = result.queue.getConsumer()
+  result.consumer0.attach()
 
 proc cleanup*[S: static int, T; MaxThreads: static int](
     a: var LockfreequeuesUnboundedMupmucAdapter[S, T, MaxThreads]

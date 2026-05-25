@@ -35,6 +35,8 @@ proc producer[ST: static DeallocationStrategy, S: static int](
 ) {.thread.} =
   {.cast(gcsafe).}:
     var p = ctx.queue[].getProducer()
+    # Register this producer's debra handle on its own thread.
+    p.attach()
     let base = ctx.producerIdx * ItemsPerProducer
     for i in 1 .. ItemsPerProducer:
       p.push(base + i)
@@ -45,6 +47,8 @@ proc consumer[ST: static DeallocationStrategy, S: static int](
 ) {.thread.} =
   {.cast(gcsafe).}:
     var c = ctx.queue[].getConsumer()
+    # Register this consumer's debra handle on its own thread.
+    c.attach()
     while true:
       let item = c.pop()
       if item.isSome:
@@ -155,12 +159,14 @@ suite "UnboundedMupmuc threaded":
 
     # Push items to create segments
     var p = queue.getProducer()
+    p.attach()
     for i in 1 .. 1000:
       p.push(i)
     let peakSegments = queue.segmentCount()
 
     # Pop all items
     var c = queue.getConsumer()
+    c.attach()
     for i in 1 .. 1000:
       discard c.pop()
 
@@ -173,11 +179,13 @@ suite "UnboundedMupmuc threaded":
 
     # Push items to create segments
     var p = queue.getProducer()
+    p.attach()
     for i in 1 .. 1000:
       p.push(i)
 
     # Pop all items
     var c = queue.getConsumer()
+    c.attach()
     for i in 1 .. 1000:
       discard c.pop()
 

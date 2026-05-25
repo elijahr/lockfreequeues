@@ -55,6 +55,8 @@ proc umupsicProducerThread[S: static int; T; MaxT: static int](
 ) {.thread.} =
   {.cast(gcsafe).}:
     var p = ctx.queue[].getProducer()
+    # Register this producer's debra handle on its own thread.
+    p.attach()
     for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
       p.push(T(i))
 
@@ -75,6 +77,9 @@ proc runOneUMupsicRun[S: static int; T; MaxT: static int; P: static int](
       startIdx: nextStart, count: count,
     )
     nextStart += count
+  # This (main) thread is the single consumer; register its debra handle
+  # here before popping.
+  queue[].attachConsumer()
   let startTime = getMonoTime()
   for i in 0 ..< P:
     createThread(

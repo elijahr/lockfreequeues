@@ -25,7 +25,9 @@ suite "Unbounded auto-create (Mupmuc)":
     block:
       var queue = newUnboundedMupmucQueue[int, stEager, 16, 4]()
       var producer = queue.getProducer()
+      producer.attach()
       var consumer = queue.getConsumer()
+      consumer.attach()
       producer.push(42)
       check(consumer.pop() == some(42))
       check(consumer.pop() == none(int))
@@ -36,10 +38,12 @@ suite "Unbounded auto-create (Mupmuc)":
   test "auto-register getProducer / getConsumer return usable handles":
     var queue = newUnboundedMupmucQueue[int, stEager, 16, 4]()
     var producer = queue.getProducer()
+    producer.attach()
     var consumer = queue.getConsumer()
-    # idx is per-queue, starts at 0 then 1 etc. The auto-register form
-    # also burns one DEBRA thread slot per call; the queue picked
-    # MaxThreads=4 so two registrations fit comfortably.
+    consumer.attach()
+    # idx is per-queue, starts at 0 then 1 etc. attach() burns one DEBRA
+    # thread slot per registering thread; the queue picked MaxThreads=4
+    # so two registrations fit comfortably.
     check(producer.idx == 0)
     check(consumer.idx == 0)
     for i in 1 .. 5:
@@ -55,7 +59,9 @@ suite "Unbounded auto-create (Mupmuc)":
   test "auto-create: bulk push/pop":
     var queue = newUnboundedMupmucQueue[int, stEager, 8, 4]()
     var producer = queue.getProducer()
+    producer.attach()
     var consumer = queue.getConsumer()
+    consumer.attach()
     producer.push(@[1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     let got = consumer.pop(10)
     check(got.isSome)
@@ -67,6 +73,7 @@ suite "Unbounded auto-create (Sipmuc)":
       var queue = newUnboundedSipmucQueue[int, stEager, 16, 4]()
       var producer = queue.getProducer()
       var consumer = queue.getConsumer()
+      consumer.attach()
       producer.push(99)
       check(consumer.pop() == some(99))
       check(consumer.pop() == none(int))
@@ -75,6 +82,7 @@ suite "Unbounded auto-create (Sipmuc)":
     var queue = newUnboundedSipmucQueue[int, stEager, 16, 4]()
     var producer = queue.getProducer()
     var consumer = queue.getConsumer()
+    consumer.attach()
     check(consumer.idx == 0)
     for i in 1 .. 4:
       producer.push(i * 10)
@@ -90,14 +98,19 @@ suite "Unbounded auto-create (Mupsic)":
   test "auto-create: caller is the consumer; producer auto-registers":
     block:
       var queue = newUnboundedMupsicQueue[int, stEager, 16, 4]()
+      # Single-threaded: this thread is both producer and consumer.
+      queue.attachConsumer()
       var producer = queue.getProducer()
+      producer.attach()
       producer.push(7)
       check(queue.pop() == some(7))
       check(queue.pop() == none(int))
 
   test "auto-register getProducer returns usable handle":
     var queue = newUnboundedMupsicQueue[int, stEager, 16, 4]()
+    queue.attachConsumer()
     var producer = queue.getProducer()
+    producer.attach()
     check(producer.idx == 0)
     for i in 1 .. 3:
       producer.push(i)
@@ -116,9 +129,13 @@ suite "Existing borrow-manager API still works":
     var queueB = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
 
     var producerA = queueA.getProducer()
+    producerA.attach()
     var consumerA = queueA.getConsumer()
+    consumerA.attach()
     var producerB = queueB.getProducer()
+    producerB.attach()
     var consumerB = queueB.getConsumer()
+    consumerB.attach()
 
     producerA.push(1)
     producerB.push(2)
@@ -130,6 +147,7 @@ suite "Existing borrow-manager API still works":
     var queue = newUnboundedSipmucQueue[int, stEager, 16, 4](addr manager)
     var producer = queue.getProducer()
     var consumer = queue.getConsumer()
+    consumer.attach()
     producer.push(123)
     check(consumer.pop() == some(123))
 
@@ -138,6 +156,10 @@ suite "Existing borrow-manager API still works":
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMupsicQueue[int, stEager, 16, 4](
         addr manager, consumerHandle)
+    # Escape hatch: the consumer handle was registered + supplied at
+    # construction (consumerAttached set true there). The producer still
+    # registers on its operating thread via attach().
     var producer = queue.getProducer()
+    producer.attach()
     producer.push(456)
     check(queue.pop() == some(456))

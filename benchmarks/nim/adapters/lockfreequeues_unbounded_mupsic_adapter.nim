@@ -45,7 +45,7 @@ import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
-from debra import DebraManager, ThreadHandle, initDebraManager, registerThread
+from debra import DebraManager, initDebraManager
 from ../bench_common import Topology, tMpscUnbounded
 
 const topologiesSupported*: set[Topology] = {tMpscUnbounded}
@@ -57,32 +57,32 @@ type
 
   UnboundedMupsicAdapter*[S: static int, T;
                           MaxThreads: static int] = object
-    ## Owns the heap-allocated queue and DebraManager. Consumer's
-    ## ThreadHandle is registered at init time on the calling (consumer)
-    ## thread and passed through the borrow smart-constructor onto the
-    ## queue. Producer threads must obtain a QueueProducer view via
-    ## `adapter.queue[].getProducer()` (auto-registers the calling
-    ## thread against `adapter.manager`).
+    ## Owns the heap-allocated queue and DebraManager. NO thread is
+    ## registered at init time (registration is thread-affine). The
+    ## consumer thread registers itself via `adapter.queue[].
+    ## attachConsumer()` before its first `pop`; producer threads obtain
+    ## a QueueProducer view via `adapter.queue[].getProducer()` and call
+    ## `.attach()` on their own thread. This keeps the handles bound to
+    ## the threads that actually operate, not the constructing thread.
     queue*: ptr UnboundedMupsicAdapterQueue[S, T, MaxThreads]
     manager*: ptr DebraManager[MaxThreads, debra.ccSingle]
-    consumerHandle*: ThreadHandle[MaxThreads, debra.ccSingle]
 
 proc initUnboundedMupsicAdapter*[S: static int, T; MaxThreads: static int](
     strategy: DeallocationStrategy = DefaultDeallocationStrategy
 ): UnboundedMupsicAdapter[S, T, MaxThreads] =
-  ## Allocate manager and queue on the heap. Registers the calling thread
-  ## as the (single) consumer. `strategy` is accepted for API symmetry
-  ## with the legacy surface but the smart-constructor pins ST to
-  ## stEager at the type level (matches the legacy 3.2.x default).
+  ## Allocate manager and queue on the heap. Does NOT register any
+  ## thread: the consumer thread calls `queue.attachConsumer()` and
+  ## producer threads call `getProducer().attach()` on their own
+  ## threads. `strategy` is accepted for API symmetry with the legacy
+  ## surface but the smart-constructor pins ST to stEager at the type
+  ## level (matches the legacy 3.2.x default).
   discard strategy
   result.manager = create(DebraManager[MaxThreads, debra.ccSingle])
   result.manager[] = initDebraManager[MaxThreads, debra.ccSingle]()
-  result.consumerHandle = registerThread(result.manager[])
 
   result.queue = create(UnboundedMupsicAdapterQueue[S, T, MaxThreads])
-  result.queue[] = newUnboundedMupsicQueue[T, stEager, S, MaxThreads](
-    result.manager, result.consumerHandle
-  )
+  result.queue[] =
+    newUnboundedMupsicQueue[T, stEager, S, MaxThreads](result.manager)
 
 proc deinitUnboundedMupsicAdapter*[S: static int, T; MaxThreads: static int](
     a: var UnboundedMupsicAdapter[S, T, MaxThreads]

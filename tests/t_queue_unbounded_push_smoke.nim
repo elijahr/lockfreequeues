@@ -76,6 +76,7 @@ suite "rkEbr push smoke — mupsic-equiv (ccMulti × ccSingle)":
   test "single producer pushes items, pin/unpin cycle clean":
     var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 8, 4])
     var p = q.getProducer()
+    p.attach()
     for i in 0 ..< 5:
       p.push(i)
     check q.len() == 5
@@ -84,6 +85,7 @@ suite "rkEbr push smoke — mupsic-equiv (ccMulti × ccSingle)":
   test "single producer crosses segment boundary":
     var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 8, 4])
     var p = q.getProducer()
+    p.attach()
     for i in 0 ..< 17:
       p.push(i)
     check q.len() == 17
@@ -95,6 +97,7 @@ suite "rkEbr push smoke — mupmuc-equiv (ccMulti × ccMulti)":
   test "single producer pushes items, pin/unpin cycle clean":
     var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, 8, 4])
     var p = q.getProducer()
+    p.attach()
     for i in 0 ..< 5:
       p.push(i)
     check q.len() == 5
@@ -103,6 +106,7 @@ suite "rkEbr push smoke — mupmuc-equiv (ccMulti × ccMulti)":
   test "single producer crosses segment boundary":
     var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, 8, 4])
     var p = q.getProducer()
+    p.attach()
     for i in 0 ..< 17:
       p.push(i)
     check q.len() == 17
