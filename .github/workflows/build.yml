@@ -38,7 +38,7 @@ jobs:
   test:
     name: Test nim-${{ matrix.nim-version }} / ${{ matrix.runs-on }}
     runs-on: ${{ matrix.runs-on }}
-    timeout-minutes: 25
+    timeout-minutes: ${{ matrix.timeout }}
 
     strategy:
       fail-fast: false
@@ -48,14 +48,17 @@ jobs:
             nim-version: 'stable'
             sanitize-threads: 'yes'
             sanitize-address: 'yes'
+            timeout: 25
           - runs-on: ubuntu-24.04-arm
             nim-version: 'stable'
             sanitize-threads: 'yes'
             sanitize-address: 'yes'
+            timeout: 45
           - runs-on: macos-latest
             nim-version: 'stable'
             sanitize-threads: 'yes'
             sanitize-address: 'yes'
+            timeout: 25
 
     steps:
       - name: Restore cache
