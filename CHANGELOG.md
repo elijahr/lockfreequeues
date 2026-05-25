@@ -264,6 +264,16 @@ The v5.0.0 reshape is measured against the pre-wave devel baseline
   `BQueue[...]` / `Queue[...]` form (family-named smart constructors such
   as `newMupsicQueue` / `newUnboundedMupmucQueue` remain as ergonomic
   aliases). See `docs/migration.md` for the full migration table.
+- `Queue` is non-copyable (move-only). Its `=copy` hook is a compile-time
+  `{.error.}`: a `Queue` owns a heap `ptr Segment` chain and (for the
+  debra-integrated, non-sipsic cardinalities) a `ptr DebraManager`, both
+  reclaimed exactly once in `=destroy`. A field-wise copy would alias those
+  owned pointers and double-free / use-after-free when both copies run their
+  destructor. Move the `Queue` (the implicit `=sink` synthesized alongside
+  `=destroy` is available) or share it across threads by `var` / `ptr`
+  parameter; only copies are rejected. `BQueue` remains copyable — it owns
+  only inline slot storage (no heap segments, no manager), so a field-wise
+  copy is sound.
 - Epoch-based reclamation ships LIVE in v5.0.0. The multi-cardinality
   unbounded arms (mupsic-/sipmuc-/mupmuc-equiv) integrate nim-debra 0.8.0
   (`>= 0.8.0`) directly; the `(ccSingle, ccSingle)` arm stays debra-free.

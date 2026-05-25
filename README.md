@@ -8,7 +8,7 @@ All variants cover SPSC, SPMC, MPSC, and MPMC.
 
 API documentation: <https://elijahr.github.io/lockfreequeues>
 
-> **v5.0.0 breaking change — Quick Start examples below are pre-v5.0.0.**
+> **v5.0.0 breaking change.**
 > v5.0.0 collapses the seven typestate queue families plus the standalone
 > `UnboundedSipsic` into two generic types: `BQueue[T, ccProd, ccCons, N, P, C]`
 > (bounded) and `Queue[T, ccProd, ccCons, ST, S, MaxThreads]` (unbounded, with
@@ -19,11 +19,7 @@ API documentation: <https://elijahr.github.io/lockfreequeues>
 > ergonomic continuity. See [`CHANGELOG.md`](CHANGELOG.md) for the v5.0.0
 > reshape note with worked examples, and
 > [`docs/v5.0.0-migration/3.3.11-B-final-shape.md`](docs/v5.0.0-migration/3.3.11-B-final-shape.md)
-> for the canonical surface reference. The Quick Start examples in this README
-> still use the legacy v4.x constructor names (`initSipsic`, `newUnboundedMupmuc`,
-> …) and will be rewritten before v5.0.0 ships — the conceptual diagrams
-> further down (bounded/unbounded tables, ordering guarantees, etc.) remain
-> accurate.
+> for the canonical surface reference.
 
 ## Why this library
 
@@ -53,61 +49,73 @@ nimble install lockfreequeues
 
 ## Quick Start
 
+v5.0.0 exposes two generic types. `BQueue[T, ccProd, ccCons, N, P, C]` is the
+bounded ring buffer; `Queue[T, ccProd, ccCons, ST, S, MaxThreads]` is the
+unbounded linked-segment queue. The `ccProd` / `ccCons` parameters
+(`ccSingle` / `ccMulti`) select the producer and consumer cardinality. For
+ergonomic continuity each cell of the SPSC/SPMC/MPSC/MPMC grid has a
+family-named smart constructor (`newSipsicQueue`, `newMupmucQueue`,
+`newUnboundedMupmucQueue`, …).
+
 ### Bounded SPSC
 
 ```nim
 import options
 import lockfreequeues
 
-# Bounded single-producer, single-consumer queue, capacity 16
-var queue = initSipsic[16, int]()
+# Bounded single-producer, single-consumer queue, capacity 16.
+# Single-cardinality sides push/pop directly on the queue.
+var queue = newSipsicQueue[int, 16]()
 
-discard queue.push(42)
+discard queue.push(42)   # push returns false when the queue is full
 discard queue.push(123)
 
-let item = queue.pop()  # some(42)
+let item = queue.pop()   # Option[int]: some(42)
 assert item == some(42)
 ```
 
 ### Unbounded MPMC
 
-The simplest setup — the queue auto-creates a private `DebraManager` and
-threads auto-register on first `getProducer()` / `getConsumer()` call:
+The simplest setup — the queue auto-creates a private `DebraManager`. Each
+operating thread registers itself by calling `.attach()` on its view before
+its first push/pop (registration is thread-affine, so attach on the thread
+that will actually push/pop). Multi-cardinality sides operate through views
+obtained with `getProducer()` / `getConsumer()`:
 
 ```nim
 import options
 import lockfreequeues
 
-var queue = newUnboundedMupmuc[64, int, 4]()
+# Unbounded MPMC: segment size 8, registry sized for 4 lifetime threads.
+var queue = newUnboundedMupmucQueue[int, stEager, 8, 4]()
 
 var producer = queue.getProducer()
-var consumer = queue.getConsumer()
+producer.attach()         # on the producer thread, before push
+producer.push(42)         # unbounded push never blocks; returns nothing
 
-producer.push(42)
-let item = consumer.pop()  # some(42)
+var consumer = queue.getConsumer()
+consumer.attach()         # on the consumer thread, before pop
+let item = consumer.pop() # Option[int]: some(42)
 assert item == some(42)
 ```
 
-For multi-queue setups that share a manager, pass it explicitly. Threads
-that touch multiple queues should also share a single `ThreadHandle` to
-avoid burning a slot per queue:
+`MaxThreads` (the `4` above) counts the lifetime number of distinct threads
+that will ever operate the queue, not the concurrent count: nim-debra has no
+per-thread unregister, so each `attach()` consumes a registry slot for the
+manager's lifetime. Size it accordingly. The unbounded SPSC arm
+(`newUnboundedSipsicQueue`) is debra-free and needs no `attach()`.
 
-```nim
-import options
-import debra
-import lockfreequeues
+### Copy semantics
 
-var manager = initDebraManager[4]()
-var queueA = newUnboundedMupmuc[64, int, 4](addr manager)
-var queueB = newUnboundedMupmuc[64, int, 4](addr manager)
+`BQueue` is **copyable**: it owns only inline slot storage, so a field-wise
+copy is sound.
 
-let handle = manager.registerThread()
-var producer = queueA.getProducer(handle)
-var consumer = queueB.getConsumer(handle)
-
-producer.push(42)
-let item = consumer.pop()
-```
+`Queue` is **move-only** (non-copyable): it owns a heap `ptr Segment` chain
+and, for the debra-integrated cardinalities, a `ptr DebraManager`. Copying
+would alias those owned pointers and double-free / use-after-free when both
+copies run `=destroy`, so `=copy` is a compile-time error. Move the `Queue`
+(it has move semantics) or share it across threads by `ptr` / `var`
+parameter — as the examples below pass `addr queue` into worker threads.
 
 See [`examples/`](examples/) for full multi-threaded examples and patterns
 (audio buffer, job scheduler, event collector, task fan-out).
