@@ -68,15 +68,12 @@ type
     manager*: ptr DebraManager[MaxThreads, debra.ccSingle]
 
 proc initUnboundedMupsicAdapter*[S: static int, T; MaxThreads: static int](
-    strategy: DeallocationStrategy = DefaultDeallocationStrategy
-): UnboundedMupsicAdapter[S, T, MaxThreads] =
+    ): UnboundedMupsicAdapter[S, T, MaxThreads] =
   ## Allocate manager and queue on the heap. Does NOT register any
   ## thread: the consumer thread calls `queue.attachConsumer()` and
   ## producer threads call `getProducer().attach()` on their own
-  ## threads. `strategy` is accepted for API symmetry with the legacy
-  ## surface but the smart-constructor pins ST to stEager at the type
+  ## threads. The smart-constructor pins ST to stEager at the type
   ## level (matches the legacy 3.2.x default).
-  discard strategy
   result.manager = create(DebraManager[MaxThreads, debra.ccSingle])
   result.manager[] = initDebraManager[MaxThreads, debra.ccSingle]()
 
