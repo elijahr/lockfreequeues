@@ -50,7 +50,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nimble
-          key: ${{ runner.os }}-nimble-docs-${{ hashFiles('*.nimble') }}
+          # Include nimble.lock in the key so lockfile changes (and the
+          # transitive set of installed packages) bust the cache. Hashing
+          # only *.nimble missed lockfile-only edits and let a stale
+          # ~/.nimble — installed under a previous lockfile shape — get
+          # restored, which short-circuited `nimble install nim` below
+          # and left `compiler/ast` unimportable on the next run.
+          key: ${{ runner.os }}-nimble-docs-${{ hashFiles('*.nimble', 'nimble.lock') }}
           restore-keys: |
             ${{ runner.os }}-nimble-docs-
 
@@ -61,7 +67,16 @@ jobs:
         # so `import compiler/<X>` resolves cleanly. This matches the typestates
         # repo's docs.yml pattern and replaces the previous in-place nim.cfg
         # patching (preserved as a ROLLBACK comment at bottom of file).
-        run: nimble install nim -y
+        #
+        # Run from /tmp so the project's nimble.lock — even though `nim`
+        # is no longer a top-level lockfile entry (see NIMBLE_LOCK_NOTES.md)
+        # — does not put nimble into lock-mode for this global install.
+        # With lock-mode active in the project root, `nimble install nim`
+        # is a silent no-op against the cached path and leaves
+        # `compiler/ast` unimportable for mkdocstrings-nim. Combined with
+        # the cache key now hashing nimble.lock, this restores reliable
+        # compiler-source installation on every run.
+        run: cd /tmp && nimble install nim -y
 
       - name: Create watch directories
         run: mkdir -p docs/overrides
