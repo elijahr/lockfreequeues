@@ -29,25 +29,37 @@ lockfreequeues/
 
 ### `src/lockfreequeues/` — the public API
 
-The four bounded queue types (`Sipsic`, `Sipmuc`, `Mupsic`, `Mupmuc`)
-each live in a single file. Their unbounded counterparts are in
-`unbounded_sipsic.nim` etc. Supporting modules:
+v5 collapsed the v4 per-family files (`sipsic.nim`, `mupsic.nim`,
+`unbounded_sipsic.nim`, etc.) into two unified generic types
+parameterised on cardinality phantoms:
 
-- `atomic_dsl.nim` — re-exports `debra/atomics` and the load / store
-  acquire / release DSL.
-- `backoff.nim` — exponential-backoff helper used by the multi-producer
-  CAS loops.
-- `typestates.nim` plus `typestates/*.nim` — the per-slot state machine
-  that governs publish / claim / drain transitions. See
+- `bqueue.nim` — bounded `BQueue[T, ccProd, ccCons, N, P, C]` with
+  phantom cardinality typestates (`ccSingle` / `ccMulti`) on the
+  producer and consumer axes. Family-named smart constructors
+  (`newSipsicQueue`, `newMupsicQueue`, `newSipmucQueue`,
+  `newMupmucQueue`) wrap the unified `newBQueue` ctor with the right
+  phantom arguments.
+- `queue.nim` — unbounded `Queue[T, ccProd, ccCons, ST, S, MaxThreads]`
+  with a deallocation-strategy phantom `ST` (`stEager` /
+  `stManual`, defaulting to `DefaultDeallocationStrategy`). Family-named
+  smart constructors (`newUnboundedSipsicQueue`,
+  `newUnboundedMupsicQueue`, `newUnboundedSipmucQueue`,
+  `newUnboundedMupmucQueue`) match the bounded pattern. The SPSC variant
+  skips the debra manager allocation; the others use nim-debra EBR for
+  segment reclamation.
+- `typestates/` — typestate scaffolding for the per-slot state machine
+  governing publish / claim / drain transitions. The CFG-verified state
+  machines come from nim-typestates. See
   [Slot Ownership Typestates](guide/slot-ownership-typestates.md) for
   the conceptual treatment.
-- `internal/aligned_alloc.nim` — segment allocator for the unbounded
-  variants, lining up segment storage on `CacheLineBytes` boundaries.
+- `internal/` — atomic-op helpers, segment allocator (lining up segment
+  storage on `CacheLineBytes` boundaries), and other implementation
+  details.
 
-When in doubt, the public proc signatures in the four
-queue-type files are the authoritative API surface. The `*Base` types
-in `typestates/*.nim` are an implementation detail and may change
-between minor versions.
+When in doubt, the public proc signatures on `BQueue` and `Queue` plus
+the family-named smart constructors are the authoritative API surface.
+Internal helpers under `internal/` and `typestates/` are
+implementation details and may change between minor versions.
 
 ### `benchmarks/` — bench harness
 

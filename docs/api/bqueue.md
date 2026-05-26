@@ -59,12 +59,12 @@ import lockfreequeues
 
 # SPSC: single producer, single consumer, capacity 16.
 # No handles needed — push/pop go directly on the queue.
-var spsc = newBQueue[int, ccSingle, ccSingle, N = 16, P = 0, C = 0]()
+var spsc = newSipsicQueue[int, 16]()
 discard spsc.push(42)
 let a = spsc.pop()                 # some(42)
 
 # MPMC: capacity 64, up to 4 producers and 4 consumers.
-var mpmc = newBQueue[int, ccMulti, ccMulti, N = 64, P = 4, C = 4]()
+var mpmc = newBQueue[int, ccMulti, ccMulti, 64, 4, 4]()
 var producer = mpmc.getProducer()
 discard producer.push(99)
 var consumer = mpmc.getConsumer()

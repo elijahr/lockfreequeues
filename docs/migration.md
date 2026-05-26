@@ -122,6 +122,12 @@ cardinality and are the recommended, lowest-churn target.
 > for the unbounded borrow forms. The family-named wrappers expand to
 > exactly these.
 
+> In v5, `ST` defaults to `DefaultDeallocationStrategy` (which is
+> `stEager` when GC is enabled, `stManual` under `--mm:none`). The tables
+> above show `stEager` explicitly for fidelity to the v4 default; in new
+> code you may omit `ST` from smart-constructor calls and let the default
+> apply (e.g., `newUnboundedSipsicQueue[T, S, MaxThreads]()`).
+
 > The runtime `strategy:` argument that previously sat on
 > `newUnboundedMupsic` / `newUnboundedSipmuc` / `newUnboundedMupmuc` is
 > **gone**. To select `stManual` vs `stEager`, write the desired strategy

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Slot ownership typestates make data races structurally impossible by tracking slot ownership through the type system. Each state transition enforces critical invariants at compile-time.
+Slot ownership typestates track slot ownership through the type system, so the most common slot-misuse footguns (use-after-commit, double-commit, commit without write) are caught by the compile-time CFG verifier. Some combinations (notably cardinality-axis cross-products) still rely on runtime invariants — see the source comments in `bqueue.nim` for the precise envelope.
 
 ## Producer-Side Flow
 
