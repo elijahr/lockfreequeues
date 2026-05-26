@@ -611,15 +611,61 @@ jobs:
               ;;
           esac
 
-      - name: Run ${{ matrix.binary }}
+      - name: Run ${{ matrix.binary }} (bounded / latency, no retry)
         # Step-level timeout: a runtime hang in one variant (lost
         # message, missed wakeup, livelock regression) would otherwise
         # spin until the job-level 18-min budget expired. Fail fast at
         # 10 min so the upload step still records the partial result.
+        # Bounded throughput + latency benches do NOT exhibit the
+        # intermittent ubuntu-latest scheduler-hang behavior seen on
+        # the four unbounded legs, so they keep the single-attempt
+        # invocation. The unbounded variants get a separate retried
+        # step below.
+        if: |
+          matrix.binary != 'bench_unbounded_sipsic' &&
+          matrix.binary != 'bench_unbounded_sipmuc' &&
+          matrix.binary != 'bench_unbounded_mupsic' &&
+          matrix.binary != 'bench_unbounded_mupmuc'
         timeout-minutes: 10
         run: |
           ./.tmp/${{ matrix.binary }} --bmf-out=${{ matrix.binary }}.json \
             | tee ${{ matrix.binary }}_output.txt
+
+      - name: Run ${{ matrix.binary }} (unbounded, with 1 retry on flake)
+        # The four unbounded bench binaries have shown an intermittent
+        # ubuntu-latest scheduler-hang on a random 1p1c/1p2c shape:
+        # the binary prints only the shape header and then sits silent
+        # until the step-level timeout fires. Empirically the hang is
+        # not reproducible on a re-run of the same revision, so wrap a
+        # single retry around the invocation: `timeout 540` (9 min)
+        # bounds each attempt; on failure we sleep briefly and try
+        # once more. Step-level `timeout-minutes: 20` is sized to fit
+        # two 9-min attempts plus the 5s sleep + overhead so both
+        # attempts always complete before the harness kills the step.
+        # NOT a third-party action so the retry stays auditable and
+        # the workflow keeps zero new dependencies.
+        if: |
+          matrix.binary == 'bench_unbounded_sipsic' ||
+          matrix.binary == 'bench_unbounded_sipmuc' ||
+          matrix.binary == 'bench_unbounded_mupsic' ||
+          matrix.binary == 'bench_unbounded_mupmuc'
+        timeout-minutes: 20
+        run: |
+          set -eo pipefail
+          # pipefail makes `tee` not swallow the bench binary's
+          # non-zero exit (timeout, crash). Without it the pipeline's
+          # exit status would always be `tee`'s 0 and the retry would
+          # never fire.
+          attempt() {
+            timeout 540 ./.tmp/${{ matrix.binary }} \
+              --bmf-out=${{ matrix.binary }}.json \
+              | tee ${{ matrix.binary }}_output.txt
+          }
+          if ! attempt; then
+            echo "::warning::${{ matrix.binary }} flaked on first attempt; retrying once"
+            sleep 5
+            attempt
+          fi
 
       - name: Upload ${{ matrix.binary }} BMF artifact
         # `if: always()` so a step-level timeout in `Run ${{ matrix.binary }}`
