@@ -272,22 +272,36 @@ proc getNimbleResolvedVersion(pkgName: string): string =
     )
     if exitCode != 0:
       return ""
-    # Path is on the last non-empty line; nimble prints diagnostic lines
-    # first (`Info: Using the environment variable: ...`). Walk from the
-    # bottom to find the first line that looks like a filesystem path.
+    # `nimble path <pkg>` may print diagnostic `Info: ...` lines either
+    # before OR after the actual path (the ordering has shifted across
+    # nimble releases, and some `Info:` lines themselves contain
+    # slashes, e.g. `Info: Using the environment variable:
+    # NIMBLE_DIR=/home/.../.nimble`). The reliable signal is not the
+    # line position but the shape: a real package path's basename
+    # starts with `<pkgName>-`. Walk all slash-bearing lines and pick
+    # the first whose trailing segment matches that prefix. Returns
+    # "" if no line qualifies.
+    let prefix = pkgName & "-"
     var path = ""
     for line in output.splitLines:
       let stripped = line.strip()
-      if stripped.len > 0 and ('/' in stripped or '\\' in stripped):
+      if stripped.len == 0:
+        continue
+      if '/' notin stripped and '\\' notin stripped:
+        continue
+      let lastSlash = max(stripped.rfind('/'), stripped.rfind('\\'))
+      let basename =
+        if lastSlash >= 0: stripped[lastSlash + 1 .. ^1] else: stripped
+      if basename.startsWith(prefix):
         path = stripped
+        break
     if path.len == 0:
       return ""
     # Extract the trailing path segment, then strip a leading "<pkg>-".
     var segment = path
-    let lastSlash = max(segment.rfind('/'), segment.rfind('\\'))
-    if lastSlash >= 0:
-      segment = segment[lastSlash + 1 .. ^1]
-    let prefix = pkgName & "-"
+    let lastSlash2 = max(segment.rfind('/'), segment.rfind('\\'))
+    if lastSlash2 >= 0:
+      segment = segment[lastSlash2 + 1 .. ^1]
     if not segment.startsWith(prefix):
       return ""
     let afterPrefix = segment[prefix.len .. ^1]

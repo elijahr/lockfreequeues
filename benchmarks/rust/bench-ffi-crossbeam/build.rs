@@ -9,14 +9,19 @@
 //! linked into the cdylib that compiled at THIS build, not what
 //! `Cargo.toml` happens to request.
 //!
-//! Lockfile parsing is done by hand (no `toml` dependency) to avoid
-//! pulling a build-script-only crate into the dep tree. The lockfile
-//! grammar we need is trivial: stanzas separated by blank lines, each
-//! with `name = "..."` and `version = "..."` keys we can grep for.
+//! Lockfile parsing uses the `toml` crate (build-dependency). The
+//! previous implementation walked the file line by line and assumed
+//! `name = ...` appeared before `version = ...` within each
+//! `[[package]]` stanza; TOML keys are order-independent, so a future
+//! Cargo release or a manual lockfile edit could silently break that
+//! assumption. Parsing as TOML makes the lookup robust against any
+//! key ordering.
 
 use std::env;
 use std::fs;
 use std::path::PathBuf;
+
+use toml::Value;
 
 // Crates we expose version getters for. Matches the
 // `bench_ffi_crossbeam_<slug>_version()` exports in `src/lib.rs`.
@@ -55,8 +60,16 @@ fn main() {
         )
     });
 
+    let parsed: Value = contents.parse().unwrap_or_else(|e| {
+        panic!(
+            "failed to parse Cargo.lock as TOML at {}: {}",
+            lockfile.display(),
+            e,
+        )
+    });
+
     for (crate_name, env_suffix) in CRATES {
-        let version = find_version_in_lockfile(&contents, crate_name)
+        let version = find_version_in_lockfile(&parsed, crate_name)
             .unwrap_or_else(|| {
                 panic!(
                     "could not find resolved version for crate `{}` in Cargo.lock. \
@@ -74,11 +87,11 @@ fn main() {
     }
 }
 
-/// Find the `version = "..."` line belonging to the stanza whose
-/// `name = "..."` matches `crate_name`. Returns `None` if the crate is
-/// not in the lockfile.
+/// Find the `version` field of the `[[package]]` entry whose `name`
+/// matches `crate_name`. Returns `None` if the crate is not present
+/// in the lockfile.
 ///
-/// Cargo.lock stanzas look like:
+/// Cargo.lock's top-level shape is:
 ///
 /// ```text
 /// [[package]]
@@ -88,29 +101,24 @@ fn main() {
 /// dependencies = [...]
 /// ```
 ///
-/// We walk the lockfile line by line, and when we see
-/// `name = "<crate_name>"`, we keep walking until we hit either the next
-/// `[[package]]` header (mismatched stanza, fall back through) or a
-/// `version = "..."` line in the SAME stanza.
-fn find_version_in_lockfile(contents: &str, crate_name: &str) -> Option<String> {
-    let needle = format!("name = \"{}\"", crate_name);
-    let mut lines = contents.lines();
-    while let Some(line) = lines.next() {
-        if line.trim() != needle {
-            continue;
-        }
-        // Found the stanza. Walk forward until we either find a version
-        // key or hit a new stanza boundary.
-        for inner in lines.by_ref() {
-            let trimmed = inner.trim();
-            if trimmed.starts_with("[[package]]") || trimmed.starts_with("[") {
-                // New stanza without a version key — malformed lockfile.
-                break;
-            }
-            if let Some(rest) = trimmed.strip_prefix("version = \"") {
-                if let Some(end) = rest.find('"') {
-                    return Some(rest[..end].to_string());
-                }
+/// TOML parses `[[package]]` as an array of tables under the
+/// `package` key. We iterate and match on `name`, returning `version`
+/// when found. Key order within each table is irrelevant.
+fn find_version_in_lockfile(parsed: &Value, crate_name: &str) -> Option<String> {
+    let packages = parsed.get("package")?.as_array()?;
+    for pkg in packages {
+        // A `[[package]]` entry without a `name` is malformed but should
+        // not abort the search; skip it and continue scanning. Same for
+        // a matching entry without a `version` — return None only after
+        // exhausting the array.
+        let name = match pkg.get("name").and_then(Value::as_str) {
+            Some(n) => n,
+            None => continue,
+        };
+        if name == crate_name {
+            if let Some(version) = pkg.get("version").and_then(Value::as_str)
+            {
+                return Some(version.to_string());
             }
         }
     }
