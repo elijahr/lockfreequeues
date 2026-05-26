@@ -227,13 +227,24 @@
    *
    * Reserved keys (`_status`, `_reason`, `_merge_outcome`, anything
    * leading with `_`) are ignored so fallback metadata doesn't leak
-   * into the grouping.
+   * into the grouping. The v5.0.0-wave `meta` sibling key (adapter
+   * version capture; see `benchmarks/nim/adapter_versions.nim`) is also
+   * skipped — it carries no measurement payload and `parseSlug` would
+   * reject its shape anyway. The shared `isMeasurementSlug` predicate
+   * keeps both iteration sites in lockstep so a future reserved key
+   * only needs to be added in one place.
    */
+  function isMeasurementSlug(slug) {
+    if (typeof slug !== 'string') return false;
+    if (slug.startsWith('_')) return false;
+    if (slug === 'meta') return false;
+    return true;
+  }
   function groupByTopology(bmf) {
     const byTopology = new Map();
     for (const slug in bmf) {
       if (!Object.prototype.hasOwnProperty.call(bmf, slug)) continue;
-      if (slug.startsWith('_')) continue;
+      if (!isMeasurementSlug(slug)) continue;
       const measureMap = bmf[slug];
       if (!measureMap || typeof measureMap !== 'object') continue;
       const m = measureMap[CHART_MEASURE];
@@ -727,7 +738,7 @@
   function collectLatencySeries(bmf) {
     const byLibrary = new Map();
     let hadAny = false;
-    const slugs = Object.keys(bmf).filter((s) => !s.startsWith('_')).sort();
+    const slugs = Object.keys(bmf).filter(isMeasurementSlug).sort();
     for (const slug of slugs) {
       const measureMap = bmf[slug];
       if (!measureMap || typeof measureMap !== 'object') continue;

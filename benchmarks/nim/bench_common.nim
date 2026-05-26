@@ -21,6 +21,7 @@
 
 import std/[algorithm, atomics, heapqueue, json, math, monotimes, options,
             random, tables, times]
+import ./adapter_versions
 
 # ---------- Topology ----------
 
@@ -103,7 +104,19 @@ proc addMeasure*(
 proc emit*(em: BMFEmitter, path: string) =
   ## Write the accumulated BMF data to `path`. Slugs alpha-sorted; within
   ## each slug, measures alpha-sorted. Optional bounds omitted when none.
+  ##
+  ## v5.0.0-wave Item 1: prepend a top-level `meta` key recording
+  ## adapter -> version mapping captured at run time (see
+  ## `adapter_versions.getAdapterVersions`). `meta` is a sibling to the
+  ## slug-keyed measurement entries; `merge_bmf.py` special-cases the key
+  ## (preserving the first-input value across fragment unions) and
+  ## `docs/assets/bench-charts.js` filters non-slug top-level keys out of
+  ## its grouping pass. Failures inside `getAdapterVersions` propagate as
+  ## exceptions; the bench run already finished so we'd rather surface
+  ## the meta-builder fault than write a JSON without the key and
+  ## silently regress the schema.
   let root = newJObject()
+  root["meta"] = getAdapterVersions()
   var slugs: seq[string]
   for slug in em.data.keys:
     slugs.add(slug)

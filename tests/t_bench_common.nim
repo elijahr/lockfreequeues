@@ -59,11 +59,23 @@ proc readJsonFile(path: string): JsonNode =
   parseJson(readFile(path))
 
 suite "bench_common BMFEmitter":
-  test "empty emitter writes {}":
+  test "empty emitter writes just the meta block":
+    # v5.0.0-wave Item 1: BMFEmitter.emit now unconditionally prepends a
+    # top-level `meta` sibling key (see
+    # `benchmarks/nim/adapter_versions.nim`). An empty emitter therefore
+    # produces `{"meta": {...}}` rather than `{}`. We check the shape
+    # (exactly one top-level key, named `meta`, mapping to an object)
+    # without pinning the full meta contents — the contents include
+    # `generated_at` which varies per run.
     let path = getTempDir() / "bench_common_empty.json"
     var em = initBMFEmitter()
     em.emit(path)
-    check readJsonFile(path) == newJObject()
+    let parsed = readJsonFile(path)
+    check parsed.kind == JObject
+    check parsed.len == 1
+    check parsed.hasKey("meta")
+    check parsed["meta"].kind == JObject
+    check parsed["meta"]["schema"].getInt == 1
     removeFile(path)
 
   test "two slugs are alpha-sorted":
