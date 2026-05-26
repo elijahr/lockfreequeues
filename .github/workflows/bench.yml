@@ -57,6 +57,16 @@ on:
         default: false
 # yamllint enable rule:truthy
 
+# Cancel superseded PR runs on the same ref so a force-push doesn't
+# burn the bench matrix on a stale revision. `cancel-in-progress` is
+# gated on PR events only: cancelling a `push: devel` run mid-flight
+# would orphan the snapshot-push retry loop, and `workflow_dispatch`
+# operator runs should never be silently cancelled by a subsequent
+# dispatch. Scoped per (workflow, ref).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   # Exposed at job env so step-level `if:` expressions can gate on
@@ -90,8 +100,13 @@ jobs:
     # (not `main`) for deterministic CI; bump in lockstep with
     # build.yml/bench.yml's `benchmark` job and lockfreequeues.nimble's
     # `requires`.
-    name: bench-tests (ubuntu-latest)
-    runs-on: ubuntu-latest
+    name: bench-tests (ubuntu-22.04)
+    # Pinned to ubuntu-22.04 (not ubuntu-latest) so bench wall-clock
+    # numbers stay reproducible across runs. The GitHub-hosted
+    # `ubuntu-latest` pointer rolls forward and the resulting kernel /
+    # glibc / scheduler delta produces apparent throughput shifts that
+    # have no relationship to a code change.
+    runs-on: ubuntu-22.04
     if: github.actor != 'github-actions[bot]'
     timeout-minutes: 10
 
@@ -110,11 +125,14 @@ jobs:
           sudo apt-get -qq install -y clang
 
       - name: Clone and install sibling Nim deps (nim-debra, nim-typestates)
+        # Pinned to v0.8.0 / v0.10.0 (matching nimble.lock) for
+        # deterministic CI; bump in lockstep with lockfreequeues.nimble's
+        # `requires` and nimble.lock on any sibling release.
         run: |
           set -e
           cd ..
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
+          git clone --depth 1 --branch v0.8.0 https://github.com/elijahr/nim-debra.git
+          git clone --depth 1 --branch v0.10.0 https://github.com/elijahr/nim-typestates.git
           (cd nim-typestates && nimble install -y)
           (cd nim-debra && nimble install -y)
 
@@ -136,8 +154,10 @@ jobs:
     # arrived, and the operator gets partial Bencher coverage rather
     # than no coverage. Per-binary `-d:` overrides are tuned to fit
     # each variant's CI budget; see design 2.5 for the override table.
-    name: ${{ matrix.binary }} (ubuntu-latest)
-    runs-on: ubuntu-latest
+    name: ${{ matrix.binary }} (ubuntu-22.04)
+    # Pinned to ubuntu-22.04 for bench-result reproducibility (see the
+    # bench-tests job above for the rationale).
+    runs-on: ubuntu-22.04
     # Two combined gates:
     #   1. PRs from forks cannot read BENCHER_API_TOKEN. Skip rather
     #      than fail noisily; maintainer pushes / merges still record
@@ -170,7 +190,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${HOME}/.cache
-          key: cache-${{ matrix.binary }}-${{ runner.os }}
+          # Include the nimble manifest + lockfile in the cache key so a
+          # dep bump invalidates the cache instead of silently reusing a
+          # stale entry. Mirrors build.yml.
+          key: cache-${{ matrix.binary }}-${{ runner.os }}-${{ hashFiles('lockfreequeues.nimble', 'nimble.lock') }}
 
       - name: Checkout project
         uses: actions/checkout@v4
@@ -188,15 +211,16 @@ jobs:
       - name: Clone and install sibling Nim deps (nim-debra, nim-typestates)
         # Mirrors build.yml: config.nims uses --path:"../nim-debra/src" and
         # --path:"../nim-typestates/src", and nimble's resolver runs before
-        # the compiler so we must install matching branches locally. Tracks
-        # `main` until nimble.directory picks up the relevant tags; bump in
-        # lockstep with build.yml and lockfreequeues.nimble's `requires`
-        # (currently `debra >= 0.8.0`, `typestates >= 0.10.0`).
+        # the compiler so we must install matching tags locally.
+        # Pinned to v0.8.0 / v0.10.0 (matching nimble.lock) for
+        # deterministic CI; bump in lockstep with build.yml and
+        # lockfreequeues.nimble's `requires` (currently
+        # `debra >= 0.8.0`, `typestates >= 0.10.0`).
         run: |
           set -e
           cd ..
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
+          git clone --depth 1 --branch v0.8.0 https://github.com/elijahr/nim-debra.git
+          git clone --depth 1 --branch v0.10.0 https://github.com/elijahr/nim-typestates.git
           (cd nim-typestates && nimble install -y)
           (cd nim-debra && nimble install -y)
 
@@ -629,6 +653,9 @@ jobs:
           matrix.binary != 'bench_unbounded_mupmuc'
         timeout-minutes: 10
         run: |
+          set -euo pipefail
+          # pipefail makes `tee` propagate the bench binary's non-zero
+          # exit (timeout, crash) instead of swallowing it under tee's 0.
           ./.tmp/${{ matrix.binary }} --bmf-out=${{ matrix.binary }}.json \
             | tee ${{ matrix.binary }}_output.txt
 
@@ -1005,8 +1032,15 @@ jobs:
             # commits that landed since checkout. Conflict on the
             # snapshot files themselves is impossible (no other workflow
             # writes to docs/assets/bench-results/), so a clean rebase
-            # is the expected outcome.
-            git rebase origin/devel
+            # is the expected outcome. Abort on rebase failure so the
+            # next iteration starts from a clean working tree (an
+            # in-progress rebase would leave HEAD detached and the next
+            # `git push` would push the partial rebase rather than the
+            # snapshot commit).
+            if ! git rebase origin/devel; then
+              git rebase --abort || true
+              echo "::warning::rebase attempt $attempt failed; aborted and continuing retry loop."
+            fi
           done
           echo "::error::Snapshot push failed after 3 retries; aborting." >&2
           exit 1
@@ -1074,7 +1108,13 @@ jobs:
             fi
             echo "::notice::fallback push attempt $attempt rejected; rebasing onto origin/devel and retrying."
             git fetch origin devel
-            git rebase origin/devel
+            # Same rationale as the regular snapshot step above: abort on
+            # rebase failure so the next iteration starts from a clean
+            # working tree rather than mid-rebase HEAD-detached state.
+            if ! git rebase origin/devel; then
+              git rebase --abort || true
+              echo "::warning::fallback rebase attempt $attempt failed; aborted and continuing retry loop."
+            fi
           done
           echo "::error::Fallback snapshot push failed after 3 retries; aborting." >&2
           exit 1

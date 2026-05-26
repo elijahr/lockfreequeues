@@ -50,6 +50,13 @@ on:
       - '.github/workflows/bench-comparison.yml'
 # yamllint enable rule:truthy
 
+# Cancel superseded runs on the same ref so a force-push or
+# back-to-back operator dispatches don't burn cdylib+matrix minutes
+# on stale revisions. Scoped per (workflow, ref).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
@@ -76,8 +83,14 @@ jobs:
     # gated on nightly cron + workflow_dispatch + targeted path pushes
     # to devel only. PR check feedback for crossbeam comes from this
     # workflow's separate Bencher report.
-    name: bench-crossbeam (ubuntu-latest)
-    runs-on: ubuntu-latest
+    name: bench-crossbeam (ubuntu-22.04)
+    # Pinned to ubuntu-22.04 (not ubuntu-latest) so bench wall-clock
+    # numbers stay reproducible across runs — the GitHub-hosted ubuntu-
+    # latest pointer rolls forward periodically (e.g., 22.04 -> 24.04)
+    # and the resulting kernel/glibc/scheduler delta produces apparent
+    # throughput shifts that have no relationship to a code change.
+    # Mirrors bench.yml's identical pin.
+    runs-on: ubuntu-22.04
     # Mirror bench.yml's bench-upload permissions: bencher run uses
     # `--github-actions ${{ secrets.GITHUB_TOKEN }}` to publish check
     # runs / PR annotations, which require explicit `checks: write` and
@@ -95,6 +108,15 @@ jobs:
       - name: Checkout project
         uses: actions/checkout@v4
 
+      - name: Restore cache
+        uses: actions/cache@v4
+        with:
+          path: ${HOME}/.cache
+          # Mirrors build.yml / bench.yml: include the nimble manifest +
+          # lockfile in the key so a dep bump invalidates the cache
+          # instead of silently reusing a stale entry.
+          key: cache-bench-comparison-${{ runner.os }}-${{ hashFiles('lockfreequeues.nimble', 'nimble.lock') }}
+
       - name: Setup Nim
         uses: jiro4989/setup-nim-action@v2
         with:
@@ -106,20 +128,17 @@ jobs:
           sudo apt-get -qq install -y clang
 
       - name: Clone and install sibling Nim deps (nim-debra, nim-typestates)
-        # Mirrors bench.yml -- config.nims resolves these via
-        # ../nim-debra/src and ../nim-typestates/src. Tracks `main` for
-        # both siblings (matching bench.yml/build.yml) until
-        # nimble.directory picks up the relevant tags; the v5.0.0
-        # integration wave requires nim-debra/typestates revisions only
-        # present on `main` (the prior v0.6.0/v0.7.0 tag pins no longer
-        # compile against v5.0.0 lockfreequeues). Bump in lockstep with
-        # build.yml/bench.yml and lockfreequeues.nimble's `requires`
-        # (currently `debra >= 0.8.0`, `typestates >= 0.10.0`).
+        # Mirrors bench.yml / build.yml -- config.nims resolves these via
+        # ../nim-debra/src and ../nim-typestates/src.
+        # Pinned to v0.8.0 / v0.10.0 (matching nimble.lock) for
+        # deterministic CI; bump in lockstep with build.yml / bench.yml
+        # and lockfreequeues.nimble's `requires` (currently
+        # `debra >= 0.8.0`, `typestates >= 0.10.0`).
         run: |
           set -e
           cd ..
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
+          git clone --depth 1 --branch v0.8.0 https://github.com/elijahr/nim-debra.git
+          git clone --depth 1 --branch v0.10.0 https://github.com/elijahr/nim-typestates.git
           (cd nim-typestates && nimble install -y)
           (cd nim-debra && nimble install -y)
 
@@ -154,7 +173,7 @@ jobs:
         # cdylib symbols at runtime before we spend ~10 min on bench
         # binaries with the same defines.
         run: |
-          set -eu
+          set -euo pipefail
           nim c -d:release -d:danger --threads:on \
             -d:adapter_crossbeam_array_queue_available \
             -d:adapter_crossbeam_seg_queue_available \
@@ -179,7 +198,7 @@ jobs:
         if: env.FORCE_SKIP_ATOMIC_QUEUE != '1'
         continue-on-error: true
         run: |
-          set -eu
+          set -euo pipefail
           # nim cpp because atomic_queue.h is C++ and the wrapper is C++.
           nim cpp -d:release -d:danger --threads:on \
             -d:adapter_atomic_queue_available \
@@ -207,7 +226,7 @@ jobs:
           env.FORCE_SKIP_RIGTORP_MPMC != '1'
         continue-on-error: true
         run: |
-          set -eu
+          set -euo pipefail
           # smoke_rigtorp.nim covers both SPSC and MPMC under their own
           # defines; enable whichever is not force-skipped. nim cpp
           # because both upstream headers are C++.
@@ -260,7 +279,7 @@ jobs:
           env.FORCE_SKIP_KANAL != '1'
         continue-on-error: true
         run: |
-          set -eu
+          set -euo pipefail
           flags=""
           if [ "${FORCE_SKIP_FLUME:-}" != "1" ]; then
             flags="$flags -d:adapter_flume_available"
@@ -311,7 +330,7 @@ jobs:
         if: env.FORCE_SKIP_LIBLFDS != '1'
         continue-on-error: true
         run: |
-          set -eu
+          set -euo pipefail
           test -f benchmarks/vendor/liblfds/liblfds711/build/gcc_gnumake/Makefile
           # CI runs on Linux so the porting layer's __linux__ branch
           # fires natively (no CFLAGS override, unlike macOS dev).
@@ -325,7 +344,7 @@ jobs:
           steps.install-liblfds.outcome == 'success'
         continue-on-error: true
         run: |
-          set -eu
+          set -euo pipefail
           # liblfds is C-only; the wrapper is C; no `nim cpp` needed.
           # --passL points at the vendored archive built above.
           nim c -d:release -d:danger --threads:on \
@@ -362,7 +381,7 @@ jobs:
         # ensures the dylib loads from the in-tree build dir at runtime
         # without needing LD_LIBRARY_PATH.
         run: |
-          set -eu
+          set -euo pipefail
           nim c -d:release -d:danger --threads:on \
             -d:BenchMpmcMessageCount=1000000 \
             -d:BenchMpmcRuns=5 \
@@ -376,7 +395,7 @@ jobs:
         # bench_unbounded_mupmuc (matches the mupmuc unbounded
         # MVP-adapter slot post-split).
         run: |
-          set -eu
+          set -euo pipefail
           nim c -d:release -d:danger --threads:on \
             -d:UnboundedMupmucMessageCount=500000 \
             -d:UnboundedMupmucRuns=3 \
@@ -388,6 +407,7 @@ jobs:
       - name: Run bench_mpmc_mupmuc (crossbeam_array_queue only)
         timeout-minutes: 12
         run: |
+          set -euo pipefail
           ./.tmp/bench_mpmc_mupmuc crossbeam_array_queue \
             --bmf-out=bench_mpmc_crossbeam.json \
             | tee bench_mpmc_crossbeam_output.txt
@@ -395,6 +415,7 @@ jobs:
       - name: Run bench_unbounded_mupmuc (crossbeam_seg_queue only)
         timeout-minutes: 12
         run: |
+          set -euo pipefail
           ./.tmp/bench_unbounded_mupmuc crossbeam_seg_queue \
             --bmf-out=bench_unbounded_crossbeam.json \
             | tee bench_unbounded_crossbeam_output.txt
@@ -417,7 +438,7 @@ jobs:
         if: env.ADAPTER_ATOMIC_QUEUE == '1'
         timeout-minutes: 12
         run: |
-          set -eu
+          set -euo pipefail
           nim cpp -d:release -d:danger --threads:on \
             -d:BenchSpscMessageCount=1000000 \
             -d:BenchSpscRuns=5 \
@@ -433,7 +454,7 @@ jobs:
         if: env.ADAPTER_ATOMIC_QUEUE == '1'
         timeout-minutes: 12
         run: |
-          set -eu
+          set -euo pipefail
           nim cpp -d:release -d:danger --threads:on \
             -d:BenchMpmcMessageCount=1000000 \
             -d:BenchMpmcRuns=5 \
@@ -450,7 +471,7 @@ jobs:
         if: env.ADAPTER_RIGTORP_SPSC == '1'
         timeout-minutes: 12
         run: |
-          set -eu
+          set -euo pipefail
           nim cpp -d:release -d:danger --threads:on \
             -d:BenchSpscMessageCount=1000000 \
             -d:BenchSpscRuns=5 \
@@ -467,7 +488,7 @@ jobs:
         if: env.ADAPTER_RIGTORP_MPMC == '1'
         timeout-minutes: 12
         run: |
-          set -eu
+          set -euo pipefail
           nim cpp -d:release -d:danger --threads:on \
             -d:BenchMpmcMessageCount=1000000 \
             -d:BenchMpmcRuns=5 \
@@ -484,7 +505,7 @@ jobs:
         if: env.ADAPTER_FLUME == '1'
         timeout-minutes: 12
         run: |
-          set -eu
+          set -euo pipefail
           nim c -d:release -d:danger --threads:on \
             -d:BenchMpmcMessageCount=1000000 \
             -d:BenchMpmcRuns=5 \
@@ -501,7 +522,7 @@ jobs:
         if: env.ADAPTER_FLUME == '1'
         timeout-minutes: 12
         run: |
-          set -eu
+          set -euo pipefail
           nim c -d:release -d:danger --threads:on \
             -d:UnboundedMupmucMessageCount=500000 \
             -d:UnboundedMupmucRuns=3 \
@@ -519,7 +540,7 @@ jobs:
         if: env.ADAPTER_KANAL == '1'
         timeout-minutes: 12
         run: |
-          set -eu
+          set -euo pipefail
           nim c -d:release -d:danger --threads:on \
             -d:BenchSpscMessageCount=1000000 \
             -d:BenchSpscRuns=5 \
@@ -536,7 +557,7 @@ jobs:
         if: env.ADAPTER_KANAL == '1'
         timeout-minutes: 12
         run: |
-          set -eu
+          set -euo pipefail
           nim c -d:release -d:danger --threads:on \
             -d:BenchMpmcMessageCount=1000000 \
             -d:BenchMpmcRuns=5 \
@@ -553,7 +574,7 @@ jobs:
         if: env.ADAPTER_KANAL == '1'
         timeout-minutes: 12
         run: |
-          set -eu
+          set -euo pipefail
           nim c -d:release -d:danger --threads:on \
             -d:UnboundedMupmucMessageCount=500000 \
             -d:UnboundedMupmucRuns=3 \
@@ -571,7 +592,7 @@ jobs:
         if: env.ADAPTER_LIBLFDS == '1'
         timeout-minutes: 12
         run: |
-          set -eu
+          set -euo pipefail
           nim c -d:release -d:danger --threads:on \
             -d:BenchSpscMessageCount=1000000 \
             -d:BenchSpscRuns=5 \
@@ -588,7 +609,7 @@ jobs:
         if: env.ADAPTER_LIBLFDS == '1'
         timeout-minutes: 12
         run: |
-          set -eu
+          set -euo pipefail
           nim c -d:release -d:danger --threads:on \
             -d:BenchMpmcMessageCount=1000000 \
             -d:BenchMpmcRuns=5 \
@@ -609,7 +630,7 @@ jobs:
         # on disk. The two crossbeam fragments anchor the list so a run
         # where every external adapter soft-skipped still merges.
         run: |
-          set -eu
+          set -euo pipefail
           inputs="bench_mpmc_crossbeam.json bench_unbounded_crossbeam.json"
           for f in \
             bench_spsc_atomic_queue.json \

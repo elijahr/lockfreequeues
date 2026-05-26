@@ -12,6 +12,13 @@ on:
       - '*.md'
 # yamllint enable rule:truthy
 
+# Cancel superseded runs on the same ref so a force-push or rapid
+# successive pushes don't burn matrix-minutes on stale revisions.
+# Scoped per (workflow, ref) so unrelated branches stay isolated.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -87,7 +94,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${HOME}/.cache
-          key: cache-${{ matrix.runs-on }}-${{ matrix.nim-version }}
+          # Include the nimble manifest + lockfile in the cache key so a
+          # dep bump (lockfreequeues.nimble) or a lockfile resolution
+          # (nimble.lock) invalidates the cache instead of silently
+          # reusing a stale entry built against the previous resolution.
+          key: cache-${{ matrix.runs-on }}-${{ matrix.nim-version }}-${{ hashFiles('lockfreequeues.nimble', 'nimble.lock') }}
 
       - name: Checkout project
         uses: actions/checkout@v4
@@ -108,15 +119,18 @@ jobs:
         # for compiler-side resolution. Nimble's dep resolver runs BEFORE
         # the compiler though, and `nimble test` will refuse to launch if
         # `requires "debra >= 0.8.0"` is unsatisfiable from nimble's
-        # package store. So fetch matching branches and `nimble install`
+        # package store. So fetch matching tags and `nimble install`
         # them locally to satisfy the resolver. Once nimble.directory has
         # picked up the new tags, this whole step can be replaced with a
         # plain `nimble install -d -y`.
+        # Pinned to v0.8.0 / v0.10.0 (matching nimble.lock) for
+        # deterministic CI; bump in lockstep with lockfreequeues.nimble's
+        # `requires` and nimble.lock on any sibling release.
         run: |
           set -e
           cd ..
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
+          git clone --depth 1 --branch v0.8.0 https://github.com/elijahr/nim-debra.git
+          git clone --depth 1 --branch v0.10.0 https://github.com/elijahr/nim-typestates.git
           (cd nim-typestates && nimble install -y)
           (cd nim-debra && nimble install -y)
 
