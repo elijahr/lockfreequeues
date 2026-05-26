@@ -72,8 +72,15 @@ vendored into this repository. The benchmark adapter code (under
 
 - **Source:** https://github.com/crossbeam-rs/crossbeam
 - **Version:** `crossbeam-queue 0.3.x` (pinned by
-  `benchmarks/rust/bench-ffi-crossbeam/Cargo.toml`; recorded in the
-  generated `Cargo.lock` at build time)
+  `benchmarks/rust/bench-ffi-crossbeam/Cargo.toml`; resolved version
+  recorded in the generated `Cargo.lock`). The exact resolved version
+  is **captured at cdylib build time** by `benchmarks/rust/bench-ffi-crossbeam/build.rs`,
+  which reads `Cargo.lock` and emits `cargo:rustc-env=BENCH_DEP_CROSSBEAM_QUEUE_VERSION`;
+  the cdylib exports `bench_ffi_crossbeam_queue_version()` which returns
+  that string, and the Nim bench harness records it at run time in
+  `meta.adapters.crossbeam_queue.version`. Nothing in this tree is a
+  hand-typed mirror of `Cargo.lock` — bumping the lockfile updates the
+  meta automatically on the next cdylib build.
 - **License:** Apache-2.0 OR MIT (choose either)
 - **Vendored at:** _(crate sources are downloaded by Cargo at build
   time; only our own thin C-ABI shim under
@@ -129,7 +136,15 @@ the nimble `threading` package is resolved at build time).
   `d655418bb644b7f85159d94c591d7d983949fb81` (vendored at PR 4
   implementation time; see
   `benchmarks/vendor/concurrentqueue/README.md` for the upgrade
-  procedure and rationale).
+  procedure and rationale). Upstream exposes no version macro, so the
+  bench JSON's `meta.adapters.concurrentqueue.version` field is `null`
+  and the integrity primitive is the SHA-1 `fingerprint` of the
+  vendored header computed at compile time (`vendored-content-hash`
+  kind). The README's pinned SHA above is carried in
+  `meta.adapters.concurrentqueue.pinned_sha_per_readme` so audits can
+  detect drift between the documented pin and the actual bytes that
+  compiled in. See `benchmarks/README.md` "Version capture and pinning"
+  for the comparison protocol.
 - **License:** BSD-2-Clause / Boost Software License 1.0 (dual)
 - **Vendored at:** `benchmarks/vendor/concurrentqueue/`
 - **Upgrade procedure:** see
@@ -174,7 +189,13 @@ under Apache-2.0.
 
 - **Source:** https://github.com/max0x7ba/atomic_queue
 - **Version:** commit `1a3774a89c86ecfdf08753dbd41018ace5a833a4`
-  (head of upstream `master` on the v4.2.0 vendoring date).
+  (head of upstream `master` on the v4.2.0 vendoring date). Upstream
+  exposes no version macro, so `meta.adapters.atomic_queue.version` is
+  `null` and the bench output's integrity primitive is the SHA-1
+  `fingerprint` of the five vendored headers computed at compile time
+  (`vendored-content-hash` kind). The README-pinned SHA is mirrored
+  into `meta.adapters.atomic_queue.pinned_sha_per_readme`. See
+  `benchmarks/README.md` "Version capture and pinning".
 - **License:** MIT
 - **Vendored at:** `benchmarks/vendor/atomic_queue/`
 - **Upgrade procedure:** see
@@ -195,7 +216,12 @@ under Apache-2.0.
   and under the public-domain dedication. The verbatim grant text is
   preserved in `benchmarks/vendor/liblfds/LICENSE`.
 - **Vendored at:** `benchmarks/vendor/liblfds/liblfds711/` (full
-  upstream source tree, unmodified).
+  upstream source tree, unmodified). liblfds exposes
+  `LFDS711_MISC_VERSION_STRING` in `liblfds711/lfds711_misc.h`; the
+  bench harness `importc`-s that macro through a compile-time
+  `{.emit.}` include so `meta.adapters.liblfds.version` reflects the
+  exact macro value compiled in (`vendored-version-macro` kind), not a
+  hand-typed mirror of the README.
 - **Upgrade procedure:** see
   `benchmarks/vendor/liblfds/README.md`
 
@@ -203,7 +229,12 @@ under Apache-2.0.
 
 - **Source:** https://github.com/rigtorp/MPMCQueue
 - **Version:** commit `b9808ede08f26fa9df4df4e081d19cace8f6c6ea`
-  (head of upstream `master` on the v4.2.0 vendoring date).
+  (head of upstream `master` on the v4.2.0 vendoring date). Upstream
+  exposes no version macro; the bench JSON records
+  `meta.adapters.rigtorp_mpmc.version = null` and a SHA-1 `fingerprint`
+  of the vendored `MPMCQueue.h` computed at compile time
+  (`vendored-content-hash` kind). README-pinned SHA mirrored into
+  `pinned_sha_per_readme`.
 - **License:** MIT
 - **Vendored at:** `benchmarks/vendor/rigtorp_mpmc/`
 - **Upgrade procedure:** see
@@ -213,7 +244,12 @@ under Apache-2.0.
 
 - **Source:** https://github.com/rigtorp/SPSCQueue
 - **Version:** commit `1053918dbd251fbff69b24ef27fa5d51c29ec2af`
-  (head of upstream `master` on the v4.2.0 vendoring date).
+  (head of upstream `master` on the v4.2.0 vendoring date). Upstream
+  exposes no version macro; the bench JSON records
+  `meta.adapters.rigtorp_spsc.version = null` and a SHA-1 `fingerprint`
+  of the vendored `SPSCQueue.h` computed at compile time
+  (`vendored-content-hash` kind). README-pinned SHA mirrored into
+  `pinned_sha_per_readme`.
 - **License:** MIT
 - **Vendored at:** `benchmarks/vendor/rigtorp_spsc/`
 - **Upgrade procedure:** see
@@ -225,7 +261,11 @@ under Apache-2.0.
 - **Version:** `0.11.1` (resolved from the `flume = "0.11"` requirement
   in `benchmarks/rust/bench-ffi-crossbeam/Cargo.toml`; the exact
   resolved version is recorded in
-  `benchmarks/rust/bench-ffi-crossbeam/Cargo.lock`).
+  `benchmarks/rust/bench-ffi-crossbeam/Cargo.lock`). Captured **at
+  cdylib build time** by `build.rs`, exported via
+  `bench_ffi_flume_version()`, and recorded at run time in
+  `meta.adapters.flume.version`. Nothing in this tree is a hand-typed
+  mirror of `Cargo.lock`.
 - **License:** Apache-2.0 OR MIT (choose either; `lockfreequeues`
   takes Apache-2.0 to match the project license).
 - **Vendored at:** _(crate sources are downloaded by Cargo at build
@@ -244,7 +284,11 @@ under Apache-2.0.
 - **Version:** `0.1.1` (resolved from the `kanal = "0.1"` requirement
   in `benchmarks/rust/bench-ffi-crossbeam/Cargo.toml`; the exact
   resolved version is recorded in
-  `benchmarks/rust/bench-ffi-crossbeam/Cargo.lock`).
+  `benchmarks/rust/bench-ffi-crossbeam/Cargo.lock`). Captured **at
+  cdylib build time** by `build.rs`, exported via
+  `bench_ffi_kanal_version()`, and recorded at run time in
+  `meta.adapters.kanal.version`. Nothing in this tree is a hand-typed
+  mirror of `Cargo.lock`.
 - **License:** MIT
 - **Vendored at:** _(crate sources are downloaded by Cargo at build
   time; only our own thin C-ABI shim under

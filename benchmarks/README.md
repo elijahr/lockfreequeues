@@ -269,7 +269,13 @@ version of each comparison adapter at run time. Schema (v1):
   "lockfreequeues_version": "5.0.0",
   "nim_version": "2.2.10",
   "adapters": {
-    "<slug>": { "version": "...", "kind": "<vendored-sha|vendored-release|cargo-locked|nimble-resolved|system-package|compiler-builtin|in-tree>", "status"?: "absent|build-without-boost" }
+    "<slug>": {
+      "version":     "<string|null>",
+      "fingerprint": "<string|null>",
+      "kind":        "<in-tree|compiler-builtin|vendored-version-macro|vendored-content-hash|cargo-locked|nimble-resolved|system-package>",
+      "pinned_sha_per_readme": "<optional; vendored libs only>",
+      "status":      "<optional; ok|absent|build-without-*|unknown>"
+    }
   },
   "absent_adapters": ["<slug>", ...]
 }
@@ -281,20 +287,49 @@ and is read by `benchmarks/nim/bench_common.nim`'s `BMFEmitter.emit`;
 per-binary BMF fragments; `docs/assets/bench-charts.js` skips the
 `meta` key in its slug-iteration passes via `isMeasurementSlug`.
 
-Adapter version sourcing rules:
+**SHA-1 fingerprint protocol.** For vendored libraries that expose no
+upstream version macro (`atomic_queue`, `concurrentqueue`/`moodycamel`,
+`rigtorp_mpmc`, `rigtorp_spsc`), the `fingerprint` field is a SHA-1
+digest of the concatenation of every vendored header that ships with
+the adapter, in sorted filename order, each preceded by a
+`\n--- <filename> ---\n` separator. Format is always `"sha1:<40-hex>"`
+so downstream tools can disambiguate hash kinds if we later add
+SHA-256. The bytes are captured at compile time via Nim's `staticRead`,
+so the fingerprint reflects exactly what was baked into the bench
+binary — any change to the vendored sources changes the fingerprint
+deterministically. To compare bench JSONs across builds, compare
+`meta.adapters.<lib>.fingerprint`; matching SHA-1 means the vendored
+bytes are identical and the throughput comparison is apples-to-apples.
 
-- **Vendored C/C++** (`atomic_queue`, `concurrentqueue`/`moodycamel`,
-  `liblfds`, `rigtorp_mpmc`, `rigtorp_spsc`): hard-coded constants in
-  `adapter_versions.nim`, extracted from each
-  `benchmarks/vendor/<lib>/README.md` "Pinned commit" / "release tag"
-  line. **When bumping a vendor SHA, update the matching constant in
-  `adapter_versions.nim` in the same commit.** Drift between the two
-  sources is silent — the bench JSON would record the stale constant
-  while the actual build used the bumped vendor sources, masking
-  comparison errors.
-- **Rust crates** (`crossbeam_queue`, `flume`, `kanal`): hard-coded
-  from `benchmarks/rust/bench-ffi-crossbeam/Cargo.lock`. Bump in
-  lockstep with `cargo build` regenerating the lockfile.
+Adapter version sourcing rules (no hand-typed mirrors of README files):
+
+- **Vendored C/C++ headers without a version macro** (`atomic_queue`,
+  `concurrentqueue`/`moodycamel`, `rigtorp_mpmc`, `rigtorp_spsc`):
+  `kind = vendored-content-hash`. `version` is `null` (no upstream
+  version exists); `fingerprint` is the SHA-1 digest described above;
+  `pinned_sha_per_readme` documents the README's pinned SHA so audits
+  can compare the upstream-tracked SHA against the compile-time
+  fingerprint. The fingerprint IS the integrity primitive; if the
+  README pin and the compile-time bytes diverge, the fingerprint moves
+  and the README claim becomes inspectable.
+- **Vendored C/C++ libraries with a version macro** (`liblfds`):
+  `kind = vendored-version-macro`. `version` is captured at compile
+  time by `importc`-ing the upstream version macro
+  (`LFDS711_MISC_VERSION_STRING`) through a tiny `{.emit.}` include —
+  the same technique used for Boost. The macro expands inside the
+  bench binary's C compilation, so it reflects exactly what was
+  compiled in.
+- **Rust crates** (`crossbeam_queue`, `flume`, `kanal`):
+  `kind = cargo-locked`. Captured at build time inside the Rust cdylib
+  (`benchmarks/rust/bench-ffi-crossbeam/`). A `build.rs` reads the
+  project's `Cargo.lock`, emits `cargo:rustc-env=BENCH_DEP_*_VERSION`
+  for each crate, and three `#[no_mangle] pub extern "C"` functions
+  return the strings as NUL-terminated C cstrings via `env!()`. The
+  Nim side `importc`-s the getters and calls them at run time, so the
+  reported version is exactly what was linked in at cdylib build time,
+  not what `Cargo.toml` requested. Bench binaries built without any
+  of the Rust adapter gates record
+  `{"version": null, "status": "build-without-rust-cdylib"}`.
 - **Nimble-resolved** (`loony`, `threading`): the bench harness
   shells out to `nimble path <pkg>` at run time and parses the
   resolved version from the package directory name. Missing package
