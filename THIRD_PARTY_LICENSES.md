@@ -55,10 +55,18 @@ vendored into this repository. The benchmark adapter code (under
   (`apt install libboost-dev` on Ubuntu CI; `brew install boost` on
   macOS dev). The bench adapter is API-compatible with all Boost
   versions that ship `boost/lockfree/queue.hpp` and
-  `boost/lockfree/spsc_queue.hpp`.
+  `boost/lockfree/spsc_queue.hpp`. The exact version is **captured at
+  run time** into each bench JSON's
+  `meta.adapters.boost_lockfree.version` field via the
+  `BOOST_LIB_VERSION` macro from `boost/version.hpp` — see
+  [`benchmarks/README.md`](benchmarks/README.md) "Version capture and
+  pinning" for the cross-run comparison protocol.
 - **License:** Boost Software License 1.0 (BSL-1.0)
 - **Vendored at:** _(not vendored — system include path)_
-- **Upgrade procedure:** _(not applicable; OS-package-managed)_
+- **Upgrade procedure:** _(not applicable; OS-package-managed. Mismatched
+  `meta.adapters.boost_lockfree.version` between two bench JSONs
+  indicates the OS image bumped Boost; throughput comparisons across
+  that boundary are not apples-to-apples.)_
 
 ### Crossbeam
 

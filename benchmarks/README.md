@@ -254,6 +254,77 @@ compiler). Per-library obligations are tracked in
   + targeted path pushes to `devel`. It produces a separate Bencher
   Report dedicated to crossbeam slugs.
 
+### Version capture and pinning
+
+Every emitted bench JSON (the per-shape files under
+`benchmarks/results/` and the merged `docs/assets/bench-results/latest.json`
+snapshot) carries a top-level `meta` block recording the resolved
+version of each comparison adapter at run time. Schema (v1):
+
+```json
+"meta": {
+  "schema": 1,
+  "generated_at": "<ISO-8601 UTC>",
+  "host": { "os": "...", "arch": "..." },
+  "lockfreequeues_version": "5.0.0",
+  "nim_version": "2.2.10",
+  "adapters": {
+    "<slug>": { "version": "...", "kind": "<vendored-sha|vendored-release|cargo-locked|nimble-resolved|system-package|compiler-builtin|in-tree>", "status"?: "absent|build-without-boost" }
+  },
+  "absent_adapters": ["<slug>", ...]
+}
+```
+
+The capture is implemented in `benchmarks/nim/adapter_versions.nim`
+and is read by `benchmarks/nim/bench_common.nim`'s `BMFEmitter.emit`;
+`benchmarks/merge_bmf.py` preserves the `meta` block when unioning
+per-binary BMF fragments; `docs/assets/bench-charts.js` skips the
+`meta` key in its slug-iteration passes via `isMeasurementSlug`.
+
+Adapter version sourcing rules:
+
+- **Vendored C/C++** (`atomic_queue`, `concurrentqueue`/`moodycamel`,
+  `liblfds`, `rigtorp_mpmc`, `rigtorp_spsc`): hard-coded constants in
+  `adapter_versions.nim`, extracted from each
+  `benchmarks/vendor/<lib>/README.md` "Pinned commit" / "release tag"
+  line. **When bumping a vendor SHA, update the matching constant in
+  `adapter_versions.nim` in the same commit.** Drift between the two
+  sources is silent — the bench JSON would record the stale constant
+  while the actual build used the bumped vendor sources, masking
+  comparison errors.
+- **Rust crates** (`crossbeam_queue`, `flume`, `kanal`): hard-coded
+  from `benchmarks/rust/bench-ffi-crossbeam/Cargo.lock`. Bump in
+  lockstep with `cargo build` regenerating the lockfile.
+- **Nimble-resolved** (`loony`, `threading`): the bench harness
+  shells out to `nimble path <pkg>` at run time and parses the
+  resolved version from the package directory name. Missing package
+  -> `{"version": null, "status": "absent"}`. Production-dep pinning
+  (nim, unittest2, typestates, debra) is via the committed
+  `nimble.lock` at the repo root; Loony and `threading` are NOT in
+  the manifest because they are bench-only optional adapters, so
+  their pinning is the responsibility of the CI workflow's
+  `nimble install <pkg>` step. The run-time `meta.adapters.*.version`
+  capture is the cross-run-comparable record.
+- **Boost.LockFree** (`boost_lockfree`): captured at compile time
+  via the `BOOST_LIB_VERSION` macro from `boost/version.hpp` when
+  either Boost adapter gate is enabled. Boost.LockFree is consumed
+  via the system package (`apt install libboost-dev` on Ubuntu CI,
+  `brew install boost` on macOS development). The version is
+  therefore implicit in the OS runner image at bench time. The bench
+  output JSON (`meta.adapters.boost_lockfree.version`) records the
+  version captured at run time. To compare bench results across
+  runs, check the `meta.adapters.boost_lockfree.version` field of
+  each JSON; mismatches indicate the OS image bumped Boost and the
+  comparison is not apples-to-apples. Builds without any Boost
+  adapter gate record
+  `{"version": null, "status": "build-without-boost"}`.
+- **Nim compiler builtin** (`nim_channel`): always set to the
+  `NimVersion` constant from `system`, which equals the compiler
+  used for the bench compile.
+- **In-tree** (`lockfreequeues`): the `LockfreequeuesVersion`
+  constant from `src/lockfreequeues.nim` (mirrors the `version` line
+  in `lockfreequeues.nimble`; bump in lockstep on every release).
+
 ### Running comparison adapters locally
 
 ```bash
