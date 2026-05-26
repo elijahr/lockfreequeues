@@ -61,7 +61,14 @@ jobs:
         # so `import compiler/<X>` resolves cleanly. This matches the typestates
         # repo's docs.yml pattern and replaces the previous in-place nim.cfg
         # patching (preserved as a ROLLBACK comment at bottom of file).
-        run: nimble install nim -y
+        #
+        # Run from /tmp so the project's nimble.lock does NOT constrain
+        # this global install. The lockfile carries a `nim` entry (because
+        # typestates/debra/unittest2 each list nim as a transitive dep)
+        # pinned to a SHA1 checksum that the live `nimble install nim`
+        # will not necessarily resolve to; consulting it here would
+        # mismatch and abort the deploy.
+        run: cd /tmp && nimble install nim -y
 
       - name: Create watch directories
         run: mkdir -p docs/overrides
