@@ -53,6 +53,13 @@ typedef void *aq_queue_t;
 // Construct a queue of `capacity`. `AtomicQueueB` requires capacity >= 1
 // at construction; we clamp 0 to 1. Returns nullptr on bad_alloc.
 aq_queue_t aq_init(unsigned long long capacity) {
+  // Defensive bound: on a hypothetical platform where `size_t` is narrower
+  // than `unsigned long long` (e.g. 32-bit `size_t`), an out-of-range
+  // capacity would silently truncate on the cast. No-op on LP64 / LLP64
+  // targets where the types are the same width.
+  if (capacity > static_cast<unsigned long long>(SIZE_MAX)) {
+    return nullptr;
+  }
   std::size_t cap = static_cast<std::size_t>(capacity);
   if (cap < 1) cap = 1;
   try {

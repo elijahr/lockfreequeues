@@ -12,5 +12,13 @@ when withDir(thisDir(), system.fileExists("nimble.paths")):
 # order, winning over any registry-stale entries.
 # Remove when nim-debra@0.8.0 + typestates >= 0.10.0 are published.
 import std/os
-switch("path", thisDir() / "../nim-debra/src")
-switch("path", thisDir() / "../nim-typestates/src")
+# Guard sibling-source overrides with `dirExists`: on a fresh clone
+# without the v5.0.0-wave sibling worktrees the path entries would point
+# at non-existent directories, causing spurious lookup churn. When the
+# siblings ARE present the absolute paths are added (most-recently-added
+# wins per Nim's search order, preserving the priority semantics);
+# otherwise we fall back cleanly to the registry-installed nimble deps.
+for sibling in ["../nim-debra/src", "../nim-typestates/src"]:
+  let abs = thisDir() / sibling
+  if dirExists(abs):
+    switch("path", abs)

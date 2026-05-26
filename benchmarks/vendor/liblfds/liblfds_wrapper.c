@@ -47,11 +47,19 @@
 /* ----- shared util ----- */
 
 /* Round `n` up to the next power of two, with a minimum of 2 (the
- * upstream APIs assert `number_elements >= 2`). */
+ * upstream APIs assert `number_elements >= 2`).
+ *
+ * Overflow guard: if `n` exceeds the highest representable power of two
+ * (`(SIZE_MAX >> 1) + 1`), the unguarded `p <<= 1` loop would shift past
+ * the top bit, overflow to 0, and spin forever. Cap at `top` so the
+ * caller (init path) can treat the inflated value as a fault and bail
+ * via `malloc` failure on the element-array allocation. */
 static size_t bench_next_pow2(size_t n) {
   if (n < 2) return 2;
   /* Already a power of two? */
   if ((n & (n - 1)) == 0) return n;
+  size_t top = (SIZE_MAX >> 1) + 1;  /* highest power of two */
+  if (n > top) return top;
   size_t p = 2;
   while (p < n) p <<= 1;
   return p;

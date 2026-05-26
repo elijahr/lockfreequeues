@@ -26,7 +26,7 @@ import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
-from debra import DebraManager, initDebraManager
+from debra import DebraManager, initDebraManager, DebraRegistrationError
 import options
 import ../bench_common
 
@@ -74,10 +74,27 @@ proc makeLockfreequeuesUnboundedMupmucAdapter*[S: static int, T;
   # attach() on the (init == operating) thread. Multi-thread shapes
   # obtain their own per-thread views via `queue.getProducer()` /
   # `queue.getConsumer()` and call `attach()` on their own threads.
-  result.producer0 = result.queue.getProducer()
-  result.producer0.attach()
-  result.consumer0 = result.queue.getConsumer()
-  result.consumer0.attach()
+  #
+  # `attach()` can raise `DebraRegistrationError` if the manager is full
+  # (MaxThreads exhausted). If that fires after `create(DebraManager…)`
+  # succeeded, the heap manager would leak because `result` is never
+  # fully returned and the deinit (`cleanup`) never runs. Mirror the
+  # `cleanup` teardown order — views first, queue, then manager — before
+  # re-raising so the failure path matches the success-path destructor
+  # contract.
+  try:
+    result.producer0 = result.queue.getProducer()
+    result.producer0.attach()
+    result.consumer0 = result.queue.getConsumer()
+    result.consumer0.attach()
+  except DebraRegistrationError:
+    reset(result.producer0)
+    reset(result.consumer0)
+    reset(result.queue)
+    reset(result.manager[])
+    dealloc(result.manager)
+    result.manager = nil
+    raise
 
 proc cleanup*[S: static int, T; MaxThreads: static int](
     a: var LockfreequeuesUnboundedMupmucAdapter[S, T, MaxThreads]
