@@ -49,6 +49,18 @@ type
     manager: ptr DebraManager[MaxT, debra.ccSingle]
     startIdx: int
     count: int
+    id: int
+      ## Stable producer index used by -d:benchProgress logging.
+
+when defined(benchProgress):
+  # Per-10k progress prints (opt-in via -d:benchProgress) for triaging
+  # intermittent CI hangs. See bench_unbounded_sipsic.nim for context.
+  # `benchShape` is written by `runUMupsicShape` before any worker thread
+  # is created and read-only thereafter, so a plain global is sufficient.
+  var benchShape: string
+  proc benchProgress(adapter, tag: string, n: int) =
+    echo "[" & adapter & " " & benchShape & " " & tag & "=" & $n & "]"
+    flushFile(stdout)
 
 proc umupsicProducerThread[S: static int; T; MaxT: static int](
     ctx: ptr UMupsicProducerCtx2[S, T, MaxT]
@@ -57,8 +69,14 @@ proc umupsicProducerThread[S: static int; T; MaxT: static int](
     var p = ctx.queue[].getProducer()
     # Register this producer's debra handle on its own thread.
     p.attach()
+    when defined(benchProgress):
+      var pushed = 0
     for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
       p.push(T(i))
+      when defined(benchProgress):
+        inc pushed
+        if pushed mod 10_000 == 0:
+          benchProgress("unbounded_mupsic", "p" & $ctx.id & " pushed", pushed)
 
 proc runOneUMupsicRun[S: static int; T; MaxT: static int; P: static int](
     queue: ptr UMupsicQueueT[S, T, MaxT],
@@ -74,7 +92,7 @@ proc runOneUMupsicRun[S: static int; T; MaxT: static int; P: static int](
     let count = baseP + (if i < remP: 1 else: 0)
     producerCtxs[i] = UMupsicProducerCtx2[S, T, MaxT](
       queue: queue, manager: manager,
-      startIdx: nextStart, count: count,
+      startIdx: nextStart, count: count, id: i,
     )
     nextStart += count
   # This (main) thread is the single consumer; register its debra handle
@@ -92,6 +110,9 @@ proc runOneUMupsicRun[S: static int; T; MaxT: static int; P: static int](
     let r = queue[].pop()
     if r.isSome:
       inc local
+      when defined(benchProgress):
+        if local mod 10_000 == 0:
+          benchProgress("unbounded_mupsic", "c0 popped", local)
     else:
       backoffOnPeerWait()
   for i in 0 ..< P: joinThread(producerThreads[i])
@@ -105,6 +126,9 @@ proc runUMupsicShape[P: static int](
 ) =
   let slug = "lockfreequeues_unbounded_mupsic/mpsc_unbounded/" & $P & "p1c"
   echo fmt"UnboundedMupsic {P}p1c ({slug}):"
+  when defined(benchProgress):
+    benchShape = $P & "p1c"
+    flushFile(stdout)
   for _ in 0 ..< warmup:
     var a = initUnboundedMupsicAdapter[SegmentSize, uint64, MaxThreads]()
     discard runOneUMupsicRun[SegmentSize, uint64, MaxThreads, P](

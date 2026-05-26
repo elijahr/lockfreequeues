@@ -51,6 +51,20 @@ type
     queue: ptr USipmucQueueT[S, T, MaxT]
     manager: ptr DebraManager[MaxT, debra.ccMulti]
     count: int
+    id: int
+      ## Stable thread index used by -d:benchProgress logging so a hang
+      ## can be attributed to a specific consumer slot.
+
+when defined(benchProgress):
+  # Per-10k progress prints (opt-in via -d:benchProgress) for triaging
+  # intermittent CI hangs. See bench_unbounded_sipsic.nim for context.
+  # `benchShape` is written by `runUSipmucShape` before any worker thread
+  # is created and read-only thereafter, so a plain global is sufficient
+  # (no cross-thread writers).
+  var benchShape: string
+  proc benchProgress(adapter, tag: string, n: int) =
+    echo "[" & adapter & " " & benchShape & " " & tag & "=" & $n & "]"
+    flushFile(stdout)
 
 proc usipmucProducerThread[S: static int; T; MaxT: static int](
     ctx: ptr USipmucProducerCtx[S, T, MaxT]
@@ -59,6 +73,9 @@ proc usipmucProducerThread[S: static int; T; MaxT: static int](
     var p = ctx.queue[].getProducer()
     for i in 0 ..< ctx.count:
       p.push(T(i))
+      when defined(benchProgress):
+        if (i + 1) mod 10_000 == 0:
+          benchProgress("unbounded_sipmuc", "p0 pushed", i + 1)
 
 proc usipmucConsumerThread[S: static int; T; MaxT: static int](
     ctx: ptr USipmucConsumerCtx[S, T, MaxT]
@@ -72,6 +89,9 @@ proc usipmucConsumerThread[S: static int; T; MaxT: static int](
       let r = consumer.pop()
       if r.isSome:
         inc local
+        when defined(benchProgress):
+          if local mod 10_000 == 0:
+            benchProgress("unbounded_sipmuc", "c" & $ctx.id & " popped", local)
       else:
         backoffOnPeerWait()
 
@@ -91,7 +111,7 @@ proc runOneUSipmucRun[S: static int; T; MaxT: static int; C: static int](
   for i in 0 ..< C:
     let count = baseC + (if i < remC: 1 else: 0)
     consumerCtxs[i] = USipmucConsumerCtx[S, T, MaxT](
-      queue: queue, manager: manager, count: count,
+      queue: queue, manager: manager, count: count, id: i,
     )
   let startTime = getMonoTime()
   createThread(producerThread,
@@ -115,6 +135,9 @@ proc runUSipmucShape[C: static int](
 ) =
   let slug = "lockfreequeues_unbounded_sipmuc/mpmc_unbounded/1p" & $C & "c"
   echo fmt"UnboundedSipmuc 1p{C}c ({slug}):"
+  when defined(benchProgress):
+    benchShape = "1p" & $C & "c"
+    flushFile(stdout)
   for _ in 0 ..< warmup:
     var manager = create(DebraManager[MaxThreads, debra.ccMulti])
     wasMoved(manager[])

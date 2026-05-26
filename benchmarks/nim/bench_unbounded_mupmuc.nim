@@ -76,11 +76,25 @@ type
     manager: ptr DebraManager[MaxT, debra.ccMulti]
     startIdx: int
     count: int
+    id: int
+      ## Stable producer index used by -d:benchProgress logging.
 
   UMupmucConsumerCtx[S: static int; T; MaxT: static int] = object
     queue: ptr UMupmucQueueT[S, T, MaxT]
     manager: ptr DebraManager[MaxT, debra.ccMulti]
     count: int
+    id: int
+      ## Stable consumer index used by -d:benchProgress logging.
+
+when defined(benchProgress):
+  # Per-10k progress prints (opt-in via -d:benchProgress) for triaging
+  # intermittent CI hangs. See bench_unbounded_sipsic.nim for context.
+  # `benchShape` is written by `runUMupmucShape` before any worker thread
+  # is created and read-only thereafter, so a plain global is sufficient.
+  var benchShape: string
+  proc benchProgress(adapter, tag: string, n: int) =
+    echo "[" & adapter & " " & benchShape & " " & tag & "=" & $n & "]"
+    flushFile(stdout)
 
 proc umupmucProducerThread[S: static int; T; MaxT: static int](
     ctx: ptr UMupmucProducerCtx[S, T, MaxT]
@@ -89,8 +103,14 @@ proc umupmucProducerThread[S: static int; T; MaxT: static int](
     var producer = ctx.queue[].getProducer()
     # Register this producer's debra handle on its own thread.
     producer.attach()
+    when defined(benchProgress):
+      var pushed = 0
     for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
       producer.push(T(i))
+      when defined(benchProgress):
+        inc pushed
+        if pushed mod 10_000 == 0:
+          benchProgress("unbounded_mupmuc", "p" & $ctx.id & " pushed", pushed)
 
 proc umupmucConsumerThread[S: static int; T; MaxT: static int](
     ctx: ptr UMupmucConsumerCtx[S, T, MaxT]
@@ -104,6 +124,9 @@ proc umupmucConsumerThread[S: static int; T; MaxT: static int](
       let r = consumer.pop()
       if r.isSome:
         inc local
+        when defined(benchProgress):
+          if local mod 10_000 == 0:
+            benchProgress("unbounded_mupmuc", "c" & $ctx.id & " popped", local)
       else:
         backoffOnPeerWait()
 
@@ -126,13 +149,13 @@ proc runOneUMupmucRun[S: static int; T; MaxT: static int;
     let count = baseP + (if i < remP: 1 else: 0)
     producerCtxs[i] = UMupmucProducerCtx[S, T, MaxT](
       queue: queue, manager: manager,
-      startIdx: nextStart, count: count,
+      startIdx: nextStart, count: count, id: i,
     )
     nextStart += count
   for i in 0 ..< C:
     let count = baseC + (if i < remC: 1 else: 0)
     consumerCtxs[i] = UMupmucConsumerCtx[S, T, MaxT](
-      queue: queue, manager: manager, count: count,
+      queue: queue, manager: manager, count: count, id: i,
     )
   let startTime = getMonoTime()
   for i in 0 ..< P:
@@ -160,6 +183,9 @@ proc runUMupmucShape[P: static int; C: static int](
   let slug = "lockfreequeues_unbounded_mupmuc/mpmc_unbounded/" &
     $P & "p" & $C & "c"
   echo fmt"UnboundedMupmuc {P}p{C}c ({slug}):"
+  when defined(benchProgress):
+    benchShape = $P & "p" & $C & "c"
+    flushFile(stdout)
   for _ in 0 ..< warmup:
     var manager = create(DebraManager[MaxThreads, debra.ccMulti])
     wasMoved(manager[])

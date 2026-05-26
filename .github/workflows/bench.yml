@@ -544,30 +544,38 @@ jobs:
               # v5.0.0 3.3.9-D split: this binary owns UnboundedSipsic
               # at 1p1c. No MVP adapters live here (sipsic is SPSC only
               # and has no Loony/Crossbeam-SegQueue/MoodyCamel analog).
+              # -d:benchProgress enables per-10k progress prints in the
+              # producer/consumer workers so an intermittent hang shows
+              # which thread stalled (CI-only; local-dev stays clean).
               nim c -d:release -d:danger --threads:on \
                 -d:UnboundedSipsicMessageCount=200000 \
                 -d:UnboundedSipsicRuns=3 \
                 -d:BenchUnboundedWarmup=1 \
+                -d:benchProgress \
                 benchmarks/nim/bench_unbounded_sipsic.nim
               ;;
             bench_unbounded_sipmuc)
               # v5.0.0 3.3.9-D split: this binary owns UnboundedSipmuc
               # at 1p{1,2,4}c. No MVP adapters live here. Stays on `nim
               # c` because no imported types require C++.
+              # See bench_unbounded_sipsic above for -d:benchProgress.
               nim c -d:release -d:danger --threads:on \
                 -d:UnboundedSipmucMessageCount=100000 \
                 -d:UnboundedSipmucRuns=2 \
                 -d:BenchUnboundedWarmup=1 \
                 -d:BenchSkipOversubscribed \
+                -d:benchProgress \
                 benchmarks/nim/bench_unbounded_sipmuc.nim
               ;;
             bench_unbounded_mupsic)
               # v5.0.0 3.3.9-D split: this binary owns UnboundedMupsic
               # at {1,2,4}p1c. No MVP adapters live here.
+              # See bench_unbounded_sipsic above for -d:benchProgress.
               nim c -d:release -d:danger --threads:on \
                 -d:UnboundedMupsicMessageCount=100000 \
                 -d:UnboundedMupsicRuns=2 \
                 -d:BenchUnboundedWarmup=1 \
+                -d:benchProgress \
                 benchmarks/nim/bench_unbounded_mupsic.nim
               ;;
             bench_unbounded_mupmuc)
@@ -580,11 +588,13 @@ jobs:
               # `nim cpp`). NIM_MODE is "cpp" iff ADAPTER_MOODYCAMEL was
               # set; otherwise it stays "c". loony and Crossbeam
               # SegQueue are mode-neutral.
+              # See bench_unbounded_sipsic above for -d:benchProgress.
               nim "$NIM_MODE" -d:release -d:danger --threads:on \
                 -d:UnboundedMupmucMessageCount=50000 \
                 -d:UnboundedMupmucRuns=2 \
                 -d:BenchUnboundedWarmup=1 \
                 -d:BenchSkipOversubscribed \
+                -d:benchProgress \
                 $ADAPTER_FLAGS \
                 benchmarks/nim/bench_unbounded_mupmuc.nim
               ;;

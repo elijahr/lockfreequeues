@@ -57,12 +57,25 @@ type
     queue: ptr USipsicQueue[S, T]
     count: int
 
+when defined(benchProgress):
+  # Per-10k progress prints (opt-in via -d:benchProgress) for triaging
+  # intermittent CI hangs in the four unbounded bench binaries. The
+  # prints are compiled out when the define is absent so local-dev
+  # output stays clean; CI's bench.yml passes -d:benchProgress for the
+  # unbounded legs only. See the v5.0.0-wave hang-triage notes.
+  proc benchProgress(adapter, shape, tag: string, n: int) =
+    echo "[" & adapter & " " & shape & " " & tag & "=" & $n & "]"
+    flushFile(stdout)
+
 proc usipsicProducerThread[S: static int; T](
     ctx: ptr USipsicProducerCtx[S, T]
 ) {.thread.} =
   var producer = ctx.queue[].getProducer()
   for i in 0 ..< ctx.count:
     producer.push(T(i))
+    when defined(benchProgress):
+      if (i + 1) mod 10_000 == 0:
+        benchProgress("unbounded_sipsic", "1p1c", "p0 pushed", i + 1)
 
 proc usipsicConsumerThread[S: static int; T](
     ctx: ptr USipsicConsumerCtx[S, T]
@@ -72,6 +85,9 @@ proc usipsicConsumerThread[S: static int; T](
     let r = ctx.queue[].pop()
     if r.isSome:
       inc local
+      when defined(benchProgress):
+        if local mod 10_000 == 0:
+          benchProgress("unbounded_sipsic", "1p1c", "c0 popped", local)
     else:
       backoffOnPeerWait()
 
