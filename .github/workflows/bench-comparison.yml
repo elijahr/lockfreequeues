@@ -106,14 +106,15 @@ jobs:
           sudo apt-get -qq install -y clang
 
       - name: Clone and install sibling Nim deps (nim-debra, nim-typestates)
-        # Mirrors bench.yml -- nim.cfg in src/ resolves these via
+        # Mirrors bench.yml -- config.nims resolves these via
         # ../nim-debra/src and ../nim-typestates/src. Tracks `main` for
         # both siblings (matching bench.yml/build.yml) until
         # nimble.directory picks up the relevant tags; the v5.0.0
         # integration wave requires nim-debra/typestates revisions only
         # present on `main` (the prior v0.6.0/v0.7.0 tag pins no longer
         # compile against v5.0.0 lockfreequeues). Bump in lockstep with
-        # build.yml/bench.yml and lockfreequeues.nimble's `requires`.
+        # build.yml/bench.yml and lockfreequeues.nimble's `requires`
+        # (currently `debra >= 0.8.0`, `typestates >= 0.10.0`).
         run: |
           set -e
           cd ..

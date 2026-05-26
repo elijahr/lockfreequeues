@@ -39,11 +39,17 @@ jobs:
     name: Test nim-${{ matrix.nim-version }} / ${{ matrix.runs-on }}
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: ${{ matrix.timeout }}
+    # Nim devel is informational — it surfaces upstream breakage before
+    # it lands in stable but does NOT gate merge. Combined with
+    # fail-fast: false, a devel-leg failure stays visible in the Checks
+    # UI without blocking PRs.
+    continue-on-error: ${{ matrix.nim-version == 'devel' }}
 
     strategy:
       fail-fast: false
       matrix:
         include:
+          # ---- stable (gating) ----
           - runs-on: ubuntu-latest
             nim-version: 'stable'
             sanitize-threads: 'yes'
@@ -56,6 +62,22 @@ jobs:
             timeout: 45
           - runs-on: macos-latest
             nim-version: 'stable'
+            sanitize-threads: 'yes'
+            sanitize-address: 'yes'
+            timeout: 25
+          # ---- devel (informational, non-gating via continue-on-error) ----
+          - runs-on: ubuntu-latest
+            nim-version: 'devel'
+            sanitize-threads: 'yes'
+            sanitize-address: 'yes'
+            timeout: 25
+          - runs-on: ubuntu-24.04-arm
+            nim-version: 'devel'
+            sanitize-threads: 'yes'
+            sanitize-address: 'yes'
+            timeout: 45
+          - runs-on: macos-latest
+            nim-version: 'devel'
             sanitize-threads: 'yes'
             sanitize-address: 'yes'
             timeout: 25
@@ -82,10 +104,10 @@ jobs:
           sudo apt-get -qq install -y clang
 
       - name: Clone and install sibling deps (nim-debra, nim-typestates)
-        # nim.cfg uses --path:"../nim-debra/src" and --path:"../nim-typestates/src"
+        # config.nims uses --path:"../nim-debra/src" and --path:"../nim-typestates/src"
         # for compiler-side resolution. Nimble's dep resolver runs BEFORE
         # the compiler though, and `nimble test` will refuse to launch if
-        # `requires "debra >= 0.7.0"` is unsatisfiable from nimble's
+        # `requires "debra >= 0.8.0"` is unsatisfiable from nimble's
         # package store. So fetch matching branches and `nimble install`
         # them locally to satisfy the resolver. Once nimble.directory has
         # picked up the new tags, this whole step can be replaced with a
@@ -125,10 +147,11 @@ jobs:
             fi
           }
           # Skip `nimble develop -y` — nim.cfg's --noNimblePath +
-          # explicit --path: directives mean nimble's package resolver is
-          # not used. The sibling-clone step above is what populates the
-          # local nimble store; going through `nimble develop` would only
-          # add a redundant dep-resolution round trip.
+          # config.nims's explicit --path: directives mean nimble's
+          # package resolver is not used. The sibling-clone step above
+          # is what populates the local nimble store; going through
+          # `nimble develop` would only add a redundant dep-resolution
+          # round trip.
           echo "::group::Run test suite (includes arc, orc, refc, lock-free enforcement)"
           nimble_run nimble test
           echo "::endgroup::"

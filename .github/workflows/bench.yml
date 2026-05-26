@@ -186,11 +186,12 @@ jobs:
           sudo apt-get -qq install -y clang
 
       - name: Clone and install sibling Nim deps (nim-debra, nim-typestates)
-        # Mirrors build.yml: nim.cfg uses --path:"../nim-debra/src" and
+        # Mirrors build.yml: config.nims uses --path:"../nim-debra/src" and
         # --path:"../nim-typestates/src", and nimble's resolver runs before
         # the compiler so we must install matching branches locally. Tracks
         # `main` until nimble.directory picks up the relevant tags; bump in
-        # lockstep with build.yml and lockfreequeues.nimble's `requires`.
+        # lockstep with build.yml and lockfreequeues.nimble's `requires`
+        # (currently `debra >= 0.8.0`, `typestates >= 0.10.0`).
         run: |
           set -e
           cd ..
