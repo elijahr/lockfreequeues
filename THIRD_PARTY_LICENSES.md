@@ -33,11 +33,20 @@ vendored into this repository. The benchmark adapter code (under
 ### Loony
 
 - **Source:** https://github.com/shayanhabibi/loony
-- **Version:** `0.3.1` (resolved by `nimble install loony`; see
-  `nimble.lock` if pinned by a downstream consumer)
+- **Version:** `0.3.1` (resolved by `nimble install loony` in bench CI;
+  the resolved version is also recorded at run time in the bench JSON
+  `meta.adapters.loony.version` field — see Item 1).
 - **License:** MIT
 - **Vendored at:** _(not vendored — resolved at build time via Nimble)_
-- **Upgrade procedure:** _(not applicable; nimble-managed)_
+- **Upgrade procedure:** _(nimble-managed; Loony is not listed in the
+  root `lockfreequeues.nimble` manifest because the package is a
+  benchmark-only optional adapter, gated by
+  `-d:adapter_loony_available`. The bench CI workflow runs
+  `nimble install loony` immediately before the bench compile step.
+  Production-dep pinning is via the committed `nimble.lock` at the
+  root of this repository, which covers nim, unittest2, typestates,
+  and debra. To pin Loony for a deterministic local bench, run
+  `nimble install loony@<version>` before invoking `nimble benchmarks`.)_
 
 ### Boost.LockFree
 
@@ -121,12 +130,17 @@ the nimble `threading` package is resolved at build time).
 ### threading (nimble package)
 
 - **Source:** https://github.com/nim-lang/threading
-- **Version:** `0.2.x` (resolved by `nimble install threading`; the
-  bench CI step records the resolved SHA in the workflow log).
+- **Version:** `0.2.x` (resolved by `nimble install threading` in bench
+  CI; the resolved version is also recorded at run time in the bench
+  JSON `meta.adapters.threading.version` field — see Item 1).
 - **License:** MIT
 - **Vendored at:** _(not vendored — resolved at build time via
   Nimble)_
-- **Upgrade procedure:** _(not applicable; nimble-managed)_
+- **Upgrade procedure:** _(nimble-managed; same rationale as Loony
+  above — `threading` is a bench-only optional adapter gated by
+  `-d:adapter_threading_channels_available`, so it is not listed in
+  the root `lockfreequeues.nimble` manifest. Production deps are
+  pinned via `nimble.lock`.)_
 
 ### Nim system.Channel (stdlib)
 
