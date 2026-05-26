@@ -65,7 +65,8 @@ import lockfreequeues
 # Unbounded SPSC queue with segment size 64.
 var queue = newQueue(Queue[int, ccSingle, ccSingle, stEager, 64, 1])
 
-discard queue.push(42)  # Never fails - grows as needed
+var p = queue.getProducer()
+p.push(42)              # never fails — grows as needed
 let item = queue.pop()  # some(42)
 ```
 

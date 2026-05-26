@@ -84,7 +84,8 @@ import lockfreequeues
 
 # SPSC: debra-free; no manager, no attach needed.
 var spsc = newQueue(Queue[int, ccSingle, ccSingle, stEager, 64, 1])
-discard spsc.push(42)              # never fails — grows as needed
+var spscProducer = spsc.getProducer()
+spscProducer.push(42)              # never fails — grows as needed
 let a = spsc.pop()                 # some(42)
 
 # MPMC: each operating thread attaches before its first push/pop.

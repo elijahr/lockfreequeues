@@ -62,7 +62,7 @@ reframe and against each other.
 > import lockfreequeues
 >
 > # Bounded mupsic-equivalent (multi-producer, single-consumer):
-> var q1 = newBQueue[int, ccMulti, ccSingle, N = 8, P = 4, C = 0]()
+> var q1 = newBQueue[int, ccMulti, ccSingle, 8, 4, 0]()
 > let p1 = q1.getProducer()
 > discard p1.push(42)
 > discard q1.pop()                 # SPSC pop on single-consumer side

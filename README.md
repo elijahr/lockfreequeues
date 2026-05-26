@@ -166,12 +166,12 @@ Unbounded queues are linked segments that grow as needed. Use them when:
 
 ## Dependencies
 
-- [`debra`](https://github.com/elijahr/nim-debra) `>= 0.3.0` for epoch-based
+- [`debra`](https://github.com/elijahr/nim-debra) `>= 0.8.0` for epoch-based
   reclamation in the unbounded multi-thread queues. `nim-debra` is a
   general-purpose DEBRA+ implementation; nothing about it is specific to this
   library, and it can be reused as the reclamation backend for any lock-free
   data structure you build.
-- [`typestates`](https://github.com/elijahr/nim-typestates) `>= 0.3.1` for the
+- [`typestates`](https://github.com/elijahr/nim-typestates) `>= 0.10.0` for the
   slot-ownership state machines that back push and pop.
 
 ## Compile-time options
@@ -256,7 +256,7 @@ Pull requests and issues welcome. See
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md). The current release is
-[3.2.0](CHANGELOG.md#320---2026-04-27).
+[5.0.0](CHANGELOG.md#500---2026-05-25).
 
 ## References
 
