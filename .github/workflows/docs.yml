@@ -109,7 +109,16 @@ jobs:
           fi
           # Smoke-test: fail loudly here if the import does not resolve,
           # rather than 30 seconds later inside mkdocstrings.
-          smoke="$(mktemp --suffix=.nim)"
+          #
+          # The temp file lives inside a mktemp -d directory and is named
+          # with a valid Nim identifier (`smoke.nim`). `nim check` derives
+          # the module name from the file's basename; `mktemp --suffix=.nim`
+          # on its own produces `tmp.<rand>.nim`, whose basename contains a
+          # dot and trips 'invalid module name' before the import is even
+          # evaluated — making the smoke test always fail. Burned one CI
+          # run (26462720391) discovering this.
+          smoke_dir="$(mktemp -d)"
+          smoke="$smoke_dir/smoke.nim"
           printf 'import compiler/ast\ndiscard\n' > "$smoke"
           if ! nim check --hints:off --warnings:off "$smoke" >/dev/null 2>&1; then
             echo 'ERROR: compiler/ast still not importable after Nim-source clone + nim.cfg patch' >&2
