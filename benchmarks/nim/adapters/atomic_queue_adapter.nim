@@ -83,6 +83,17 @@ when defined(adapter_atomic_queue_available):
       a.queue = nil
 
   proc push*[T](a: var AtomicQueueAdapter[T], item: T): PushResult =
+    # NIL-sentinel guard (Gemini cycle 18 F1): the C++ wrapper at
+    # `benchmarks/vendor/atomic_queue/atomic_queue_wrapper.cpp` offsets
+    # every push by +1 to dodge the 0 NIL sentinel that
+    # `AtomicQueueB<T>` reserves. `high(uint64) + 1` overflows to 0 →
+    # collides with NIL → silent corruption. Reject this single value
+    # explicitly; the wrapper assumes the collision-free range
+    # `[1, UINT64_MAX-1]`.
+    doAssert cast[uint64](item) != high(uint64),
+      "AtomicQueueAdapter cannot transport high(uint64): the C++ wrapper " &
+      "offsets every push by +1 to avoid the 0 NIL sentinel, and high(uint64)+1 " &
+      "overflows to 0 (a collision-free range of [1, UINT64_MAX-1] is required)."
     if a.queue == nil:
       return prFull
     if aq_push(a.queue, culonglong(cast[uint64](item))) != cint(0):

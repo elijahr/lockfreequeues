@@ -85,16 +85,25 @@ proc initUnboundedMupsicAdapter*[S: static int, T; MaxThreads: static int](
   # ARC/ORC, so `result.manager[] = ...` would run the DebraManager
   # `=destroy` on uninitialized storage. Mark the slot moved-from first.
   wasMoved(result.manager[])
-  result.manager[] = initDebraManager[MaxThreads, debra.ccSingle]()
 
-  # Guard the second `create()` + queue init with a bool-flagged
-  # try/finally so an `OutOfMemDefect` raised mid-init (or any other
-  # exception escaping `newUnboundedMupsicQueue`) tears down the
-  # already-allocated manager rather than leaking its heap block.
-  # Mirrors the unbounded sipmuc / mupmuc adapters' destructor-order
-  # discipline (reset → dealloc) on the failure path.
+  # Guard manager-value-init + queue `create()` + queue init with a
+  # bool-flagged try/finally so an `OutOfMemDefect` (or any other
+  # exception) raised by `initDebraManager` or `newUnboundedMupsicQueue`
+  # tears down the already-allocated manager heap block rather than
+  # leaking it. Mirrors the unbounded sipmuc / mupmuc adapters'
+  # destructor-order discipline (reset → dealloc) on the failure path.
+  # Two-flag guard (Gemini cycle 18 F5):
+  #  * `managerValueInitOk` — set after `initDebraManager` returns,
+  #    indicating the heap manager slot holds a fully-initialized value
+  #    (so `reset(manager[])` is safe in the cleanup arm). If false,
+  #    the slot is `wasMoved`'d-but-never-assigned and `reset` is
+  #    skipped — `dealloc` still runs to free the raw heap block.
+  #  * `queueInitOk` — set after `newUnboundedMupsicQueue` returns.
+  var managerValueInitOk = false
   var queueInitOk = false
   try:
+    result.manager[] = initDebraManager[MaxThreads, debra.ccSingle]()
+    managerValueInitOk = true
     result.queue = create(UnboundedMupsicAdapterQueue[S, T, MaxThreads])
     # Same rationale for the queue: the unified Queue carries a typestate
     # `=destroy`, so mark the created slot moved-from before assigning into it.
@@ -109,7 +118,11 @@ proc initUnboundedMupsicAdapter*[S: static int, T; MaxThreads: static int](
         # queue slot's `=destroy` is safe to skip via `dealloc` alone.
         dealloc(result.queue)
         result.queue = nil
-      reset(result.manager[])
+      if managerValueInitOk:
+        # Manager value is fully initialized; safe to run its `=destroy`.
+        # If `initDebraManager` raised before completing, the slot is
+        # `wasMoved`'d-but-never-assigned — skip `reset` and just free.
+        reset(result.manager[])
       dealloc(result.manager)
       result.manager = nil
 

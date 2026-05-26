@@ -298,7 +298,12 @@ proc getNimbleResolvedVersion(pkgName: string): string =
     let prefix = pkgName & "-"
     var path = ""
     for line in output.splitLines:
-      let stripped = line.strip()
+      # Whitespace strip first; then strip trailing path separators
+      # (Gemini cycle 18 F7): some nimble versions / platforms emit
+      # a trailing `/` or `\` on the path line, which would otherwise
+      # leave the basename empty and miss the `<pkg>-` prefix match.
+      var stripped = line.strip()
+      stripped = stripped.strip(chars = {'/', '\\'}, leading = false)
       if stripped.len == 0:
         continue
       if '/' notin stripped and '\\' notin stripped:
@@ -404,8 +409,12 @@ proc getAdapterVersions*(): JsonNode =
   ## std/json implementation).
   result = newJObject()
   result["schema"] = newJInt(1)
+  # `getTime().utc` rather than `now().utc` (Gemini cycle 18 F8):
+  # `now()` is local-time and converting to UTC depends on the system
+  # timezone configuration; `getTime()` returns a Time object directly
+  # so the ISO-8601 output is timezone-independent.
   result["generated_at"] = newJString(
-    now().utc.format("yyyy-MM-dd'T'HH:mm:ss'Z'"))
+    getTime().utc.format("yyyy-MM-dd'T'HH:mm:ss'Z'"))
 
   let host = newJObject()
   host["os"] = newJString(hostOS)

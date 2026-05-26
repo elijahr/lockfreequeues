@@ -82,9 +82,13 @@ proc makeLockfreequeuesUnboundedSipmucAdapter*[S: static int, T;
   # ARC/ORC, so `result.manager[] = ...` would run the DebraManager
   # `=destroy` on uninitialized storage. Mark the slot moved-from first.
   wasMoved(result.manager[])
-  result.manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
 
-  # Two-flag guard mirroring the mupmuc adapter:
+  # Three-flag guard mirroring the mupmuc adapter (Gemini cycle 18 F6):
+  #  * `managerValueInitOk` — set after `initDebraManager` returns,
+  #    indicating the heap manager slot holds a fully-initialized value
+  #    (so `reset(manager[])` is safe in the cleanup arm). If false,
+  #    the slot is `wasMoved`'d-but-never-assigned and `reset` is
+  #    skipped — `dealloc` still runs to free the raw heap block.
   #  * `queueValueInitOk` — set after `newUnboundedSipmucQueue` returns,
   #    indicating the heap queue slot holds a fully-initialized Queue
   #    value (so `reset(queue[])` is safe and required to free segments).
@@ -92,9 +96,12 @@ proc makeLockfreequeuesUnboundedSipmucAdapter*[S: static int, T;
   #    false, the finally arm tears down whatever partial state exists.
   # The ccSingle producer carries no per-thread handle, so only the
   # consumer attach() is a raise site for `DebraRegistrationError`.
+  var managerValueInitOk = false
   var queueValueInitOk = false
   var queueInitOk = false
   try:
+    result.manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
+    managerValueInitOk = true
     result.queue = create(UnboundedSipmucAdapterQueue[S, T, MaxThreads])
     # Same rationale for the queue: the unified Queue carries a typestate
     # `=destroy`, so mark the created slot moved-from before assigning into it.
@@ -135,7 +142,11 @@ proc makeLockfreequeuesUnboundedSipmucAdapter*[S: static int, T;
         # `dealloc` the raw heap block directly.
         dealloc(result.queue)
         result.queue = nil
-      reset(result.manager[])
+      if managerValueInitOk:
+        # Manager value is fully initialized; safe to run its `=destroy`.
+        # If `initDebraManager` raised before completing, the slot is
+        # `wasMoved`'d-but-never-assigned — skip `reset` and just free.
+        reset(result.manager[])
       dealloc(result.manager)
       result.manager = nil
 

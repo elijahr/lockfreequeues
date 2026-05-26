@@ -69,19 +69,21 @@ proc makeLockfreequeuesUnboundedMupmucAdapter*[S: static int, T;
   # ARC/ORC, so `result.manager[] = ...` would run the DebraManager
   # `=destroy` on uninitialized storage. Mark the slot moved-from first.
   wasMoved(result.manager[])
-  result.manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
 
-  # Guard queue allocation, queue init, AND producer/consumer attach
-  # with a bool-flagged try/finally so any failure mid-init (OOM from
-  # `create`, OOM/other from `newUnboundedMupmucQueue`, or
+  # Guard manager value init, queue allocation, queue init, AND
+  # producer/consumer attach with a bool-flagged try/finally so any
+  # failure mid-init (raise from `initDebraManager`, OOM from `create`,
+  # OOM/other from `newUnboundedMupmucQueue`, or
   # `DebraRegistrationError` from `attach()`) tears down the
-  # already-allocated manager AND any partial queue/view state rather
-  # than leaking. Mirrors the unbounded mupsic adapter's queueInitOk
-  # pattern, extended to cover the attach() path. The
-  # `except DebraRegistrationError` arm preserves the original raised
-  # exception type (raise without conversion) while `finally` handles
-  # the cleanup uniformly for all failure modes.
-  # Two-flag guard:
+  # already-allocated heap blocks rather than leaking. Mirrors the
+  # unbounded mupsic adapter's queueInitOk pattern, extended to cover
+  # both the manager-value-init and attach() paths.
+  # Three-flag guard (Gemini cycle 18 F4):
+  #  * `managerValueInitOk` — set after `initDebraManager` returns,
+  #    indicating the heap manager slot holds a fully-initialized value
+  #    (so `reset(manager[])` is safe in the cleanup arm). If false,
+  #    the slot is `wasMoved`'d-but-never-assigned and `reset` is
+  #    skipped — `dealloc` still runs to free the raw heap block.
   #  * `queueValueInitOk` — set after `newUnboundedMupmucQueue` returns,
   #    indicating the heap queue slot holds a fully-initialized Queue
   #    value (so `reset(queue[])` is safe and required to free segments).
@@ -90,9 +92,12 @@ proc makeLockfreequeuesUnboundedMupmucAdapter*[S: static int, T;
   # This mirrors mupsic's discipline (skip `reset` on a moved-from but
   # never-initialized slot) AND extends it to cover the attach() path,
   # where the queue IS fully initialized but a view registration raised.
+  var managerValueInitOk = false
   var queueValueInitOk = false
   var queueInitOk = false
   try:
+    result.manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
+    managerValueInitOk = true
     result.queue = create(UnboundedMupmucAdapterQueue[S, T, MaxThreads])
     # Same rationale for the queue: the unified Queue carries a typestate
     # `=destroy`, so mark the created slot moved-from before assigning into it.
@@ -133,7 +138,11 @@ proc makeLockfreequeuesUnboundedMupmucAdapter*[S: static int, T;
         # `dealloc` the raw heap block directly.
         dealloc(result.queue)
         result.queue = nil
-      reset(result.manager[])
+      if managerValueInitOk:
+        # Manager value is fully initialized; safe to run its `=destroy`.
+        # If `initDebraManager` raised before completing, the slot is
+        # `wasMoved`'d-but-never-assigned — skip `reset` and just free.
+        reset(result.manager[])
       dealloc(result.manager)
       result.manager = nil
 
