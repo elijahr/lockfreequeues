@@ -137,3 +137,99 @@ the nimble `threading` package is resolved at build time).
 - **License:** MIT (Nim compiler license)
 - **Vendored at:** _(not vendored — built into the Nim compiler)_
 - **Upgrade procedure:** _(not applicable; tracks Nim compiler)_
+
+## Comparison expansion libraries (v5.0.0)
+
+v5.0.0 adds four more vendored C/C++ comparison targets (`atomic_queue`,
+`liblfds`, `rigtorp_mpmc`, `rigtorp_spsc`) and two additional Rust
+crates that ride alongside `crossbeam-queue` in the existing
+`bench-ffi-crossbeam` cdylib (`flume`, `kanal`). The benchmark adapter
+code (`benchmarks/nim/adapters/<lib>_adapter.nim` and the C/C++
+wrappers in each vendor directory) is original `lockfreequeues` source
+under Apache-2.0.
+
+### atomic_queue (max0x7ba)
+
+- **Source:** https://github.com/max0x7ba/atomic_queue
+- **Version:** commit `1a3774a89c86ecfdf08753dbd41018ace5a833a4`
+  (head of upstream `master` on the v4.2.0 vendoring date).
+- **License:** MIT
+- **Vendored at:** `benchmarks/vendor/atomic_queue/`
+- **Upgrade procedure:** see
+  `benchmarks/vendor/atomic_queue/README.md`
+
+### liblfds (7.1.1)
+
+- **Source:** https://liblfds.org/ (mirrored at
+  https://github.com/darthcloud/liblfds7.1.1)
+- **Version:** `7.1.1` (upstream release tag; the canonical
+  `liblfds/liblfds7.1.1` GitHub mirror was retired, so the vendoring
+  uses two content-identical community mirrors cross-checked at
+  vendoring time — see `benchmarks/vendor/liblfds/README.md`).
+- **License:** public-domain dedication with an explicit multi-grant
+  (MIT, BSD, Apache, GPL/LGPL, Creative Commons) per the upstream
+  homepage. `lockfreequeues` consumes liblfds under the Apache-2.0
+  grant from that list (matches the project's own Apache-2.0 license)
+  and under the public-domain dedication. The verbatim grant text is
+  preserved in `benchmarks/vendor/liblfds/LICENSE`.
+- **Vendored at:** `benchmarks/vendor/liblfds/liblfds711/` (full
+  upstream source tree, unmodified).
+- **Upgrade procedure:** see
+  `benchmarks/vendor/liblfds/README.md`
+
+### rigtorp::mpmc::Queue
+
+- **Source:** https://github.com/rigtorp/MPMCQueue
+- **Version:** commit `b9808ede08f26fa9df4df4e081d19cace8f6c6ea`
+  (head of upstream `master` on the v4.2.0 vendoring date).
+- **License:** MIT
+- **Vendored at:** `benchmarks/vendor/rigtorp_mpmc/`
+- **Upgrade procedure:** see
+  `benchmarks/vendor/rigtorp_mpmc/README.md`
+
+### rigtorp::SPSCQueue
+
+- **Source:** https://github.com/rigtorp/SPSCQueue
+- **Version:** commit `1053918dbd251fbff69b24ef27fa5d51c29ec2af`
+  (head of upstream `master` on the v4.2.0 vendoring date).
+- **License:** MIT
+- **Vendored at:** `benchmarks/vendor/rigtorp_spsc/`
+- **Upgrade procedure:** see
+  `benchmarks/vendor/rigtorp_spsc/README.md`
+
+### flume (Rust crate)
+
+- **Source:** https://github.com/zesterer/flume
+- **Version:** `0.11.1` (resolved from the `flume = "0.11"` requirement
+  in `benchmarks/rust/bench-ffi-crossbeam/Cargo.toml`; the exact
+  resolved version is recorded in
+  `benchmarks/rust/bench-ffi-crossbeam/Cargo.lock`).
+- **License:** Apache-2.0 OR MIT (choose either; `lockfreequeues`
+  takes Apache-2.0 to match the project license).
+- **Vendored at:** _(crate sources are downloaded by Cargo at build
+  time; only our own thin C-ABI shim under
+  `benchmarks/rust/bench-ffi-crossbeam/` is committed)_
+- **Upgrade procedure:** bump the `flume` version in
+  `benchmarks/rust/bench-ffi-crossbeam/Cargo.toml`, run
+  `cargo build --release` to refresh `Cargo.lock`, run the integration
+  tests
+  (`cargo test --release --manifest-path benchmarks/rust/bench-ffi-crossbeam/Cargo.toml`)
+  and the Nim round-trip suite with the `flume` adapter gate enabled.
+
+### kanal (Rust crate)
+
+- **Source:** https://github.com/fereidani/kanal
+- **Version:** `0.1.1` (resolved from the `kanal = "0.1"` requirement
+  in `benchmarks/rust/bench-ffi-crossbeam/Cargo.toml`; the exact
+  resolved version is recorded in
+  `benchmarks/rust/bench-ffi-crossbeam/Cargo.lock`).
+- **License:** MIT
+- **Vendored at:** _(crate sources are downloaded by Cargo at build
+  time; only our own thin C-ABI shim under
+  `benchmarks/rust/bench-ffi-crossbeam/` is committed)_
+- **Upgrade procedure:** bump the `kanal` version in
+  `benchmarks/rust/bench-ffi-crossbeam/Cargo.toml`, run
+  `cargo build --release` to refresh `Cargo.lock`, run the integration
+  tests
+  (`cargo test --release --manifest-path benchmarks/rust/bench-ffi-crossbeam/Cargo.toml`)
+  and the Nim round-trip suite with the `kanal` adapter gate enabled.
