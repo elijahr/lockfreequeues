@@ -45,12 +45,18 @@ type
 
   LockfreequeuesUnboundedMupmucAdapter*[S: static int, T;
                                         MaxThreads: static int] = object
-    ## Inline queue (Nim 2.2.6 codegen workaround); heap manager because
+    ## Heap manager AND heap queue. The manager is heap-pointer because
     ## the unified `newUnboundedMupmucQueue` borrow form takes a
-    ## `ptr DebraManager`. ccCons == ccMulti pins manager cardinality to
-    ## `debra.ccMulti` per the smart-constructor signature.
+    ## `ptr DebraManager`. The queue is heap-pointer because the cached
+    ## `producer0` / `consumer0` views store a `ptr Queue` borrowing
+    ## into the queue slot, and an inline queue field would dangle when
+    ## the adapter is returned by value from the factory (NRVO is not
+    ## guaranteed in Nim). Mirrors the
+    ## lockfreequeues_unbounded_mupsic_adapter heap-storage pattern.
+    ## ccCons == ccMulti pins manager cardinality to `debra.ccMulti`
+    ## per the smart-constructor signature.
     manager*: ptr DebraManager[MaxThreads, debra.ccMulti]
-    queue*: UnboundedMupmucAdapterQueue[S, T, MaxThreads]
+    queue*: ptr UnboundedMupmucAdapterQueue[S, T, MaxThreads]
     producer0*: UnboundedMupmucAdapterProducer[S, T, MaxThreads]
     consumer0*: UnboundedMupmucAdapterConsumer[S, T, MaxThreads]
 
@@ -62,35 +68,40 @@ proc makeLockfreequeuesUnboundedMupmucAdapter*[S: static int, T;
   # wasMoved before the deref-assign: `create`'s zero-fill is not tracked by
   # ARC/ORC, so `result.manager[] = ...` would run the DebraManager
   # `=destroy` on uninitialized storage. Mark the slot moved-from first.
-  # (The queue here is an inline field, not a `create`d pointer, so it needs
-  # no wasMoved — only the heap manager does.)
   wasMoved(result.manager[])
   result.manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
-  result.queue =
+
+  result.queue = create(UnboundedMupmucAdapterQueue[S, T, MaxThreads])
+  # Same rationale for the queue: the unified Queue carries a typestate
+  # `=destroy`, so mark the created slot moved-from before assigning into it.
+  wasMoved(result.queue[])
+  result.queue[] =
     newUnboundedMupmucQueue[T, stEager, S, MaxThreads](result.manager)
   # Cache producer-0 / consumer-0 for the 1P/1C smoke path, where the
   # init thread IS the operating thread. getProducer/getConsumer no
   # longer register; both views register their debra handles here via
   # attach() on the (init == operating) thread. Multi-thread shapes
-  # obtain their own per-thread views via `queue.getProducer()` /
-  # `queue.getConsumer()` and call `attach()` on their own threads.
+  # obtain their own per-thread views via `queue[].getProducer()` /
+  # `queue[].getConsumer()` and call `attach()` on their own threads.
   #
   # `attach()` can raise `DebraRegistrationError` if the manager is full
-  # (MaxThreads exhausted). If that fires after `create(DebraManager…)`
-  # succeeded, the heap manager would leak because `result` is never
+  # (MaxThreads exhausted). If that fires after `create(...)` succeeded,
+  # the heap manager AND heap queue would leak because `result` is never
   # fully returned and the deinit (`cleanup`) never runs. Mirror the
   # `cleanup` teardown order — views first, queue, then manager — before
   # re-raising so the failure path matches the success-path destructor
   # contract.
   try:
-    result.producer0 = result.queue.getProducer()
+    result.producer0 = result.queue[].getProducer()
     result.producer0.attach()
-    result.consumer0 = result.queue.getConsumer()
+    result.consumer0 = result.queue[].getConsumer()
     result.consumer0.attach()
   except DebraRegistrationError:
     reset(result.producer0)
     reset(result.consumer0)
-    reset(result.queue)
+    reset(result.queue[])
+    dealloc(result.queue)
+    result.queue = nil
     reset(result.manager[])
     dealloc(result.manager)
     result.manager = nil
@@ -101,18 +112,21 @@ proc cleanup*[S: static int, T; MaxThreads: static int](
 ) =
   ## Order matters on two axes:
   ##  1. The cached `producer0` / `consumer0` views borrow a pointer into
-  ##     the inline `queue` and carry typestate `=destroy`s. They must be
-  ##     reset BEFORE the queue is reset, else their scope-exit destructors
-  ##     would touch a destroyed queue (use-after-free).
-  ##  2. The inline queue's `=destroy` calls `unbindClient(manager[])`, so
-  ##     the manager must outlive the queue. Reset the queue (running its
-  ##     destructor while `manager` is still valid), then free the manager.
-  ## The view-reset additions go ahead of the existing queue-before-manager
-  ## teardown, which is preserved.
-  if a.manager != nil:
+  ##     the heap-allocated `queue` and carry typestate `=destroy`s.
+  ##     They must be reset BEFORE the queue is reset, else their
+  ##     scope-exit destructors would touch a destroyed queue
+  ##     (use-after-free).
+  ##  2. The queue's `=destroy` calls `unbindClient(manager[])`, so the
+  ##     manager must outlive the queue. Reset+free the queue first
+  ##     (running its destructor while `manager` is still valid), then
+  ##     reset+free the manager.
+  if a.queue != nil:
     reset(a.producer0)
     reset(a.consumer0)
-    reset(a.queue)
+    reset(a.queue[])
+    dealloc(a.queue)
+    a.queue = nil
+  if a.manager != nil:
     reset(a.manager[])
     dealloc(a.manager)
     a.manager = nil

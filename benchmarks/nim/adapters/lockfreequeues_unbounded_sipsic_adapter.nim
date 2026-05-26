@@ -11,11 +11,16 @@
 ## segments on demand) so this adapter's `push` always returns
 ## `prSuccess`.
 ##
-## Implementation note: the underlying `Queue` is held inline (not via
-## heap pointer). Inline storage means Nim's automatic `=destroy` runs
-## when the adapter goes out of scope, which keeps the adapter free of
-## explicit lifecycle plumbing. The `cleanup` proc is retained as a
-## no-op for symmetry with the other adapters' cleanup contract.
+## Implementation note: the underlying `Queue` is held on the heap via
+## a `ptr Queue[...]` field. Heap storage is required because the
+## cached `producer0` view stores a `ptr Queue` borrowing into the
+## queue field, and an inline queue would dangle when the factory's
+## return value is copied/moved out of its stack frame (NRVO is not
+## guaranteed in Nim). Mirrors the lockfreequeues_unbounded_mupsic
+## adapter's manager+queue heap-storage pattern; here there is no
+## DebraManager because the SPSC branch carries no reclamation
+## machinery. `cleanup` resets the cached view first, then resets the
+## queue and frees its heap slot.
 
 import options
 import lockfreequeues/queue
@@ -31,28 +36,52 @@ const SipsicMaxThreads = 4
   ## immaterial.
 
 type
+  UnboundedSipsicAdapterQueue[S: static int, T] =
+    Queue[T, ccSingle, ccSingle, stEager, S, SipsicMaxThreads]
+  UnboundedSipsicAdapterProducer[S: static int, T] =
+    QueueProducer[T, ccSingle, ccSingle, stEager, S, SipsicMaxThreads]
+
   LockfreequeuesUnboundedSipsicAdapter*[S: static int, T] = object
-    queue*: Queue[T, ccSingle, ccSingle, stEager, S, SipsicMaxThreads]
-    producer0*: QueueProducer[T, ccSingle, ccSingle, stEager, S,
-                              SipsicMaxThreads]
+    ## Heap queue (see module doc); the cached `producer0` view borrows
+    ## a `ptr Queue` into the heap slot and therefore stays valid for
+    ## the lifetime of the adapter regardless of how the adapter value
+    ## is moved/copied at the call site.
+    queue*: ptr UnboundedSipsicAdapterQueue[S, T]
+    producer0*: UnboundedSipsicAdapterProducer[S, T]
       ## Cached producer view obtained ONCE on the init/operating
       ## thread (mirrors `producer0` in
       ## `lockfreequeues_unbounded_sipmuc_adapter`). The ccSingle
       ## producer carries no per-thread handle and stores only a
-      ## `ptr Queue` into the inline queue, so it stays valid for every
-      ## `push` and avoids recreating the view per call.
+      ## `ptr Queue` into the heap-allocated queue, so it stays valid
+      ## for every `push` and avoids recreating the view per call.
 
 proc makeLockfreequeuesUnboundedSipsicAdapter*[S: static int, T](
     capacity: int = 0   # ignored for unbounded
 ): LockfreequeuesUnboundedSipsicAdapter[S, T] =
-  result.queue =
+  result.queue = create(UnboundedSipsicAdapterQueue[S, T])
+  # wasMoved before the deref-assign: `create`'s zero-fill is not tracked by
+  # ARC/ORC, so `result.queue[] = ...` would run the unified Queue's
+  # typestate `=destroy` on uninitialized storage. Mark the slot moved-from
+  # first. Mirrors the lockfreequeues_unbounded_mupsic_adapter pattern.
+  wasMoved(result.queue[])
+  result.queue[] =
     newUnboundedSipsicQueue[T, stEager, S, SipsicMaxThreads]()
-  result.producer0 = result.queue.getProducer()
+  result.producer0 = result.queue[].getProducer()
 
 proc cleanup*[S: static int, T](
     a: var LockfreequeuesUnboundedSipsicAdapter[S, T]
 ) =
-  discard
+  ## Order matters: the cached `producer0` view borrows a `ptr Queue`
+  ## into the heap-allocated queue and carries a typestate `=destroy`.
+  ## It must be reset BEFORE the queue is reset, else its scope-exit
+  ## destructor would touch a destroyed queue (use-after-free). Then
+  ## reset the queue (runs the unified Queue destructor on a valid
+  ## referent) and free its heap slot.
+  if a.queue != nil:
+    reset(a.producer0)
+    reset(a.queue[])
+    dealloc(a.queue)
+    a.queue = nil
 
 proc push*[S: static int, T](
     a: var LockfreequeuesUnboundedSipsicAdapter[S, T], item: T
@@ -63,7 +92,7 @@ proc push*[S: static int, T](
 proc pop*[S: static int, T](
     a: var LockfreequeuesUnboundedSipsicAdapter[S, T]
 ): PopResult[T] =
-  let r = a.queue.pop()
+  let r = a.queue[].pop()
   if r.isSome:
     PopResult[T](success: true, value: r.get)
   else:

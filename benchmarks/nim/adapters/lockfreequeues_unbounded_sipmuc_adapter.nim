@@ -13,7 +13,7 @@
 ## consumer-0 view (`getConsumer` called on the init thread) for the
 ## smoke / 1p1c shape. Multi-consumer shapes (1p2c, 1p4c) register
 ## additional consumer views per-thread inside the bench harness via
-## `adapter.queue.getConsumer()`.
+## `adapter.queue[].getConsumer()`.
 ##
 ## v5.0.0 cascade: the legacy `UnboundedSipmuc[S, T, MT]` type was
 ## deleted in 3.3.7. The smart-constructor `newUnboundedSipmucQueue`
@@ -50,12 +50,15 @@ type
 
   LockfreequeuesUnboundedSipmucAdapter*[S: static int, T;
                                         MaxThreads: static int] = object
-    ## Manager is heap-pointer because the unified Queue rkEbr borrow
-    ## smart-constructor takes a `ptr DebraManager` (the queue stores
-    ## the pointer into shared retire state). Queue is inline because
-    ## heap-pointer storage on a generic destructor-bearing type
-    ## triggers a Nim 2.2.6 codegen bug from this generic adapter site
-    ## (mirrors the lockfreequeues_unbounded_sipsic_adapter comment).
+    ## Manager and queue are BOTH heap-allocated. The manager is
+    ## heap-pointer because the unified Queue rkEbr borrow
+    ## smart-constructor takes a `ptr DebraManager`. The queue is
+    ## heap-pointer because the cached `producer0` / `consumer0` views
+    ## store a `ptr Queue` borrowing into the queue slot, and an
+    ## inline queue field would dangle when the adapter is returned
+    ## by value from the factory (NRVO is not guaranteed in Nim).
+    ## Mirrors the lockfreequeues_unbounded_mupsic_adapter heap-storage
+    ## pattern.
     ##
     ## ccCons == ccMulti requires a ccMulti-cardinality manager per
     ## nim-debra `cardinality.nim`; the smart-constructor enforces this
@@ -66,7 +69,7 @@ type
     ## so the adapter caches a `producer0` view for the smoke / 1p1c
     ## shape.
     manager*: ptr DebraManager[MaxThreads, debra.ccMulti]
-    queue*: UnboundedSipmucAdapterQueue[S, T, MaxThreads]
+    queue*: ptr UnboundedSipmucAdapterQueue[S, T, MaxThreads]
     producer0*: UnboundedSipmucAdapterProducer[S, T, MaxThreads]
     consumer0*: UnboundedSipmucAdapterConsumer[S, T, MaxThreads]
 
@@ -78,35 +81,40 @@ proc makeLockfreequeuesUnboundedSipmucAdapter*[S: static int, T;
   # wasMoved before the deref-assign: `create`'s zero-fill is not tracked by
   # ARC/ORC, so `result.manager[] = ...` would run the DebraManager
   # `=destroy` on uninitialized storage. Mark the slot moved-from first.
-  # (The queue here is an inline field, not a `create`d pointer, so it needs
-  # no wasMoved — only the heap manager does.)
   wasMoved(result.manager[])
   result.manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
-  result.queue =
+
+  result.queue = create(UnboundedSipmucAdapterQueue[S, T, MaxThreads])
+  # Same rationale for the queue: the unified Queue carries a typestate
+  # `=destroy`, so mark the created slot moved-from before assigning into it.
+  wasMoved(result.queue[])
+  result.queue[] =
     newUnboundedSipmucQueue[T, stEager, S, MaxThreads](result.manager)
   # producer0 / consumer0 are the cached views for the smoke / 1p1c
   # round-trip path, where the init thread IS the operating thread.
   # getConsumer/getProducer no longer register; consumer0 registers its
   # debra handle here via attach() on the (init == operating) thread.
   # The single producer (ccSingle) needs no registration. Multi-consumer
-  # shapes obtain their own per-thread views via `queue.getConsumer()`
+  # shapes obtain their own per-thread views via `queue[].getConsumer()`
   # and call `attach()` on their own threads.
   #
   # `attach()` can raise `DebraRegistrationError` if the manager is full
-  # (MaxThreads exhausted). If that fires after `create(DebraManager…)`
-  # succeeded, the heap manager would leak because `result` is never
+  # (MaxThreads exhausted). If that fires after `create(...)` succeeded,
+  # the heap manager AND heap queue would leak because `result` is never
   # fully returned and the deinit (`cleanup`) never runs. Mirror the
   # `cleanup` teardown order — views first, queue, then manager — before
   # re-raising so the failure path matches the success-path destructor
   # contract.
   try:
-    result.producer0 = result.queue.getProducer()
-    result.consumer0 = result.queue.getConsumer()
+    result.producer0 = result.queue[].getProducer()
+    result.consumer0 = result.queue[].getConsumer()
     result.consumer0.attach()
   except DebraRegistrationError:
     reset(result.producer0)
     reset(result.consumer0)
-    reset(result.queue)
+    reset(result.queue[])
+    dealloc(result.queue)
+    result.queue = nil
     reset(result.manager[])
     dealloc(result.manager)
     result.manager = nil
@@ -117,19 +125,22 @@ proc cleanup*[S: static int, T; MaxThreads: static int](
 ) =
   ## Order matters on two axes:
   ##  1. The cached `producer0` / `consumer0` views borrow a pointer into
-  ##     the inline `queue` and carry typestate `=destroy`s. They must be
-  ##     reset BEFORE the queue is reset, else their scope-exit destructors
-  ##     would touch a destroyed queue (use-after-free).
-  ##  2. The inline queue's `=destroy` calls `unbindClient(manager[])`, so
-  ##     the manager must outlive the queue. Reset the queue (running its
-  ##     destructor while `manager` is still valid), then free the manager.
-  ## After this proc returns the queue is destroyed; callers must not keep
-  ## using `a.queue`. The view-reset additions go ahead of the existing
-  ## queue-before-manager teardown, which is preserved.
-  if a.manager != nil:
+  ##     the heap-allocated `queue` and carry typestate `=destroy`s.
+  ##     They must be reset BEFORE the queue is reset, else their
+  ##     scope-exit destructors would touch a destroyed queue
+  ##     (use-after-free).
+  ##  2. The queue's `=destroy` calls `unbindClient(manager[])`, so the
+  ##     manager must outlive the queue. Reset+free the queue first
+  ##     (running its destructor while `manager` is still valid), then
+  ##     reset+free the manager. After this proc returns the queue is
+  ##     destroyed; callers must not keep using `a.queue`.
+  if a.queue != nil:
     reset(a.producer0)
     reset(a.consumer0)
-    reset(a.queue)
+    reset(a.queue[])
+    dealloc(a.queue)
+    a.queue = nil
+  if a.manager != nil:
     reset(a.manager[])
     dealloc(a.manager)
     a.manager = nil
