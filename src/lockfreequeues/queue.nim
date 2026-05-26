@@ -726,6 +726,12 @@ proc newQueue*[
       let mgr = allocAligned[DebraManager[MaxThreads, debra.ccMulti]]()
     else:
       let mgr = allocAligned[DebraManager[MaxThreads, debra.ccSingle]]()
+    # `allocAligned`'s zero-fill is not tracked by ARC/ORC, so a later
+    # `mgr[] = initDebraManager[...]()` would run the `DebraManager`
+    # `=destroy` on uninitialized storage. Mark the slot moved-from
+    # first to match the NRVO discipline applied in
+    # benchmarks/nim/adapters/lockfreequeues_unbounded_*_adapter.nim.
+    wasMoved(mgr[])
     var ok = false
     try:
       when ccCons == ccMulti:

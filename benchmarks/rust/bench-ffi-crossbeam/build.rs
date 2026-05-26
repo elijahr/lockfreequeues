@@ -106,11 +106,21 @@ fn main() {
 /// when found. Key order within each table is irrelevant.
 fn find_version_in_lockfile(parsed: &Value, crate_name: &str) -> Option<String> {
     let packages = parsed.get("package")?.as_array()?;
+    // Scan the full array so we can warn on duplicate `name` matches.
+    // Multiple `[[package]]` entries with the same name in a single
+    // `Cargo.lock` is legal (Cargo permits multiple major versions of
+    // the same crate to coexist) but the bench harness records ONE
+    // version per crate name into `meta.adapters.<slug>.version`, so a
+    // duplicate is ambiguous: silently returning the first match would
+    // hide which copy is actually linked. Warn via `cargo:warning=…`
+    // so the operator sees the ambiguity in build output without
+    // failing the build (the first match is still returned for
+    // forward compatibility — duplicates were never expected here).
+    let mut found: Option<String> = None;
     for pkg in packages {
         // A `[[package]]` entry without a `name` is malformed but should
         // not abort the search; skip it and continue scanning. Same for
-        // a matching entry without a `version` — return None only after
-        // exhausting the array.
+        // a matching entry without a `version`.
         let name = match pkg.get("name").and_then(Value::as_str) {
             Some(n) => n,
             None => continue,
@@ -118,9 +128,21 @@ fn find_version_in_lockfile(parsed: &Value, crate_name: &str) -> Option<String> 
         if name == crate_name {
             if let Some(version) = pkg.get("version").and_then(Value::as_str)
             {
-                return Some(version.to_string());
+                if let Some(prev) = &found {
+                    println!(
+                        "cargo:warning=bench-ffi-crossbeam build.rs: \
+                         multiple Cargo.lock entries for crate {:?} \
+                         ({:?} and {:?}); reporting the first match in \
+                         BENCH_DEP_<crate>_VERSION. Disambiguate by \
+                         removing the duplicate or splitting cdylib \
+                         builds per crate version.",
+                        crate_name, prev, version,
+                    );
+                } else {
+                    found = Some(version.to_string());
+                }
             }
         }
     }
-    None
+    found
 }

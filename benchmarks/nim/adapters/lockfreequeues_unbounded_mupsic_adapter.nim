@@ -74,6 +74,12 @@ proc initUnboundedMupsicAdapter*[S: static int, T; MaxThreads: static int](
   ## producer threads call `getProducer().attach()` on their own
   ## threads. The smart-constructor pins ST to stEager at the type
   ## level (matches the legacy 3.2.x default).
+  ##
+  ## OOM safety: the second `create(...)` can raise `OutOfMemDefect`
+  ## after the first allocation succeeded; without a guard the manager
+  ## heap block would leak. Mirror the unbounded sipmuc / mupmuc
+  ## adapters' destructor-order teardown (reset → dealloc) on the
+  ## failure path so the success-path destructor contract still holds.
   result.manager = create(DebraManager[MaxThreads, debra.ccSingle])
   # wasMoved before the deref-assign: `create`'s zero-fill is not tracked by
   # ARC/ORC, so `result.manager[] = ...` would run the DebraManager
@@ -81,12 +87,31 @@ proc initUnboundedMupsicAdapter*[S: static int, T; MaxThreads: static int](
   wasMoved(result.manager[])
   result.manager[] = initDebraManager[MaxThreads, debra.ccSingle]()
 
-  result.queue = create(UnboundedMupsicAdapterQueue[S, T, MaxThreads])
-  # Same rationale for the queue: the unified Queue carries a typestate
-  # `=destroy`, so mark the created slot moved-from before assigning into it.
-  wasMoved(result.queue[])
-  result.queue[] =
-    newUnboundedMupsicQueue[T, stEager, S, MaxThreads](result.manager)
+  # Guard the second `create()` + queue init with a bool-flagged
+  # try/finally so an `OutOfMemDefect` raised mid-init (or any other
+  # exception escaping `newUnboundedMupsicQueue`) tears down the
+  # already-allocated manager rather than leaking its heap block.
+  # Mirrors the unbounded sipmuc / mupmuc adapters' destructor-order
+  # discipline (reset → dealloc) on the failure path.
+  var queueInitOk = false
+  try:
+    result.queue = create(UnboundedMupsicAdapterQueue[S, T, MaxThreads])
+    # Same rationale for the queue: the unified Queue carries a typestate
+    # `=destroy`, so mark the created slot moved-from before assigning into it.
+    wasMoved(result.queue[])
+    result.queue[] =
+      newUnboundedMupsicQueue[T, stEager, S, MaxThreads](result.manager)
+    queueInitOk = true
+  finally:
+    if not queueInitOk:
+      if result.queue != nil:
+        # `wasMoved` happened only on success; on partial-init the
+        # queue slot's `=destroy` is safe to skip via `dealloc` alone.
+        dealloc(result.queue)
+        result.queue = nil
+      reset(result.manager[])
+      dealloc(result.manager)
+      result.manager = nil
 
 proc deinitUnboundedMupsicAdapter*[S: static int, T; MaxThreads: static int](
     a: var UnboundedMupsicAdapter[S, T, MaxThreads]

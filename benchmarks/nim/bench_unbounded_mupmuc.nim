@@ -102,6 +102,11 @@ proc umupmucProducerThread[S: static int; T; MaxT: static int](
   {.cast(gcsafe).}:
     var producer = ctx.queue[].getProducer()
     # Register this producer's debra handle on its own thread.
+    # No try/except around `attach()`: `MaxT == MaxThreads == 16` (see
+    # the top-of-file constant) bounds the registration capacity above
+    # the largest shape this binary exercises (`4p4c` + main + consumer
+    # threads = 9 attach() calls), so `DebraRegistrationError` is
+    # unreachable here by construction.
     producer.attach()
     when defined(benchProgress):
       var pushed = 0
@@ -117,7 +122,10 @@ proc umupmucConsumerThread[S: static int; T; MaxT: static int](
 ) {.thread.} =
   {.cast(gcsafe).}:
     var consumer = ctx.queue[].getConsumer()
-    # Register this consumer's debra handle on its own thread.
+    # Register this consumer's debra handle on its own thread. Same
+    # `MaxT == 16` rationale as the producer thread above: no
+    # try/except is needed because debra registration exhaustion is
+    # unreachable for the shapes this binary exercises.
     consumer.attach()
     var local = 0
     while local < ctx.count:

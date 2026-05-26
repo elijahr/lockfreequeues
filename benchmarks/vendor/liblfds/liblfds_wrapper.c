@@ -74,6 +74,14 @@ typedef struct {
 } bench_liblfds_bss_t;
 
 void *bench_liblfds_bss_init(unsigned long long capacity) {
+  /* Bound-check before the cast: on platforms where `unsigned long long`
+   * is wider than `size_t` (rare today, but legal under C), a >SIZE_MAX
+   * capacity would silently truncate. Matches the guard in the other
+   * vendored C/C++ wrappers (atomic_queue, moodycamel, rigtorp_*).
+   * No-op on LP64 / LLP64 targets where the two types are the same width. */
+  if (capacity > (unsigned long long)SIZE_MAX) {
+    return NULL;
+  }
   size_t cap = bench_next_pow2((size_t)capacity);
   bench_liblfds_bss_t *q = (bench_liblfds_bss_t *)malloc(sizeof(*q));
   if (q == NULL) return NULL;
@@ -130,6 +138,10 @@ typedef struct {
 } bench_liblfds_bmm_t;
 
 void *bench_liblfds_bmm_init(unsigned long long capacity) {
+  /* Same SIZE_MAX bound-check rationale as bench_liblfds_bss_init above. */
+  if (capacity > (unsigned long long)SIZE_MAX) {
+    return NULL;
+  }
   size_t cap = bench_next_pow2((size_t)capacity);
   /* `bench_liblfds_bmm_t` embeds `struct lfds711_queue_bmm_state`, whose
    * `read_index` / `write_index` fields are declared with
