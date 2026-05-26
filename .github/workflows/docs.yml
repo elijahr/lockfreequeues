@@ -50,15 +50,19 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nimble
-          # Include nimble.lock in the key so lockfile changes (and the
-          # transitive set of installed packages) bust the cache. Hashing
-          # only *.nimble missed lockfile-only edits and let a stale
-          # ~/.nimble — installed under a previous lockfile shape — get
-          # restored, which short-circuited `nimble install nim` below
-          # and left `compiler/ast` unimportable on the next run.
-          key: ${{ runner.os }}-nimble-docs-${{ hashFiles('*.nimble', 'nimble.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-nimble-docs-
+          # The prefix is intentionally versioned (`-v2-`) so legacy
+          # caches stored under the older `-nimble-docs-` prefix cannot
+          # be partial-matched back in. CI run 26461203298 proved that
+          # changing only the hash suffix is insufficient: a stale cache
+          # from a prior lockfile shape was restored via restore-keys
+          # fallback, and `nimble install nim` then silently no-op'd
+          # because nimble saw "nim already installed" inside that stale
+          # cache — leaving `compiler/ast` unimportable for mkdocstrings.
+          #
+          # restore-keys is intentionally OMITTED: partial-match restores
+          # are exactly what masked the bug. We want either an exact key
+          # hit (safe) or a clean miss followed by a fresh install.
+          key: ${{ runner.os }}-nimble-docs-v2-${{ hashFiles('*.nimble', 'nimble.lock') }}
 
       - name: Install Nim compiler API package (for mkdocstrings-nim)
         # mkdocstrings-nim's extractor.nim does `import compiler/[ast, parser, ...]`,
