@@ -33,3 +33,46 @@ references to absent packages).
 
 The other three packages (`unittest2`, `typestates`, `debra`) remain
 pinned by SHA1 checksum and serve their normal lockfile role.
+
+## Lockfile scope during pre-release: typestates + debra are local-path
+
+During the v5.0.0 integration wave, the `typestates` and `debra`
+entries in `nimble.lock` carry **empty `url` and `vcsRevision`
+fields**. This is intentional, not a corruption.
+
+The reason is that v5.0.0 of `lockfreequeues` is co-developed against
+the `main` branches of `nim-typestates` and `nim-debra` as sibling
+checkouts via `config.nims`'s `--path:"../nim-typestates/src"` /
+`--path:"../nim-debra/src"` overrides. The CI workflows
+(`.github/workflows/{build,bench,bench-comparison}.yml`) `git clone`
+those sibling repos at `main` and `nimble install` them locally so
+nimble's resolver is satisfied; the compiler then resolves the actual
+source via the sibling-path directives. The lockfile entries record
+the resulting checksum but cannot meaningfully record an upstream
+`url` / `vcsRevision` because the install came from a local path.
+
+What `nimble.lock` actually guarantees today, therefore, is:
+
+- **`unittest2`**: fully url+SHA pinned (Status nim-unittest2).
+- **`typestates`**: SHA1 of the installed package contents; url and
+  vcsRevision are empty because installs come from the local sibling
+  checkout, not a git URL.
+- **`debra`**: same as typestates.
+
+This is acceptable for the v5.0.0 pre-release because the CI
+workflows themselves pin to `main` HEAD of both repos and the
+sibling-path override is what the compiler reads at build time
+anyway. Once `typestates v0.10.0` and `debra v0.8.0` are published
+to `nimble.directory`, the lockfile should be regenerated against
+the registry (which will populate `url` and `vcsRevision` against
+the public GitHub tags
+`https://github.com/elijahr/nim-typestates@v0.10.0` ->
+commit `f3955be472e8353f8736bb639c3133023889ddb8`, and
+`https://github.com/elijahr/nim-debra@v0.8.0` ->
+commit `123f29c9efbf9b646f80e385cdde95a690200a89`), and the CI's
+sibling-clone step can be retired.
+
+Until then, treat `nimble.lock` as binding only for `unittest2`;
+typestates + debra are pinned by the CI sibling-clone step plus the
+floor versions in `lockfreequeues.nimble` (`typestates >= 0.10.0`,
+`debra >= 0.8.0`).

@@ -1,6 +1,6 @@
 # Third-Party Licenses
 
-`lockfreequeues` itself is licensed under Apache-2.0 (see `LICENSE`).
+`lockfreequeues` itself is licensed under MIT (see `LICENSE`).
 The benchmark suite (under `benchmarks/`) compares `lockfreequeues`
 against several upstream queue libraries; this file records the license
 obligations for each one.
@@ -28,7 +28,7 @@ The libraries below are linked at compile time by the bench suite when
 the relevant `-d:adapter_*_available` gate is set; their source is NOT
 vendored into this repository. The benchmark adapter code (under
 `benchmarks/nim/adapters/<lib>_adapter.nim`) is original
-`lockfreequeues` source and inherits the project's Apache-2.0 license.
+`lockfreequeues` source and inherits the project's MIT license.
 
 ### Loony
 
@@ -183,7 +183,7 @@ crates that ride alongside `crossbeam-queue` in the existing
 `bench-ffi-crossbeam` cdylib (`flume`, `kanal`). The benchmark adapter
 code (`benchmarks/nim/adapters/<lib>_adapter.nim` and the C/C++
 wrappers in each vendor directory) is original `lockfreequeues` source
-under Apache-2.0.
+under MIT.
 
 ### atomic_queue (max0x7ba)
 
@@ -211,10 +211,10 @@ under Apache-2.0.
   vendoring time — see `benchmarks/vendor/liblfds/README.md`).
 - **License:** public-domain dedication with an explicit multi-grant
   (MIT, BSD, Apache, GPL/LGPL, Creative Commons) per the upstream
-  homepage. `lockfreequeues` consumes liblfds under the Apache-2.0
-  grant from that list (matches the project's own Apache-2.0 license)
-  and under the public-domain dedication. The verbatim grant text is
-  preserved in `benchmarks/vendor/liblfds/LICENSE`.
+  homepage. `lockfreequeues` consumes liblfds under the MIT grant
+  from that list (matches the project's own MIT license) and under
+  the public-domain dedication. The verbatim grant text is preserved
+  in `benchmarks/vendor/liblfds/LICENSE`.
 - **Vendored at:** `benchmarks/vendor/liblfds/liblfds711/` (full
   upstream source tree, unmodified). liblfds exposes
   `LFDS711_MISC_VERSION_STRING` in `liblfds711/lfds711_misc.h`; the
@@ -267,7 +267,7 @@ under Apache-2.0.
   `meta.adapters.flume.version`. Nothing in this tree is a hand-typed
   mirror of `Cargo.lock`.
 - **License:** Apache-2.0 OR MIT (choose either; `lockfreequeues`
-  takes Apache-2.0 to match the project license).
+  takes MIT to match the project license).
 - **Vendored at:** _(crate sources are downloaded by Cargo at build
   time; only our own thin C-ABI shim under
   `benchmarks/rust/bench-ffi-crossbeam/` is committed)_
