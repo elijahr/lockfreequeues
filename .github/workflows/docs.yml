@@ -64,23 +64,54 @@ jobs:
           # hit (safe) or a clean miss followed by a fresh install.
           key: ${{ runner.os }}-nimble-docs-v2-${{ hashFiles('*.nimble', 'nimble.lock') }}
 
-      - name: Install Nim compiler API package (for mkdocstrings-nim)
+      - name: Make Nim compiler API importable (for mkdocstrings-nim)
         # mkdocstrings-nim's extractor.nim does `import compiler/[ast, parser, ...]`,
-        # which expects Nim's compiler/ source tree to be importable. Installing
-        # the `nim` Nimble package places the compiler source on the Nimble path
-        # so `import compiler/<X>` resolves cleanly. This matches the typestates
-        # repo's docs.yml pattern and replaces the previous in-place nim.cfg
-        # patching (preserved as a ROLLBACK comment at bottom of file).
+        # which expects Nim's compiler/ source tree to be importable as the
+        # `compiler` module. The setup-nim-action download (a full official
+        # Nim distribution) DOES contain `compiler/` source under the nim
+        # root, but it is not on the importable search path by default.
         #
-        # Run from /tmp so the project's nimble.lock — even though `nim`
-        # is no longer a top-level lockfile entry (see NIMBLE_LOCK_NOTES.md)
-        # — does not put nimble into lock-mode for this global install.
-        # With lock-mode active in the project root, `nimble install nim`
-        # is a silent no-op against the cached path and leaves
-        # `compiler/ast` unimportable for mkdocstrings-nim. Combined with
-        # the cache key now hashing nimble.lock, this restores reliable
-        # compiler-source installation on every run.
-        run: cd /tmp && nimble install nim -y
+        # Two approaches exist:
+        #   (1) `nimble install nim` — used to place the compiler source on
+        #       the nimble path. As of CI runs in May 2026 this command
+        #       routes through nimble's nimbinaries flow (downloads
+        #       nim-X.Y.Z-linux_x64.tar.xz as a side-car install) and does
+        #       NOT register the compiler/ source on the importable path.
+        #       Verified empirically across three CI runs on this PR.
+        #   (2) Append `path="<nim_root>"` to the active nim.cfg, which
+        #       adds the nim root (the parent of `lib/` and `compiler/`)
+        #       to the import search path. `import compiler/ast` then
+        #       resolves to `<nim_root>/compiler/ast.nim`.
+        #
+        # We use (2) because it is deterministic, registry-independent,
+        # and does not interact with nimble.lock or the nimble cache. It
+        # is the same pattern that the docs.yml ROLLBACK comment (kept at
+        # the bottom of this file for archeology) documents.
+        run: |
+          set -euo pipefail
+          nim_bin="$(readlink -f "$(command -v nim)")"
+          nim_root="$(dirname "$(dirname "$nim_bin")")"
+          if [ ! -d "$nim_root/compiler" ]; then
+            echo "ERROR: $nim_root/compiler not found; setup-nim-action layout drifted." >&2
+            ls -la "$nim_root" >&2
+            exit 1
+          fi
+          echo "Patching $nim_root/config/nim.cfg to expose compiler/ on import path"
+          echo "" >> "$nim_root/config/nim.cfg"
+          echo "# Added by docs.yml to make compiler/ importable for mkdocstrings-nim." >> "$nim_root/config/nim.cfg"
+          echo "path=\"$nim_root\"" >> "$nim_root/config/nim.cfg"
+          # Smoke-test: fail loudly here if the import does not resolve,
+          # rather than 30 seconds later inside mkdocstrings.
+          smoke=$(mktemp --suffix=.nim)
+          printf 'import compiler/ast\ndiscard\n' > "$smoke"
+          if ! nim check --hints:off --warnings:off "$smoke" >/dev/null 2>&1; then
+            echo "ERROR: compiler/ast still not importable after path patch" >&2
+            nim check "$smoke" >&2 || true
+            echo "--- nim.cfg ---" >&2
+            cat "$nim_root/config/nim.cfg" >&2
+            exit 1
+          fi
+          echo "compiler/ast importable: OK"
 
       - name: Create watch directories
         run: mkdir -p docs/overrides
