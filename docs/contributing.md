@@ -204,8 +204,9 @@ The repo's `.editorconfig` is the canonical formatter contract: 2-space
 indent, LF line endings, UTF-8, trailing newline. Beyond that, the
 conventions visible in `src/lockfreequeues/`:
 
-- One queue type per file; the file name matches the type
-  (`sipsic.nim` for `Sipsic`, etc.).
+- Bounded and unbounded queue families share a single file each
+  (`bqueue.nim`, `queue.nim`); cardinality is selected via phantom
+  generics rather than per-family files.
 - Module-level docstring at the top using `##` for public headers and
   RST-style fields (`* parameter description`) for arguments.
 - `{.align: CacheLineBytes.}` on every shared atomic that lives next to
