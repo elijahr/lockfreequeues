@@ -27,7 +27,47 @@
 //! handles the writes).
 
 use crossbeam_queue::{ArrayQueue, SegQueue};
-use std::os::raw::c_void;
+use std::os::raw::{c_char, c_void};
+
+// ---------------- Version getters (v5.0.0-wave Item 1) ----------------
+//
+// The three functions below return null-terminated C strings containing
+// the resolved versions of the crates this cdylib wraps. The strings are
+// baked in at build time by `build.rs`, which reads `Cargo.lock` and
+// emits `cargo:rustc-env=BENCH_DEP_*_VERSION=...`. The Nim bench
+// harness (`benchmarks/nim/adapter_versions.nim`) `importc`-s these
+// functions and records the returned strings in the bench JSON's
+// `meta.adapters.<slug>.version` field, so each bench result documents
+// exactly which crate versions were linked in.
+//
+// Trailing `\0` is appended via `concat!` so the literal is a valid C
+// string with no allocation. The returned pointer points into the
+// binary's read-only data segment; the caller MUST NOT free it.
+
+/// Returns the resolved `crossbeam-queue` crate version as a
+/// NUL-terminated C string (e.g. `"0.3.12\0"` ptr). Baked in at
+/// cdylib build time by `build.rs` from `Cargo.lock`.
+#[no_mangle]
+pub extern "C" fn bench_ffi_crossbeam_queue_version() -> *const c_char {
+    static V: &str = concat!(env!("BENCH_DEP_CROSSBEAM_QUEUE_VERSION"), "\0");
+    V.as_ptr() as *const c_char
+}
+
+/// Returns the resolved `flume` crate version as a NUL-terminated C
+/// string. See `bench_ffi_crossbeam_queue_version`.
+#[no_mangle]
+pub extern "C" fn bench_ffi_flume_version() -> *const c_char {
+    static V: &str = concat!(env!("BENCH_DEP_FLUME_VERSION"), "\0");
+    V.as_ptr() as *const c_char
+}
+
+/// Returns the resolved `kanal` crate version as a NUL-terminated C
+/// string. See `bench_ffi_crossbeam_queue_version`.
+#[no_mangle]
+pub extern "C" fn bench_ffi_kanal_version() -> *const c_char {
+    static V: &str = concat!(env!("BENCH_DEP_KANAL_VERSION"), "\0");
+    V.as_ptr() as *const c_char
+}
 
 // ---------------- ArrayQueue (bounded MPMC) ----------------
 

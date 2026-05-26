@@ -15,19 +15,49 @@
 ##     host:                   { os, arch }
 ##     lockfreequeues_version: <const from src/lockfreequeues.nim>
 ##     nim_version:            <NimVersion>
-##     adapters:               <adapter slug -> { version, kind, ... }>
+##     adapters:               <adapter slug -> { version, fingerprint, kind, ... }>
 ##     absent_adapters:        [<slug>, ...]
 ##
-## Adapter-version sourcing:
-## - Vendored C/C++ adapters: hard-coded `const` strings here, extracted
-##   from `benchmarks/vendor/<lib>/README.md` "Pinned commit" / "release
-##   tag" lines. When the vendor SHA bumps, BOTH the README AND the
-##   matching constant below MUST be updated in the same commit; the
-##   bench output is the only place mismatches become visible after the
-##   fact.
-## - Rust adapters: hard-coded from
-##   `benchmarks/rust/bench-ffi-crossbeam/Cargo.lock` resolved versions.
-##   Bump in lockstep with `cargo build` regenerating the lockfile.
+## Per-adapter schema:
+##
+##   adapters.<slug>: {
+##     "version":     <string|null>,  # semver / release-tag if upstream exposes one
+##     "fingerprint": <string|null>,  # "sha1:<hex>" content fingerprint, or null
+##     "kind":        <string>,       # one of: in-tree, compiler-builtin,
+##                                    #         vendored-version-macro,
+##                                    #         vendored-content-hash,
+##                                    #         cargo-locked, nimble-resolved,
+##                                    #         system-package
+##     "pinned_sha_per_readme": <string>,  # optional, vendored libs only:
+##                                    #   documents the README's pinned SHA so
+##                                    #   audits can compare against the
+##                                    #   compile-time content fingerprint.
+##     "status":      <string>,       # "ok" | "absent" | "build-without-*" | "unknown"
+##     ...
+##   }
+##
+## Adapter-version sourcing (no more hand-typed mirrors of README files):
+## - Vendored C/C++ headers WITHOUT a version macro
+##   (`atomic_queue`, `concurrentqueue`/`moodycamel`, `rigtorp_mpmc`,
+##    `rigtorp_spsc`): a SHA-1 fingerprint of the on-disk header bytes is
+##   computed at compile time via `staticRead` + `std/sha1`. The
+##   fingerprint IS the integrity primitive; any change to the vendored
+##   sources changes the fingerprint deterministically. The README's
+##   pinned SHA is carried alongside in `pinned_sha_per_readme` as
+##   documentation only.
+## - Vendored C/C++ libraries WITH a version macro (`liblfds`): the
+##   macro is `importc`-ed via a tiny `{.emit.}` include, exactly the
+##   pattern used for Boost. The macro is the canonical version string.
+## - Rust adapters (`crossbeam_queue`, `flume`, `kanal`): captured at
+##   build time inside the Rust cdylib (`benchmarks/rust/bench-ffi-crossbeam/`).
+##   A `build.rs` reads the project's `Cargo.lock`, emits
+##   `cargo:rustc-env=BENCH_DEP_*_VERSION=...` for each crate, and three
+##   `#[no_mangle] pub extern "C"` functions return null-terminated C
+##   strings via `env!()`. The Nim side `importc`-s those functions and
+##   calls them at run time, so the captured version is exactly what is
+##   linked in, not what `Cargo.toml` requests. Gated by the existing
+##   `-d:adapter_{crossbeam_*,flume,kanal}_available` flags so absent
+##   builds compile clean.
 ## - Loony / threading: nimble-resolved; `getNimbleResolvedVersion` shells
 ##   out to `nimble path <pkg>` at run time. Absent package -> "absent"
 ##   status, no version.
@@ -45,15 +75,137 @@
 ## matters; missing meta is a documentation gap, not a measurement
 ## failure.
 
-import std/[json, osproc, strutils, times]
+import std/[json, osproc, sha1, strutils, times]
 import ../../src/lockfreequeues
 
-# Boost.LockFree version capture (Item 4). Compile-time include of
-# <boost/version.hpp> when either Boost adapter gate is enabled; the
-# `BOOST_LIB_VERSION` macro expands to a literal string like "1_74" which
-# we can import as a `cstring`. Wrapped in `when` so the include is only
-# attempted when the operator already opted in to a Boost build; absent-
-# Boost runs never reference the header.
+# ---------- Compile-time content fingerprints ----------
+#
+# `staticRead` reads bytes at compile time. We concatenate every
+# vendored header that ships with the adapter, separated by a recognizable
+# marker line, then SHA-1 the result. The output is stable for identical
+# inputs and changes deterministically when any byte of any vendored
+# header changes. Filenames are listed in sorted order so the
+# concatenation order is reproducible.
+#
+# Spec-required prefix: `"sha1:"` so downstream tools can disambiguate
+# hash kinds if we later add SHA-256.
+
+const FingerprintPrefix = "sha1:"
+
+# Compile-time `staticRead` snapshots of every vendored header relevant
+# to a content-hash adapter. The bytes are baked into the binary at
+# compile time, so the runtime SHA-1 below hashes exactly what compiled
+# in — the "build time" semantics the spec asks for. (We hash at run
+# time instead of compile time because `std/sha1` uses `copyMem` /
+# `c_memcpy`, which the Nim VM rejects with "VM not allowed to do FFI";
+# the bytes themselves are still frozen at compile time, so the result
+# is deterministic per build.)
+const AtomicQueueHeaderBytes: array[5, (string, string)] = [
+  ("atomic_queue.h",
+    staticRead("../vendor/atomic_queue/include/atomic_queue/atomic_queue.h")),
+  ("atomic_queue_mutex.h",
+    staticRead("../vendor/atomic_queue/include/atomic_queue/atomic_queue_mutex.h")),
+  ("barrier.h",
+    staticRead("../vendor/atomic_queue/include/atomic_queue/barrier.h")),
+  ("defs.h",
+    staticRead("../vendor/atomic_queue/include/atomic_queue/defs.h")),
+  ("spinlock.h",
+    staticRead("../vendor/atomic_queue/include/atomic_queue/spinlock.h")),
+]
+
+const ConcurrentQueueHeaderBytes: array[1, (string, string)] = [
+  ("concurrentqueue.h",
+    staticRead("../vendor/concurrentqueue/concurrentqueue.h")),
+]
+
+const RigtorpMpmcHeaderBytes: array[1, (string, string)] = [
+  ("MPMCQueue.h",
+    staticRead("../vendor/rigtorp_mpmc/include/rigtorp/MPMCQueue.h")),
+]
+
+const RigtorpSpscHeaderBytes: array[1, (string, string)] = [
+  ("SPSCQueue.h",
+    staticRead("../vendor/rigtorp_spsc/include/rigtorp/SPSCQueue.h")),
+]
+
+proc concatWithSeparators(parts: openArray[(string, string)]): string =
+  ## Concatenate `(filename, contents)` pairs into a single string with a
+  ## `\n--- <filename> ---\n` separator before each part. The separator
+  ## structure makes a divergence diagnosable from the raw concatenation
+  ## even without the original files. `parts` MUST already be sorted by
+  ## filename — the caller is responsible for sort order so the
+  ## fingerprint is reproducible.
+  result = ""
+  for (name, body) in parts:
+    result.add("\n--- ")
+    result.add(name)
+    result.add(" ---\n")
+    result.add(body)
+
+proc fingerprintOf(parts: openArray[(string, string)]): string =
+  ## SHA-1 fingerprint of the concatenation of `parts` in their given
+  ## order. Returns the spec-mandated `"sha1:<40-hex>"` string.
+  FingerprintPrefix & toLowerAscii($secureHash(concatWithSeparators(parts)))
+
+# ---------- README-pinned SHAs (documentation only) ----------
+#
+# These are NOT the source of truth for `version` anymore — the
+# compile-time fingerprint above is. We keep the README-pinned SHAs in
+# `pinned_sha_per_readme` so an audit can spot drift between the README's
+# claim and the actual bytes that compiled in.
+
+const
+  AtomicQueueReadmeSha = "1a3774a89c86ecfdf08753dbd41018ace5a833a4"
+    ## source: benchmarks/vendor/atomic_queue/README.md "Pinned commit"
+
+  ConcurrentQueueReadmeSha = "d655418bb644b7f85159d94c591d7d983949fb81"
+    ## source: benchmarks/vendor/concurrentqueue/README.md "Pinned commit"
+
+  RigtorpMpmcReadmeSha = "b9808ede08f26fa9df4df4e081d19cace8f6c6ea"
+    ## source: benchmarks/vendor/rigtorp_mpmc/README.md "Pinned commit"
+
+  RigtorpSpscReadmeSha = "1053918dbd251fbff69b24ef27fa5d51c29ec2af"
+    ## source: benchmarks/vendor/rigtorp_spsc/README.md "Pinned commit"
+
+# ---------- liblfds: version macro from vendored header ----------
+#
+# `LFDS711_MISC_VERSION_STRING` is defined in
+# `benchmarks/vendor/liblfds/liblfds711/inc/liblfds711/lfds711_misc.h`.
+# We `importc` it the same way we do `BOOST_LIB_VERSION`, ensuring the
+# version comes from the actual bytes that compile in.
+
+# The `-I` flag for the liblfds vendor root is only on the compile line
+# when the liblfds adapter is gated in (see `benchmarks/nim/adapters/
+# liblfds_adapter.nim`, which emits `{.passC: "-I<vendor>/liblfds".}`).
+# We therefore gate the `#include` + `importc` of
+# `LFDS711_MISC_VERSION_STRING` on the same flag. From the
+# `benchmarks/vendor/liblfds/` include root the misc header lives at
+# `liblfds711/inc/liblfds711/lfds711_misc.h`.
+when defined(adapter_liblfds_available):
+  const LiblfdsAdapterPresent = true
+  # We `#include` the umbrella header rather than `lfds711_misc.h`
+  # directly: `lfds711_misc.h` depends on the porting-abstraction-layer
+  # headers (compiler / OS / processor) being included first, and only
+  # the umbrella header pulls them in in the right order. The macro
+  # `LFDS711_MISC_VERSION_STRING` is defined transitively via this
+  # include. Path is relative to the `-I<vendor>/liblfds` flag emitted
+  # by `liblfds_adapter.nim`.
+  {.emit: """/*INCLUDESECTION*/
+#include "liblfds711/inc/liblfds711.h"
+""".}
+
+  proc getLiblfdsVersionMacro(): cstring {.
+    importc: "LFDS711_MISC_VERSION_STRING",
+    header: "liblfds711/inc/liblfds711.h",
+    nodecl.}
+else:
+  const LiblfdsAdapterPresent = false
+
+# ---------- Boost.LockFree: version macro from system header ----------
+#
+# Compile-time include of <boost/version.hpp> when either Boost adapter
+# gate is enabled; `BOOST_LIB_VERSION` expands to a literal string like
+# "1_74".
 when defined(adapter_boost_lockfree_queue_available) or
      defined(adapter_boost_lockfree_spsc_available):
   {.emit: """/*INCLUDESECTION*/
@@ -68,41 +220,35 @@ when defined(adapter_boost_lockfree_queue_available) or
     ## Boost the adapter was linked against — see spec Item 4(A).
     $getBoostLibVersionMacro()
 
-# ---------- Hard-coded vendored / cargo-locked versions ----------
+# ---------- Rust cdylib: importc the version getters ----------
 #
-# Each constant below pairs with a source-of-truth file. Bump both in the
-# same commit when the upstream version moves. The `# source:` comment is
-# load-bearing for grep-based audits.
+# The Rust cdylib at `benchmarks/rust/bench-ffi-crossbeam/` exports three
+# `extern "C"` functions that return null-terminated C strings with the
+# crate versions resolved at cargo-build time (read from `Cargo.lock` by
+# a `build.rs`). We `importc` each function, gated by the matching Nim
+# `-d:adapter_*_available` flag; the link flag emission lives in
+# `benchmarks/nim/adapters/crossbeam_link.nim` (already imported by the
+# adapter modules; a bench binary that includes any of the three Rust
+# adapters will pull that in transitively, providing `-lbench_ffi_crossbeam`).
 
-const
-  AtomicQueueSha = "1a3774a89c86ecfdf08753dbd41018ace5a833a4"
-    ## source: benchmarks/vendor/atomic_queue/README.md "Pinned commit"
+when defined(adapter_crossbeam_array_queue_available) or
+     defined(adapter_crossbeam_seg_queue_available):
+  proc bench_ffi_crossbeam_queue_version(): cstring {.importc, cdecl.}
+  const CrossbeamCdylibLinked = true
+else:
+  const CrossbeamCdylibLinked = false
 
-  ConcurrentQueueSha = "d655418bb644b7f85159d94c591d7d983949fb81"
-    ## source: benchmarks/vendor/concurrentqueue/README.md "Pinned commit"
-    ## (also covers the `moodycamel` slug, which is the same vendored tree)
+when defined(adapter_flume_available):
+  proc bench_ffi_flume_version(): cstring {.importc, cdecl.}
+  const FlumeCdylibLinked = true
+else:
+  const FlumeCdylibLinked = false
 
-  LiblfdsRelease = "7.1.1"
-    ## source: benchmarks/vendor/liblfds/README.md "Upstream release tag"
-
-  RigtorpMpmcSha = "b9808ede08f26fa9df4df4e081d19cace8f6c6ea"
-    ## source: benchmarks/vendor/rigtorp_mpmc/README.md "Pinned commit"
-
-  RigtorpSpscSha = "1053918dbd251fbff69b24ef27fa5d51c29ec2af"
-    ## source: benchmarks/vendor/rigtorp_spsc/README.md "Pinned commit"
-
-  CrossbeamQueueVersion = "0.3.12"
-    ## source: benchmarks/rust/bench-ffi-crossbeam/Cargo.lock (crate
-    ## name = "crossbeam-queue"). Resolved from the
-    ## `crossbeam-queue = "0.3"` requirement in Cargo.toml at lock time.
-
-  FlumeVersion = "0.11.1"
-    ## source: benchmarks/rust/bench-ffi-crossbeam/Cargo.lock (crate
-    ## name = "flume")
-
-  KanalVersion = "0.1.1"
-    ## source: benchmarks/rust/bench-ffi-crossbeam/Cargo.lock (crate
-    ## name = "kanal")
+when defined(adapter_kanal_available):
+  proc bench_ffi_kanal_version(): cstring {.importc, cdecl.}
+  const KanalCdylibLinked = true
+else:
+  const KanalCdylibLinked = false
 
 # ---------- Nimble-resolved adapters ----------
 
@@ -164,22 +310,64 @@ proc getNimbleResolvedVersion(pkgName: string): string =
 
 # ---------- meta builder ----------
 
+proc fingerprintEntry(fingerprint: string, kind: string,
+                      pinnedSha: string = ""): JsonNode =
+  ## Build a `meta.adapters.<slug>` entry for a vendored-content-hash
+  ## library: `version` is null (no upstream version exists), `fingerprint`
+  ## is the compile-time SHA-1 of the vendored bytes, `kind` is
+  ## `vendored-content-hash`, and `pinned_sha_per_readme` documents the
+  ## README's pinned SHA for audit cross-checks.
+  result = newJObject()
+  result["version"] = newJNull()
+  result["fingerprint"] = newJString(fingerprint)
+  result["kind"] = newJString(kind)
+  if pinnedSha.len > 0:
+    result["pinned_sha_per_readme"] = newJString(pinnedSha)
+
 proc adapterEntry(version: string, kind: string,
                   extra: openArray[(string, JsonNode)] = []): JsonNode =
   ## Build one `meta.adapters.<slug>` JsonNode. Empty `version` records
-  ## `{"version": null, "kind": kind, "status": "absent"}` so downstream
-  ## consumers can distinguish "we couldn't resolve it" from "we resolved
-  ## it to the empty string".
+  ## `{"version": null, "fingerprint": null, "kind": kind, "status": "absent"}`
+  ## so downstream consumers can distinguish "we couldn't resolve it"
+  ## from "we resolved it to the empty string".
   result = newJObject()
   if version.len == 0:
     result["version"] = newJNull()
+    result["fingerprint"] = newJNull()
     result["kind"] = newJString(kind)
     result["status"] = newJString("absent")
   else:
     result["version"] = newJString(version)
+    result["fingerprint"] = newJNull()
     result["kind"] = newJString(kind)
   for (k, v) in extra:
     result[k] = v
+
+proc rustCrateEntry(linked: bool, version: string, slug: string): JsonNode =
+  ## Build the entry for a Rust crate captured via the cdylib FFI getter.
+  ## When the cdylib is not linked into THIS bench binary (the gate flag
+  ## is unset), records `{"status": "build-without-rust-cdylib"}` so
+  ## absent-Rust builds are unambiguous. When linked but the getter
+  ## returned an empty / whitespace-only string, records
+  ## `{"status": "unknown"}` so a build.rs failure doesn't silently look
+  ## like a successful capture.
+  result = newJObject()
+  result["kind"] = newJString("cargo-locked")
+  if not linked:
+    result["version"] = newJNull()
+    result["fingerprint"] = newJNull()
+    result["status"] = newJString("build-without-rust-cdylib")
+  elif version.strip().len == 0:
+    result["version"] = newJNull()
+    result["fingerprint"] = newJNull()
+    result["status"] = newJString("unknown")
+    result["captured_from"] = newJString(
+      "bench_ffi_crossbeam_" & slug & "_version()")
+  else:
+    result["version"] = newJString(version)
+    result["fingerprint"] = newJNull()
+    result["captured_from"] = newJString(
+      "bench_ffi_crossbeam_" & slug & "_version()")
 
 proc getAdapterVersions*(): JsonNode =
   ## Build the `meta` JsonNode injected at the top of every BMF JSON
@@ -202,23 +390,91 @@ proc getAdapterVersions*(): JsonNode =
   let adapters = newJObject()
   var absent: seq[string] = @[]
 
-  # Vendored C/C++ adapters (kind = vendored-sha / vendored-release).
-  adapters["atomic_queue"] = adapterEntry(AtomicQueueSha, "vendored-sha")
-  adapters["concurrentqueue"] = adapterEntry(
-    ConcurrentQueueSha, "vendored-sha")
-  adapters["moodycamel"] = adapterEntry(
-    ConcurrentQueueSha, "vendored-sha")
-  adapters["liblfds"] = adapterEntry(LiblfdsRelease, "vendored-release")
-  adapters["rigtorp_mpmc"] = adapterEntry(RigtorpMpmcSha, "vendored-sha")
-  adapters["rigtorp_spsc"] = adapterEntry(RigtorpSpscSha, "vendored-sha")
+  # ---- Vendored C/C++ adapters captured by content fingerprint ----
+  # (header-only libs without an upstream version macro). Fingerprints
+  # are computed at run-time over the compile-time-baked header bytes.
+  let atomicQueueFingerprint = fingerprintOf(AtomicQueueHeaderBytes)
+  let concurrentQueueFingerprint = fingerprintOf(ConcurrentQueueHeaderBytes)
+  let rigtorpMpmcFingerprint = fingerprintOf(RigtorpMpmcHeaderBytes)
+  let rigtorpSpscFingerprint = fingerprintOf(RigtorpSpscHeaderBytes)
+  adapters["atomic_queue"] = fingerprintEntry(
+    atomicQueueFingerprint, "vendored-content-hash", AtomicQueueReadmeSha)
+  adapters["concurrentqueue"] = fingerprintEntry(
+    concurrentQueueFingerprint, "vendored-content-hash",
+    ConcurrentQueueReadmeSha)
+  adapters["moodycamel"] = fingerprintEntry(
+    concurrentQueueFingerprint, "vendored-content-hash",
+    ConcurrentQueueReadmeSha)
+  adapters["rigtorp_mpmc"] = fingerprintEntry(
+    rigtorpMpmcFingerprint, "vendored-content-hash", RigtorpMpmcReadmeSha)
+  adapters["rigtorp_spsc"] = fingerprintEntry(
+    rigtorpSpscFingerprint, "vendored-content-hash", RigtorpSpscReadmeSha)
 
-  # Cargo-locked Rust crates (kind = cargo-locked).
-  adapters["crossbeam_queue"] = adapterEntry(
-    CrossbeamQueueVersion, "cargo-locked")
-  adapters["flume"] = adapterEntry(FlumeVersion, "cargo-locked")
-  adapters["kanal"] = adapterEntry(KanalVersion, "cargo-locked")
+  # ---- liblfds: vendored-version-macro ----
+  # The `LFDS711_MISC_VERSION_STRING` macro is only reachable if a
+  # liblfds adapter was gated in (so `-I…/inc` is on the compile line).
+  # Otherwise record null with the explicit "build-without-liblfds"
+  # status so absent-liblfds builds are unambiguous.
+  when LiblfdsAdapterPresent:
+    let liblfdsVer = $getLiblfdsVersionMacro()
+    let liblfdsEntry = newJObject()
+    liblfdsEntry["version"] = newJString(liblfdsVer)
+    liblfdsEntry["fingerprint"] = newJNull()
+    liblfdsEntry["kind"] = newJString("vendored-version-macro")
+    liblfdsEntry["captured_from"] = newJString(
+      "liblfds711/inc/liblfds711.h@LFDS711_MISC_VERSION_STRING")
+    adapters["liblfds"] = liblfdsEntry
+  else:
+    let liblfdsEntry = newJObject()
+    liblfdsEntry["version"] = newJNull()
+    liblfdsEntry["fingerprint"] = newJNull()
+    liblfdsEntry["kind"] = newJString("vendored-version-macro")
+    liblfdsEntry["status"] = newJString("build-without-liblfds")
+    adapters["liblfds"] = liblfdsEntry
+    absent.add("liblfds")
 
-  # Nimble-resolved (kind = nimble-resolved). Empty -> absent.
+  # ---- Rust crates: cargo-locked, captured via cdylib FFI getter ----
+  block crossbeamCapture:
+    var version = ""
+    when CrossbeamCdylibLinked:
+      try:
+        version = $bench_ffi_crossbeam_queue_version()
+      except CatchableError:
+        version = ""
+    adapters["crossbeam_queue"] = rustCrateEntry(
+      CrossbeamCdylibLinked, version, "crossbeam_queue")
+    if CrossbeamCdylibLinked and version.strip().len == 0:
+      absent.add("crossbeam_queue")
+    elif not CrossbeamCdylibLinked:
+      absent.add("crossbeam_queue")
+
+  block flumeCapture:
+    var version = ""
+    when FlumeCdylibLinked:
+      try:
+        version = $bench_ffi_flume_version()
+      except CatchableError:
+        version = ""
+    adapters["flume"] = rustCrateEntry(FlumeCdylibLinked, version, "flume")
+    if FlumeCdylibLinked and version.strip().len == 0:
+      absent.add("flume")
+    elif not FlumeCdylibLinked:
+      absent.add("flume")
+
+  block kanalCapture:
+    var version = ""
+    when KanalCdylibLinked:
+      try:
+        version = $bench_ffi_kanal_version()
+      except CatchableError:
+        version = ""
+    adapters["kanal"] = rustCrateEntry(KanalCdylibLinked, version, "kanal")
+    if KanalCdylibLinked and version.strip().len == 0:
+      absent.add("kanal")
+    elif not KanalCdylibLinked:
+      absent.add("kanal")
+
+  # ---- Nimble-resolved adapters (kind = nimble-resolved). Empty -> absent ----
   let loonyVer = getNimbleResolvedVersion("loony")
   adapters["loony"] = adapterEntry(loonyVer, "nimble-resolved")
   if loonyVer.len == 0:
@@ -229,11 +485,11 @@ proc getAdapterVersions*(): JsonNode =
   if threadingVer.len == 0:
     absent.add("threading")
 
-  # Boost.LockFree (kind = system-package). Only captured when one of the
-  # Boost adapter gates is set; otherwise recorded as absent with the
-  # explicit "build-without-boost" status so consumers can distinguish
-  # "this run did not build Boost" from "this run built Boost but failed
-  # to capture the version".
+  # ---- Boost.LockFree (kind = system-package) ----
+  # Only captured when one of the Boost adapter gates is set; otherwise
+  # recorded as absent with the explicit "build-without-boost" status so
+  # consumers can distinguish "this run did not build Boost" from "this
+  # run built Boost but failed to capture the version".
   when defined(adapter_boost_lockfree_queue_available) or
        defined(adapter_boost_lockfree_spsc_available):
     let boostVer = getBoostVersion()
@@ -245,15 +501,16 @@ proc getAdapterVersions*(): JsonNode =
   else:
     let boostObj = newJObject()
     boostObj["version"] = newJNull()
+    boostObj["fingerprint"] = newJNull()
     boostObj["kind"] = newJString("system-package")
     boostObj["status"] = newJString("build-without-boost")
     adapters["boost_lockfree"] = boostObj
     absent.add("boost_lockfree")
 
-  # Nim `system.Channel` rides the compiler version.
+  # ---- Nim `system.Channel` rides the compiler version ----
   adapters["nim_channel"] = adapterEntry(NimVersion, "compiler-builtin")
 
-  # In-tree.
+  # ---- In-tree ----
   adapters["lockfreequeues"] = adapterEntry(
     LockfreequeuesVersion, "in-tree")
 
