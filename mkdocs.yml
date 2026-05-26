@@ -96,6 +96,7 @@ nav:
     - Overview: api/index.md
     - Bounded Queue (BQueue): api/bqueue.md
     - Unbounded Queue (Queue): api/queue.md
+  - Migration: migration.md
   - Benchmarks: benchmarks.md
   - Contributing: contributing.md
 

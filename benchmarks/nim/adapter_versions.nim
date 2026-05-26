@@ -32,7 +32,9 @@
 ##                                    #   documents the README's pinned SHA so
 ##                                    #   audits can compare against the
 ##                                    #   compile-time content fingerprint.
-##     "status":      <string>,       # "ok" | "absent" | "build-without-*" | "unknown"
+##     "status":      <string>,       # "absent" | "build-without-*" | "unknown"
+##                                    #   (key OMITTED on the success path —
+##                                    #   absence means "resolved cleanly")
 ##     ...
 ##   }
 ##

@@ -44,7 +44,9 @@ jobs:
       - name: Setup Nim
         uses: jiro4989/setup-nim-action@v2
         with:
-          nim-version: '2.2.8'
+          # Kept in lockstep with `nimble.lock` (which pins `nim` to
+          # `2.2.10`). Bump both files together on Nim upgrades.
+          nim-version: '2.2.10'
 
       - name: Cache Nimble packages
         uses: actions/cache@v4
@@ -222,11 +224,3 @@ jobs:
       # step) so the next run picks up the fresh JSON. The chart's
       # example.json fallback (PR #29) handles transient 404s during the
       # gap between docs deploy and bench publication.
-
-### ROLLBACK ###
-# If `nimble install nim -y` ever breaks (registry change, package rename,
-# layout regression), revert the "Install Nim compiler API package" step
-# to the previous in-place nim.cfg patch:
-#   - locate nim_root via `dirname (dirname (readlink -f $(which nim)))`
-#   - append `path="$lib/.."` to `$nim_root/config/nim.cfg`
-# Remove this rollback block after one release cycle (v4.3.0).

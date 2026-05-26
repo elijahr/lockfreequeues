@@ -12,6 +12,16 @@ release-order: 3 of 3 (typestates 0.9.0 → nim-debra 0.8.0 → lockfreequeues 5
 target-nim: ">= 2.2.0" (existing lockfreequeues.nimble:11; unchanged)
 ---
 
+> **Historical design artifact.** This document captures the
+> pre-3.3.11-B 10-param unified Queue design. The canonical
+> reference for the shipped v5.0.0 surface is
+> [`3.3.11-B-final-shape.md`](3.3.11-B-final-shape.md). The two
+> bullets to keep in mind while reading below: (a) the unified
+> `Queue` is now 6 params (not 10) and `BQueue` carries the bounded
+> surface separately; (b) `UnboundedSipsic` was absorbed into the
+> `Queue[..., ccSingle, ccSingle, ...]` branch rather than remaining
+> standalone.
+
 ## 1. Release Goal
 
 > **BREAKING NOTICE — lockfreequeues 5.0.0 is a SemVer MAJOR release.**

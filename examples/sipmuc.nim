@@ -1,13 +1,16 @@
 ## Example: Single-producer, multi-consumer (SPMC) bounded queue using
-## the unified `Queue` generic.
+## the unified `BQueue` generic.
 ##
 ## This demonstrates a fan-out pattern where one producer distributes
 ## work to multiple consumers.
 ##
 ## v5.0.0 cascade migration: the legacy `Sipmuc[N, C, T]` family was
-## collapsed into `Queue[T, ccSingle, ccMulti, stEager, rkNone, N, 0,
-## C, 0, 0]`. Consumers are obtained via `q.getConsumer(idx)` with an
-## explicit consumer index per thread.
+## collapsed into `BQueue[T, ccSingle, ccMulti, N, 0, C]` (the bounded
+## 6-param shape — capacity `N`, single producer arm, `C` consumer
+## views). Consumers are obtained via `q.getConsumer(idx)` with an
+## explicit consumer index per thread. See
+## `docs/v5.0.0-migration/3.3.11-B-final-shape.md` for the canonical
+## surface reference.
 
 import lockfreequeues/atomic_dsl
 import os

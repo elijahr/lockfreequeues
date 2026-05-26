@@ -1,10 +1,13 @@
 ## Example: Multi-producer, multi-consumer (MPMC) bounded queue using
-## the unified `Queue` generic.
+## the unified `BQueue` generic.
 ##
 ## v5.0.0 cascade migration: the legacy `Mupmuc[N, P, C, T]` family was
-## collapsed into `Queue[T, ccMulti, ccMulti, stEager, rkNone, N, P, C,
-## 0, 0]`. Producers and consumers are obtained via `q.getProducer()` /
-## `q.getConsumer()` (one per thread).
+## collapsed into `BQueue[T, ccMulti, ccMulti, N, P, C]` (the bounded
+## 6-param shape — capacity `N`, `P` producer views, `C` consumer
+## views). Producers and consumers are obtained via `q.getProducer()`
+## / `q.getConsumer()` (one per thread). See
+## `docs/v5.0.0-migration/3.3.11-B-final-shape.md` for the canonical
+## surface reference.
 
 import options
 import random

@@ -543,6 +543,26 @@ honoured regardless of build mode.
 - `benchmarks/README.md` "Updating the README summary" subsection
   codifies the new hand-curation procedure for the README BENCHMARKS
   markers (which shapes to read, where to read them, when to commit).
+- Bench `meta.adapters.*` meta-block emission protocol unified under
+  `benchmarks/nim/adapter_versions.nim`: every adapter records a
+  `version` (or `null` when the upstream exposes no version macro), a
+  `kind` discriminator (`nimble-resolved`, `cargo-locked`,
+  `vendored-content-hash`, `vendored-version-macro`, `system-package`,
+  `compiler-builtin`), and — for vendored libraries without a version
+  macro — a SHA-1 `fingerprint` of the header bytes computed at
+  compile time plus a `pinned_sha_per_readme` cross-check field.
+  `status` is OMITTED on the success path; absent / build-without-*
+  / unknown cases carry the corresponding explicit status string.
+- Five new vendored / nimble / system adapters land in v5.0.0
+  alongside the meta-block reshape: three Rust crates riding the
+  existing `bench-ffi-crossbeam` cdylib (`crossbeam_queue::SegQueue`,
+  `flume::Sender/Receiver`, `kanal::Sender/Receiver`) and five
+  C/C++ vendored targets (`atomic_queue` SPSC + MPMC,
+  `liblfds7.1.1` bss + bmm, `rigtorp::mpmc::Queue`,
+  `rigtorp::SPSCQueue`, MoodyCamel `concurrentqueue`). Each entry is
+  third-party-license-tracked in `THIRD_PARTY_LICENSES.md` and gated
+  behind `-d:adapter_<slug>_available` so production builds are
+  unaffected.
 
 ### Changed
 

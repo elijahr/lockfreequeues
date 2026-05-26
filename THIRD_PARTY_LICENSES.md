@@ -22,6 +22,43 @@ Per-vendor block schema:
 - **Upgrade procedure:** see `<repo-relative path>/README.md` (omit if not vendored)
 ```
 
+## Production library dependencies
+
+The libraries below are linked into the production `lockfreequeues`
+crate (not the bench suite). They are pinned via `nimble.lock` at the
+repository root and resolved by `nimble install` against the
+elijahr/nim-typestates and elijahr/nim-debra registry entries.
+
+### nim-typestates
+
+- **Source:** https://github.com/elijahr/nim-typestates
+- **Version:** `0.10.0` (pinned via `nimble.lock`)
+- **License:** MIT
+- **Vendored at:** _(not vendored — resolved via Nimble; sibling-source
+  worktree overrides under `config.nims` are advisory and only active
+  when a sibling clone is present alongside this repo, see CB-014
+  comment in `config.nims`)_
+- **Upgrade procedure:** bump the `requires` line in
+  `lockfreequeues.nimble`, run `nimble lock` to refresh `nimble.lock`,
+  and re-run the test matrix. The static AST verifier behavior is
+  documented in `docs/v5.0.0-migration/3.3.11-B-final-shape.md` —
+  any version below `0.10.0` lacks the multi-line pragma scanner
+  and will reject the unified Queue's typestate-pragma combined forms.
+
+### nim-debra
+
+- **Source:** https://github.com/elijahr/nim-debra
+- **Version:** `0.8.0` (pinned via `nimble.lock`)
+- **License:** MIT
+- **Vendored at:** _(not vendored — resolved via Nimble; same sibling-
+  source override caveat as `nim-typestates` above.)_
+- **Upgrade procedure:** bump the `requires` line in
+  `lockfreequeues.nimble`, run `nimble lock` to refresh `nimble.lock`,
+  and re-run the test matrix. The EBR reclamation contract consumed by
+  unbounded multi-cardinality `Queue` arms is documented in the
+  `Registration & lifecycle (unbounded multi-cardinality arms)`
+  section of `CHANGELOG.md`.
+
 ## Comparison MVP libraries (PR 3)
 
 The libraries below are linked at compile time by the bench suite when

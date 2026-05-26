@@ -1,12 +1,14 @@
-## Example usage of the unified `Queue` generic in SPSC (single-producer,
+## Example usage of the unified `BQueue` generic in SPSC (single-producer,
 ## single-consumer) bounded cardinality.
 ##
 ## v5.0.0 cascade migration: the legacy `Sipsic[N, T]` family was
-## collapsed into `Queue[T, ccSingle, ccSingle, stEager, rkNone, N, 0,
-## 0, 0, 0]`. The constructor short form below uses the
-## `newSipsicQueue[T, N]()` smart-constructor added in v5.0.0 (Doc C
-## §3.0.4) — `ccProd = ccCons = ccSingle`, `RK = rkNone`, and `ST`
-## defaults to `DefaultDeallocationStrategy`.
+## collapsed into `BQueue[T, ccSingle, ccSingle, N, 0, 0]` (the bounded
+## 6-param shape — `ccProd = ccCons = ccSingle`, capacity `N`, producer
+## and consumer view counts both zero for the SPSC arm). The
+## constructor short form below uses the `newSipsicQueue[T, N]()`
+## smart-constructor; see
+## `docs/v5.0.0-migration/3.3.11-B-final-shape.md` for the canonical
+## surface reference.
 
 import options
 import random

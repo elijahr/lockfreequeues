@@ -1,5 +1,11 @@
 # v5.0.0 cascade migration mapping (Task D2)
 
+> **Historical artifact.** This document describes the pre-3.3.11-B
+> 10-param unified Queue shape. The canonical reference for the
+> shipped v5.0.0 surface is
+> [`3.3.11-B-final-shape.md`](3.3.11-B-final-shape.md). Cross-reference
+> any "After" form below against that document before relying on it.
+
 **Worktree:** `~/Development/worktrees/lfq-v5.0.0-wave/lockfreequeues-track-D-early/`
 **Branch:** `feat/v5.0.0-impl-track-D-early`
 **Inventory commit:** `ad70f69` (`docs/v5.0.0-migration/cascade-inventory.md`)

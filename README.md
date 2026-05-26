@@ -26,9 +26,10 @@ API documentation: <https://elijahr.github.io/lockfreequeues>
 If two threads need to hand items to each other and you cannot afford a mutex,
 the answer is a lock-free queue. Picking the right one is the hard part: do you
 have one producer or many, one consumer or many, a fixed capacity or not? Each
-choice changes the algorithm and the cost. `lockfreequeues` ships eight queues
-covering every cell of that grid, with a uniform API and verified ordering
-guarantees.
+choice changes the algorithm and the cost. `lockfreequeues` covers all eight
+cells of that grid (four bounded cardinality arms on `BQueue` and four
+unbounded cardinality arms on `Queue`) with a uniform API and verified
+ordering guarantees.
 
 A short vocabulary first.
 

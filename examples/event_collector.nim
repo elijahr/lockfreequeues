@@ -17,17 +17,13 @@
 ## - Network packet capture from multiple interfaces
 ## - User activity tracking across browser tabs
 
-import lockfreequeues/atomic_dsl
 import os
 import options
 import random
 import std/monotimes
 import times
 
-import lockfreequeues/queue as lfq_queue
-import lockfreequeues/strategy
-import lockfreequeues/reclamation
-import lockfreequeues/internal/pinscope_stub
+import lockfreequeues
 
 from debra import DebraManager, initDebraManager
 

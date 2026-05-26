@@ -1,12 +1,15 @@
-## Example usage of the unified `Queue` generic in MPSC (multi-producer,
+## Example usage of the unified `BQueue` generic in MPSC (multi-producer,
 ## single-consumer) bounded cardinality.
 ##
 ## v5.0.0 cascade migration: the legacy `Mupsic[N, P, T]` family was
-## collapsed into `Queue[T, ccMulti, ccSingle, stEager, rkNone, N, P,
-## 0, 0, 0]`. The constructor short form below uses the
-## `newMupsicQueue[T, N, P]()` smart-constructor added in v5.0.0
-## (Doc C §3.0.4). Producers are obtained via `q.getProducer()` (one
-## per thread) and push through the returned `QueueProducer`.
+## collapsed into `BQueue[T, ccMulti, ccSingle, N, P, 0]` (the bounded
+## 6-param shape — capacity `N`, `P` producer views, single consumer
+## arm). The constructor short form below uses the
+## `newMupsicQueue[T, N, P]()` smart-constructor. Producers are
+## obtained via `q.getProducer()` (one per thread) and push through
+## the returned `BQueueProducer`. See
+## `docs/v5.0.0-migration/3.3.11-B-final-shape.md` for the canonical
+## surface reference.
 
 import options
 import random

@@ -201,9 +201,14 @@ Current slug set emitted across the topology-split binaries:
 ## Comparison libraries — third-party adapters
 
 PR 3 (Track 3) introduced the comparison MVP with five
-external-library adapters; PR 4 (Track 4) extends the set to seven
-upstream libraries / nine adapter variants so each topology has ≥ 3
-distinct libraries plotted on the same Bencher dashboard. All
+external-library adapters; PR 4 (Track 4) extended the set to seven
+upstream libraries / nine adapter variants. v5.0.0 lands another four
+vendored C/C++ targets (`atomic_queue`, `liblfds`, `rigtorp_mpmc`,
+`rigtorp_spsc`) and two additional Rust crates (`flume`, `kanal`)
+that ride alongside `crossbeam-queue` in the existing
+`bench-ffi-crossbeam` cdylib — bringing the comparison set to twelve
+upstream libraries / eighteen adapter variants so each topology has
+≥ 3 distinct libraries plotted on the same Bencher dashboard. All
 adapters are gated behind `-d:adapter_<library_slug>_available`;
 absent gates produce no symbol references and the production builds
 are unchanged.
@@ -218,6 +223,12 @@ are unchanged.
 | MoodyCamel | `concurrentqueue::ConcurrentQueue` | `mpmc_unbounded` | `-d:adapter_moodycamel_available` | vendored at `benchmarks/vendor/concurrentqueue/` (requires `nim cpp`) |
 | nimble `threading` | `threading.Chan` | `mpmc` (bounded) | `-d:adapter_threading_channels_available` | `nimble install threading` |
 | Nim `system.Channel` | `system/channels.Channel` | `mpsc` (bounded, blocking-on-full producer\*) | `-d:adapter_nim_channel_available` | none (Nim stdlib) |
+| atomic_queue (max0x7ba) | `atomic_queue::AtomicQueueB` | `spsc` + `mpmc` (bounded) | `-d:adapter_atomic_queue_available` | vendored at `benchmarks/vendor/atomic_queue/` (requires `nim cpp`) |
+| liblfds | `lfds711_queue_bss` / `_bmm` | `spsc` + `mpmc` (bounded) | `-d:adapter_liblfds_available` | vendored at `benchmarks/vendor/liblfds/` (C wrapper) |
+| rigtorp::MPMCQueue | `rigtorp::mpmc::Queue` | `mpmc` (bounded) | `-d:adapter_rigtorp_mpmc_available` | vendored at `benchmarks/vendor/rigtorp_mpmc/` (requires `nim cpp`) |
+| rigtorp::SPSCQueue | `rigtorp::SPSCQueue` | `spsc` (bounded) | `-d:adapter_rigtorp_spsc_available` | vendored at `benchmarks/vendor/rigtorp_spsc/` (requires `nim cpp`) |
+| flume | `flume::Sender/Receiver` | `mpmc` (bounded) + `mpmc_unbounded` | `-d:adapter_flume_available` | same as Crossbeam (rides the `bench-ffi-crossbeam` cdylib) |
+| kanal | `kanal::Sender/Receiver` | `spsc` + `mpmc` (bounded) + `mpmc_unbounded` | `-d:adapter_kanal_available` | same as Crossbeam (rides the `bench-ffi-crossbeam` cdylib) |
 
 \* The `system.Channel` adapter blocks the producer when the channel
 is full instead of returning back-pressure to the harness loop, so its
@@ -235,7 +246,15 @@ Library upstreams: [Loony](https://github.com/shayanhabibi/loony)
 (BSD-2-Clause / Boost dual),
 [nimble threading](https://github.com/nim-lang/threading) (MIT),
 [Nim `system.Channel`](https://nim-lang.org) (MIT, ships with the
-compiler). Per-library obligations are tracked in
+compiler),
+[atomic_queue](https://github.com/max0x7ba/atomic_queue) (MIT),
+[liblfds](https://liblfds.org/) (public-domain multi-grant; consumed
+under MIT),
+[rigtorp::MPMCQueue](https://github.com/rigtorp/MPMCQueue) (MIT),
+[rigtorp::SPSCQueue](https://github.com/rigtorp/SPSCQueue) (MIT),
+[flume](https://github.com/zesterer/flume) (Apache-2.0 OR MIT),
+[kanal](https://github.com/fereidani/kanal) (MIT).
+Per-library obligations are tracked in
 [`THIRD_PARTY_LICENSES.md`](../THIRD_PARTY_LICENSES.md).
 
 ### CI integration

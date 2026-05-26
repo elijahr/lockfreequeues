@@ -17,7 +17,6 @@
 ## - Build system task execution
 ## - Database query scheduling
 
-import lockfreequeues/atomic_dsl
 import os
 import options
 import random
@@ -25,10 +24,7 @@ import std/monotimes
 import strutils
 import times
 
-import lockfreequeues/queue as lfq_queue
-import lockfreequeues/strategy
-import lockfreequeues/reclamation
-import lockfreequeues/internal/pinscope_stub
+import lockfreequeues
 
 import ./debra_cc_helpers
 
@@ -51,8 +47,8 @@ type
     priority: Priority
     workMs: int  # Simulated work duration
 
-  JobQueue = lfq_queue.Queue[Job, ccMulti, ccMulti, stEager, SegmentSize,
-                             MaxThreads]
+  JobQueue = Queue[Job, ccMulti, ccMulti, stEager, SegmentSize,
+                   MaxThreads]
 
   SubmitterContext = object
     queue: ptr JobQueue
