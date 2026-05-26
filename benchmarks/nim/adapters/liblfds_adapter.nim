@@ -48,7 +48,11 @@ when defined(adapter_liblfds_available):
     ## Resolved at compile time: `benchmarks/vendor/liblfds` under the
     ## repo root regardless of where the bench binary is invoked from.
 
-  # `-Iliblfds711/inc` lets the wrapper `#include "liblfds711.h"` resolve.
+  # `-I VendorDir` resolves the wrapper's
+  # `#include "liblfds711/inc/liblfds711.h"` and `adapter_versions.nim`'s
+  # identical-path include for `LFDS711_MISC_VERSION_STRING`. No deeper
+  # `-I` is needed because both sites use the full `liblfds711/inc/...`
+  # relative path rather than a bare `liblfds711.h`.
   {.passC: "-I" & VendorDir.}
   {.compile: VendorDir & "/liblfds_wrapper.c".}
 

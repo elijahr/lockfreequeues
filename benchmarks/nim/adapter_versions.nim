@@ -233,6 +233,14 @@ when defined(adapter_boost_lockfree_queue_available) or
 
 when defined(adapter_crossbeam_array_queue_available) or
      defined(adapter_crossbeam_seg_queue_available):
+  # Defensive import: pulls in the shared `{.passL.}` link directives
+  # for `-lbench_ffi_crossbeam` so the `importc` getter below resolves
+  # even when this module is the ONLY consumer of the crossbeam gate
+  # in a given binary (e.g. a script that captures versions without
+  # importing any crossbeam adapter directly). Nim dedups module
+  # imports, so binaries that already import a crossbeam adapter
+  # (which transitively imports this link module) are unaffected.
+  import ./adapters/crossbeam_link
   proc bench_ffi_crossbeam_queue_version(): cstring {.importc, cdecl.}
   const CrossbeamCdylibLinked = true
 else:
