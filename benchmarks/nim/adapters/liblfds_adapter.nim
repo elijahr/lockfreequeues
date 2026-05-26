@@ -96,6 +96,14 @@ when defined(adapter_liblfds_available):
         "LiblfdsAdapter cannot transport ref types: the C queue " &
         "bypasses Nim's GC. Use a non-ref 64-bit payload."
     doAssert capacity > 0, "liblfds bounded queues require capacity > 0"
+    # liblfds bss/bmm bounded queues require capacity to be a power of 2.
+    # A non-power-of-2 trips an internal LFDS711_PAL_ASSERT inside liblfds
+    # that deliberately null-deref-crashes the process — no usable error
+    # message reaches the caller. Surface a clear Nim-side failure before
+    # we cross the FFI boundary.
+    doAssert (capacity and (capacity - 1)) == 0,
+      "liblfds bounded queues require capacity to be a power of 2 (got " &
+      $capacity & ")"
     result.kind = kind
     result.capacity = capacity
     case kind

@@ -75,7 +75,7 @@
 ## matters; missing meta is a documentation gap, not a measurement
 ## failure.
 
-import std/[json, osproc, sha1, strutils, times]
+import std/[json, os, osproc, sha1, strutils, times]
 import ../../src/lockfreequeues
 
 # ---------- Compile-time content fingerprints ----------
@@ -274,8 +274,12 @@ proc getNimbleResolvedVersion(pkgName: string): string =
   ## the runtime cannot fork (rare; e.g. some heavily sandboxed CI).
   ## Wrap in try/except so a missing nimble never crashes the bench.
   try:
+    # quoteShell escapes pkgName before concatenation. Today's call sites
+    # pass safe literals ("loony", "threading"), but quoting future-proofs
+    # the helper against any caller passing a dynamic or unusual package
+    # name without re-validating this site.
     let (output, exitCode) = execCmdEx(
-      "nimble path " & pkgName,
+      "nimble path " & quoteShell(pkgName),
       options = {poUsePath, poStdErrToStdOut},
     )
     if exitCode != 0:
