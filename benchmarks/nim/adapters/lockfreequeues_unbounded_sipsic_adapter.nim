@@ -58,15 +58,41 @@ type
 proc makeLockfreequeuesUnboundedSipsicAdapter*[S: static int, T](
     capacity: int = 0   # ignored for unbounded
 ): LockfreequeuesUnboundedSipsicAdapter[S, T] =
-  result.queue = create(UnboundedSipsicAdapterQueue[S, T])
-  # wasMoved before the deref-assign: `create`'s zero-fill is not tracked by
-  # ARC/ORC, so `result.queue[] = ...` would run the unified Queue's
-  # typestate `=destroy` on uninitialized storage. Mark the slot moved-from
-  # first. Mirrors the lockfreequeues_unbounded_mupsic_adapter pattern.
-  wasMoved(result.queue[])
-  result.queue[] =
-    newUnboundedSipsicQueue[T, stEager, S, SipsicMaxThreads]()
-  result.producer0 = result.queue[].getProducer()
+  # OOM safety: `create(...)` followed by `newUnboundedSipsicQueue()`
+  # can each raise `OutOfMemDefect`. Without a guard the heap slot from
+  # a successful `create` would leak if `newUnboundedSipsicQueue` (or
+  # any subsequent step) raises. No DebraManager and no attach() in the
+  # SPSC branch, so a simple `try/finally` flagged by `queueInitOk` is
+  # sufficient. Mirrors the mupsic adapter discipline (skip `reset` on
+  # a moved-from but never-initialized slot; `dealloc` alone).
+  var queueInitOk = false
+  try:
+    result.queue = create(UnboundedSipsicAdapterQueue[S, T])
+    # wasMoved before the deref-assign: `create`'s zero-fill is not tracked by
+    # ARC/ORC, so `result.queue[] = ...` would run the unified Queue's
+    # typestate `=destroy` on uninitialized storage. Mark the slot moved-from
+    # first. Mirrors the lockfreequeues_unbounded_mupsic_adapter pattern.
+    wasMoved(result.queue[])
+    result.queue[] =
+      newUnboundedSipsicQueue[T, stEager, S, SipsicMaxThreads]()
+    result.producer0 = result.queue[].getProducer()
+    queueInitOk = true
+  finally:
+    if not queueInitOk:
+      if result.queue != nil:
+        # `wasMoved` happened only on the success path through the
+        # deref-assign; on partial-init the queue slot is either
+        # moved-from (init raised) or zero (create raised and the line
+        # below never ran). Either way `=destroy` on that state is
+        # avoidable — `dealloc` the raw heap block directly.
+        dealloc(result.queue)
+        result.queue = nil
+      # `producer0` is a view borrowing into the (now-freed) queue. On
+      # the failure path it was either never assigned (zero state) or
+      # holds a ptr into the now-freed slot; reset it to drop the
+      # dangling ptr before scope exit. `reset` on zero state is a
+      # safe no-op.
+      reset(result.producer0)
 
 proc cleanup*[S: static int, T](
     a: var LockfreequeuesUnboundedSipsicAdapter[S, T]

@@ -84,41 +84,60 @@ proc makeLockfreequeuesUnboundedSipmucAdapter*[S: static int, T;
   wasMoved(result.manager[])
   result.manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
 
-  result.queue = create(UnboundedSipmucAdapterQueue[S, T, MaxThreads])
-  # Same rationale for the queue: the unified Queue carries a typestate
-  # `=destroy`, so mark the created slot moved-from before assigning into it.
-  wasMoved(result.queue[])
-  result.queue[] =
-    newUnboundedSipmucQueue[T, stEager, S, MaxThreads](result.manager)
-  # producer0 / consumer0 are the cached views for the smoke / 1p1c
-  # round-trip path, where the init thread IS the operating thread.
-  # getConsumer/getProducer no longer register; consumer0 registers its
-  # debra handle here via attach() on the (init == operating) thread.
-  # The single producer (ccSingle) needs no registration. Multi-consumer
-  # shapes obtain their own per-thread views via `queue[].getConsumer()`
-  # and call `attach()` on their own threads.
-  #
-  # `attach()` can raise `DebraRegistrationError` if the manager is full
-  # (MaxThreads exhausted). If that fires after `create(...)` succeeded,
-  # the heap manager AND heap queue would leak because `result` is never
-  # fully returned and the deinit (`cleanup`) never runs. Mirror the
-  # `cleanup` teardown order — views first, queue, then manager — before
-  # re-raising so the failure path matches the success-path destructor
-  # contract.
+  # Two-flag guard mirroring the mupmuc adapter:
+  #  * `queueValueInitOk` — set after `newUnboundedSipmucQueue` returns,
+  #    indicating the heap queue slot holds a fully-initialized Queue
+  #    value (so `reset(queue[])` is safe and required to free segments).
+  #  * `queueInitOk` — set after the consumer attach() succeeds. While
+  #    false, the finally arm tears down whatever partial state exists.
+  # The ccSingle producer carries no per-thread handle, so only the
+  # consumer attach() is a raise site for `DebraRegistrationError`.
+  var queueValueInitOk = false
+  var queueInitOk = false
   try:
+    result.queue = create(UnboundedSipmucAdapterQueue[S, T, MaxThreads])
+    # Same rationale for the queue: the unified Queue carries a typestate
+    # `=destroy`, so mark the created slot moved-from before assigning into it.
+    wasMoved(result.queue[])
+    result.queue[] =
+      newUnboundedSipmucQueue[T, stEager, S, MaxThreads](result.manager)
+    queueValueInitOk = true
+    # producer0 / consumer0 are the cached views for the smoke / 1p1c
+    # round-trip path, where the init thread IS the operating thread.
+    # getConsumer/getProducer no longer register; consumer0 registers
+    # its debra handle here via attach() on the (init == operating)
+    # thread. The single producer (ccSingle) needs no registration.
+    # Multi-consumer shapes obtain their own per-thread views via
+    # `queue[].getConsumer()` and call `attach()` on their own threads.
+    # `attach()` can raise `DebraRegistrationError` if the manager is
+    # full (MaxThreads exhausted).
     result.producer0 = result.queue[].getProducer()
     result.consumer0 = result.queue[].getConsumer()
     result.consumer0.attach()
-  except DebraRegistrationError:
-    reset(result.producer0)
-    reset(result.consumer0)
-    reset(result.queue[])
-    dealloc(result.queue)
-    result.queue = nil
-    reset(result.manager[])
-    dealloc(result.manager)
-    result.manager = nil
-    raise
+    queueInitOk = true
+  finally:
+    if not queueInitOk:
+      # Teardown mirrors `cleanup`'s order — views first (they borrow a
+      # ptr into the queue and carry typestate destructors), then queue,
+      # then manager. `reset` on a view that was never assigned past
+      # zero-init runs the default destructor on zero state, which is a
+      # safe no-op.
+      reset(result.producer0)
+      reset(result.consumer0)
+      if result.queue != nil:
+        if queueValueInitOk:
+          # Queue value is fully initialized; run its `=destroy` while
+          # the manager is still alive (the destructor calls
+          # `unbindClient(manager[])`).
+          reset(result.queue[])
+        # If queueValueInitOk is false, the slot was `wasMoved`'d but
+        # never re-assigned — skip `reset` per mupsic's discipline and
+        # `dealloc` the raw heap block directly.
+        dealloc(result.queue)
+        result.queue = nil
+      reset(result.manager[])
+      dealloc(result.manager)
+      result.manager = nil
 
 proc cleanup*[S: static int, T; MaxThreads: static int](
     a: var LockfreequeuesUnboundedSipmucAdapter[S, T, MaxThreads]
