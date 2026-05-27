@@ -1004,6 +1004,10 @@ jobs:
           SHA=$(git rev-parse --short HEAD)
           cp merged.json "docs/assets/bench-results/${SHA}.json"
           cp merged.json docs/assets/bench-results/latest.json
+          # Auto-refresh example.json (the README's pinned source) on
+          # every devel push so it tracks the latest measured snapshot
+          # without requiring hand-curation between releases.
+          cp merged.json docs/assets/bench-results/example.json
           git add docs/assets/bench-results/
           # Nothing to commit if merged.json is byte-identical to the
           # currently-checked-in latest.json (rare but possible on a
@@ -1043,6 +1047,62 @@ jobs:
             fi
           done
           echo "::error::Snapshot push failed after 3 retries; aborting." >&2
+          exit 1
+
+      # PR-branch snapshot push: mirror the devel-snapshot writes back
+      # to the PR head ref so the PR carries its own fresh bench output.
+      # Skipped on:
+      #   - fork PRs (GITHUB_TOKEN cannot write across-repo; the
+      #     `head.repo.full_name == github.repository` gate on the job-
+      #     level `if:` already covers same-repo-only, but we re-assert
+      #     `!fork` here for defense-in-depth).
+      #   - bot-actor runs (the snapshot push commits as
+      #     `github-actions[bot]`; the actor guard prevents a snapshot-
+      #     push from re-triggering itself, mirroring the devel path).
+      # Loop-safety: the existing `paths-ignore: docs/assets/bench-
+      # results/**` block on `pull_request` plus `[skip ci]` in the
+      # commit message provide the same two-layer loop guard the devel
+      # path uses.
+      - name: Snapshot to docs assets (PR branch push)
+        if: |
+          github.event_name == 'pull_request' &&
+          github.actor != 'github-actions[bot]' &&
+          github.event.pull_request.head.repo.fork == false
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          # actions/checkout above ran with `ref: ''` for PR events
+          # (detached HEAD on the PR merge commit). Fetch and check out
+          # the PR head ref so the snapshot commit lands on the PR
+          # branch tip, not on the detached merge commit.
+          git fetch origin "${{ github.head_ref }}":"refs/remotes/origin/${{ github.head_ref }}"
+          git checkout -B "${{ github.head_ref }}" "refs/remotes/origin/${{ github.head_ref }}"
+          mkdir -p docs/assets/bench-results
+          SHA=$(git rev-parse --short HEAD)
+          cp merged.json "docs/assets/bench-results/${SHA}.json"
+          cp merged.json docs/assets/bench-results/latest.json
+          cp merged.json docs/assets/bench-results/example.json
+          git add docs/assets/bench-results/
+          if git diff --cached --quiet; then
+            echo "::notice::PR-branch snapshot identical to current checked-in copy; skipping commit."
+            exit 0
+          fi
+          git commit -m "chore(bench): refresh snapshot for PR [skip ci]"
+          # Same retry loop as the devel path: fetch + rebase + push up
+          # to 3 times to survive concurrent advances of the PR branch.
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:${{ github.head_ref }}"; then
+              exit 0
+            fi
+            echo "::notice::PR-branch push attempt $attempt rejected; rebasing onto origin/${{ github.head_ref }} and retrying."
+            git fetch origin "${{ github.head_ref }}"
+            if ! git rebase "origin/${{ github.head_ref }}"; then
+              git rebase --abort || true
+              echo "::warning::PR-branch rebase attempt $attempt failed; aborted and continuing retry loop."
+            fi
+          done
+          echo "::error::PR-branch snapshot push failed after 3 retries; aborting." >&2
           exit 1
 
       # v4.2.0 thread D1: defensive fallback snapshot.

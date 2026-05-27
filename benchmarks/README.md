@@ -445,36 +445,14 @@ topology binary), the deletion-safety contract enforced by
 
 `docs/assets/bench-results/example.json` is the middle tier of the
 chart's 3-tier fallback chain (live `latest.json` → `example.json`
-fixture → red error banner). It exists so the public benchmarks page
-renders representative data with a yellow "fixture" status banner when
-the live snapshot is unavailable, instead of a broken red banner.
+fixture → red error banner).
 
-The fixture must come from a real successful bench run; hand-authored
-"representative" numbers are forbidden (design §5.4 shape-coverage
-policy). To regenerate:
-
-1. Pick a recent successful `bench.yml` run on `devel` whose merged BMF
-   covers `mpmc/{1p1c,1p2c,2p1c,2p2c,4p4c}` plus latency at `1p1c`
-   bounded variants:
-   `gh run list --workflow=bench.yml --branch=devel --status=success --limit 5`.
-2. Download all five per-binary BMF artifacts:
-   `gh run download <run-id> --pattern 'bench-*-bmf' -D /tmp/bmf/`.
-3. Merge into one BMF document via this repo's merger:
-   `find /tmp/bmf/ -name '*.json' -print0 | xargs -0 python3 benchmarks/merge_bmf.py merged.json`.
-4. Schema-validate (per design §5.4 step 4): every key matches
-   `^[a-z][a-z0-9_]*(?:/[a-z][a-z0-9_]*)+/\d+p\d+c$` and every measure
-   value carries only `value` / `lower_value` / `upper_value`.
-5. Copy the merged result to
-   `docs/assets/bench-results/example.json` and commit with a message
-   that records the source workflow run id, head sha, and run date.
-
-Bench-comparison adapters (Crossbeam, Loony, Boost, MoodyCamel,
-threading.Chan, Nim system.Channel) only run on
-`bench-comparison.yml` (nightly cron); if their slugs are absent from
-the chosen `bench.yml` run, the fixture will not include them and the
-chart will render only the in-house lockfreequeues + nim_channels
-slugs. That is acceptable for the fallback rendering — the live
-`latest.json` carries the full set once snapshots resume.
+`example.json` auto-refreshes on every `bench.yml` run: on `devel`
+pushes the snapshot step writes it alongside `latest.json` and
+`${SHA}.json`; on `pull_request` events the PR-branch snapshot step
+writes it to the PR head ref as well. Hand-curation is no longer
+needed — the fixture tracks the latest successful merged BMF
+automatically.
 
 ## Updating the README summary
 
