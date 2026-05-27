@@ -58,33 +58,38 @@ type
 proc makeLockfreequeuesUnboundedSpscAdapter*[S: static int, T](
     capacity: int = 0   # ignored for unbounded
 ): LockfreequeuesUnboundedSpscAdapter[S, T] =
-  # OOM safety: `create(...)` followed by `newUnboundedSpscQueue()`
-  # can each raise `OutOfMemDefect`. Without a guard the heap slot from
-  # a successful `create` would leak if `newUnboundedSpscQueue` (or
-  # any subsequent step) raises. No DebraManager and no attach() in the
-  # SPSC branch, so a simple `try/finally` flagged by `queueInitOk` is
-  # sufficient. Mirrors the mpsc adapter discipline (skip `reset` on
-  # a moved-from but never-initialized slot; `dealloc` alone).
+  # OOM safety: `create(...)`, `newUnboundedSpscQueue()`, and
+  # `getProducer()` can each raise. The queue value owns segment memory
+  # once `newUnboundedSpscQueue` returns, so if a later step raises the
+  # queue slot needs `reset(...)` to run its `=destroy` and free those
+  # segments; before then, `=destroy` on a moved-from slot is wrong and
+  # `dealloc` alone is the right cleanup. Two flags discriminate the
+  # cases. Mirrors the mpmc / mpsc / spmc adapter discipline.
+  var queueValueInitOk = false
   var queueInitOk = false
   try:
     result.queue = create(UnboundedSpscAdapterQueue[S, T])
     # wasMoved before the deref-assign: `create`'s zero-fill is not tracked by
     # ARC/ORC, so `result.queue[] = ...` would run the unified Queue's
     # typestate `=destroy` on uninitialized storage. Mark the slot moved-from
-    # first. Mirrors the lockfreequeues_unbounded_mpsc_adapter pattern.
+    # first.
     wasMoved(result.queue[])
     result.queue[] =
       newUnboundedSpscQueue[T, stEager, S, SpscMaxThreads]()
+    queueValueInitOk = true
     result.producer0 = result.queue[].getProducer()
     queueInitOk = true
   finally:
     if not queueInitOk:
       if result.queue != nil:
-        # `wasMoved` happened only on the success path through the
-        # deref-assign; on partial-init the queue slot is either
-        # moved-from (init raised) or zero (create raised and the line
-        # below never ran). Either way `=destroy` on that state is
-        # avoidable — `dealloc` the raw heap block directly.
+        if queueValueInitOk:
+          # Queue value is live and owns segment memory; run `=destroy`
+          # via `reset` so segments are released before the heap block
+          # is freed.
+          reset(result.queue[])
+        # Slot is now either moved-from (queue value never assigned) or
+        # destroyed (reset just ran). `dealloc` releases the raw heap
+        # block in both cases.
         dealloc(result.queue)
         result.queue = nil
       # `producer0` is a view borrowing into the (now-freed) queue. On
