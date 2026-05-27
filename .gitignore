@@ -24,8 +24,6 @@ nimblecache/
 nimble.develop
 nimble.paths
 
-# Internal planning docs
-docs/plans/
 deps/
 # Worktree-local symlink to the main repo's deps/ folder, created by
 # the worktree setup so nim.cfg's `--path:"deps/unittest2"` resolves.

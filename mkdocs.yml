@@ -29,9 +29,6 @@ theme:
     - navigation.expand
     - toc.follow
 
-exclude_docs: |
-  plans/
-
 plugins:
   - search
   - include-markdown:
