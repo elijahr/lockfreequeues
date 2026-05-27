@@ -32,6 +32,7 @@ when defined(adapter_atomic_queue_available):
     {.error: "atomic_queue_adapter requires `nim cpp` (atomic_queue.h is C++).".}
 
   import std/os
+  import std/typetraits
   import ../bench_common
   import ../adapter
 
@@ -63,10 +64,12 @@ when defined(adapter_atomic_queue_available):
       assert sizeof(T) == 8,
         "AtomicQueueAdapter requires sizeof(T) == 8 (the wrapper " &
         "stores `uint64_t`); got sizeof(" & $T & ") = " & $sizeof(T)
-      assert not (T is ref),
-        "AtomicQueueAdapter cannot transport ref types: the C++ queue " &
-        "bypasses Nim's GC, so refcounts wouldn't be maintained across " &
-        "the boundary. Use a non-ref 64-bit payload (uint64, ptr, etc)."
+      assert supportsCopyMem(T),
+        "AtomicQueueAdapter requires a type that supports copyMem " &
+        "(no managed heap resources like string, seq, ref, or types " &
+        "with custom destructors): the C++ queue bypasses Nim's GC, " &
+        "so any managed resources wouldn't be maintained across the " &
+        "boundary. Use a non-ref 64-bit payload (uint64, ptr, etc)."
     doAssert capacity > 0, "AtomicQueue requires capacity > 0"
     result.capacity = capacity
     result.queue = aq_init(culonglong(capacity))

@@ -19,6 +19,7 @@
 ## `-d:adapter_kanal_available` is passed.
 
 when defined(adapter_kanal_available):
+  import std/typetraits
   import ../bench_common
   import ../adapter
   # Owns `-L<dir> -lbench_ffi_crossbeam`. Idempotent across multiple
@@ -60,10 +61,12 @@ when defined(adapter_kanal_available):
       assert sizeof(T) == 8,
         "KanalAdapter requires sizeof(T) == 8 (the FFI shim transports " &
         "a uint64 payload); got sizeof(" & $T & ") = " & $sizeof(T)
-      assert not (T is ref),
-        "KanalAdapter cannot transport ref types: the Rust channel " &
-        "bypasses Nim's GC, so refcounts wouldn't be maintained across " &
-        "the boundary. Use a non-ref 64-bit payload (uint64, ptr, etc)."
+      assert supportsCopyMem(T),
+        "KanalAdapter requires a type that supports copyMem (no managed " &
+        "heap resources like string, seq, ref, or types with custom " &
+        "destructors): the Rust channel bypasses Nim's GC, so any " &
+        "managed resources wouldn't be maintained across the boundary. " &
+        "Use a non-ref 64-bit payload (uint64, ptr, etc)."
     doAssert capacity > 0,
       "KanalAdapter (bounded) requires capacity > 0 " &
       "(zero would null-init at the FFI boundary)"
@@ -109,10 +112,12 @@ when defined(adapter_kanal_available):
         "KanalUnboundedAdapter requires sizeof(T) == 8 (the FFI shim " &
         "transports a uint64 payload); got sizeof(" & $T & ") = " &
         $sizeof(T)
-      assert not (T is ref),
-        "KanalUnboundedAdapter cannot transport ref types: the Rust " &
-        "channel bypasses Nim's GC, so refcounts wouldn't be maintained " &
-        "across the boundary. Use a non-ref 64-bit payload (uint64, ptr)."
+      assert supportsCopyMem(T),
+        "KanalUnboundedAdapter requires a type that supports copyMem " &
+        "(no managed heap resources like string, seq, ref, or types " &
+        "with custom destructors): the Rust channel bypasses Nim's GC, " &
+        "so any managed resources wouldn't be maintained across the " &
+        "boundary. Use a non-ref 64-bit payload (uint64, ptr)."
     discard capacity
     result.queue = kanal_unbounded_init()
     doAssert result.queue != nil, "kanal_unbounded_init returned null"

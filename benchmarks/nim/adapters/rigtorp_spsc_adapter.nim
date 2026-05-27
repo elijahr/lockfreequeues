@@ -23,6 +23,7 @@ when defined(adapter_rigtorp_spsc_available):
     {.error: "rigtorp_spsc_adapter requires `nim cpp` (SPSCQueue.h is C++).".}
 
   import std/os
+  import std/typetraits
   import ../bench_common
   import ../adapter
 
@@ -49,10 +50,13 @@ when defined(adapter_rigtorp_spsc_available):
       assert sizeof(T) == 8,
         "RigtorpSpscAdapter requires sizeof(T) == 8 (the wrapper " &
         "stores `uint64_t`); got sizeof(" & $T & ") = " & $sizeof(T)
-      assert not (T is ref),
-        "RigtorpSpscAdapter cannot transport ref types: the C++ queue " &
-        "bypasses Nim's GC. Use a non-ref 64-bit payload."
-    doAssert capacity > 0, "rigtorp::SPSCQueue requires capacity > 0"
+      assert supportsCopyMem(T),
+        "RigtorpSpscAdapter requires a type that supports copyMem (no " &
+        "managed heap resources like string, seq, ref, or types with " &
+        "custom destructors): the C++ queue bypasses Nim's GC. Use a " &
+        "non-ref 64-bit payload."
+    doAssert capacity > 0,
+      "rigtorp::SPSCQueue requires capacity > 0"
     result.capacity = capacity
     result.queue = rigtorp_spsc_init(culonglong(capacity))
     if result.queue == nil:

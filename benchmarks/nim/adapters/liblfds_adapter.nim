@@ -40,6 +40,7 @@
 
 when defined(adapter_liblfds_available):
   import std/os
+  import std/typetraits
   import ../bench_common
   import ../adapter
 
@@ -92,10 +93,15 @@ when defined(adapter_liblfds_available):
         "LiblfdsAdapter requires sizeof(T) == 8 (the wrapper packs the " &
         "payload into liblfds's void* slot via uintptr_t); got sizeof(" &
         $T & ") = " & $sizeof(T)
-      assert not (T is ref),
-        "LiblfdsAdapter cannot transport ref types: the C queue " &
-        "bypasses Nim's GC. Use a non-ref 64-bit payload."
+      assert supportsCopyMem(T),
+        "LiblfdsAdapter requires a type that supports copyMem (no " &
+        "managed heap resources like string, seq, ref, or types with " &
+        "custom destructors): the C queue bypasses Nim's GC. Use a " &
+        "non-ref 64-bit payload."
     doAssert capacity > 0, "liblfds bounded queues require capacity > 0"
+    doAssert capacity >= 2,
+      "liblfds bounded queues require capacity >= 2 (internal libfds " &
+      "assertion)"
     # liblfds bss/bmm bounded queues require capacity to be a power of 2.
     # A non-power-of-2 trips an internal LFDS711_PAL_ASSERT inside liblfds
     # that deliberately null-deref-crashes the process — no usable error

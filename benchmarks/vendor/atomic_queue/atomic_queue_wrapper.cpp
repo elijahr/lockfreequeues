@@ -73,6 +73,10 @@ aq_queue_t aq_init(unsigned long long capacity) {
 // on-the-wire value is never the NIL sentinel (0).
 int aq_push(aq_queue_t q, unsigned long long item) {
   if (q == nullptr) return 0;
+  // Reject UINT64_MAX: the +1 offset below would overflow to 0 and
+  // collide with the NIL sentinel that AtomicQueueB reserves for empty
+  // slots, silently corrupting the queue.
+  if (item == UINT64_MAX) return 0;
   auto *queue = static_cast<BenchQueue *>(q);
   std::uint64_t v = static_cast<std::uint64_t>(item) + 1;
   return queue->try_push(v) ? 1 : 0;
