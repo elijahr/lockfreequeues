@@ -23,7 +23,7 @@ type NodeObj = object
   value: int
 var q4 = newUnboundedSpscQueue[ptr NodeObj, stEager, 64, 4]()
 
-# This fails on arc/orc — `ref` uses spinlocks for refcounting.
+# This fails on arc/orc/atomicArc — see below for why.
 type Node = ref object
   value: int
 var q5 = newUnboundedSpscQueue[Node, stEager, 64, 4]()  # Compile error
@@ -31,11 +31,19 @@ var q5 = newUnboundedSpscQueue[Node, stEager, 64, 4]()  # Compile error
 
 ### Why this matters
 
-On `arc` and `orc` memory managers, `ref` types use reference counting. The
-queue's CAS operations correctly serialize slot access, but reference-counting
-operations on `ref` items may fall back to spinlock-based atomics on some
-platforms. That defeats the lock-free guarantee at the item level even when
-the queue itself stays lock-free.
+Slots are stored in a shared `array[S, T]` and crossed between producer and
+consumer threads. When a producer writes `seg.data[i] = item` and a consumer
+reads `seg.data[i]`, those assignments fire Nim's `=copy`/`=sink` hooks for
+ref types, which mutate the refcount on the same object that other threads
+are concurrently reading or writing.
+
+On `arc` and `orc`, that refcount is a non-atomic `int` — concurrent mutation
+is a data race regardless of any lock-free property. On `atomicArc` the
+refcount itself is atomic, but the slot bytes (the ref handle) are still
+read and written without coordination beyond the queue's CAS protocol, so
+the race surfaces as torn slot reads or as refcount mutation around a
+partially-written slot. In every case the queue itself remains lock-free;
+the unsoundness is in the item-type contract.
 
 ### Allowing non-lock-free types
 

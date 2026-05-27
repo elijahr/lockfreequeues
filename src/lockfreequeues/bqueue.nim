@@ -675,6 +675,20 @@ proc push*[T; N: static int](
     self: var BQueue[T, ccSingle, ccSingle, N, 0, 0], item: T
 ): bool =
   ## SPSC single-item push (lock-free; uses the SPSC typestate verbs).
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.
+          error:
+            "BQueue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
+            "mutate the refcount on the same object multiple threads can " &
+            "read or write, which is a race regardless of whether the " &
+            "refcount itself is atomic. Use a lock-free type (int, " &
+            "pointer, ptr T, etc.) or compile with " &
+            "-d:allowNonLockFreeQueueItems to explicitly allow it."
+        .}
+
   var queueBase = cast[ptr SpscBase[N, T]](addr self)
 
   let op = spsc_push.start[N]()
@@ -692,6 +706,20 @@ proc push*[T; N, C: static int](
     self: var BQueue[T, ccSingle, ccMulti, N, 0, C], item: T
 ): bool =
   ## SPMC single-item push (defensive CAS, single-producer-side).
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.
+          error:
+            "BQueue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
+            "mutate the refcount on the same object multiple threads can " &
+            "read or write, which is a race regardless of whether the " &
+            "refcount itself is atomic. Use a lock-free type (int, " &
+            "pointer, ptr T, etc.) or compile with " &
+            "-d:allowNonLockFreeQueueItems to explicitly allow it."
+        .}
+
   var queueBase = cast[ptr SpmcPushBase[N, C, T]](addr self)
 
   var op = spmc_push.start[N]()
@@ -713,6 +741,20 @@ proc push*[T; N, P: static int](
     self: BQueueProducer[T, ccMulti, ccSingle, N, P, 0], item: T
 ): bool =
   ## MPSC single-item push (lock-free; uses the MPSC typestate verbs).
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.
+          error:
+            "BQueue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
+            "mutate the refcount on the same object multiple threads can " &
+            "read or write, which is a race regardless of whether the " &
+            "refcount itself is atomic. Use a lock-free type (int, " &
+            "pointer, ptr T, etc.) or compile with " &
+            "-d:allowNonLockFreeQueueItems to explicitly allow it."
+        .}
+
   var queueBase = cast[ptr MpscPushBase[N, P, T]](self.queue)
 
   var op = mpsc_push.start[N]()
@@ -734,6 +776,20 @@ proc push*[T; N, P, C: static int](
     self: BQueueProducer[T, ccMulti, ccMulti, N, P, C], item: T
 ): bool =
   ## MPMC single-item push (lock-free; uses the MPMC typestate verbs).
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.
+          error:
+            "BQueue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
+            "mutate the refcount on the same object multiple threads can " &
+            "read or write, which is a race regardless of whether the " &
+            "refcount itself is atomic. Use a lock-free type (int, " &
+            "pointer, ptr T, etc.) or compile with " &
+            "-d:allowNonLockFreeQueueItems to explicitly allow it."
+        .}
+
   var queueBase = cast[ptr MpmcPushBase[N, P, C, T]](self.queue)
 
   var op = mpmc_push.start[N]()
@@ -763,6 +819,19 @@ proc push*[
     "Direct push on a multi-producer BQueue is not allowed. " &
     "Use BQueue.getProducer().push(item) to obtain a per-thread " &
     "BQueueProducer and push through it.".} =
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.
+          error:
+            "BQueue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
+            "mutate the refcount on the same object multiple threads can " &
+            "read or write, which is a race regardless of whether the " &
+            "refcount itself is atomic. Use a lock-free type (int, " &
+            "pointer, ptr T, etc.) or compile with " &
+            "-d:allowNonLockFreeQueueItems to explicitly allow it."
+        .}
   discard
 
 # --- SPSC pop (direct on BQueue) -----------------------------------------
@@ -770,6 +839,20 @@ proc pop*[T; N: static int](
     self: var BQueue[T, ccSingle, ccSingle, N, 0, 0]
 ): Option[T] =
   ## SPSC single-item pop.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.
+          error:
+            "BQueue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
+            "mutate the refcount on the same object multiple threads can " &
+            "read or write, which is a race regardless of whether the " &
+            "refcount itself is atomic. Use a lock-free type (int, " &
+            "pointer, ptr T, etc.) or compile with " &
+            "-d:allowNonLockFreeQueueItems to explicitly allow it."
+        .}
+
   var queueBase = cast[ptr SpscBase[N, T]](addr self)
 
   let op = spsc_pop.start[N]()
@@ -787,6 +870,20 @@ proc pop*[T; N, P: static int](
     self: var BQueue[T, ccMulti, ccSingle, N, P, 0]
 ): Option[T] =
   ## MPSC single-item pop (defensive CAS, single-consumer-side).
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.
+          error:
+            "BQueue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
+            "mutate the refcount on the same object multiple threads can " &
+            "read or write, which is a race regardless of whether the " &
+            "refcount itself is atomic. Use a lock-free type (int, " &
+            "pointer, ptr T, etc.) or compile with " &
+            "-d:allowNonLockFreeQueueItems to explicitly allow it."
+        .}
+
   var queueBase = cast[ptr MpscBase[N, P, T]](addr self)
 
   var op = mpsc_pop.start[N]()
@@ -808,6 +905,20 @@ proc pop*[T; N, C: static int](
     self: BQueueConsumer[T, ccSingle, ccMulti, N, 0, C]
 ): Option[T] =
   ## SPMC single-item pop.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.
+          error:
+            "BQueue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
+            "mutate the refcount on the same object multiple threads can " &
+            "read or write, which is a race regardless of whether the " &
+            "refcount itself is atomic. Use a lock-free type (int, " &
+            "pointer, ptr T, etc.) or compile with " &
+            "-d:allowNonLockFreeQueueItems to explicitly allow it."
+        .}
+
   var queueBase = cast[ptr SpmcBase[N, C, T]](self.queue)
 
   var op = spmc_pop.start[N]()
@@ -829,6 +940,20 @@ proc pop*[T; N, P, C: static int](
     self: BQueueConsumer[T, ccMulti, ccMulti, N, P, C]
 ): Option[T] =
   ## MPMC single-item pop.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.
+          error:
+            "BQueue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
+            "mutate the refcount on the same object multiple threads can " &
+            "read or write, which is a race regardless of whether the " &
+            "refcount itself is atomic. Use a lock-free type (int, " &
+            "pointer, ptr T, etc.) or compile with " &
+            "-d:allowNonLockFreeQueueItems to explicitly allow it."
+        .}
+
   var queueBase = cast[ptr MpmcBase[N, P, C, T]](self.queue)
 
   var op = mpmc_pop.start[N]()
@@ -856,6 +981,19 @@ proc pop*[
     "Direct pop on a multi-consumer BQueue is not allowed. " &
     "Use BQueue.getConsumer().pop() to obtain a per-thread " &
     "BQueueConsumer and pop through it.".} =
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.
+          error:
+            "BQueue item type '" & $T & "' is a ref type. " &
+            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
+            "mutate the refcount on the same object multiple threads can " &
+            "read or write, which is a race regardless of whether the " &
+            "refcount itself is atomic. Use a lock-free type (int, " &
+            "pointer, ptr T, etc.) or compile with " &
+            "-d:allowNonLockFreeQueueItems to explicitly allow it."
+        .}
   discard
 
 ## ----------------------------------------------------------------------
