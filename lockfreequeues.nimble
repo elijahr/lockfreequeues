@@ -38,10 +38,6 @@ task test, "Runs the test suite":
   exec "nim c --mm:arc --threads:on -r -f tests/test.nim"
   exec "nim c --mm:refc --threads:on -r -f tests/test.nim"
 
-  # Test with lock-free enforcement (ensures no spinlock fallback)
-  exec "nim c --mm:arc -d:nimEnforceLockFreeAtomics --threads:on -r -f tests/test.nim"
-  exec "nim c --mm:orc -d:nimEnforceLockFreeAtomics --threads:on -r -f tests/test.nim"
-
   if getEnv("SANITIZE_THREADS") != "no":
     # C (with thread sanitization, requires atomicArc for thread-safe refcounting)
     exec "nim c --cc:clang --mm:atomicArc --passC:\"-fsanitize=thread\" --passL:\"-fsanitize=thread\" --threads:on -r -f tests/test.nim"

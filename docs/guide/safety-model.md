@@ -54,8 +54,10 @@ For maximum safety and portability:
 - **Avoid `ref` types** on `arc` / `orc`; prefer `ptr T` with manual memory
   management.
 - **Test on the target platform**: lock-free atomic availability is
-  platform-dependent; verify on your deployment target with
-  `-d:nimEnforceLockFreeAtomics`.
+  platform-dependent. `debra/atomics` rejects non-lock-free `Atomic[T]`
+  by default; build on your deployment target to surface any rejection,
+  or pass `-d:debraAllowNonLockFreeAtomics` to opt into the libatomic
+  spinlock fallback (with a per-call-site warning).
 
 ### Testing under multiple memory managers
 
@@ -101,8 +103,9 @@ CI runs the full suite across:
 - Memory managers: `arc`, `orc`, `refc`, `atomicArc`.
 - Backends: C and C++.
 - Sanitisers: ThreadSanitizer (TSAN) under `atomicArc`, AddressSanitizer (ASAN).
-- Lock-free atomic enforcement: a dedicated `-d:nimEnforceLockFreeAtomics` lane
-  on both `arc` and `orc` to catch any spinlock fallback.
+
+Lock-free atomic enforcement is structural, not lane-specific: `debra/atomics`
+rejects any non-lock-free `Atomic[T]` at compile time on every lane by default.
 
 The same matrix is applied to the threaded reclamation tests
 (`t_unbounded_*_threaded`) so segment retirement and free are exercised under

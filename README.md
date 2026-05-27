@@ -178,7 +178,6 @@ Unbounded queues are linked segments that grow as needed. Use them when:
 | Flag                                       | Default | Effect                                                                                  |
 |--------------------------------------------|---------|-----------------------------------------------------------------------------------------|
 | `-d:allowNonLockFreeQueueItems`            | off     | Disable the arc/orc compile-time check that rejects `ref` item types.                   |
-| `-d:nimEnforceLockFreeAtomics`             | off     | Nim flag; fail compilation if any atomic operation falls back to spinlocks.             |
 | `-d:LockFreeQueuesAdvanceEvery=N`          | 64      | DEBRA epoch-advance cadence for unbounded queues' Eager reclamation per-pop fast path.  |
 
 ## Thread safety
@@ -242,8 +241,10 @@ suite on:
 - Memory managers: `arc`, `orc`, `refc`, `atomicArc`.
 - Backends: C and C++.
 - Sanitisers: ThreadSanitizer (TSAN) on `atomicArc`, AddressSanitizer (ASAN).
-- Lock-free atomic enforcement: `-d:nimEnforceLockFreeAtomics` lane on `arc`
-  and `orc`.
+
+Lock-free atomic enforcement is on by default — `debra/atomics` rejects any
+`Atomic[T]` instantiation that would dispatch to libatomic spinlock fallback
+unless `-d:debraAllowNonLockFreeAtomics` is passed.
 
 192 tests across the bounded, unbounded, threaded, and lock-free-check suites.
 

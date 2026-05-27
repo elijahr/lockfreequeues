@@ -214,8 +214,8 @@ The v5.0.0 reshape is measured against the pre-wave devel baseline
   shrank or grew under 1%.
 - **Test posture at v5.0.0 cut**: 5 MM lanes (orc / arc / refc /
   atomicArc+TSan / orc+ASan) green at 240/240 each, plus C++ lane
-  240/240, plus `-d:nimEnforceLockFreeAtomics` lane 240/240.
-  `should_fail/runner.nim`: 14/14. R7 / R8 / R9 grep gates: clean.
+  240/240. `should_fail/runner.nim`: 14/14. R7 / R8 / R9 grep gates:
+  clean.
 
 ### Removed (3.3.11-B late)
 
@@ -1290,7 +1290,7 @@ destination subsystem.
 - Latency and throughput benchmark suite under `benchmarks/nim/` (`bench_latency.nim`, `bench_throughput.nim`, `bench_main.nim`) with adapters for each queue type.
 - New examples: `audio_buffer.nim`, `event_collector.nim`, `job_scheduler.nim`, `task_fanout.nim`, and `sipmuc.nim`.
 - Thread safety section and slot-ownership typestate documentation in README.
-- CI matrix across arc, orc, and refc memory managers, including a `-d:nimEnforceLockFreeAtomics` lane.
+- CI matrix across arc, orc, and refc memory managers.
 - Dependency on `debra >= 0.3.0` for safe memory reclamation in the unbounded multi-consumer queues.
 - Dependency on `typestates >= 0.3.1` (already used; bumped to pull in the latest API).
 

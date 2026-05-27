@@ -84,8 +84,6 @@ relevant combination:
 
 - C backend with default MM (`orc`) and explicit `arc`, `refc`.
 - C++ backend with default MM.
-- Two `-d:nimEnforceLockFreeAtomics` lanes (on `arc` and `orc`) that
-  reject any spinlock fallback at compile time.
 - ThreadSanitizer on `clang` + `atomicArc` (gated by
   `SANITIZE_THREADS=no` to skip on machines without a working clang
   TSAN).
@@ -125,10 +123,9 @@ For tight iteration, point Nim straight at one file:
 nim c --threads:on -r tests/t_spsc.nim
 ```
 
-Add flags as needed: `-d:release` for speed,
-`--mm:arc -d:nimEnforceLockFreeAtomics` to reproduce a CI lane,
-`--cc:clang --passC:"-fsanitize=thread" --passL:"-fsanitize=thread"` to
-debug a TSAN report.
+Add flags as needed: `-d:release` for speed, `--mm:arc` to reproduce a
+specific CI lane, `--cc:clang --passC:"-fsanitize=thread"
+--passL:"-fsanitize=thread"` to debug a TSAN report.
 
 ### Adding a new test
 
