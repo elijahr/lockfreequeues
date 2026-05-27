@@ -241,7 +241,8 @@ genuinely lock-free atomics". For everything else, prefer `ptr T`.
 
 ## DEBRA integration
 
-DEBRA is the epoch-based reclamation (EBR) scheme used by the
+DEBRA ([Brown 2015](https://www.cs.utoronto.ca/~tabrown/debra/)) is the
+epoch-based reclamation (EBR) scheme used by the
 multi-cardinality unbounded shapes (any unbounded `Queue` with a multi
 producer or multi consumer — MPSC, SPMC, MPMC) to retire and free
 segments safely under contention. The single-cardinality unbounded shape

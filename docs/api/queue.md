@@ -20,7 +20,8 @@ Body layout splits on `(ccProd, ccCons) is (ccSingle, ccSingle)`:
   linked-segment, committed-flag-free SPSC protocol (formerly the
   standalone `UnboundedSpsc` type) is absorbed verbatim; retired
   segments are freed inline by the consumer-side advance.
-- **MPSC / SPMC / MPMC**: DEBRA+ epoch-based memory reclamation via
+- **MPSC / SPMC / MPMC**: DEBRA+ epoch-based memory reclamation
+  ([Brown 2015](https://www.cs.utoronto.ca/~tabrown/debra/)) via
   [nim-debra](https://github.com/elijahr/nim-debra). The queue owns or
   borrows a `DebraManager`, and each operating thread holds a
   per-thread handle for the pin/retire cycle.
