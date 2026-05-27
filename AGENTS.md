@@ -111,31 +111,76 @@ counterpart to collide with. SPSC POP and the other six files are
 U-prefixed. The rule is per state-graph, not per concurrency variant —
 see commit body of `3d96020` for the migration-time discovery.
 
-## v5.0.0 updates
+## Repository hygiene
 
-Delta notes for v5.0.0-impl (`feat/v5.0.0-impl`). Historical content
-above is preserved verbatim from `v4.2.0-bench-tightening`; this section
-captures the deltas an agent landing on this branch needs to know.
+These rules govern what may and may not enter source-controlled
+files — code comments, docstrings, prose docs, and commit messages.
 
-- **TSAN hang mitigation — still applies.** The hang is a Nim runner +
-  thread-sanitizer interaction, not queue-family-specific. Unified
-  `Queue[…]` type does not change the symptom or the short-circuit
-  (build then exec `.tmp/<test>` directly). Use as-is.
-- **Defense placement SHAs `bb50bc9` + `7296240` are NOT reachable from
-  v5.0.0-impl tip (`9cde893`).** Both commits live on the v4.3-task-14
-  orphan branch and were not merged forward. The *principle* and the
-  SPMC vs SPSC/MPSC mirrored-placement example remain authoritative as
-  historical reference; if you need to inspect the original diffs,
-  fetch them from the orphan branch. Future commit-point defense work
-  in v5.0.0 should still follow the heuristic (locate the irreversible
-  transition, place defense immediately before).
-- **U-prefix typestate rule — fully operative.** `USPSCPop*`,
-  `USPMCPop*`, `UMPMCPop*`, etc. state types persist in
-  `src/lockfreequeues/typestates/unbounded_*.nim`. Phase 1's unified
-  `Queue[…]` generic did not consolidate these away. SPSC PUSH remains
-  the single un-prefixed exception per the historical rule. Pending
-  Phase 3 Track E may revisit, but as of `9cde893` the rule is in
-  effect and must be honored when adding new unbounded state graphs.
-- **Source provenance.** This AGENTS.md was propagated from
-  `v4.2.0-bench-tightening` (113-line source) during v5.0.0 Phase 4.7
-  PR-prep. The v5.0.0-wave worktree previously had no AGENTS.md.
+### No ephemeral process artifacts in tracked files
+
+The following classes of content MUST NOT appear in tracked files
+(source, docs, examples, tests, workflows):
+
+- **Phase / Track / Bundle / Step markers.** Implementation-timeline
+  identifiers like "Phase 3.3", "Track E", "Bundle F", "Step 3.3.9-D",
+  "3.3.11-B", or any equivalent ad-hoc plan coordinate. These live in
+  external plan documents and git history, not in shipped code.
+- **Reviewer-feedback references.** Per-cycle flag identifiers
+  (M-codes, F-codes, R-codes, "Gemini cycle N", "Momus r3 LOWs",
+  "pepper flag-N", "lychee MED-N", "smart-ctor F-N", "BENCH-LOW-N",
+  "CB-NNN", "arc-orc-NNN", "cascade-NNN"). The fix lives in the diff;
+  the flag identifier dies with the review.
+- **Temporary-state statements.** "Until X lands", "Once Y ships",
+  "When Z completes", "(planned C1)". If a workaround is in place,
+  describe the workaround in present tense without naming the future
+  event that retires it. If the workaround DOES need retiring, file
+  an issue or a TODO with no ephemeral coordinate.
+- **Postmortem narration in code.** Reasoning about why an earlier
+  attempt failed ("Wall 1 fix", "Wall 2 fix", "Wall 3 acceptance",
+  "originally we tried X but it broke Y") belongs in the commit
+  message or CHANGELOG, never in a checked-in comment.
+- **AI attribution.** No `Co-Authored-By` trailers, no "Generated
+  with Claude" footers, no bot signatures in commits, PR titles, PR
+  descriptions, issue bodies, or comments.
+- **GitHub issue numbers in commit messages, PR titles, or PR
+  descriptions.** GitHub auto-links `#N` and notifies subscribers;
+  reserve issue references for explicit human-curated cross-links.
+
+### What comments are FOR
+
+Source comments and docstrings exist to explain code that is not
+obvious from the code itself. Acceptable categories:
+
+- FFI / ABI contracts (NIL sentinels, alignment requirements,
+  memory-ownership protocols across language boundaries).
+- Memory ordering / atomicity rationale (which load is acquire,
+  which store is release, what synchronizes-with what).
+- Algorithmic invariants the type system cannot express (Vyukov
+  sequence-counter discipline, committed-flag publication, EBR
+  epoch advancement rules).
+- Footgun callouts at sites that LOOK safe but are not (use-after-
+  destroy, ARC + `ref T` slot copy hazards).
+- Non-obvious workarounds with the constraint that produces them
+  ("must run before X because Y", stated in present tense without
+  reference to when X will go away).
+
+Comments that restate the code are noise. `# increment counter`
+above `counter += 1` adds nothing; delete it.
+
+### Ephemeral docs do not get checked in
+
+Implementation-phase audit trails — bench-delta postmortems, cascade
+inventories, cross-doc re-gate reports, design rework deltas — do
+not enter the tracked tree. The release-branch worktree is the right
+home for them during development; the merge commit is where they
+are dropped, not promoted to `docs/`.
+
+The release-time documentation surface is:
+
+- `README.md` — entry point.
+- `docs/` (the mkdocs site, navigation defined in `mkdocs.yml`).
+- `CHANGELOG.md` — versioned history.
+- `AGENTS.md` — agent-facing operational notes (this file).
+- `THIRD_PARTY_LICENSES.md`.
+
+If a doc isn't reachable from one of those, it shouldn't be tracked.
