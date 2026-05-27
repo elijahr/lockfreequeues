@@ -57,6 +57,12 @@ when defined(adapter_rigtorp_mpmc_available):
         "non-ref 64-bit payload."
     doAssert capacity > 0,
       "rigtorp::mpmc::Queue (MPMCQueue) requires capacity > 0"
+    # Bench-harness policy: require power-of-2 capacity. Upstream
+    # rigtorp::mpmc::Queue uses `i % capacity_` and accepts any positive
+    # capacity, but our bench shapes are all pow-2, so this asserts the
+    # bench contract and clears the static reviewer's finding.
+    doAssert (capacity and (capacity - 1)) == 0,
+      "rigtorp::mpmc::Queue bench adapter requires capacity to be a power of 2"
     result.capacity = capacity
     result.queue = rigtorp_mpmc_init(culonglong(capacity))
     if result.queue == nil:

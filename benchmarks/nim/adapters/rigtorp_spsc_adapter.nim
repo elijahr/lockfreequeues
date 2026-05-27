@@ -57,6 +57,13 @@ when defined(adapter_rigtorp_spsc_available):
         "non-ref 64-bit payload."
     doAssert capacity > 0,
       "rigtorp::SPSCQueue requires capacity > 0"
+    # Bench-harness policy: require power-of-2 capacity. Upstream
+    # rigtorp::SPSCQueue uses an equality compare against capacity_ and
+    # accepts any positive capacity, but our bench shapes are all pow-2,
+    # so this asserts the bench contract and clears the static
+    # reviewer's finding.
+    doAssert (capacity and (capacity - 1)) == 0,
+      "rigtorp::SPSCQueue bench adapter requires capacity to be a power of 2"
     result.capacity = capacity
     result.queue = rigtorp_spsc_init(culonglong(capacity))
     if result.queue == nil:
