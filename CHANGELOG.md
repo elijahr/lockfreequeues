@@ -51,9 +51,8 @@ reframe and against each other.
 >   original brief — see the "Bundle F revised design" section
 >   below for the Wall 1 / Wall 2 / Wall 3 deviations.
 >
-> Doc C and the design-queue-collapse-v5.0.0 doc still describe the
-> older 10-param shape; the canonical reference for the current
-> surface is `docs/v5.0.0-migration/3.3.11-B-final-shape.md`.
+> The canonical reference for the current surface is this CHANGELOG
+> entry plus `docs/migration.md`.
 >
 > **Worked example — primary surface (3.3.11-B / M7 lock).** For new
 > code, prefer the two generic constructors:
@@ -159,14 +158,8 @@ reshape above: a bounded `BQueue[T, ccProd, ccCons, N, P, C]` and an
 unbounded `Queue[T, ccProd, ccCons, ST, S, MaxThreads]`. The standalone
 `UnboundedSipsic[S, T]` SPSC type was ABSORBED into `Queue`'s
 `(ccSingle, ccSingle)` arm (debra-free committed-flag-free protocol) and
-its module deleted — it is no longer a separate type. See
-`docs/v5.0.0-migration/reframe-rationale.md` for the full
-inflection-point rationale and `docs/v5.0.0-migration/design-queue-collapse-v5.0.0.md`
-(Doc C) for the original surface specification. **Doc C describes the
-superseded 10-param shape**; the 3.3.11-B final shape (summarized in the
-addendum above) is canonical, with
-`docs/v5.0.0-migration/3.3.11-B-final-shape.md` as the authoritative
-reference.
+its module deleted — it is no longer a separate type. The final shape
+summarized in the addendum above is canonical.
 
 Reclamation is cardinality-driven, not a phantom parameter. The
 `(ccSingle, ccSingle)` arm uses the debra-free committed-flag-free
@@ -946,8 +939,8 @@ honoured regardless of build mode.
 > bounded, `Queue[T, ccProd, ccCons, ST, S, MaxThreads]` unbounded),
 > dropped the `RK` parameter (reclamation is now cardinality-driven), and
 > absorbed `UnboundedSipsic` into `Queue`. See the 3.3.11-B reshape note
-> at the top of this release and `docs/v5.0.0-migration/3.3.11-B-final-shape.md`
-> for the shipped surface. The entries are retained for the audit trail.
+> at the top of this release for the shipped surface. The entries are
+> retained for the audit trail.
 
 - `Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]` generic
   type shell at `src/lockfreequeues/queue.nim`. Field layout splits by
@@ -1059,38 +1052,29 @@ honoured regardless of build mode.
 
 ### Documentation (v5.0.0 reframe audit trail)
 
-- `docs/v5.0.0-migration/reframe-rationale.md` (commit `d6f6244`):
-  captures the 2026-05-17 operator decision to reframe the planned
-  v4.3 MINOR release as a SemVer MAJOR `v5.0.0` and collapse the
-  seven non-SPSC queue families into the unified `Queue` generic.
-  Documents the inflection-point rationale per the most-correct-
-  least-deferred rule so future maintainers (and the v6 design pass)
-  have a captured audit trail.
+- Reframe rationale (audit trail): the 2026-05-17 operator decision
+  reframed the planned v4.3 MINOR release as a SemVer MAJOR `v5.0.0`
+  and collapsed the seven non-SPSC queue families into the unified
+  `Queue` generic per the most-correct-least-deferred rule.
 - `docs/migration.md` (commit `d6f6244`): full migration guide for
   4.1.x → 5.0.0, including the migration table for every retired
   type and the explicit "no aliases" rule for typed call sites. (The
   doc's two-stage `rkNone` base / `rkEbr` RC release plan was superseded
   by 3.3.11-B — reclamation is cardinality-driven and EBR ships live in
   5.0.0; the `RK` axis no longer exists.)
-- `docs/v5.0.0-migration/design-queue-collapse-v5.0.0.md`
-  (Doc C, commit `ca24d63`): complete surface specification for the
-  unified `Queue` generic. Defines §3.0 target shape, §3.0.1 uniform
-  generic, §3.0.2.4 9 param-coherence guards, and §5 verbatim source
-  for the bounded and unbounded field bodies. Load-bearing for
-  Track B (rkNone body), Track E (rkEbr body), and Track A4
-  (param-coherence harness).
-- `docs/v5.0.0-migration/cascade-inventory.md` (commit `ad70f69`,
-  Track D-early D1) and `docs/v5.0.0-migration/cascade-mapping.md`
-  (commit `4d97248`, Track D-early D2): inventory and mapping of
-  every legacy-facade call site touched by the unified `Queue`
-  cascade. Refactor commits (`c6c9066` umbrella, `5e32dd4` runner,
-  `40fe70b` examples, `333b339` benches, `a3b0b4b` adapter
-  consolidation) cite these documents.
-- `docs/v5.0.0-migration/track-e-preflight.md` (commit `dc4fcdc`):
-  Track E preflight memo for M3. Documents the Task 11 LCRQ
-  baseline rename `prevConsumerIdx → consumerHead` as orphan on
-  `feat/v4.3-task-14`; the rename was NOT applied to v5.0.0-impl,
-  and the unbounded path on v5.0.0-impl is pre-Task-11 state. The
+- Queue-collapse surface specification (audit trail): defined the
+  unified `Queue` generic's target shape, uniform generic, param-
+  coherence guards, and verbatim source for the bounded and unbounded
+  field bodies.
+- Cascade inventory and mapping (audit trail): inventoried and mapped
+  every legacy-facade call site touched by the unified `Queue` cascade.
+  Refactor commits (`c6c9066` umbrella, `5e32dd4` runner, `40fe70b`
+  examples, `333b339` benches, `a3b0b4b` adapter consolidation) drew
+  from these inventories.
+- Track E preflight (audit trail): captured the Task 11 LCRQ baseline
+  rename `prevConsumerIdx → consumerHead` as orphan on
+  `feat/v4.3-task-14`; the rename was NOT applied to v5.0.0-impl, so
+  the unbounded path on v5.0.0-impl is pre-Task-11 state. The
   unbounded debra-integrated body shipped live in 5.0.0 WITHOUT the
   rename; the consumer-claim relaxation carries forward as a v5.x
   post-release semantics change (see L5).
@@ -1169,11 +1153,9 @@ verdict.
 
 - **L5 — Strict-FIFO consumer-claim relaxation (`prevConsumerIdx →
   consumerHead`): (b) STILL OPEN.** v4.3.0 deferred this rename
-  and the CAS-on-head consumer-claim mechanism to v4.4. Per the
-  Track E preflight memo
-  (`docs/v5.0.0-migration/track-e-preflight.md`, commit
-  `dc4fcdc`), the Task 11 LCRQ baseline rename is orphan on
-  `feat/v4.3-task-14` and was NOT applied to v5.0.0-impl.
+  and the CAS-on-head consumer-claim mechanism to v4.4. The Task 11
+  LCRQ baseline rename is orphan on `feat/v4.3-task-14` and was NOT
+  applied to v5.0.0-impl.
   Verification: `prevConsumerIdx` remains the multi-consumer CAS slot
   field name in the shipped `Queue` (`queue.nim`, the `ccCons == ccMulti`
   branches) — the pre-Task-11 state. The unbounded debra-integrated body
@@ -1230,25 +1212,8 @@ destination subsystem.
 
 ### References
 
-Cross-references to v5.0.0 reframe documents (audit trail):
-
 - [Migration guide](docs/migration.md) — full migration table from
   4.1.x to 5.0.0; cited in BREAKING.
-- [Reframe rationale](docs/v5.0.0-migration/reframe-rationale.md) —
-  why v4.3 became v5.0.0; cited in the prose opening of this
-  release.
-- [Doc C — unified Queue surface
-  specification](docs/v5.0.0-migration/design-queue-collapse-v5.0.0.md)
-  — original (superseded 10-param) design surface; cited in BREAKING
-  for the param-coherence guards.
-- [Track E preflight
-  memo](docs/v5.0.0-migration/track-e-preflight.md) — `rkEbr`
-  unbounded body preflight, `prevConsumerIdx → consumerHead`
-  rename mandate; cited in L5.
-- [Cascade inventory](docs/v5.0.0-migration/cascade-inventory.md)
-  and [Cascade
-  mapping](docs/v5.0.0-migration/cascade-mapping.md) — Track
-  D-early audit trail for the cross-cascade refactor commits.
 
 ## [4.1.0] - 2026-05-01
 

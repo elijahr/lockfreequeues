@@ -40,10 +40,9 @@ elijahr/nim-typestates and elijahr/nim-debra registry entries.
   comment in `config.nims`)_
 - **Upgrade procedure:** bump the `requires` line in
   `lockfreequeues.nimble`, run `nimble lock` to refresh `nimble.lock`,
-  and re-run the test matrix. The static AST verifier behavior is
-  documented in `docs/v5.0.0-migration/3.3.11-B-final-shape.md` —
-  any version below `0.10.0` lacks the multi-line pragma scanner
-  and will reject the unified Queue's typestate-pragma combined forms.
+  and re-run the test matrix. Any version below `0.10.0` lacks the
+  multi-line pragma scanner and will reject the unified Queue's
+  typestate-pragma combined forms.
 
 ### nim-debra
 

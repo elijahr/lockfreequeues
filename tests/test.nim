@@ -18,14 +18,6 @@ import ./t_queue_bounded_mupmuc
 import ./t_queue_bounded_sipsic
 import ./t_queue_bounded_mupsic_threaded
 import ./t_queue_bounded_sipsic_threaded
-# Re-enabled 2026-05-17 after v5.0.0 Phase 4.6.3 green-mirage audit
-# surfaced that the prior disable comment ("pre-existing deadlock...")
-# was verbatim-preserved from v3.x committed-flag era. Standalone
-# re-run on feat/v5.0.0-impl @ adcc2f5 with --threads:on -r at 3-run
-# cold-state per test PASSED for both variants. No deadlock observed
-# in current code; the disable was stale documentation, not a live
-# constraint. Audit artifact: docs/v5.0.0-migration/bench-report-b3-split.md
-# references the Phase 4.6 audit context.
 import ./t_queue_bounded_mupmuc_threaded
 import ./t_queue_bounded_sipmuc_threaded
 import ./t_unbounded_mupmuc

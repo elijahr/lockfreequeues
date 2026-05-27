@@ -130,6 +130,4 @@ task benchteststress, "Runs the bench harness test suite including 3.3M-sample s
 # code OR delete the test"), the stress test suite + task are removed.
 # The MM lane matrix (5 lanes × 240 tests, plus TSan/ASan sanitizers
 # under `nimble test`) provides the primary concurrency-correctness
-# signal. See `docs/v5.0.0-migration/3.3.11-B-postmortem.md`
-# ("Stress-test triage") for the full rationale and the post-v5.0.0
-# resurrection plan.
+# signal.

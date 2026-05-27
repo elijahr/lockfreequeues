@@ -8,9 +8,7 @@
 ## collapsed into `BQueue[T, ccSingle, ccMulti, N, 0, C]` (the bounded
 ## 6-param shape — capacity `N`, single producer arm, `C` consumer
 ## views). Consumers are obtained via `q.getConsumer(idx)` with an
-## explicit consumer index per thread. See
-## `docs/v5.0.0-migration/3.3.11-B-final-shape.md` for the canonical
-## surface reference.
+## explicit consumer index per thread.
 
 import lockfreequeues/atomic_dsl
 import os

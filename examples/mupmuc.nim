@@ -5,9 +5,7 @@
 ## collapsed into `BQueue[T, ccMulti, ccMulti, N, P, C]` (the bounded
 ## 6-param shape — capacity `N`, `P` producer views, `C` consumer
 ## views). Producers and consumers are obtained via `q.getProducer()`
-## / `q.getConsumer()` (one per thread). See
-## `docs/v5.0.0-migration/3.3.11-B-final-shape.md` for the canonical
-## surface reference.
+## / `q.getConsumer()` (one per thread).
 
 import options
 import random

@@ -7,9 +7,7 @@
 ## arm). The constructor short form below uses the
 ## `newMupsicQueue[T, N, P]()` smart-constructor. Producers are
 ## obtained via `q.getProducer()` (one per thread) and push through
-## the returned `BQueueProducer`. See
-## `docs/v5.0.0-migration/3.3.11-B-final-shape.md` for the canonical
-## surface reference.
+## the returned `BQueueProducer`.
 
 import options
 import random

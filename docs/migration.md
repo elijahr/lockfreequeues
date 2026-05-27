@@ -341,13 +341,3 @@ instantiation-time feedback the legacy per-family types provided.
   (`BQueue`) users and the debra-free unbounded SPSC arm do not pull in
   the reclamation path.)
 - `nim >= 2.2.0` (unchanged from 4.1.x).
-
-## See also
-
-- `docs/v5.0.0-migration/3.3.11-B-final-shape.md` — the canonical v5.0.0
-  surface reference (the two 6-param types `BQueue` / `Queue`, the smart
-  constructors, the cardinality `{.error.}` gates).
-- `docs/v5.0.0-migration/design-queue-collapse-v5.0.0.md` and
-  `docs/v5.0.0-migration/reframe-rationale.md` — historical context for
-  the earlier single-10-param-`Queue` design that the final shape
-  superseded. Retained for provenance; not the shipped surface.

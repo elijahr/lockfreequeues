@@ -6,9 +6,7 @@
 ## 6-param shape — `ccProd = ccCons = ccSingle`, capacity `N`, producer
 ## and consumer view counts both zero for the SPSC arm). The
 ## constructor short form below uses the `newSipsicQueue[T, N]()`
-## smart-constructor; see
-## `docs/v5.0.0-migration/3.3.11-B-final-shape.md` for the canonical
-## surface reference.
+## smart-constructor.
 
 import options
 import random

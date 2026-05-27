@@ -17,9 +17,7 @@ API documentation: <https://elijahr.github.io/lockfreequeues>
 > two generics (`newBQueue`, `newQueue`) plus family-named thin wrappers
 > (`newSipsicQueue`, `newMupsicQueue`, `newUnboundedMupmucQueue`, …) for
 > ergonomic continuity. See [`CHANGELOG.md`](CHANGELOG.md) for the v5.0.0
-> reshape note with worked examples, and
-> [`docs/v5.0.0-migration/3.3.11-B-final-shape.md`](docs/v5.0.0-migration/3.3.11-B-final-shape.md)
-> for the canonical surface reference.
+> reshape note with worked examples and the canonical surface reference.
 
 ## Why this library
 
