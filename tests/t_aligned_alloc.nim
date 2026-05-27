@@ -4,7 +4,8 @@
 ## zero-initialized memory across a range of payload sizes (struct under,
 ## equal-to, and over a single cache line).
 
-import lockfreequeues/atomic_dsl
+import debra/atomics
+import debra/atomics/dsl
 import lockfreequeues/internal/aligned_alloc
 import unittest2
 

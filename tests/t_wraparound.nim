@@ -1,4 +1,5 @@
-import lockfreequeues/atomic_dsl
+import debra/atomics
+import debra/atomics/dsl
 import options
 import unittest2
 

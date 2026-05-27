@@ -9,7 +9,8 @@
 ## Test count parity: 28 tests (matches t_mpmc.nim).
 ## 7, 5, 6.1.
 
-import lockfreequeues/atomic_dsl
+import debra/atomics
+import debra/atomics/dsl
 import options
 import sequtils
 import unittest2

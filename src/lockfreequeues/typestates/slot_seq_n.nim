@@ -18,7 +18,7 @@
 ## eliminating a class of off-by-one indexing bugs.
 
 import typestates
-import ../atomic_dsl
+import debra/atomics
 import ./virtual_values_n
 
 type SlotSeqN*[N: static int] = object

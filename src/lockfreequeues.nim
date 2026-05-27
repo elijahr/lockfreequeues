@@ -26,17 +26,23 @@ const LockfreequeuesVersion* {.strdefine.} = "5.0.0"
 ##     `ccMulti` (and the legacy `rkNone`/`rkEbr` symbols) directly.
 
 when compileOption("threads"):
+  import debra/atomics
+  import debra/atomics/dsl
   import
-    ./lockfreequeues/[atomic_dsl, bqueue, exceptions, queue, reclamation, strategy]
+    ./lockfreequeues/[bqueue, exceptions, queue, reclamation, strategy]
   import ./lockfreequeues/internal/pinscope_stub
 
-  export atomic_dsl, bqueue, exceptions, queue, reclamation, strategy
+  export atomics, dsl
+  export bqueue, exceptions, queue, reclamation, strategy
   export pinscope_stub
 else:
   # threading off, only provide the unified Queue + its supporting enums
   # (Queue SPSC works without threads).
-  import ./lockfreequeues/[atomic_dsl, bqueue, queue, reclamation, strategy]
+  import debra/atomics
+  import debra/atomics/dsl
+  import ./lockfreequeues/[bqueue, queue, reclamation, strategy]
   import ./lockfreequeues/internal/pinscope_stub
 
-  export atomic_dsl, bqueue, queue, reclamation, strategy
+  export atomics, dsl
+  export bqueue, queue, reclamation, strategy
   export pinscope_stub

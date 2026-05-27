@@ -9,7 +9,8 @@
 ## Test count parity: 27 tests (matches t_spmc.nim).
 ## 7, 5, 6.1.
 
-import lockfreequeues/atomic_dsl
+import debra/atomics
+import debra/atomics/dsl
 import options
 import sequtils
 import unittest2

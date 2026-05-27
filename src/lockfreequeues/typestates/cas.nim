@@ -6,7 +6,7 @@
 ## value actually observed at the address). Callers `match` on the resulting
 ## `CASResult` union and cannot reach the payload without selecting a branch.
 
-import ../atomic_dsl
+import debra/atomics
 import typestates
 
 type

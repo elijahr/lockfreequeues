@@ -17,7 +17,8 @@
 ## padding checks now go through the unified Queue + Segment helpers
 ## like the other three variants.
 
-import lockfreequeues/atomic_dsl
+import debra/atomics
+import debra/atomics/dsl
 
 import lockfreequeues/queue as q_mod
 import lockfreequeues/strategy
@@ -32,7 +33,7 @@ from debra import DebraManager, initDebraManager, registerThread
 
 import unittest2
 
-# CacheLineBytes is exported from atomic_dsl via debra/atomics.
+# CacheLineBytes is provided by debra/atomics.
 
 const Cl = CacheLineBytes
 

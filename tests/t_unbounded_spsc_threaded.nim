@@ -2,7 +2,8 @@
 ## `UnboundedSpsc[S, T]` is absorbed into
 ## `Queue[T, ccSingle, ccSingle, stEager, S, MaxThreads]`.
 
-import lockfreequeues/atomic_dsl
+import debra/atomics
+import debra/atomics/dsl
 import options
 import unittest2
 

@@ -12,7 +12,8 @@
 ## Test count parity: 2 tests (matches t_mpsc_threaded.nim).
 ## 7, 5, 6.1.
 
-import lockfreequeues/atomic_dsl
+import debra/atomics
+import debra/atomics/dsl
 import options
 import unittest2
 

@@ -49,7 +49,7 @@ else:
   ): cint {.importc, header: "<stdlib.h>".}
   from system/ansi_c import c_free
 
-import ../atomic_dsl
+import debra/atomics
 export CacheLineBytes
 
 proc allocAligned*[T](): ptr T =

@@ -13,7 +13,7 @@
 ## the explicit `pad` field below.
 
 import typestates
-import ../atomic_dsl
+import debra/atomics
 import ./virtual_values_n
 
 type

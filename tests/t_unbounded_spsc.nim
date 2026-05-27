@@ -4,7 +4,8 @@
 ## continue to exercise the spsc surface through the absorbed Queue
 ## via `newUnboundedSpscQueue`.
 
-import lockfreequeues/atomic_dsl
+import debra/atomics
+import debra/atomics/dsl
 import options
 import unittest2
 

@@ -16,7 +16,8 @@
 ## - Image processing pipeline
 ## - Game engine job distribution
 
-import lockfreequeues/atomic_dsl
+import debra/atomics
+import debra/atomics/dsl
 import os
 import options
 import std/monotimes

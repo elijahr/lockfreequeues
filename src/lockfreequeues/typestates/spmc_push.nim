@@ -26,7 +26,7 @@
 ##
 ## See design doc §2 (algorithm), §3 (bug walkthrough), §10.6 (recipe).
 
-import ../atomic_dsl
+import debra/atomics
 import typestates
 
 import ./virtual_values_n

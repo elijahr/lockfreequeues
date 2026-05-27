@@ -27,7 +27,8 @@
 import unittest2
 
 import lockfreequeues
-import lockfreequeues/atomic_dsl
+import debra/atomics
+import debra/atomics/dsl
 
 import lockfreequeues/typestates/mpmc_cell
 import lockfreequeues/typestates/mpmc_push

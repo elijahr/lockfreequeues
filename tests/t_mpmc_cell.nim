@@ -1,5 +1,6 @@
 import unittest2
-import lockfreequeues/atomic_dsl
+import debra/atomics
+import debra/atomics/dsl
 import lockfreequeues/typestates/virtual_values_n
 import lockfreequeues/typestates/mpmc_cell
 

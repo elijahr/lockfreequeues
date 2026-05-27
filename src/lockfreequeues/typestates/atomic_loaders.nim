@@ -1,7 +1,7 @@
 ## Type-safe atomic load/store for queue pointers.
 
 import typestates
-import ../atomic_dsl
+import debra/atomics
 import ./virtual_values_n
 import ./virtual_values_n1
 

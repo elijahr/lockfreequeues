@@ -44,7 +44,7 @@ import ./internal/typestates_dsl
 
 import ./internal/pinscope_stub
 import ./internal/aligned_alloc
-import ./atomic_dsl
+import debra/atomics
 import ./backoff
 import ./internal/shared
 import options

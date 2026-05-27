@@ -29,7 +29,7 @@ import ./internal/typestates_dsl
 # `./internal/typestates_dsl` for the same name-shadow reason documented
 # in `bqueue.nim` — a direct `import typestates` from this file would
 # resolve to the local sibling `./typestates.nim` re-export module.
-import ./atomic_dsl
+import debra/atomics
 import ./backoff
 import options
 import std/typetraits

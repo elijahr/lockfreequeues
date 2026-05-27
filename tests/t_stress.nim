@@ -7,7 +7,8 @@ when not compileOption("threads"):
 import std/options
 import unittest2
 import lockfreequeues
-import lockfreequeues/atomic_dsl
+import debra/atomics
+import debra/atomics/dsl
 
 const
   SmallBuffer = 16

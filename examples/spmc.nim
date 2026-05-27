@@ -10,7 +10,8 @@
 ## views). Consumers are obtained via `q.getConsumer(idx)` with an
 ## explicit consumer index per thread.
 
-import lockfreequeues/atomic_dsl
+import debra/atomics
+import debra/atomics/dsl
 import os
 import options
 

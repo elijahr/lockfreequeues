@@ -36,10 +36,11 @@ the modification-order sense. Concretely:
   tail advance via CAS — the CAS-success edge synchronizes claimants.
 
 The pairing is lifted from `debra/atomics`, which `lockfreequeues`
-re-exports through `atomic_dsl.nim`. That module exposes the standard
-`load`, `store`, `compareExchangeStrong`, `fetchAdd` family plus a
-DSL with `loadAcquire` / `storeRelease` shorthand the queue
-implementations use throughout.
+re-exports directly (alongside `debra/atomics/dsl`) from the umbrella
+module. Those modules expose the standard `load`, `store`,
+`compareExchangeStrong`, `fetchAdd` family plus a DSL with
+`loadAcquire` / `storeRelease` shorthand the queue implementations use
+throughout.
 
 ### What the user must guarantee
 
