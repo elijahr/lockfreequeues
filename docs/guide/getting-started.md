@@ -148,10 +148,12 @@ The three errors that account for the majority of "it doesn't compile" or
 
 ### "Item type is not lock-free safe"
 
-If your item type is a `ref T` and you compile under `--mm:arc` or `--mm:orc`,
-you will see a static error from the queue's item-type guard. Reference
-counting on `ref` types can fall back to spinlocks on some platforms,
-defeating the lock-free guarantee at the item level.
+If your item type is a `ref T` and you compile under `--mm:arc`, `--mm:orc`,
+or `--mm:atomicArc`, you will see a static error from the queue's item-type
+guard. Slots are stored in a shared `array[S, T]`, and the `=copy`/`=sink`
+hooks for `ref` types mutate the refcount on the same object that other
+threads are concurrently reading or writing — a data race regardless of
+whether the refcount itself is atomic.
 
 ```text
 type Node = ref object

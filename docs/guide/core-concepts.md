@@ -94,7 +94,7 @@ The four producer/consumer patterns and the queue type that implements each.
 | many | 1 | `newMpscQueue` | `newUnboundedMpscQueue` |
 | many | many | `newMpmcQueue` | `newUnboundedMpmcQueue` |
 
-In v5.0.0 every shape is one of two unified generics: bounded queues are
+In v5 every shape is one of two unified generics: bounded queues are
 `BQueue[T, ccProd, ccCons, N, P, C]` and unbounded queues are
 `Queue[T, ccProd, ccCons, ST, S, MaxThreads]`. The cardinality is carried
 by the `ccProd` / `ccCons` parameters (`ccSingle` or `ccMulti`); the

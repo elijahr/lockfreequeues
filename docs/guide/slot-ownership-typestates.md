@@ -196,20 +196,24 @@ slot-ownership token, so the type system enforces all of these at once:
 
 ## MPSC implementation progression
 
-The unbounded MPSC push path moves through this typestate sequence
-(defined in `src/lockfreequeues/typestates/unbounded_mpsc_push.nim`):
+The MPSC push typestate is defined in
+`src/lockfreequeues/typestates/mpsc_push.nim` and is shared by both
+bounded `BQueue[T, ccMulti, ccSingle, ...]` and unbounded
+`Queue[T, ccMulti, ccSingle, ...]`. The state machine has three states:
 
-1. **MPSCPushReady**: initial state with pinned DEBRA context
-2. **MPSCPushSegmentLoaded**: segment and tail position loaded
-3. **MPSCPushSlotClaimed**: slot claimed via CAS (or SegmentFull/Retry)
-4. **MPSCPushItemWritten**: data written to slot
-5. **MPSCPushComplete**: committed flag set, data visible to consumers
+1. **MPSCPushStart**: entry point; no slot held yet.
+2. **MPSCPushSlotClaimed**: slot won via CAS; ready to write and commit.
+3. **MPSCPushFull**: terminal; generation full (bounded) or segment full
+   (unbounded) — caller advances or allocates.
 
-Each transition consumes its predecessor (a `sink` parameter), so a stale
-token cannot be reused — the compiler rejects any code path that skips a
-state or double-uses a claim. Application code never touches these states
+The `tryClaim` transition takes `MPSCPushStart` and returns an
+`MPSCPushClaimResult` that resolves to either `MPSCPushSlotClaimed`
+(slot won), `MPSCPushFull` (terminal), or back to `MPSCPushStart` (CAS
+race — retry). Each transition consumes its predecessor via a `sink`
+parameter, so the compiler rejects any code path that skips a state or
+double-uses a claim. Application code never touches these states
 directly; they are the compile-time scaffolding behind a single
-`producer.push(item)` call on a `Queue` built with `newUnboundedMpscQueue`.
+`producer.push(item)` call.
 
 ## Performance
 

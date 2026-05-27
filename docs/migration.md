@@ -399,7 +399,7 @@ instantiation-time feedback the legacy per-family types provided.
 
 `lockfreequeues 5.0.0` requires (per the coordinated release wave):
 
-- `typestates >= 0.9.0`
+- `typestates >= 0.10.0`
 - `nim-debra >= 0.8.0` (only required when instantiating the
   debra-integrated unbounded `Queue` cardinalities; bounded-only
   (`BQueue`) users and the debra-free unbounded SPSC arm do not pull in

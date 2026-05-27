@@ -194,9 +194,9 @@ queues' own state — both are lock-free for the queues' own atomics.
 fall back to non-atomic refcounting; on platforms where it would not,
 `atomicArc` adds cost without adding safety.
 
-Pinning to Nim 2.2.6 or newer is recommended (see
-`lockfreequeues.nimble`'s `requires` line). Older Nim toolchains miss
-some of the atomic builtins the queues rely on.
+Nim 2.2.0 or newer is required (see `lockfreequeues.nimble`'s `requires`
+line). Older Nim toolchains miss some of the atomic builtins the queues
+rely on.
 
 For the safety implications of each memory manager choice, see
 [Safety Model → Test matrix](safety-model.md#test-matrix) and

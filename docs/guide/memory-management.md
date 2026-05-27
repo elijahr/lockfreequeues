@@ -269,9 +269,13 @@ at construction. Each multi-cardinality view registers the *calling*
 thread with the queue's `DebraManager` on its first use, via `attach()`.
 The single consumer of an unbounded MPSC queue uses `attachConsumer()` on
 its own consuming thread instead. Registration MUST happen on the thread
-that will subsequently `push()` / `pop()` through the view; registering on
-one thread and operating from another mis-routes the debra handle and
-raises `DebraRegistrationError`.
+that will subsequently `push()` / `pop()` through the view. Two failure
+modes are distinct: if the manager's `MaxThreads` slots are exhausted,
+`attach()` / `attachConsumer()` raise `DebraRegistrationError`. Cross-thread
+misuse — registering on one thread and operating from another — fires a
+debug-only assert in debug builds and silently corrupts reclamation in
+release builds, so size `MaxThreads` correctly and keep each view's
+`attach()` and `push()` / `pop()` on the same thread.
 
 ```nim
 import options

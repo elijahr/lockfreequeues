@@ -4,8 +4,8 @@
 lock-free queue. A single generic type covers all four
 producer/consumer cardinality combinations — SPSC, MPSC, SPMC, and
 MPMC — selected at compile time through `ccProd` and `ccCons`. It
-replaces the v4.x family-prefixed unbounded types (`UnboundedSpsc`,
-`UnboundedSpmc`, `UnboundedMpsc`, `UnboundedMpmc`).
+replaces the v4.x family-prefixed unbounded types (`UnboundedSipsic`,
+`UnboundedSipmuc`, `UnboundedMupsic`, `UnboundedMupmuc`).
 
 ## Overview
 
@@ -101,12 +101,15 @@ let b = consumer.pop()             # some(99)
 
 ## Calling Convention by Cardinality
 
-As with `BQueue`, the single side of each axis operates directly on the
-queue; the multi side requires a per-thread handle from
-`getProducer()` / `getConsumer()`. Direct `push` on a multi-producer
-`Queue` (or `pop` on a multi-consumer `Queue`) is a **compile-time
-error** whose diagnostic names only the user-visible `QueueProducer` /
-`QueueConsumer` aliases.
+`Queue` always pushes through a `QueueProducer` view — even for
+`ccProd == ccSingle`. The view is obtained from `queue.getProducer()`,
+and the single-producer arm doesn't require `.attach()`. Pop is
+asymmetric: `ccCons == ccSingle` arms expose a bare `queue.pop()`,
+while `ccCons == ccMulti` requires a `QueueConsumer` view from
+`getConsumer()` and per-thread `.attach()`. Direct `push` on a
+`Queue` or direct `pop` on a multi-consumer `Queue` is a
+**compile-time error** whose diagnostic names only the user-visible
+`QueueProducer` / `QueueConsumer` aliases.
 
 ## Typestate Notes
 

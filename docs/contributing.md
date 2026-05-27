@@ -29,8 +29,8 @@ lockfreequeues/
 
 ### `src/lockfreequeues/` — the public API
 
-v5 collapsed the v4 per-family files (`spsc.nim`, `mpsc.nim`,
-`unbounded_spsc.nim`, etc.) into two unified generic types
+v5 collapsed the v4 per-family files (`sipsic.nim`, `mupsic.nim`,
+`unbounded_sipsic.nim`, etc.) into two unified generic types
 parameterised on cardinality phantoms:
 
 - `bqueue.nim` — bounded `BQueue[T, ccProd, ccCons, N, P, C]` with

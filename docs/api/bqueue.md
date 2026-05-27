@@ -4,8 +4,8 @@
 queue. A single generic type covers all four producer/consumer
 cardinality combinations — SPSC, MPSC, SPMC, and MPMC — selected at
 compile time through the `ccProd` and `ccCons` parameters. It replaces
-the v4.x family-prefixed bounded types (`Spsc`, `Spmc`, `Mpsc`,
-`Mpmc`).
+the v4.x family-prefixed bounded types (`Sipsic`, `Sipmuc`, `Mupsic`,
+`Mupmuc`).
 
 ## Overview
 
