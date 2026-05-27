@@ -78,7 +78,7 @@ proc makeLockfreequeuesUnboundedMpmcAdapter*[S: static int, T;
   # already-allocated heap blocks rather than leaking. Mirrors the
   # unbounded mpsc adapter's queueInitOk pattern, extended to cover
   # both the manager-value-init and attach() paths.
-  # Three-flag guard (Gemini cycle 18 F4):
+  # Three-flag guard:
   #  * `managerValueInitOk` — set after `initDebraManager` returns,
   #    indicating the heap manager slot holds a fully-initialized value
   #    (so `reset(manager[])` is safe in the cleanup arm). If false,

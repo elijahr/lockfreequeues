@@ -84,10 +84,10 @@ suite "pop(Spmc[N, C, T])":
   setup:
     queue.reset()
 
-  # B.2 Bundle E: direct pop on a ccMulti-consumer Queue is now a
+  # B.2 direct pop on a ccMulti-consumer Queue is now a
   # compile-time `{.error.}`. The former runtime `InvalidCallDefect`
-  # smoke-tests are superseded by Bundle J compile-fail negative-
-  # controls under tests/should_fail/ (added in 3.3.11-B.3).
+  # smoke-tests are superseded by compile-fail negative-
+  # controls under tests/should_fail/.
 
 suite "push(Spmc[N, C, T], T)":
   setup:

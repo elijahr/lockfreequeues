@@ -1,5 +1,5 @@
-## §6.3 condition (6) / 3.3.11-B Bundle J + M8 (family-level):
-## direct `push` on a multi-producer `BQueue` is gated by a Bundle E
+
+## direct `push` on a multi-producer `BQueue` is gated by a
 ## `{.error.}` overload. Calling `push(item)` on a `ccProd == ccMulti`
 ## BQueue must fail at compile time with a message pointing the caller
 ## at `BQueue.getProducer().push(item)`.

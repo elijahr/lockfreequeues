@@ -196,7 +196,7 @@ class MergeBmfTests(unittest.TestCase):
     # produces a single merged output whose slug set is the disjoint
     # union of the inputs. The 5-input shape pre-dates both the v5.0.0
     # B3 mpmc-binary split (which fanned mpmc into mpmc_mpmc +
-    # mpmc_spmc) and the v5.0.0 3.3.9-D unbounded-binary split (which
+    # mpmc_spmc) and the unbounded-binary split (which
     # fanned unbounded into the four
     # bench_unbounded_{spsc,spmc,mpsc,mpmc} binaries); the
     # production pipeline now ships 9 fragments, but the merger's union

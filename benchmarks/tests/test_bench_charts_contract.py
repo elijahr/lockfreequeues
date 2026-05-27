@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Tests for the chart-data contract between merge_bmf.py output and
-docs/assets/bench-charts.js (Track 5 PR 5 Task 5.2).
+docs/assets/bench-charts.js.
 
 The chart consumes `docs/assets/bench-results/latest.json`, which is
 produced by `merge_bmf.py` and copied verbatim into the docs assets

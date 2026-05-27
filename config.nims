@@ -3,7 +3,7 @@ when withDir(thisDir(), system.fileExists("nimble.paths")):
   include "nimble.paths"
 # end Nimble config
 
-# Phase 3.3 integration-wave path-override: pin debra@0.8.0 and
+# Integration-wave path-override: pin debra@0.8.0 and
 # typestates >= 0.10.0 via worktree --path: directives. Placed after
 # include "nimble.paths" so dedup (Nim collapses repeat --path:
 # entries) does not suppress these — at the time config.nims runs,

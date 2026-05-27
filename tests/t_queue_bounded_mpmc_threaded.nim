@@ -11,7 +11,7 @@
 ##   initMpmc[N, P, C, int]() -> newBQueue[int, ccMulti, ccMulti, ##                                            N, P, C]()
 ##
 ## Test count parity: 2 tests (matches the legacy file).
-## Track B / Task B2. Doc C 3.7, 5, 6.1.
+## 7, 5, 6.1.
 
 import lockfreequeues/atomic_dsl
 import options

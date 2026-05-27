@@ -6,8 +6,8 @@ bench_mpmc_bounded / bench_spmc_bounded / bench_unbounded_spsc /
 bench_unbounded_spmc / bench_unbounded_mpsc /
 bench_unbounded_mpmc` outputs merged via `merge_bmf.py`) is a strict
 superset of the pre-split BMF captured by Task 2.1 from the legacy
-`bench_throughput` binary. v5.0.0 B3 split the `bench_mpmc` slot into
-a per-family pair; v5.0.0 3.3.9-D fanned the `bench_unbounded` slot
+`bench_throughput` binary. the `bench_mpmc` slot into
+a per-family pair; fanned the `bench_unbounded` slot
 into four per-family binaries. Each binary's slug subset is smaller;
 the union is unchanged.
 

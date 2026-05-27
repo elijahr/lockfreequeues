@@ -28,7 +28,7 @@
 ## The bench harness in `bench_unbounded_mpsc.nim` consumes this
 ## adapter directly via specialized benchmark procs (was
 ## `bench_throughput.nim` prior to the PR 2 topology split; then
-## `bench_unbounded.nim` until v5.0.0 3.3.9-D split it per family).
+## `bench_unbounded.nim` until split it per family).
 ##
 ## v5.0.0 cascade: the legacy `UnboundedMpsc[S, T, MT]` type was
 ## deleted in 3.3.7. The borrow-form smart-constructor
@@ -92,7 +92,7 @@ proc initUnboundedMpscAdapter*[S: static int, T; MaxThreads: static int](
   # tears down the already-allocated manager heap block rather than
   # leaking it. Mirrors the unbounded spmc / mpmc adapters'
   # destructor-order discipline (reset → dealloc) on the failure path.
-  # Two-flag guard (Gemini cycle 18 F5):
+  # Two-flag guard:
   #  * `managerValueInitOk` — set after `initDebraManager` returns,
   #    indicating the heap manager slot holds a fully-initialized value
   #    (so `reset(manager[])` is safe in the cleanup arm). If false,

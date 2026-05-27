@@ -143,8 +143,8 @@ jobs:
         run: nimble benchtests
 
   bench:
-    # Track 2 PR 2 + v5.0.0 B3 split: matrix over the topology-split
-    # binaries. v5.0.0 B3 split the original `bench_mpmc` into a
+    # Track 2 PR 2 +: matrix over the topology-split
+    # binaries. the original `bench_mpmc` into a
     # per-family pair (bench_mpmc_bounded + bench_spmc_bounded) to
     # eliminate cross-family iCache contention; see the bench_mpmc_*.nim
     # headers for the diagnostic. Each matrix entry is its own GitHub
@@ -289,7 +289,7 @@ jobs:
       - name: Install loony (nimble)
         # Loony is a Nim-only unbounded MPMC queue; nimble pulls it from
         # the registry. Only bench_unbounded_mpmc uses it (matches the
-        # mpmc unbounded MVP-adapter slot post-3.3.9-D split).
+        # mpmc unbounded MVP-adapter slot split).
         id: install-loony
         if: |
           env.FORCE_SKIP_LOONY != '1' &&
@@ -338,7 +338,7 @@ jobs:
       # the bench is reproducible without network egress. Only
       # bench_unbounded_mpmc wires the moodycamel adapter
       # (mpmc_unbounded; matches the mpmc unbounded MVP-adapter slot
-      # post-3.3.9-D split).
+      # split).
       - name: Install MoodyCamel (vendored header presence check)
         id: install-moodycamel
         if: |
@@ -499,7 +499,7 @@ jobs:
         # Per-binary -d: overrides mirror the design 2.5 CI override
         # column. Bounded throughput binaries: 1M messages × 5 runs ×
         # 2 warmup; cheap, single-digit seconds total. The four
-        # bench_unbounded_* binaries (post 3.3.9-D split) each carry
+        # bench_unbounded_* binaries each carry
         # only their own family's overrides — spsc 200K×3, spmc/
         # mpsc 100K×2, mpmc 50K×2 — because the previously-monolithic
         # 16-shape total (1+3+3+9) plus oversubscribed shapes like 1p4c
@@ -541,7 +541,7 @@ jobs:
                 benchmarks/nim/bench_mpsc.nim
               ;;
             bench_mpmc_bounded)
-              # v5.0.0 B3 split: this binary owns the Mpmc grid +
+              #: this binary owns the Mpmc grid +
               # Queue-bounded-mpmc parity + nim_channels grid + MVP
               # comparison adapters (boost.lockfree, crossbeam ArrayQueue,
               # threading.Chan). Shares the BenchMpmc* intdefines with
@@ -554,7 +554,7 @@ jobs:
                 benchmarks/nim/bench_mpmc_bounded.nim
               ;;
             bench_spmc_bounded)
-              # v5.0.0 B3 split: this binary owns the Spmc 1p{1,2,4}c
+              #: this binary owns the Spmc 1p{1,2,4}c
               # set + Queue-bounded-spmc parity. No MVP adapters live
               # here (spmc-shape MVP adapters do not exist), so
               # ADAPTER_FLAGS is ignored; stay on `nim c` because none
@@ -566,7 +566,7 @@ jobs:
                 benchmarks/nim/bench_spmc_bounded.nim
               ;;
             bench_unbounded_spsc)
-              # v5.0.0 3.3.9-D split: this binary owns UnboundedSpsc
+              # split: this binary owns UnboundedSpsc
               # at 1p1c. No MVP adapters live here (spsc is SPSC only
               # and has no Loony/Crossbeam-SegQueue/MoodyCamel analog).
               # -d:benchProgress enables per-10k progress prints in the
@@ -580,7 +580,7 @@ jobs:
                 benchmarks/nim/bench_unbounded_spsc.nim
               ;;
             bench_unbounded_spmc)
-              # v5.0.0 3.3.9-D split: this binary owns UnboundedSpmc
+              # split: this binary owns UnboundedSpmc
               # at 1p{1,2,4}c. No MVP adapters live here. Stays on `nim
               # c` because no imported types require C++.
               # See bench_unbounded_spsc above for -d:benchProgress.
@@ -593,7 +593,7 @@ jobs:
                 benchmarks/nim/bench_unbounded_spmc.nim
               ;;
             bench_unbounded_mpsc)
-              # v5.0.0 3.3.9-D split: this binary owns UnboundedMpsc
+              # split: this binary owns UnboundedMpsc
               # at {1,2,4}p1c. No MVP adapters live here.
               # See bench_unbounded_spsc above for -d:benchProgress.
               nim c -d:release -d:danger --threads:on \
@@ -604,7 +604,7 @@ jobs:
                 benchmarks/nim/bench_unbounded_mpsc.nim
               ;;
             bench_unbounded_mpmc)
-              # v5.0.0 3.3.9-D split: this binary owns UnboundedMpmc
+              # split: this binary owns UnboundedMpmc
               # at the full {1,2,4}p{1,2,4}c grid PLUS the MVP
               # comparison adapters whose slug shape matches the mpmc
               # unbounded grid: loony (Nim, plain `nim c`), Crossbeam
@@ -910,7 +910,7 @@ jobs:
       # `--threshold-measure throughput`; the actual measure key emitted by
       # the per-topology bench binaries is `throughput_ops_ms`, so the
       # earlier threshold never matched any measure. Track 6 corrects this.
-      # v5.0.0 3.3.9-D split bench_unbounded into 4 per-family binaries
+      # split bench_unbounded into 4 per-family binaries
       # (spsc/spmc/mpsc/mpmc); the throughput_ops_ms key is
       # unchanged.
       #
@@ -971,7 +971,7 @@ jobs:
             --adapter json \
             --file merged.json
 
-      # Track 5 PR 5 Task 5.5.b: snapshot the merged BMF into the docs
+      # snapshot the merged BMF into the docs
       # assets tree so the chart on `docs/benchmarks.md` always points
       # at the most recent devel run. Loop-prevention against bench.yml
       # itself relies on three defensive layers:

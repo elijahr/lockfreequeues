@@ -1,6 +1,6 @@
 ## Test that UnboundedSpsc accepts lock-free types.
 ##
-## Post-3.3.11-B.2.5: the standalone `UnboundedSpsc[S, T]` is absorbed
+## the standalone `UnboundedSpsc[S, T]` is absorbed
 ## into `Queue[T, ccSingle, ccSingle, stEager, S, MaxThreads]`.
 
 import std/options

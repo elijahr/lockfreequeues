@@ -2,7 +2,7 @@
 ##
 ## This test should FAIL compilation on arc/orc without -d:allowNonLockFreeQueueItems.
 ##
-## Post-3.3.11-B.2.5: the standalone `UnboundedSpsc[S, T]` was absorbed
+## the standalone `UnboundedSpsc[S, T]` was absorbed
 ## into `Queue[T, ccSingle, ccSingle, stEager, S, MaxThreads]`. The
 ## ref-type guard now triggers on push, not on construction.
 

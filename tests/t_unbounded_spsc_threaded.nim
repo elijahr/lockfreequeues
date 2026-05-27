@@ -1,4 +1,4 @@
-## UnboundedSpsc threaded tests — post-3.3.11-B.2.5 the standalone
+## UnboundedSpsc threaded tests —  the standalone
 ## `UnboundedSpsc[S, T]` is absorbed into
 ## `Queue[T, ccSingle, ccSingle, stEager, S, MaxThreads]`.
 

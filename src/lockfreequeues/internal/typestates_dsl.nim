@@ -1,8 +1,8 @@
 ## Re-export shim for the upstream `typestates` package's DSL macros.
 ##
-## Bundle F (3.3.11-B.4.1.6) lifts this shim into existence because
-## the local `lockfreequeues/typestates.nim` re-export module shadows
-## the upstream package name (`typestates`) for files at the same
+## The shim exists because the local `lockfreequeues/typestates.nim`
+## re-export module shadows the upstream package name (`typestates`)
+## for files at the same
 ## directory level as itself (e.g., `bqueue.nim`, `queue.nim`). Nim's
 ## module resolution prefers a same-directory sibling over a
 ## `--path:`-resolved package, so `import typestates` from `bqueue.nim`

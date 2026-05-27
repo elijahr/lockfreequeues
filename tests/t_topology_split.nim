@@ -1,5 +1,5 @@
 ## Tests for the bench-rollup PR 2 topology split (post v5.0.0 B3 +
-## v5.0.0 3.3.9-D splits).
+## splits).
 ##
 ## Topology-split binaries replace the legacy `bench_throughput.nim`:
 ##
@@ -19,12 +19,12 @@
 ##                               (full grid).
 ##   bench_latency             — already shipped in PR 1.
 ##
-## v5.0.0 B3 split the pre-existing `bench_mpmc` binary into the two
+## the pre-existing `bench_mpmc` binary into the two
 ## per-family binaries above because co-compiling the Mpmc grid and
 ## the Spmc shapes produced a cross-family iCache contention artifact
 ## (-39.6% on `spmc/mpmc/1p1c`; see the bench_mpmc_*.nim headers).
 ##
-## v5.0.0 3.3.9-D applied the same mitigation to `bench_unbounded`,
+## applied the same mitigation to `bench_unbounded`,
 ## fanning it out into four per-family binaries because co-compiling
 ## all four unbounded families + three MVP adapters into one release
 ## binary produced -17% to -34% throughput regressions on
@@ -149,7 +149,7 @@ suite "topology split: bench_mpsc (Task 2.4)":
 
 # ---------- Task 2.5a: bench_mpmc_bounded emits mpmc grid + channels ----------
 #
-# v5.0.0 B3 split the original Task 2.5 `bench_mpmc` suite into two
+# the original Task 2.5 `bench_mpmc` suite into two
 # per-family suites. The mpmc binary owns the Mpmc 4x4 grid + 8p8c
 # oversubscription case, the Queue-bounded-mpmc parity grid, and the
 # nim_channels {1,2,4}p{1,2,4}c grid (channels match the mpmc shape
@@ -216,7 +216,7 @@ suite "topology split: bench_spmc_bounded (Task 2.5b)":
 
 # ---------- Task 2.6a: bench_unbounded_spsc emits spsc 1p1c ----------
 #
-# v5.0.0 3.3.9-D split the original Task 2.6 `bench_unbounded` suite
+# split the original Task 2.6 `bench_unbounded` suite
 # into four per-family suites (Task 2.6a..2.6d). Each binary owns one
 # unbounded family; the union of their slug sets equals what the
 # pre-split `bench_unbounded` binary emitted. The split mirrors the
@@ -338,7 +338,7 @@ suite "topology split: deletion-safety (Task 2.7)":
     # unbounded_spmc + unbounded_mpsc + unbounded_mpmc); merge
     # the outputs via merge_bmf.py; invoke superset_check.py and assert
     # exit 0 + no output to stderr. v5.0.0 B3 added the
-    # mpmc_mpmc/mpmc_spmc split; v5.0.0 3.3.9-D added the four-way
+    # mpmc_mpmc/mpmc_spmc split; added the four-way
     # unbounded split.
     let dir = createTempDir("topology_split_superset_", "")
     defer: removeDir(dir)

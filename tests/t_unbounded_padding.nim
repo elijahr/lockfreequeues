@@ -11,7 +11,7 @@
 ## onto a 64-byte boundary, and ``{.align: CacheLineBytes.}`` is added to
 ## each Segment field that participates in producer/consumer coordination.
 ##
-## v5.0.0 migration note: post-3.3.11-B.2.5 the standalone
+## v5.0.0 migration note:  the standalone
 ## `UnboundedSpsc[S, T]` was absorbed into
 ## `Queue[T, ccSingle, ccSingle, stEager, S, MaxThreads]`. The spsc
 ## padding checks now go through the unified Queue + Segment helpers

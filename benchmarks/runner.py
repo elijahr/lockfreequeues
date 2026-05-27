@@ -4,7 +4,7 @@
 Orchestrates benchmark execution across languages and collects results.
 PR 2 (bench-rollup) replaced the single `bench_throughput` driver with
 topology-split binaries; v5.0.0 B3 further split the MPMC slice into a
-per-family pair (bench_mpmc_bounded + bench_spmc_bounded); v5.0.0 3.3.9-D
+per-family pair (bench_mpmc_bounded + bench_spmc_bounded);
 applied the same mitigation to the unbounded slice, fanning the legacy
 `bench_unbounded` binary out into four per-family binaries
 (bench_unbounded_spsc + bench_unbounded_spmc +
@@ -28,7 +28,7 @@ BENCHMARK_DIR = Path(__file__).parent
 PROJECT_ROOT = BENCHMARK_DIR.parent
 RESULTS_DIR = BENCHMARK_DIR / "results"
 
-# Track 2 PR 2 + v5.0.0 B3 split + v5.0.0 3.3.9-D split: topology-split
+# topology-split
 # binaries with the MPMC slice further split per family AND the
 # unbounded slice fanned out into four per-family binaries. Each is
 # built and run separately; merge_bmf.py unions the fragments before

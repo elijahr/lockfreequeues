@@ -1,30 +1,22 @@
-## Unbounded `Queue` generic — v5.0.0 final shape.
-##
-## Step 3.3.11-B (sub-dispatch B.2.5) reshaped the legacy unified
-## `Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]` (10
-## params) into this 6-param unbounded-only form:
+## Unbounded `Queue` generic.
 ##
 ##     Queue[T, ccProd, ccCons, ST, S, MaxThreads]
 ##
 ## Param order is LOAD-BEARING:
 ##   T, ccProd, ccCons, ST, S, MaxThreads
 ##
-## The bounded surface moved to `bqueue.nim` (`BQueue[T, ccProd, ccCons,
-## N, P, C]`) in B.1. The standalone `UnboundedSpsc[S, T]` from
-## `unbounded_spsc.nim` was absorbed into this `Queue` via the
-## `when (ccProd, ccCons) is (ccSingle, ccSingle):` branch of the
-## object body — that branch carries no debra integration (no
-## `manager`, no `ownsManager`, no pin/retire wrappers) and uses the
-## committed-flag-free linked-segment protocol verbatim from the
-## legacy module. The other three cardinality combos (mpsc-,
-## spmc-, mpmc-equiv) carry debra integration unchanged.
+## The bounded surface lives in `bqueue.nim` (`BQueue[T, ccProd, ccCons,
+## N, P, C]`). The `(ccSingle, ccSingle)` branch of the object body
+## carries no debra integration (no `manager`, no `ownsManager`, no
+## pin/retire wrappers) and uses the committed-flag-free linked-segment
+## protocol from the legacy standalone unbounded-SPSC module. The other
+## three cardinality combos (MPSC, SPMC, MPMC) carry debra integration.
 ##
 ## Cardinality-illegal direct-on-queue calls (multi-producer `push`
 ## or multi-consumer `pop` against `Queue` directly rather than via
 ## `QueueProducer` / `QueueConsumer`) are gated by compile-time
-## `{.error.}` overloads (Bundle E, sub-dispatch B.2). The error
-## messages reference the user-visible alias type names per the M5
-## R9 grep gate — no `*Multi`/`*Single` leakage.
+## `{.error.}` overloads. The error messages reference the user-visible
+## alias type names — no `*Multi`/`*Single` leakage.
 
 import ./strategy
 import ./reclamation
@@ -32,12 +24,11 @@ import ./internal/pinscope_stub
 import ./internal/aligned_alloc
 import ./internal/shared
 import ./internal/typestates_dsl
-# Bundle F (3.3.11-B.4.1.6): upstream `typestates` package's
-# `typestate` / `destructorTransition` / `transitionError` DSL macros
-# pulled in via `./internal/typestates_dsl` for the same name-shadow
-# reason documented in `bqueue.nim` — a direct `import typestates`
-# from this file would resolve to the local sibling
-# `./typestates.nim` re-export module.
+# Upstream `typestates` package's `typestate` / `destructorTransition`
+# / `transitionError` DSL macros pulled in via
+# `./internal/typestates_dsl` for the same name-shadow reason documented
+# in `bqueue.nim` — a direct `import typestates` from this file would
+# resolve to the local sibling `./typestates.nim` re-export module.
 import ./atomic_dsl
 import ./backoff
 import options
@@ -63,13 +54,13 @@ export exceptions
 # `stManual`, `stEager`, `ccSingle`, `ccMulti` travel with their enum
 # type; any module that imports `queue` sees them. The `rkNone` / `rkEbr`
 # enum members are no longer needed by `Queue` itself (the reclamation
-# axis was eliminated in 3.3.11-B), but the enum is re-exported for
-# bench-adapter / migration-shim compatibility.
+# axis was eliminated), but the enum is re-exported for bench-adapter /
+# migration-shim compatibility.
 export
   DeallocationStrategy, ReclamationKind, PinScopeCardinality, Manual, Eager,
   DefaultDeallocationStrategy
 
-# `NoSlice` lives in `internal/shared.nim` post-3.3.11-B.2.5. Re-exported
+# `NoSlice` lives in `internal/shared.nim`  Re-exported
 # here so existing callers that consume it via `lockfreequeues/queue`
 # continue to compile.
 export NoSlice
@@ -82,7 +73,7 @@ static:
     "LockFreeQueuesAdvanceEvery must be a positive integer"
 
 ## ----------------------------------------------------------------------
-## Middle-axis Lifecycle typestate (Bundle F.1, 3.3.11-B.4.1.6).
+## Middle-axis Lifecycle typestate.
 ##
 ## Tracks `QueueInit -> QueueDestroyed` on the unbounded Queue value.
 ## Parallel to `BQueue`'s Lifecycle typestate in `bqueue.nim` — same
@@ -91,7 +82,7 @@ static:
 ## demands independent lifecycles. Mirrors nim-debra
 ## `pinned_scope.nim:67-93` verbatim in shape.
 ##
-## State-preserving discipline (Wall 1 fix from B.4.1.5): every Queue
+## State-preserving discipline: every Queue
 ## state-preserving op (`push`, `pop`, `getProducer`, `getConsumer`,
 ## `retireOnCAS`, `retireOnPublish`, batch variants) declares NO
 ## `{.transition.}` pragma. They live in this module (queue.nim) so
@@ -149,7 +140,7 @@ typestate QueueLifecycle[
       QueueDestroyed[T, ccProd, ccCons, ST, S, MaxThreads]
 
 ## ----------------------------------------------------------------------
-## Middle-axis Claim-state typestate (Bundle F.2, 3.3.11-B.4.1.6).
+## Middle-axis Claim-state typestate.
 ##
 ## Tracks `QueueClaimUnclaimed -> QueueClaimBothClaimed` on the
 ## QueueProducer / QueueConsumer view types. Parallel to the BQueue
@@ -158,10 +149,9 @@ typestate QueueLifecycle[
 ## from BQueue's state types, which live in this build's same import
 ## graph via the `lockfreequeues` aggregator.
 ##
-## Wall 2 fix (B.4.1.5): single object type per view, uniform
-## attachment, ccMulti-only attach/detach methods. ccSingle callers
-## hit a clean type-mismatch diagnostic with no `*Multi` / `*Single`
-## leakage.
+## Single object type per view, uniform attachment, ccMulti-only
+## attach/detach methods. ccSingle callers hit a clean type-mismatch
+## diagnostic with no `*Multi` / `*Single` leakage.
 ## ----------------------------------------------------------------------
 
 type
@@ -327,7 +317,7 @@ type
           attachedTid*: ThreadId
 
 ## ----------------------------------------------------------------------
-## Param-coherence guards — unbounded subset of legacy Doc C §3.0.2.4.
+## Param-coherence guards — unbounded subset of legacy 
 ##
 ## The legacy 9 guards covered both rkNone (6 guards) and rkEbr (3
 ## guards). The 6 rkNone guards moved to `bqueue.nim`
@@ -373,7 +363,7 @@ type
     ## `push`. For `ccProd == ccSingle` the producer carries no
     ## handle (spsc/spmc-equiv have no pin requirement on push).
     ##
-    ## Claim-state typestate (Bundle F.2): every view begins in
+    ## Claim-state typestate : every view begins in
     ## `QCUnclaimed`. The optional `claimed` runtime flag (ccMulti
     ## only) tracks attach/detach state-preservingly (no static
     ## typestate transition). See `bqueue.nim` for the symmetric
@@ -420,7 +410,7 @@ type
         attachedTid*: ThreadId
 
 ## ----------------------------------------------------------------------
-## Unbounded-queue body — Track E (Steps 3.3.2-3.3.4), absorbed spsc
+## Unbounded-queue body — absorbed spsc
 ## from `unbounded_spsc.nim` (B.2.5).
 ## ----------------------------------------------------------------------
 
@@ -443,7 +433,7 @@ proc newSegment[T; ccProd, ccCons: static PinScopeCardinality, S: static int]():
     result.prevConsumerIdx.store(-1, moRelaxed)
 
 ## ----------------------------------------------------------------------
-## Per-queue retire wrappers — Doc C §3.0.2 + γ guard.
+## Per-queue retire wrappers — + γ guard.
 ##
 ## Defined only for non-spsc cardinalities (debra-integrated). Spsc-
 ## absorbed (`(ccSingle, ccSingle)`) has no debra integration and thus
@@ -659,7 +649,7 @@ proc newQueue*[
 
 # Spsc-absorbed manager-borrowed `{.error.}` gate. The spsc-absorbed
 # `(ccSingle, ccSingle)` body is debra-free; routing through a borrow
-# overload would mis-shape the body. M5 R9: error string references
+# overload would mis-shape the body. error string references
 # user-visible alias names only.
 proc newQueue*[
     T;
@@ -955,7 +945,7 @@ proc push*[
 ## ----------------------------------------------------------------------
 ## Pop body — single-item.
 ##
-## Doc C §3.5 carrier decision: pop lives on bare `Queue` for
+## carrier decision: pop lives on bare `Queue` for
 ## ccCons == ccSingle variants (spsc-absorbed + mpsc-equiv) and on
 ## `QueueConsumer` for ccCons == ccMulti variants (spmc-equiv,
 ## mpmc-equiv).
@@ -1249,8 +1239,8 @@ proc pop*[
     some(items)
 
 # --- ccMulti-consumer compile-time gate on bare Queue.pop ----------------
-# Bundle E: compile-time `{.error.}` overload. References user-visible
-# alias name `QueueConsumer` per M5 R9.
+# compile-time `{.error.}` overload. References user-visible
+# alias name `QueueConsumer`.
 proc pop*[
     T;
     ccProd: static PinScopeCardinality,
@@ -1277,14 +1267,12 @@ proc pop*[
   discard
 
 ## ----------------------------------------------------------------------
-## Claim-state attach / detach for QueueProducer / QueueConsumer
-## (Bundle F.2, 3.3.11-B.4.1.6).
+## Claim-state attach / detach for QueueProducer / QueueConsumer.
 ##
-## Per the Wall 2 fix from B.4.1.5: signatures bind ccMulti only;
-## ccSingle callers receive a clean type-mismatch diagnostic with no
-## `*Multi` / `*Single` backing-type leakage (M5 R9). State-preserving
-## per Wall 1 — no `{.transition.}` pragma; same-module discipline
-## satisfied since QueueClaimState is declared in this file.
+## Signatures bind ccMulti only; ccSingle callers receive a clean
+## type-mismatch diagnostic with no `*Multi` / `*Single` backing-type
+## leakage. State-preserving — no `{.transition.}` pragma; same-module
+## discipline satisfied since QueueClaimState is declared in this file.
 ## ----------------------------------------------------------------------
 
 proc attach*[
@@ -1443,7 +1431,7 @@ proc attachConsumer*[
 
 ## ----------------------------------------------------------------------
 ## Destructors driving Lifecycle / Claim-state terminal transitions
-## (Bundle F.1 + F.2, 3.3.11-B.4.1.6). Mirror BQueue's pattern.
+##. Mirror BQueue's pattern.
 ## ----------------------------------------------------------------------
 
 proc `=copy`*[
@@ -1482,7 +1470,7 @@ proc `=destroy`*[
   ## client refcount on the manager and (when `ownsManager`) runs the
   ## manager's destructor.
   ##
-  ## Bundle F.1: also drives the Lifecycle terminal transition
+  ## Also drives the Lifecycle terminal transition
   ## (`QueueInit -> QueueDestroyed`) via `destructorTransition`.
   ##
   ## **Precondition:** all worker threads that attached to this queue
@@ -1540,12 +1528,9 @@ proc `=destroy`*[
   discard
 
 ## ----------------------------------------------------------------------
-## Family-named unbounded smart constructors (Bundle D — kept as thin
-## wrappers per the B.2 coord note's recommended path (b) to minimize
-## test churn).
+## Family-named unbounded smart constructors — kept as thin wrappers.
 ##
-## M4 alias-return lock honored — every signature returns
-## `Queue[...]`, never a backing type.
+## Every signature returns `Queue[...]`, never a backing type.
 ## ----------------------------------------------------------------------
 
 proc newUnboundedSpscQueue*[

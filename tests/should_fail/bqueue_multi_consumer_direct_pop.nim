@@ -1,5 +1,5 @@
-## §6.3 condition (7) / 3.3.11-B Bundle J + M8 (family-level):
-## direct `pop` on a multi-consumer `BQueue` is gated by a Bundle E
+
+## direct `pop` on a multi-consumer `BQueue` is gated by a
 ## `{.error.}` overload. Calling `pop()` on a `ccCons == ccMulti`
 ## BQueue must fail at compile time with a message pointing the caller
 ## at `BQueue.getConsumer().pop()`.

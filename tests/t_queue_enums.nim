@@ -5,10 +5,10 @@
 ## unbounded_mpmc.nim:50) and introduce `ReclamationKind` for the unified
 ## `Queue` generic's `RK` phantom.
 ##
-## Doc C §3.0.5 (ReclamationKind), §3.1 (DeallocationStrategy), §5
+## (ReclamationKind), §3.1 (DeallocationStrategy), §5
 ## (verbatim source).
 ##
-## Impl plan: Track A, Task A1.
+## 
 
 import unittest2
 
@@ -33,7 +33,7 @@ suite "v5.0.0 enum modules":
     check $stManual == "stManual"
     check $stEager == "stEager"
 
-  test "Manual / Eager bare-symbol aliases preserved (Doc C §3.1)":
+  test "Manual / Eager bare-symbol aliases preserved":
     # Backward-compatibility aliases from the v4.x triplicated enum form.
     check Manual == stManual
     check Eager == stEager

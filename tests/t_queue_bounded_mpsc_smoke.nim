@@ -3,7 +3,7 @@
 ## Exercises the mpsc-equivalent shape (`ccMulti × ccSingle`) only.
 ## The full per-cardinality migration tests land in Track B2.
 ##
-## Impl plan §B1 Step 1. Doc C §3.0 (bounded body), §5 (initQueue), §6.1.
+## Impl plan §B1 Step 1. (bounded body), §5 (initQueue), §6.1.
 
 import options
 import unittest2

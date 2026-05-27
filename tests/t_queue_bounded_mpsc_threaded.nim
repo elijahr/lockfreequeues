@@ -10,7 +10,7 @@
 ##                                                     ProducerCount, 0]()
 ##
 ## Test count parity: 2 tests (matches t_mpsc_threaded.nim).
-## Track B / Task B2. Doc C 3.7, 5, 6.1.
+## 7, 5, 6.1.
 
 import lockfreequeues/atomic_dsl
 import options

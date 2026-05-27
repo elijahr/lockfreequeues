@@ -10,7 +10,7 @@
 ## name-collision with the imported `lockfreequeues/queue` module.
 ## Test count parity: 28 tests (matches t_mpsc.nim).
 ##
-## Track B / Task B2. Doc C 3.7, 5, 6.1.
+## 7, 5, 6.1.
 
 import options
 import unittest2
@@ -56,10 +56,10 @@ suite "push(Queue MPSC)":
   setup:
     q.reset()
 
-  # B.2 Bundle E: direct push on a ccMulti Queue is now a compile-time
+  # B.2 direct push on a ccMulti Queue is now a compile-time
   # `{.error.}`. The former runtime `InvalidCallDefect` smoke-tests are
-  # superseded by Bundle J compile-fail negative-controls under
-  # tests/should_fail/ (added in 3.3.11-B.3).
+  # superseded by compile-fail negative-controls under
+  # tests/should_fail/.
 
 suite "push(QueueProducer MPSC, T)":
   setup:

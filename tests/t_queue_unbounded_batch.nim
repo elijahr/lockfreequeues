@@ -14,7 +14,7 @@
 ##     count > available returns `some(seq)` with up-to-available
 ##     elements.
 ##
-## Step 3.3.6.5 of Phase 3.3 lockfreequeues v5.0.0 implementation.
+## 
 ## Gap-fill between 3.3.6a (spsc call-site migration) and 3.3.6b-e
 ## (bulk migration). Pure additive; thin loop wrappers over the
 ## existing single-item rkEbr push/pop bodies.
@@ -156,9 +156,9 @@ suite "rkEbr batch pop (count) — spmc-equiv (ccSingle × ccMulti)":
       check got[i] == items[i]
     check c.pop().isNone
 
-  # B.2 Bundle E: direct batch pop on a ccMulti-consumer Queue is now
-  # a compile-time `{.error.}`. Bundle J compile-fail negative-controls
-  # under tests/should_fail/ exercise the gate (added in 3.3.11-B.3).
+  # B.2 direct batch pop on a ccMulti-consumer Queue is now
+  # a compile-time `{.error.}`. compile-fail negative-controls
+  # under tests/should_fail/ exercise the gate.
 
 suite "rkEbr batch pop (count) — mpmc-equiv (ccMulti × ccMulti)":
   test "push then pop(count) via QueueConsumer returns some(seq)":
@@ -177,6 +177,6 @@ suite "rkEbr batch pop (count) — mpmc-equiv (ccMulti × ccMulti)":
       check got[i] == items[i]
     check c.pop().isNone
 
-  # B.2 Bundle E: direct batch pop on a ccMulti-consumer Queue is now
-  # a compile-time `{.error.}`. Bundle J compile-fail negative-controls
-  # under tests/should_fail/ exercise the gate (added in 3.3.11-B.3).
+  # B.2 direct batch pop on a ccMulti-consumer Queue is now
+  # a compile-time `{.error.}`. compile-fail negative-controls
+  # under tests/should_fail/ exercise the gate.

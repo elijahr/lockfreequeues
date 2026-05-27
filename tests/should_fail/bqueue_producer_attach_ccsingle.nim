@@ -1,7 +1,7 @@
-## 3.3.11-B.4.1.6 Bundle F deferred-from-B.3 J case (10):
+
 ## ccSingle BQueueProducer cannot call `attach()`.
 ##
-## Bundle F.2 Claim-state typestate uses a single user-facing object
+## Claim-state typestate uses a single user-facing object
 ## type with `when ccProd == ccMulti:` internal layout switch (Wall 2
 ## fix from B.4.1.5). `attach` is declared ONLY with the
 ## `BQueueProducer[T, ccMulti, ccCons, N, P, C]` param signature, so
@@ -9,7 +9,7 @@
 ## set. Calling `attach()` on a `BQueueProducer[..., ccSingle, ...]`
 ## must produce a "type mismatch" diagnostic that names the
 ## user-visible alias type `BQueueProducer` (NOT a `*Multi`/`*Single`
-## backing type — see M5 R9 grep gate).
+## backing type).
 
 import lockfreequeues/bqueue
 

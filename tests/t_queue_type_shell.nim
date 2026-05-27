@@ -1,6 +1,6 @@
 ## Smoke tests for the v5.0.0 type shell — BQueue + Queue.
 ##
-## Step 3.3.11-B (sub-dispatch B.2.5) reshaped the legacy 10-param
+## reshaped the legacy 10-param
 ## unified `Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]`
 ## into two narrower types:
 ##

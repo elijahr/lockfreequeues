@@ -7,7 +7,7 @@
 ##   initSpmc[N, C, T]() -> newBQueue[T, ccSingle, ccMulti, ##                                       N, 0, C]()
 ##
 ## Test count parity: 27 tests (matches t_spmc.nim).
-## Track B / Task B2. Doc C 3.7, 5, 6.1.
+## 7, 5, 6.1.
 
 import lockfreequeues/atomic_dsl
 import options
@@ -98,10 +98,10 @@ suite "pop(Queue SPMC)":
   setup:
     q.reset()
 
-  # B.2 Bundle E: direct pop on a ccMulti-consumer Queue is now a
+  # B.2 direct pop on a ccMulti-consumer Queue is now a
   # compile-time `{.error.}`. The former runtime `InvalidCallDefect`
-  # smoke-tests are superseded by Bundle J compile-fail negative-
-  # controls under tests/should_fail/ (added in 3.3.11-B.3).
+  # smoke-tests are superseded by compile-fail negative-
+  # controls under tests/should_fail/.
 
 suite "push(Queue SPMC, T)":
   setup:

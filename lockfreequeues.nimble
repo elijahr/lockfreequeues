@@ -15,14 +15,14 @@ requires "typestates >= 0.10.0"
 requires "debra >= 0.8.0"
 
 # Tasks
-task should_fail, "Verifies compile-fail negative controls (Doc C §6.3)":
+task should_fail, "Verifies compile-fail negative controls":
   # Driver iterates the 5-case table and runs `nim c --compileOnly` per
   # case, asserting expected exit + pinned substring. Ported from
   # nim-debra 0.8.0's `tests/should_fail/runner.nim` harness.
   exec "nim r --hints:off --warnings:off --path:src tests/should_fail/runner.nim"
 
 task test, "Runs the test suite":
-  # Compile-fail negative controls (Doc C §6.3). Runs first so a
+  # Compile-fail negative controls. Runs first so a
   # regression in the (γ) bounded-asymmetry guard or Strategy/cardinality
   # phantom-param surface trips the suite before the positive matrix
   # masks it with downstream noise.
@@ -67,7 +67,7 @@ task benchmarks, "Runs the benchmark suite":
   # PR 2 (bench-rollup) replaced bench_throughput.nim with topology-
   # split binaries. v5.0.0 B3 further split the MPMC binary into a
   # per-family pair (bench_mpmc_bounded + bench_spmc_bounded) to remove
-  # cross-family iCache contention; v5.0.0 3.3.9-D applied the same
+  # cross-family iCache contention; applied the same
   # mitigation to the unbounded binary, fanning it out into four
   # per-family binaries (bench_unbounded_{spsc,spmc,mpsc,mpmc}).
   # See the bench_mpmc_*.nim and bench_unbounded_*.nim headers for the
@@ -120,7 +120,7 @@ task benchteststress, "Runs the bench harness test suite including 3.3M-sample s
   exec "nim c -d:release -d:BenchCommonStress --threads:on -r -f tests/t_bench_common.nim"
 
 
-# task `stresstests` removed in v5.0.0 (3.3.11-B.4.2). The 9 legacy
+# task `stresstests` removed in v5.0.0 . The 9 legacy
 # `stress-tests/t_*_threaded.nim` files referenced the per-family
 # aliases (`Mpmc[N, P, C, T]`, `Spmc[N, C, T]`, etc.) and the
 # pre-DEBRA EpochManager API. Rewiring 1,197 LOC to the new

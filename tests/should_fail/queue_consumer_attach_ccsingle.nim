@@ -1,4 +1,4 @@
-## 3.3.11-B.4.1.6 Bundle F deferred-from-B.3 J case (13):
+
 ## ccSingle QueueConsumer cannot call `attach()`.
 
 import lockfreequeues/queue

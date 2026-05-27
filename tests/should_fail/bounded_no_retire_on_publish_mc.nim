@@ -2,7 +2,7 @@
 ## on an unbounded `Queue[..., ccCons = ccMulti, RK = rkEbr, ...]` must
 ## fail to compile.
 ##
-## Per Doc C §3.0.2, `retireOnPublish` is defined only when
+## Per , `retireOnPublish` is defined only when
 ## `RK == rkEbr AND ccCons == ccSingle` (the DR-S4 single-writer foot-gun
 ## gate). Calling it on a multi-consumer rkEbr queue must fail UFCS
 ## lookup at the dot-call site.

@@ -95,7 +95,7 @@ reframe and against each other.
 > side. A pre-implementation probe step (B.4.1.5) empirically
 > validated revised patterns against typestates v0.9.3:
 >
-> - **Wall 1 fix — no self-loop transitions.** State-preserving
+> - ** — no self-loop transitions.** State-preserving
 >   methods (`push`, `pop`, `getProducer`, `getConsumer`, `attach`,
 >   `detach`, batch variants) declare NO `{.transition.}` pragma.
 >   The typestate verifier accepts same-module non-transition procs
@@ -106,7 +106,7 @@ reframe and against each other.
 >   exclusively by `=destroy` via `destructorTransition`, mirroring
 >   nim-debra's `pinned_scope.nim:178-180` verbatim.
 >
-> - **Wall 2 fix — single object type with internal `when` switch.**
+> - ** — single object type with internal `when` switch.**
 >   `BQueueProducer` / `BQueueConsumer` / `QueueProducer` /
 >   `QueueConsumer` are single user-facing object types per view
 >   (no Multi/Single split). The optional `claimed: bool` field
@@ -147,7 +147,7 @@ reframe and against each other.
 > constructors return `BQueue[...]` / `Queue[...]` aliases;
 > `getProducer()` / `getConsumer()` return `BQueueProducer[...]` /
 > view aliases; cardinality-illegal direct calls are still gated by
-> Bundle E's `{.error.}` overloads (which take precedence over the
+>'s `{.error.}` overloads (which take precedence over the
 > typestate's destructor-only transition because the `{.error.}`
 > overload is more-specific).
 

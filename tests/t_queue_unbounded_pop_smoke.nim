@@ -1,4 +1,4 @@
-## Smoke fixtures for the v5.0.0 Track E Step 3.3.4 — rkEbr pop body
+## Smoke fixtures for the rkEbr pop body
 ## across all 4 cardinality variants (spsc-equiv, spmc-equiv,
 ## mpsc-equiv, mpmc-equiv).
 ##
@@ -23,7 +23,7 @@
 ##     callers fail UFCS lookup for `retireOnCAS` / `retireOnPublish`
 ##     — verified via the `compiles()` negative control below.
 ##
-## Step 3.3.4 of Phase 3.3 lockfreequeues v5.0.0 implementation.
+## 
 
 import unittest2
 import std/options
@@ -145,9 +145,9 @@ suite "rkEbr pop smoke — spmc-equiv (ccSingle × ccMulti)":
       check r.get == i
     check c.pop().isNone
 
-  # B.2 Bundle E: direct pop on a ccMulti-consumer Queue is now a
-  # compile-time `{.error.}`. Bundle J compile-fail negative-controls
-  # under tests/should_fail/ exercise the gate (added in 3.3.11-B.3).
+  # B.2 direct pop on a ccMulti-consumer Queue is now a
+  # compile-time `{.error.}`. compile-fail negative-controls
+  # under tests/should_fail/ exercise the gate.
 
 suite "rkEbr pop smoke — mpmc-equiv (ccMulti × ccMulti)":
   ## §3.5.2 retire-bearing site (retireOnCAS, strong
@@ -182,9 +182,9 @@ suite "rkEbr pop smoke — mpmc-equiv (ccMulti × ccMulti)":
       check r.get == i
     check c.pop().isNone
 
-  # B.2 Bundle E: direct pop on a ccMulti-consumer Queue is now a
-  # compile-time `{.error.}`. Bundle J compile-fail negative-controls
-  # under tests/should_fail/ exercise the gate (added in 3.3.11-B.3).
+  # B.2 direct pop on a ccMulti-consumer Queue is now a
+  # compile-time `{.error.}`. compile-fail negative-controls
+  # under tests/should_fail/ exercise the gate.
 
 suite "rkEbr bounded-asymmetry guard (γ)":
   ## Bounded `Queue[..., rkNone, ...]` callers MUST fail UFCS lookup

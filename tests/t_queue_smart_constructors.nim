@@ -5,9 +5,9 @@
 ## (`t_queue_bounded_*.nim`, `t_queue_unbounded_push_smoke.nim`,
 ## `t_queue_unbounded_pop_smoke.nim`) and the §3.0.2.4 soundness gates.
 ##
-## Post-3.3.11-B.2.5: the standalone `UnboundedSpsc[S, T]` was absorbed
+## the standalone `UnboundedSpsc[S, T]` was absorbed
 ## into `Queue[T, ccSingle, ccSingle, stEager, S, MaxThreads]` and now
-## ships its own smart-ctor (`newUnboundedSpscQueue`) exercised below.
+## ships its own smart constructor (`newUnboundedSpscQueue`) exercised below.
 ##
 ## **Push-uniform / pop-asymmetric**: `push` always goes through
 ## `QueueProducer.push` for `ccProd == ccMulti` and through
@@ -15,7 +15,7 @@
 ## `Queue.pop` for `ccCons == ccSingle` and through
 ## `QueueConsumer.pop` (via `getConsumer`) for `ccCons == ccMulti`.
 ##
-## Step 3.3.5b of Phase 3.3 lockfreequeues v5.0.0 implementation.
+## 
 
 import std/options
 import unittest2

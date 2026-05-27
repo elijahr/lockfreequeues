@@ -1,6 +1,6 @@
 ## Adapter for lockfreequeues unbounded SPSC.
 ##
-## Post-3.3.11-B.2.5: the legacy `UnboundedSpsc[S, T]` was absorbed
+## the legacy `UnboundedSpsc[S, T]` was absorbed
 ## into `Queue[T, ccSingle, ccSingle, stEager, S, MaxThreads]` via
 ## queue.nim's `when ccProd == ccSingle and ccCons == ccSingle:`
 ## branch. The branch carries no debra integration — the `MaxThreads`

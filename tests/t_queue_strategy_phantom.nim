@@ -1,10 +1,10 @@
 ## Positive monomorphization test for the Strategy (`ST`) phantom on
-## the unified Queue's rkEbr branch (Doc C §3.7).
+## the unified Queue's rkEbr branch.
 ##
 ## Asserts that both `stManual` and `stEager` compile across the three
 ## multi-segment cardinality variants — mpsc-equiv, spmc-equiv,
 ## mpmc-equiv — and that the segment-count semantics differ between
-## the two strategies per Doc C §3.0.2:
+## the two strategies:
 ##
 ## * `stEager` — the rkEbr pop body decrements `self.segments` after
 ##   each segment retire (the `when ST != stManual:` guard at the
@@ -19,8 +19,8 @@
 ## body spans 3 segments (4 + 4 + 1), drains all 9 items, then asserts
 ## the segment-count delta matches the strategy.
 ##
-## Doc C §3.7 lists this file by name; the assertion inventory is
-## explicit at §6.3 (positive phantom). Step 3.3.8 of Phase 3.3
+## lists this file by name; the assertion inventory is
+## explicit at §6.3 (positive phantom). Earlier draft
 ## lockfreequeues v5.0.0 implementation.
 
 import std/options

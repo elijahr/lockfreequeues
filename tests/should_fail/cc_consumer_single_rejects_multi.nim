@@ -3,7 +3,7 @@
 ##
 ## `newUnboundedMpscQueue` (`ccMulti × ccSingle`) borrow-overload
 ## requires `DebraManager[MT, debra.ccSingle]` and
-## `ThreadHandle[MT, debra.ccSingle]` per Doc C §3.0.4 / §3.1. Passing
+## `ThreadHandle[MT, debra.ccSingle]` / §3.1. Passing
 ## a ccMulti-cardinality manager/handle pair must fail type-checking.
 
 import lockfreequeues/queue

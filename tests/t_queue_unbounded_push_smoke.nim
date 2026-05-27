@@ -1,4 +1,4 @@
-## Smoke fixtures for the v5.0.0 Track E Step 3.3.3 — rkEbr push body
+## Smoke fixtures for the rkEbr push body
 ## across all 4 cardinality variants (spsc-equiv, spmc-equiv,
 ## mpsc-equiv, mpmc-equiv).
 ##
@@ -21,7 +21,7 @@
 ## observable state (`len`, `segmentCount`) instead of round-tripping
 ## items.
 ##
-## Step 3.3.3 of Phase 3.3 lockfreequeues v5.0.0 implementation.
+## 
 
 import unittest2
 

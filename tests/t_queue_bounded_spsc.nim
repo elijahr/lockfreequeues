@@ -7,7 +7,7 @@
 ##   initSpsc[N, T]() -> newBQueue[T, ccSingle, ccSingle, ##                                    N, 0, 0]()
 ##
 ## Test count parity: 21 tests (matches t_spsc.nim).
-## Track B / Task B2. Doc C 3.7, 5, 6.1.
+## 7, 5, 6.1.
 
 import options
 import sequtils

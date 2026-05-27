@@ -1,4 +1,4 @@
-## 3.3.11-B.4.1.6 Bundle F.3.5 deliberate-negative cross-module
+## cross-module
 ## containment test (case 14):
 ##
 ## Verifies that a `{.transition.}`-tagged proc declared in an
@@ -15,7 +15,7 @@
 ##
 ## This is the load-bearing test that proves F.3.5 intra-module
 ## containment is actually enforced — without it, the same-module
-## discipline of Bundle F (`bqueue.nim` owns both the BQueueLifecycle
+## discipline ((`bqueue.nim` owns both the BQueueLifecycle
 ## typestate declaration and every state-preserving op) would be a
 ## convention rather than a checked invariant.
 ##

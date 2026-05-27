@@ -13,7 +13,7 @@
 ##
 ## Ported from nim-debra 0.8.0's `tests/should_fail/runner.nim`
 ## (Phase 3.2.b.6) with a project-specific case table covering the
-## 5 conditions enumerated in Doc C §6.3:
+## 5 conditions enumerated in :
 ##   1. Consumer ST=stManual vs Queue ST=stEager (Strategy phantom).
 ##   2. ccCons=ccSingle queue rejects ccMulti DebraManager/handle.
 ##   3. ccCons=ccMulti  queue rejects ccSingle DebraManager.
@@ -21,7 +21,7 @@
 ##   5. (γ) bounded-asymmetry: retireOnPublish on
 ##      Queue[..., ccCons=ccMulti, rkEbr, ...].
 ##
-## Step 3.3.8 of Phase 3.3 lockfreequeues v5.0.0.
+## 
 
 import std/[osproc, strformat, strutils]
 
@@ -67,12 +67,12 @@ const cases = @[
     outcome: eoCompileFails,
     substring: "retireOnPublish",
   ),
-  # 3.3.11-B Bundle J + M8 (family-level coverage of Bundle E
-  # `{.error.}` cardinality gates). One case per BQueue/Queue * push/pop
-  # family, exercising the cardinality `{.error.}` overload through the
-  # family-named thin-wrappers (`newMpscQueue`, `newSpmcQueue`,
-  # `newMpmcQueue`, `newUnboundedSpmcQueue`). Family-level rather
-  # than per-individual-wrapper per the M8 light-touch policy.
+  # Family-level coverage of `{.error.}` cardinality gates. One case per
+  # BQueue/Queue * push/pop family, exercising the cardinality
+  # `{.error.}` overload through the family-named thin-wrappers
+  # (`newMpscQueue`, `newSpmcQueue`, `newMpmcQueue`,
+  # `newUnboundedSpmcQueue`). Family-level rather than per-individual-
+  # wrapper.
   Case(
     name: "t_bqueue_cardinality §6.3 (6) — direct push on ccProd=ccMulti BQueue is forbidden",
     file: "tests/should_fail/bqueue_multi_producer_direct_push.nim",
@@ -97,14 +97,13 @@ const cases = @[
     outcome: eoCompileFails,
     substring: "batch push on a multi-producer BQueue",
   ),
-  # 3.3.11-B.4.1.6 Bundle F deferred-from-B.3 J. Cases (10)-(14) cover
-  # the Middle-axis Claim-state typestate (Wall 2 fix from B.4.1.5)
-  # and F.3.5 deliberate-negative cross-module containment. The
+  # Cases (10)-(14) cover the Middle-axis Claim-state typestate
+  # and the deliberate-negative cross-module containment. The
   # ccSingle-attach cases all assert the same substring fragment
   # `BQueueProducer` / `BQueueConsumer` / `QueueProducer` /
   # `QueueConsumer` — these are the user-visible alias names that
-  # appear in the Nim "type mismatch" diagnostic per the Wall 2 fix;
-  # no `*Multi`/`*Single` backing-type leakage (M5 R9 grep gate).
+  # appear in the Nim "type mismatch" diagnostic;
+  # no `*Multi`/`*Single` backing-type leakage.
   Case(
     name: "t_bqueue_claimstate §6.3 (10) — ccSingle BQueueProducer cannot attach",
     file: "tests/should_fail/bqueue_producer_attach_ccsingle.nim",

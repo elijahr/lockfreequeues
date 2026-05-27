@@ -3,11 +3,11 @@
 ## Consolidates the triplicated `DeallocationStrategy` enum that previously
 ## lived in `unbounded_mpsc.nim`, `unbounded_spmc.nim`, and
 ## `unbounded_mpmc.nim`. v4.x callers used the bare-symbol forms `Manual`
-## and `Eager`; those are preserved as constant aliases (Doc C §3.1) so the
+## and `Eager`; those are preserved as constant aliases so the
 ## migration to the prefixed `stManual` / `stEager` is non-breaking at the
 ## call site.
 ##
-## Doc C §3.1, §5 (verbatim source).
+## , §5 (verbatim source).
 
 type DeallocationStrategy* = enum
   stManual    ## Reserved for future batch-retire; no specialization in v5.0.

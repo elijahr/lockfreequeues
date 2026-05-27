@@ -1,4 +1,4 @@
-## UnboundedMpsc throughput bench (v5.0.0 3.3.9-D split).
+## UnboundedMpsc throughput bench (split).
 ##
 ## Carved out of the legacy `bench_unbounded.nim` to eliminate
 ## cross-family iCache contention — mirrors the 37aa1c5 mitigation

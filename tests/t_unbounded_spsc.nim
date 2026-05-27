@@ -1,4 +1,4 @@
-## UnboundedSpsc tests — post-3.3.11-B.2.5 the standalone
+## UnboundedSpsc tests —  the standalone
 ## `UnboundedSpsc[S, T]` type is absorbed into
 ## `Queue[T, ccSingle, ccSingle, stEager, S, MaxThreads]`. These tests
 ## continue to exercise the spsc surface through the absorbed Queue

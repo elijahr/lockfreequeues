@@ -1,4 +1,4 @@
-## Bounded Spmc throughput bench (v5.0.0 B3 split).
+## Bounded Spmc throughput bench .
 ##
 ## Carved out of the legacy `bench_mpmc.nim` to eliminate cross-family
 ## iCache contention. Before the split, the single `bench_mpmc` binary

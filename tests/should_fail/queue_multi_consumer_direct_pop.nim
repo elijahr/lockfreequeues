@@ -1,6 +1,6 @@
-## §6.3 condition (8) / 3.3.11-B Bundle J + M8 (family-level):
+
 ## direct `pop` on a multi-consumer unbounded `Queue` is gated by a
-## Bundle E `{.error.}` overload. Calling `pop()` on a
+## A `{.error.}` overload. Calling `pop()` on a
 ## `ccCons == ccMulti` Queue must fail at compile time with a message
 ## pointing the caller at `Queue.getConsumer().pop()`.
 ##

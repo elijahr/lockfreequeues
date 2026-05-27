@@ -19,12 +19,12 @@ regression gate via [Bencher.dev](https://bencher.dev).
   matches the mpmc grid).
 - `nim/bench_spmc_bounded.nim` - Bounded MPMC throughput driver, Spmc
   family (Spmc 1p{1,2,4}c, Queue ccSingle×ccMulti parity at the same
-  shapes). v5.0.0 B3 split the original `bench_mpmc.nim` into these
+  shapes). the original `bench_mpmc.nim` into these
   two per-family binaries to eliminate cross-family iCache contention
   that was producing a spurious -39.6% throughput artifact on
   `spmc/mpmc/1p1c`; see the file headers for the diagnostic.
 - `nim/bench_unbounded_spsc.nim` - Unbounded throughput driver,
-  UnboundedSpsc family (1p1c). v5.0.0 3.3.9-D split the original
+  UnboundedSpsc family (1p1c). split the original
   `bench_unbounded.nim` into four per-family binaries (this file plus
   the three below) to eliminate cross-family iCache contention that
   was producing -17% to -34% throughput regressions on
@@ -62,7 +62,7 @@ regression gate via [Bencher.dev](https://bencher.dev).
   (`tests/fixtures/pre-split-slugs.json`).
 - `results/` - JSON output from local benchmark runs.
 - `runner.py` - Orchestrates local benchmark execution. Builds and
-  runs all nine topology-split binaries (post 3.3.9-D), then merges
+  runs all nine topology-split binaries , then merges
   their fragments via `merge_bmf.py`.
 
 ## Quick Start (local)
@@ -108,8 +108,8 @@ python3 benchmarks/merge_bmf.py merged.json \
 `.github/workflows/bench.yml` runs the topology-split binaries on
 `ubuntu-latest` for every PR and every push to `main`/`devel` via a
 GitHub Actions matrix (one matrix entry per binary, each with its own
-`timeout-minutes: 18` budget). v5.0.0 B3 split the `bench_mpmc` slot
-into `bench_mpmc_bounded` + `bench_spmc_bounded`; v5.0.0 3.3.9-D fanned
+`timeout-minutes: 18` budget). the `bench_mpmc` slot
+into `bench_mpmc_bounded` + `bench_spmc_bounded`; fanned
 the `bench_unbounded` slot into four per-family binaries
 (`bench_unbounded_{spsc,spmc,mpsc,mpmc}`) so each family runs
 in parallel as an independent matrix entry. The workflow:
@@ -382,7 +382,7 @@ Adapter version sourcing rules (no hand-typed mirrors of README files):
 ### Running comparison adapters locally
 
 ```bash
-# Loony (Nim only; lives in bench_unbounded_mpmc post 3.3.9-D split):
+# Loony (Nim only; lives in bench_unbounded_mpmc split):
 nimble install loony
 nim c -r -d:release -d:danger --threads:on \
   -d:adapter_loony_available \
@@ -405,7 +405,7 @@ nim c -r -d:release -d:danger --threads:on \
   benchmarks/nim/bench_mpmc_bounded.nim crossbeam_array_queue
 
 # MoodyCamel (vendored single-header; nim cpp; lives in
-# bench_unbounded_mpmc post 3.3.9-D split):
+# bench_unbounded_mpmc split):
 nim cpp -r -d:release -d:danger --threads:on \
   -d:adapter_moodycamel_available \
   -d:UnboundedMpmcMessageCount=100000 -d:UnboundedMpmcRuns=3 \
@@ -439,7 +439,7 @@ enforcement, collision detection (with both colliding files named in
 stderr), alpha-sorted output, 5-input union (one fragment per
 topology binary), the deletion-safety contract enforced by
 `superset_check.py`, and the BMF-shape contract that
-`docs/assets/bench-charts.js` depends on (Track 5 PR 5).
+`docs/assets/bench-charts.js` depends on.
 
 ## Refreshing the example fixture
 

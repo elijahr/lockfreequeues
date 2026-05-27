@@ -83,7 +83,7 @@ proc makeLockfreequeuesUnboundedSpmcAdapter*[S: static int, T;
   # `=destroy` on uninitialized storage. Mark the slot moved-from first.
   wasMoved(result.manager[])
 
-  # Three-flag guard mirroring the mpmc adapter (Gemini cycle 18 F6):
+  # Three-flag guard mirroring the mpmc adapter:
   #  * `managerValueInitOk` — set after `initDebraManager` returns,
   #    indicating the heap manager slot holds a fully-initialized value
   #    (so `reset(manager[])` is safe in the cleanup arm). If false,

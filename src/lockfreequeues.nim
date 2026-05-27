@@ -1,14 +1,11 @@
 ## lockfreequeues — top-level umbrella module.
 ##
-## v5.0.0 final shape (3.3.11-B.2.5):
-##
-## Version constant (Item 1, bench-versioning gap close): the umbrella
-## module exposes `LockfreequeuesVersion` so the bench harness's
-## `getAdapterVersions` can stamp the in-tree package version into the
-## bench JSON `meta.adapters.lockfreequeues.version` field without
-## re-parsing `lockfreequeues.nimble` at run time. Source-of-truth
-## remains `lockfreequeues.nimble`; this constant MUST be bumped in
-## lockstep on every release.
+## The umbrella module exposes `LockfreequeuesVersion` so the bench
+## harness's `getAdapterVersions` can stamp the in-tree package version
+## into the bench JSON `meta.adapters.lockfreequeues.version` field
+## without re-parsing `lockfreequeues.nimble` at run time.
+## Source-of-truth remains `lockfreequeues.nimble`; this constant MUST
+## be bumped in lockstep on every release.
 
 const LockfreequeuesVersion* {.strdefine.} = "5.0.0"
   ## In-tree package version. Mirrors the `version = "5.0.0"` line in
@@ -27,7 +24,6 @@ const LockfreequeuesVersion* {.strdefine.} = "5.0.0"
 ##   - Strategy / reclamation / pinscope-stub enums re-exported for
 ##     consumer code that references `stEager`, `stManual`, `ccSingle`,
 ##     `ccMulti` (and the legacy `rkNone`/`rkEbr` symbols) directly.
-##   - `unbounded_spsc` module deleted in B.2.5 (absorbed into Queue).
 
 when compileOption("threads"):
   import

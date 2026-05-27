@@ -7,10 +7,10 @@
 ## - `rkEbr`  — unbounded family. LCRQ-style segmented body + nim-debra
 ##   epoch-based reclamation.
 ##
-## No default is supplied (Doc C §3.0.5: "Phase 3 deliberately does not
+## No default is supplied (: "Phase 3 deliberately does not
 ## supply one because the choice is semantically important").
 ##
-## Doc C §3.0.5, §5 (verbatim source).
+## , §5 (verbatim source).
 
 type ReclamationKind* = enum
   rkNone   ## Bounded queues: no reclamation machinery (Vyukov seqlocks).

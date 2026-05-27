@@ -1,4 +1,4 @@
-## 3.3.11-B.4.1.6 Bundle F deferred-from-B.3 J case (12):
+
 ## ccSingle QueueProducer cannot call `attach()`.
 ##
 ## Same shape as the BQueue counterpart, but exercising the

@@ -374,7 +374,7 @@ jobs:
           echo "::warning title=Adapter skipped::liblfds build or smoke failed or force-skipped (the vendored subset lacks the gcc_gnumake Makefile); comparison bench will omit liblfds slugs."
 
       - name: Compile bench_mpmc_bounded with crossbeam_array_queue
-        # v5.0.0 B3 split: crossbeam_array_queue's slug shape matches
+        #: crossbeam_array_queue's slug shape matches
         # the mpmc grid so it lives in the mpmc binary (the spmc
         # binary has no MVP-adapter wiring). CI run shape mirrors
         # bench.yml's bench_mpmc_bounded settings (1M / 5 / 2). rpath
@@ -391,7 +391,7 @@ jobs:
             benchmarks/nim/bench_mpmc_bounded.nim
 
       - name: Compile bench_unbounded_mpmc with crossbeam_seg_queue
-        # v5.0.0 3.3.9-D split: the Crossbeam SegQueue adapter lives in
+        # split: the Crossbeam SegQueue adapter lives in
         # bench_unbounded_mpmc (matches the mpmc unbounded
         # MVP-adapter slot post-split).
         run: |
