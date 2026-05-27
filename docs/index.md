@@ -4,7 +4,7 @@ Lock-free queues for Nim, implemented as ring buffers (bounded) and linked segme
 
 ## Overview
 
-v5.0.0 exposes two unified, cardinality-parameterized queue types —
+v5 exposes two unified, cardinality-parameterized queue types —
 [`BQueue`](api/bqueue.md) (bounded) and [`Queue`](api/queue.md)
 (unbounded). Each covers all four producer/consumer combinations,
 selected at compile time via the `ccProd` / `ccCons` parameters.
@@ -30,6 +30,29 @@ Linked segments that grow as needed. The MP/MC shapes use DEBRA+ epoch-based rec
 | SPMC | Single | Multiple | Wait-free | Lock-free |
 | MPSC | Multiple | Single | Lock-free | Wait-free |
 | MPMC | Multiple | Multiple | Lock-free | Lock-free |
+
+## Compatibility
+
+| Requirement | Supported |
+|-------------|-----------|
+| Nim         | `>= 2.2.0` |
+| Memory managers | `orc` (default), `arc`, `refc`, `atomicArc` |
+| Backends    | C, C++ |
+| Threads     | `--threads:on` required (default in Nim 2.2+) |
+| Platforms (CI-verified) | Linux x86_64, Linux arm64, macOS arm64 |
+| Sanitisers (CI-verified) | ThreadSanitizer (under `atomicArc`), AddressSanitizer |
+| Dependencies | [`debra`](https://github.com/elijahr/nim-debra) `>= 0.8.0`, [`typestates`](https://github.com/elijahr/nim-typestates) `>= 0.10.0` |
+| License     | MIT |
+
+**Item-type constraints.** Slots are shared across threads and stored in a
+plain `array[S, T]`, so the queue rejects `ref T` item types under `arc` /
+`orc` / `atomicArc` at compile time. Use a value type, a `ptr T`, or pass
+`-d:allowNonLockFreeQueueItems` to disable the check at your own risk.
+
+**Atomics.** All atomics route through `debra/atomics`, which statically
+rejects any `Atomic[T]` instantiation that would fall back to libatomic
+spinlocks. Enforcement is on by default; opt out with
+`-d:debraAllowNonLockFreeAtomics` (per-call-site warning fires).
 
 ## Installation
 
@@ -108,7 +131,7 @@ let item = consumer.pop()  # some(42)
 
 ## Examples
 
-Examples are in the [examples](https://github.com/elijahr/lockfreequeues/tree/master/examples) directory:
+Examples are in the [examples](https://github.com/elijahr/lockfreequeues/tree/devel/examples) directory:
 
 ```sh
 nimble examples

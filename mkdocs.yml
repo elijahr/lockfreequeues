@@ -1,5 +1,5 @@
 site_name: lockfreequeues
-site_description: Lock-free queues for Nim, implemented as ring buffers
+site_description: Lock-free queues for Nim
 site_url: https://elijahr.github.io/lockfreequeues/
 
 repo_name: elijahr/lockfreequeues
@@ -66,7 +66,11 @@ plugins:
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.inlinehilite
   - pymdownx.snippets:
       base_path: ["."]

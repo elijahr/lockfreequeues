@@ -4,9 +4,26 @@
 
 Lock-free queues for Nim. Bounded queues are ring buffers; unbounded queues are
 linked segments reclaimed via [DEBRA](https://github.com/elijahr/nim-debra).
-All variants cover SPSC, SPMC, MPSC, and MPMC.
+All variants cover SPSC, SPMC, MPSC, and MPMC. 
 
 API documentation: <https://elijahr.github.io/lockfreequeues>
+
+## Compatibility
+
+| Requirement | Supported |
+|-------------|-----------|
+| Nim         | `>= 2.2.0` |
+| Memory managers | `orc` (default), `arc`, `refc`, `atomicArc` |
+| Backends    | C, C++ |
+| Threads     | `--threads:on` required (default in Nim 2.2+) |
+| Platforms (CI-verified) | Linux x86_64, Linux arm64, macOS arm64 |
+| Sanitisers (CI-verified) | ThreadSanitizer (under `atomicArc`), AddressSanitizer |
+| Dependencies | [`debra`](https://github.com/elijahr/nim-debra) `>= 0.8.0`, [`typestates`](https://github.com/elijahr/nim-typestates) `>= 0.10.0` |
+| License     | MIT |
+
+**Item-type constraints.** Slots are shared across threads and stored in a plain `array[S, T]`, so the queue rejects `ref T` item types under `arc` / `orc` / `atomicArc` at compile time (the refcount mutation isn't safe under the concurrent slot read/write). Use a value type, a `ptr T`, or pass `-d:allowNonLockFreeQueueItems` to disable the check at your own risk.
+
+**Atomics.** All atomics route through [`debra/atomics`](https://github.com/elijahr/nim-debra), which statically rejects any `Atomic[T]` instantiation that would dispatch to libatomic spinlock fallback. Enforcement is on by default; opt out with `-d:debraAllowNonLockFreeAtomics` (per-call-site warning fires).
 
 > **v5.0.0 breaking change.**
 > v5.0.0 collapses the seven typestate queue families plus the standalone

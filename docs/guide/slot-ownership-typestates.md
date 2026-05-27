@@ -6,14 +6,13 @@ Slot ownership typestates track slot ownership through the type system, so the m
 
 ## Producer-Side Flow
 
-```
-tryClaimSlot()
-    |
-    v
-SlotClaimed ----[writeItem]----> SlotWritten ----[commitSlot]----> SlotCommitted
-    |                                |
-    v                                v
- SegmentFull                      [data ready]
+```mermaid
+flowchart LR
+    start([tryClaimSlot]) -->|ckClaimed| Claimed[SlotClaimed]
+    start -->|ckSegmentFull| Full([SegmentFull: allocate new segment])
+    start -->|ckRetry| Retry([retry CAS])
+    Claimed -->|writeItem| Written[SlotWritten]
+    Written -->|commitSlot| Committed[SlotCommitted: data visible to consumers]
 ```
 
 ### States
@@ -56,14 +55,12 @@ of ckRetry:
 
 ## Consumer-Side Flow
 
-```
-tryClaimForRead()
-    |
-    v
-SlotAvailable ----[readItem]----> T (data)
-    |
-    v
-SlotPending ----[waitForCommit]----> SlotAvailable
+```mermaid
+flowchart LR
+    start([tryClaimForRead]) -->|committed| Avail[SlotAvailable]
+    start -->|MPSC: not yet committed| Pending[SlotPending]
+    Pending -->|waitForCommit| Avail
+    Avail -->|readItem| Data([T: data])
 ```
 
 ### States
