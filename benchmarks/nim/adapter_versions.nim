@@ -196,10 +196,15 @@ when defined(adapter_liblfds_available):
 #include "liblfds711/inc/liblfds711.h"
 """.}
 
-  proc getLiblfdsVersionMacro(): cstring {.
+  # Imported as a variable, not a proc: LFDS711_MISC_VERSION_STRING is a
+  # C preprocessor macro that expands to a string literal, so calling it
+  # with `()` would emit `"literal"()` and fail C compilation. A template
+  # preserves the existing call-site form `getLiblfdsVersionMacro()`.
+  let liblfdsVersionMacro {.
     importc: "LFDS711_MISC_VERSION_STRING",
     header: "liblfds711/inc/liblfds711.h",
-    nodecl.}
+    nodecl.}: cstring
+  template getLiblfdsVersionMacro(): cstring = liblfdsVersionMacro
 else:
   const LiblfdsAdapterPresent = false
 
@@ -213,8 +218,12 @@ when defined(adapter_boost_lockfree_queue_available) or
   {.emit: """/*INCLUDESECTION*/
 #include <boost/version.hpp>
 """.}
-  proc getBoostLibVersionMacro(): cstring {.
-    importc: "BOOST_LIB_VERSION", header: "boost/version.hpp", nodecl.}
+  # Imported as a variable, not a proc: BOOST_LIB_VERSION is a C
+  # preprocessor macro that expands to a string literal (e.g. "1_74"),
+  # so calling it with `()` would emit `"1_74"()` and fail C compilation.
+  let boostLibVersionMacro {.
+    importc: "BOOST_LIB_VERSION", header: "boost/version.hpp", nodecl.}: cstring
+  template getBoostLibVersionMacro(): cstring = boostLibVersionMacro
 
   proc getBoostVersion(): string =
     ## Returns the Boost.LockFree version string captured at compile time
