@@ -2,10 +2,10 @@
 ## Replaces the 4 parallel `lockfreequeues_queue_bounded_*` adapters
 ## with a single type parameterized over `ccProd, ccCons, N, P, C, T`.
 ##
-## v5.0.0 cascade Track D3.6.5; B.2.5 rewired from the legacy 10-param
-## `Queue[..., rkNone, ...]` to the dedicated 6-param `BQueue`.
+## The adapter targets the dedicated 6-param `BQueue` generic rather
+## than the legacy 10-param `Queue[..., rkNone, ...]` shape.
 ##
-## **ST phantom retention.** Pre-B.2.5 the adapter carried an `ST`
+## **ST phantom retention.** The adapter previously carried an `ST`
 ## (`DeallocationStrategy`) phantom param to match the unified Queue's
 ## bounded shape. BQueue has no `ST` axis (deallocation strategy is an
 ## unbounded-only concern), but the bench harness call sites still pass

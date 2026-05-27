@@ -6,12 +6,12 @@
 ## `bench_unbounded` binary co-compiled UnboundedSpsc +
 ## UnboundedSpmc + UnboundedMpsc + UnboundedMpmc (plus three
 ## MVP adapters under MoodyCamel / Loony / Crossbeam SegQueue gates)
-## into one release-mode binary. Step 3.3.9 retry #4's cold-state
-## diagnostic surfaced -32% to -34% throughput regressions on
-## unbounded_mpmc/2p2c, unbounded_mpsc/2p1c, and unbounded_mpsc/
-## 4p1c that pepper attributed to the same bench-binary-layout
-## artifact 37aa1c5 mitigated. Isolating each unbounded family into
-## its own binary removes that contention surface at the source.
+## into one release-mode binary. Cold-state diagnostics surfaced
+## -32% to -34% throughput regressions on unbounded_mpmc/2p2c,
+## unbounded_mpsc/2p1c, and unbounded_mpsc/4p1c, attributed to the
+## same bench-binary-layout artifact 37aa1c5 mitigated. Isolating
+## each unbounded family into its own binary removes that contention
+## surface at the source.
 ##
 ## Covers UnboundedSpsc (no DEBRA, plain SPSC) at 1p1c.
 ##

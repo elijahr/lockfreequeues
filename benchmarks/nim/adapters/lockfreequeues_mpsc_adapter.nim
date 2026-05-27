@@ -6,10 +6,10 @@
 ## thread. The single-consumer pop path goes through the queue object
 ## directly.
 ##
-## v5.0.0 cascade: the legacy `Mpsc[N, P, T]` type was deleted in
-## 3.3.7 in favour of the unified `Queue[T, ccMulti, ccSingle, stEager,
-## rkNone, N, P, 0, 0, 0]` generic. The adapter surface (`push`, `pop`,
-## `getProducer`, the factory) is preserved verbatim.
+## The legacy `Mpsc[N, P, T]` type has been removed in favour of the
+## unified `Queue[T, ccMulti, ccSingle, stEager, rkNone, N, P, 0, 0,
+## 0]` generic. The adapter surface (`push`, `pop`, `getProducer`,
+## the factory) is preserved verbatim.
 
 import options
 import lockfreequeues

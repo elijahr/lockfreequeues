@@ -15,11 +15,11 @@
 ## additional consumer views per-thread inside the bench harness via
 ## `adapter.queue[].getConsumer()`.
 ##
-## v5.0.0 cascade: the legacy `UnboundedSpmc[S, T, MT]` type was
-## deleted in 3.3.7. The smart-constructor `newUnboundedSpmcQueue`
-## returns the unified Queue value; the legacy
-## "consumer0Handle + queue.getConsumer(handle)" plumbing collapses
-## into a single `queue.getConsumer()` call on the init thread.
+## The legacy `UnboundedSpmc[S, T, MT]` type has been removed. The
+## smart-constructor `newUnboundedSpmcQueue` returns the unified Queue
+## value; the legacy "consumer0Handle + queue.getConsumer(handle)"
+## plumbing collapses into a single `queue.getConsumer()` call on the
+## init thread.
 
 # Fine-grained imports (not the umbrella) so the `ccSingle` /
 # `ccMulti` symbols flow from a single enum module. The umbrella

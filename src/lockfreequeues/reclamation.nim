@@ -7,10 +7,11 @@
 ## - `rkEbr`  — unbounded family. LCRQ-style segmented body + nim-debra
 ##   epoch-based reclamation.
 ##
-## No default is supplied (: "Phase 3 deliberately does not
-## supply one because the choice is semantically important").
-##
-## , §5 (verbatim source).
+## No default is supplied: the choice of `rkNone` vs `rkEbr` is
+## semantically load-bearing — bounded queues have no segments to retire,
+## and the unbounded SPSC shape is committed-flag-free, so the right
+## reclamation kind is part of the queue's identity, not a configuration
+## dial.
 
 type ReclamationKind* = enum
   rkNone   ## Bounded queues: no reclamation machinery (Vyukov seqlocks).

@@ -1,8 +1,7 @@
 ## Adapter for lockfreequeues UnboundedMpsc-equivalent (unbounded MPSC).
 ##
-## Renamed from `lockfreequeues_unbounded_mpsc.nim` in PR 0 Task 0.9
-## per design section 2.2. `topologiesSupported` is exported here for
-## PR 3 Task 3.11 consumption.
+## File naming follows the `<library_slug>_adapter.nim` convention.
+## `topologiesSupported` is exported here for the bench-driver registry.
 ##
 ## The unified Queue[T, ccMulti, ccSingle, ST, rkEbr, ...] differs from
 ## the bounded adapters in two ways:
@@ -30,8 +29,8 @@
 ## `bench_throughput.nim` prior to the PR 2 topology split; then
 ## `bench_unbounded.nim` until split it per family).
 ##
-## v5.0.0 cascade: the legacy `UnboundedMpsc[S, T, MT]` type was
-## deleted in 3.3.7. The borrow-form smart-constructor
+## The legacy `UnboundedMpsc[S, T, MT]` type has been removed. The
+## borrow-form smart-constructor
 ## `newUnboundedMpscQueue[T, stEager, S, MaxThreads](addr manager,
 ## consumerHandle)` replaces the legacy `newUnboundedMpsc(...)` —
 ## same arguments, same shape, returns the unified Queue value type.

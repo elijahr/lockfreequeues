@@ -34,15 +34,14 @@
 import std/[monotimes, options, os, parseopt, sets, strformat, syncio, times]
 import ./bench_common
 import lockfreequeues/backoff
-# v5.0.0 cascade Step 3.3.8c: the legacy `lockfreequeues/spmc` module
-# was deleted in 3.3.7; the "spmc" variant below now drives the unified
+# The legacy `lockfreequeues/spmc` module has been deleted; the "spmc"
+# variant below now drives the unified
 # `BQueue[T, ccSingle, ccMulti, N, 0, C]` generic
 # via the smart-constructor `newSpmcQueue` / `initQueue`. The legacy
 # variant slug + measure shape are preserved verbatim; the queue_bounded
 # parity variant below uses the same underlying generic at the same
 # Queue instantiation (semantically redundant post-deletion but kept so
-# the B3 cascade slug set remains stable across the 3.3 implementation
-# steps).
+# the historical slug set remains stable for downstream consumers).
 import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/internal/pinscope_stub
@@ -163,10 +162,10 @@ proc runSpmcShape[N, C: static int; T](
   echo ""
   em.addMeasure(slug, "throughput_ops_ms", m, m - s, m + s)
 
-# ---------- v5.0.0 cascade D3.6: BQueue ccSingle x ccMulti harness ----------
+# ---------- BQueue ccSingle x ccMulti harness ----------
 #
 # Slug `lockfreequeues_queue_bounded_spmc/mpmc/1p<C>c`. Output metric /
-# units (throughput_ops_ms) match the legacy Spmc baseline so B3
+# units (throughput_ops_ms) match the legacy Spmc baseline so the
 # parity delta is a simple per-shape division across the two emitted
 # measures.
 
@@ -274,7 +273,7 @@ proc runVariant(variant: string, em: var BMFEmitter) =
     runSpmcShape[MpmcCapacity, 4, uint64](
       em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
   of "queue_bounded_spmc":
-    # v5.0.0 cascade D3.6: Queue parity for the Spmc 1p<C>c set.
+    # Queue parity harness for the Spmc 1p<C>c set.
     runQBoundedSpmcShape[MpmcCapacity, 1, uint64](
       em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
     runQBoundedSpmcShape[MpmcCapacity, 2, uint64](

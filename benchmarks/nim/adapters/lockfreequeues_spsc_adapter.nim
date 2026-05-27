@@ -1,14 +1,13 @@
 ## Adapter for lockfreequeues Spsc-equivalent (bounded SPSC).
 ##
-## Renamed from `lockfreequeues_spsc.nim` in PR 0 Task 0.9 per design
-## section 2.2 (`<library_slug>_adapter.nim`). `topologiesSupported` is
-## exported here for PR 3 Task 3.11 consumption.
+## File naming follows the `<library_slug>_adapter.nim` convention.
+## `topologiesSupported` is exported here for the bench-driver registry.
 ##
-## v5.0.0 cascade: the legacy `Spsc[N, T]` type was deleted in
-## 3.3.7 in favour of the unified `Queue[T, ccSingle, ccSingle, stEager,
-## rkNone, N, 0, 0, 0, 0]` generic. The adapter surface (`push`, `pop`,
-## `name`, the `init*Adapter` factory) is preserved verbatim so bench
-## drivers do not need to be re-wired.
+## The legacy `Spsc[N, T]` type has been removed in favour of the
+## unified `Queue[T, ccSingle, ccSingle, stEager, rkNone, N, 0, 0, 0,
+## 0]` generic. The adapter surface (`push`, `pop`, `name`, the
+## `init*Adapter` factory) is preserved verbatim so bench drivers do
+## not need to be re-wired.
 
 import options
 import lockfreequeues

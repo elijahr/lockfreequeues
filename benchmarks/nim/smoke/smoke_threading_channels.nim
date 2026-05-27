@@ -1,6 +1,6 @@
 ## Compile-and-run smoke for the ``threading.Chan`` adapter.
 ##
-## Used by ``bench.yml`` (Track 4 §4.7) as a sanity check that the
+## Used by ``bench.yml`` as a sanity check that the
 ## ``nimble install threading`` step succeeded and that the package's
 ## channel module is resolvable + functional under ``--threads:on``.
 ##

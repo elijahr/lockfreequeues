@@ -12,9 +12,9 @@
 ## the init thread). Multi-thread shapes register additional
 ## producers/consumers per-thread inside the bench harness.
 ##
-## v5.0.0 cascade: the legacy `UnboundedMpmc[S, T, MT]` type was
-## deleted in 3.3.7. The smart-constructor `newUnboundedMpmcQueue` and
-## queue-side `getProducer()` / `getConsumer()` replace the legacy
+## The legacy `UnboundedMpmc[S, T, MT]` type has been removed. The
+## smart-constructor `newUnboundedMpmcQueue` and queue-side
+## `getProducer()` / `getConsumer()` replace the legacy
 ## `newUnboundedMpmc(...)` + `queue.getProducer(handle)` /
 ## `queue.getConsumer(handle)` plumbing.
 

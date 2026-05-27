@@ -1,8 +1,8 @@
 ## Compile-and-run smoke for the Boost.LockFree adapters.
 ##
-## Used by ``bench.yml`` (Track 3 §3.12) as a sanity check that the apt-
-## installed ``libboost-dev`` headers are present and resolvable, before
-## the full bench binaries run with the same defines.
+## Used by ``bench.yml`` as a sanity check that the apt-installed
+## ``libboost-dev`` headers are present and resolvable, before the
+## full bench binaries run with the same defines.
 ##
 ## Build:
 ##   nim cpp -d:adapter_boost_lockfree_queue_available \

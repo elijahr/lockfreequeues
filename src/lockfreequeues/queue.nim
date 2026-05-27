@@ -284,9 +284,9 @@ type
       itemCount*: Atomic[int]
       segments*: Atomic[int]
     else:
-      # Debra-integrated body. Manager CC is gated on `ccCons`
-      # (Step 3.3.4.5 soundness fix): nim-debra `cardinality.nim`
-      # REQUIRES `ccMulti` for consumer pins on multi-consumer queues.
+      # Debra-integrated body. Manager CC is gated on `ccCons`:
+      # nim-debra `cardinality.nim` REQUIRES `ccMulti` for consumer
+      # pins on multi-consumer queues.
       when ccCons == ccMulti:
         manager*: ptr DebraManager[MaxThreads, debra.ccMulti]
       else:
@@ -371,7 +371,7 @@ type
     idx*: int
     queue*: ptr Queue[T, ccProd, ccCons, ST, S, MaxThreads]
     when ccProd == ccMulti:
-      # Producer.handle CC follows the manager (Step 3.3.4.5).
+      # Producer.handle CC follows the manager.
       when ccCons == ccMulti:
         handle*: ThreadHandle[MaxThreads, debra.ccMulti]
       else:

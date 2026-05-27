@@ -1,7 +1,7 @@
-## Bounded MPSC throughput bench (Track 2 PR 2 Task 2.4).
+## Bounded MPSC throughput bench.
 ##
-## Splits the MPSC slice out of the legacy bench_throughput.nim into a
-## standalone binary. Covers Mpsc at `{1,2,4}p1c`. Mpsc requires
+## Standalone binary for the MPSC slice, split out of the legacy
+## bench_throughput.nim. Covers Mpsc at `{1,2,4}p1c`. Mpsc requires
 ## per-thread `Producer` objects obtained via `queue.getProducer(idx)`
 ## with an explicit `idx`; we pre-assign indices 0..P-1 on the main
 ## thread and pass the Producer values to the worker threads, mirroring
@@ -18,22 +18,21 @@
 import std/[monotimes, options, os, parseopt, sets, strformat, syncio, times]
 import ./bench_common
 import lockfreequeues/backoff
-# v5.0.0 cascade Step 3.3.8c: the legacy `lockfreequeues/mpsc` module
-# was deleted in 3.3.7; the "mpsc" variant below now drives the unified
+# The legacy `lockfreequeues/mpsc` module has been deleted; the "mpsc"
+# variant below now drives the unified
 # `BQueue[T, ccMulti, ccSingle, N, P, 0]` generic
 # via the smart-constructor `newMpscQueue` / `initQueue`. The legacy
 # variant slug + measure shape are preserved verbatim; the queue_bounded
 # parity variant below uses the same underlying generic at the same
 # Queue instantiation (semantically redundant post-deletion but kept so
-# the B3 cascade slug set remains stable across the 3.3 implementation
-# steps).
+# the historical slug set remains stable for downstream consumers).
 import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/internal/pinscope_stub
 
-# PR 4 comparison adapter (Track 4 §4.6). Nim's stdlib system.Channel
-# wired here under the MPSC slot. Blocking-on-full producer; see the
-# adapter file for the apples-to-oranges fairness caveat.
+# Comparison adapter: Nim's stdlib system.Channel wired here under the
+# MPSC slot. Blocking-on-full producer; see the adapter file for the
+# apples-to-oranges fairness caveat.
 when defined(adapter_nim_channel_available):
   import ./adapters/nim_channel_adapter
 
@@ -165,7 +164,7 @@ proc runMpscShape[N, P: static int; T](
   echo ""
   em.addMeasure(slug, "throughput_ops_ms", m, m - s, m + s)
 
-# ---------- v5.0.0 cascade D3.6: BQueue-based MPSC parity harness ----------
+# ---------- BQueue-based MPSC parity harness ----------
 #
 # Parallel to the Mpsc harness above, but exercises the unified
 # `BQueue[uint64, ccMulti, ccSingle, N, P, 0]`

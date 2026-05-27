@@ -14,10 +14,10 @@
 ## /Users/eek/.local/spellbook/docs/Users-eek-Development-lockfreequeues/plans/2026-05-01-bench-rollup-design.md
 ## for the contract.
 ##
-## Task 0.1 ships a compile-only stub: types and proc signatures are
-## final, bodies raise `AssertionDefect` with "not implemented" so
-## downstream tasks (0.2-0.6) can be written and reviewed in parallel
-## while the implementation lands behind them.
+## The initial scaffold shipped as a compile-only stub: types and
+## proc signatures are final, bodies raise `AssertionDefect` with
+## "not implemented" so downstream work can be written and reviewed
+## in parallel while the implementation lands behind them.
 
 import std/[algorithm, atomics, heapqueue, json, math, monotimes, options,
             random, tables, times]

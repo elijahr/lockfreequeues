@@ -1,8 +1,8 @@
 ## Adapter for Nim built-in channels (bounded MPMC).
 ##
 ## Uses the system's Channel[T] type which is automatically available
-## when compiling with --threads:on. `topologiesSupported` exported per
-## design 2.2 (PR 3 Task 3.11 consumes it).
+## when compiling with --threads:on. `topologiesSupported` is exported
+## for the bench-driver registry.
 
 import ../adapter
 from ../bench_common import Topology, tMpmc

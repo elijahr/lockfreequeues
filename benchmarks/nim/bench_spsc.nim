@@ -1,10 +1,10 @@
-## Bounded SPSC throughput bench (Track 2 PR 2 Task 2.3).
+## Bounded SPSC throughput bench.
 ##
-## Splits the SPSC slice out of the legacy bench_throughput.nim into a
-## standalone binary so CI can budget SPSC and MPMC independently
-## (design 2.5; impl plan Track 2). Covers the single Spsc queue at
-## the canonical `1p1c` smoke shape — the Spsc type only supports
-## one producer and one consumer by construction.
+## Standalone binary for the SPSC slice, split out of the legacy
+## bench_throughput.nim so CI can budget SPSC and MPMC independently.
+## Covers the single Spsc queue at the canonical `1p1c` smoke shape
+## — the Spsc type only supports one producer and one consumer by
+## construction.
 ##
 ## Per-binary intdefines (design §2.5):
 ##   -d:BenchSpscRuns=<N>          (default 33)
@@ -17,13 +17,13 @@
 import std/[options, os, parseopt, sets, strformat, syncio]
 import ./bench_common
 import ./adapters/lockfreequeues_spsc_adapter
-# v5.0.0 cascade D3.6.5: consolidated Queue-based parity adapter.
+# Consolidated Queue-based parity adapter.
 import ./adapters/queue_bounded_adapter
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
 
-# MVP comparison adapters (Track 3). Each is included only when its
+# Comparison adapters. Each is included only when its
 # `-d:adapter_<lib>_available` gate is set; absent gate yields no
 # symbol references and the variant is dropped from `SupportedVariants`
 # below via `when declared(...)`.
@@ -80,11 +80,11 @@ proc initSpscQ(capacity: int): SpscAdapter[SpscCapacity, uint64] =
   doAssert capacity == SpscCapacity, "capacity must equal SpscCapacity"
   initSpscAdapter[SpscCapacity, uint64]()
 
-# v5.0.0 cascade D3.6.5: parallel factory via the consolidated
+# Parallel factory via the consolidated
 # QueueBoundedAdapter at SPSC cardinality. Slug
 # `lockfreequeues_queue_bounded_spsc/spsc/1p1c`. Output metric +
 # units (throughput_ops_ms) identical to the legacy spsc baseline
-# so B3 can compute a % delta.
+# so parity tooling can compute a % delta directly.
 proc initQueueBoundedSpscQ(capacity: int):
     QueueBoundedAdapter[ccSingle, ccSingle, stEager,
                         SpscCapacity, 0, 0, uint64] =
@@ -187,12 +187,11 @@ proc runVariant(variant: string, em: var BMFEmitter) =
       metrics.ops_ms_mean + metrics.ops_ms_stddev,
     )
   of "queue_bounded_spsc":
-    # v5.0.0 cascade D3.6: same shape as `spsc` variant above, but
+    # Same shape as the `spsc` variant above, but
     # backed by the unified `BQueue[T, ccSingle, ccSingle, stEager,
     # rkNone, N, 0, 0, 0, 0]` generic via `QueueBoundedAdapter`. Slug +
-    # metric mirror so B3
-    # parity delta is a simple per-shape division across the two
-    # emitted measures.
+    # metric mirror so the parity delta is a simple per-shape division
+    # across the two emitted measures.
     let slug = "lockfreequeues_queue_bounded_spsc/spsc/1p1c"
     echo fmt"{variant} ({slug}):"
     let metrics = runThroughputHarness[

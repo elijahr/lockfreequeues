@@ -15,19 +15,18 @@
 ##                                         in PR 2 via the topology-split
 ##                                         binaries.
 ##
-## v5.0.0 cascade: the legacy `Spmc[N, C, T]` type was deleted in
-## 3.3.7 in favour of the unified `Queue[T, ccSingle, ccMulti, stEager,
-## rkNone, N, 0, C, 0, 0]` generic. The adapter surface (`push`, `pop`,
-## `getConsumer`, the factory) is preserved verbatim.
+## The legacy `Spmc[N, C, T]` type has been removed in favour of the
+## unified `Queue[T, ccSingle, ccMulti, stEager, rkNone, N, 0, C, 0,
+## 0]` generic. The adapter surface (`push`, `pop`, `getConsumer`,
+## the factory) is preserved verbatim.
 
 import options
 import lockfreequeues
 import ../bench_common
 
 const topologiesSupported* = {tMpmc}
-  ## Per design 2.2, Spmc lives under `mpmc` with shapes restricted
-  ## to `1p<C>c`. Exported here for PR 3 Task 3.11 consumption; PR 0
-  ## ships the type but does not yet read it.
+  ## Spmc lives under the `mpmc` topology with shapes restricted to
+  ## `1p<C>c`. Exported here for the bench-driver registry.
 
 type
   SpmcQueue*[N, C: static int, T] =

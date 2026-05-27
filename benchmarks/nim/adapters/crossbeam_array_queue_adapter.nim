@@ -5,8 +5,8 @@
 ## ring-buffer MPMC queue.
 ##
 ## We do not link directly against the Rust library; instead we go through
-## a thin C-ABI cdylib at ``benchmarks/rust/bench-ffi-crossbeam/`` (see
-## ``Track 3 Task 3.8``). The cdylib exports four ``extern "C"`` fns:
+## a thin C-ABI cdylib at ``benchmarks/rust/bench-ffi-crossbeam/``.
+## The cdylib exports four ``extern "C"`` fns:
 ## ``cb_array_init``, ``cb_array_push``, ``cb_array_pop``, ``cb_array_destroy``.
 ##
 ## Topology: ``mpmc`` bounded. ``topologiesSupported = {tMpmc}``.

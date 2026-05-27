@@ -73,8 +73,7 @@ proc tryClaim*[N, P, C: static int, T](
   # PhysicalSlotN[N] is constructed via the validated index() path. The
   # double-mod (here, then again inside index()) is intentional: validate()
   # checks val < 2*N and index() does the final mod. The cost is one extra
-  # mod on the hot path - negligible vs the CAS that follows. See Phase A
-  # open issue #1 in the impl plan.
+  # mod on the hot path - negligible vs the CAS that follows.
   let slot = initRawN[N](int(pos mod uint64(N))).validate().index()
   let s = queue.cells.seqLoad(slot, moAcquire) # P2
   let diff = cast[int64](s) - cast[int64](pos)

@@ -41,28 +41,27 @@ import std/[monotimes, options, os, parseopt, sets, strformat, syncio, times]
 import ./bench_common
 import ./adapters/channels_adapter
 import lockfreequeues/backoff
-# v5.0.0 cascade Step 3.3.8c: the legacy `lockfreequeues/mpmc` module
-# was deleted in 3.3.7; the "mpmc" variant below now drives the unified
+# The legacy `lockfreequeues/mpmc` module has been deleted; the "mpmc"
+# variant below now drives the unified
 # `BQueue[T, ccMulti, ccMulti, N, P, C]` generic
 # via the smart-constructor `newMpmcQueue` / `initQueue`. The legacy
 # variant slug + measure shape are preserved verbatim; the queue_bounded
 # parity variant below uses the same underlying generic at the same
 # Queue instantiation (semantically redundant post-deletion but kept so
-# the B3 cascade slug set remains stable across the 3.3 implementation
-# steps).
+# the historical slug set remains stable for downstream consumers).
 import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/internal/pinscope_stub
 
-# MVP comparison adapters (Track 3). Gated by per-library defines.
+# Comparison adapters, gated by per-library defines.
 when defined(adapter_boost_lockfree_queue_available):
   import ./adapters/boost_lockfree_queue_adapter
 
 when defined(adapter_crossbeam_array_queue_available):
   import ./adapters/crossbeam_array_queue_adapter
 
-# PR 4 comparison adapter (Track 4 §4.6). Nimble threading.Chan
-# wired here under the MPMC slot. Non-blocking trySend/tryRecv.
+# Comparison adapter: Nimble threading.Chan wired here under the MPMC
+# slot. Non-blocking trySend/tryRecv.
 when defined(adapter_threading_channels_available):
   import ./adapters/threading_channels_adapter
 
@@ -213,7 +212,7 @@ proc runMpmcShape[N, P, C: static int; T](
   echo ""
   em.addMeasure(slug, "throughput_ops_ms", m, m - s, m + s)
 
-# ---------- v5.0.0 cascade D3.6: BQueue ccMulti x ccMulti harness ----------
+# ---------- BQueue ccMulti x ccMulti harness ----------
 #
 # Slug `lockfreequeues_queue_bounded_mpmc/mpmc/<P>p<C>c`. Output
 # metric / units (throughput_ops_ms) match the legacy Mpmc baseline.
@@ -466,7 +465,7 @@ proc runVariant(variant: string, em: var BMFEmitter) =
     runMpmcShape[MpmcCapacity, 8, 8, uint64](
       em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
   of "queue_bounded_mpmc":
-    # v5.0.0 cascade D3.6: Queue parity for the full Mpmc shape set.
+    # Queue parity harness for the full Mpmc shape set.
     runQBoundedMpmcShape[MpmcCapacity, 1, 1, uint64](
       em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
     runQBoundedMpmcShape[MpmcCapacity, 1, 2, uint64](

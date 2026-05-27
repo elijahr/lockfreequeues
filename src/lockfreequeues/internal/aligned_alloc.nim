@@ -23,10 +23,9 @@
 ## Both backends are wrapped behind ``allocAligned[T]() / freeAligned(p)`` so
 ## callers don't have to ``when defined(windows):`` at every site.
 ##
-## Compile probe verified at impl-plan time (Task 3.2.0): the C
-## ``posix_memalign`` from ``<stdlib.h>`` is callable from both ``nim c`` and
-## ``nim cpp`` on macOS (libSystem) and Linux glibc, returning 64-byte
-## aligned memory and ``rc == 0`` on success.
+## The C ``posix_memalign`` from ``<stdlib.h>`` is callable from both
+## ``nim c`` and ``nim cpp`` on macOS (libSystem) and Linux glibc,
+## returning 64-byte aligned memory and ``rc == 0`` on success.
 ##
 ## Note: ``std/posix.posix_memalign`` was the first candidate, but on macOS
 ## the Apple SDK declares the first parameter with the

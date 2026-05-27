@@ -31,9 +31,9 @@ import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
 from debra import DebraManager, initDebraManager
 
-# MVP comparison adapters (Track 3 / 4 §4.6). Loony, Crossbeam
-# SegQueue, MoodyCamel are unbounded MPMC; all go through
-# runThroughputHarness over the {1,2,4} P x {1,2,4} C grid.
+# Comparison adapters. Loony, Crossbeam SegQueue, MoodyCamel are
+# unbounded MPMC; all go through runThroughputHarness over the
+# {1,2,4} P x {1,2,4} C grid.
 when defined(adapter_loony_available):
   import ./adapters/loony_adapter
 

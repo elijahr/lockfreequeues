@@ -1,19 +1,18 @@
 ## Adapter for lockfreequeues Mpmc-equivalent (bounded MPMC).
 ##
-## Renamed from `lockfreequeues_mpmc.nim` in PR 0 Task 0.9 per design
-## section 2.2. `topologiesSupported` is exported here for PR 3
-## Task 3.11.
+## File naming follows the `<library_slug>_adapter.nim` convention.
+## `topologiesSupported` is exported here for the bench-driver registry.
 ##
 ## Note: Mpmc-equiv requires using Producer/Consumer views for
 ## push/pop. This adapter manages those internally for single-threaded
 ## testing. For multi-threaded benchmarks, use getProducer/getConsumer
 ## on the underlying queue directly.
 ##
-## v5.0.0 cascade: the legacy `Mpmc[N, P, C, T]` type was deleted in
-## 3.3.7 in favour of the unified `Queue[T, ccMulti, ccMulti, stEager,
-## rkNone, N, P, C, 0, 0]` generic. The adapter surface
-## (`initMpmcAdapter`, `deinitMpmcAdapter`, `cleanup`, `push`,
-## `pop`, `name`) is preserved verbatim.
+## The legacy `Mpmc[N, P, C, T]` type has been removed in favour of
+## the unified `Queue[T, ccMulti, ccMulti, stEager, rkNone, N, P, C,
+## 0, 0]` generic. The adapter surface (`initMpmcAdapter`,
+## `deinitMpmcAdapter`, `cleanup`, `push`, `pop`, `name`) is
+## preserved verbatim.
 
 import options
 import lockfreequeues

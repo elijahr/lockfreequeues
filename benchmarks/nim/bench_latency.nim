@@ -1,7 +1,7 @@
 ## Latency benchmark: ping-pong RTT between 2 threads.
 ##
-## Track 1 PR 1 — rewritten on top of `bench_common.runLatencyHarness`.
-## Mirrors the bench_throughput CLI surface:
+## Built on top of `bench_common.runLatencyHarness`. Mirrors the
+## bench_throughput CLI surface:
 ##
 ##   bench_latency [--bmf-out=<path>] [<variant>...]
 ##
@@ -18,7 +18,6 @@
 ## Emitted measures per slug:
 ##   latency_p50_ns, latency_p95_ns, latency_p99_ns,
 ##   latency_p999_ns, latency_max_ns
-##   (Track 6 Task 6.1: full p50/p95/p99/p999/max set.)
 ##
 ## Slug shape: `<library_slug>/<topology>/1p1c` per design 2.2 / table at
 ## design line 357.
@@ -29,7 +28,7 @@ import ./adapters/lockfreequeues_spsc_adapter
 import ./adapters/lockfreequeues_spmc_adapter
 import ./adapters/lockfreequeues_mpsc_adapter
 import ./adapters/lockfreequeues_mpmc_adapter
-# v5.0.0 cascade D3.6.5: consolidated Queue-based parity adapter.
+# Consolidated Queue-based parity adapter.
 import ./adapters/queue_bounded_adapter
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
@@ -86,10 +85,11 @@ proc initMpsc(): LockfreequeuesMpscAdapter[LatencyCapacity, 1, uint64] =
 proc initMpmc(): MpmcAdapter[LatencyCapacity, uint64] =
   initMpmcAdapter[LatencyCapacity, uint64]()
 
-# v5.0.0 cascade D3.6.5: consolidated BQueue-based parity factories.
+# Consolidated BQueue-based parity factories.
 # All 4 cardinality combos route through the unified
 # `QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T]` type. Slugs
-# preserve the per-family naming for B3 % delta computation.
+# preserve the per-family naming so parity tooling can compute the
+# % delta directly.
 
 proc initQBoundedSpsc():
     QueueBoundedAdapter[ccSingle, ccSingle, stEager,
@@ -229,11 +229,11 @@ proc runVariant(
   em.addMeasure(slug, "latency_p50_ns", metrics.p50_ns)
   em.addMeasure(slug, "latency_p95_ns", metrics.p95_ns)
   em.addMeasure(slug, "latency_p99_ns", metrics.p99_ns)
-  # Track 6 Task 6.1: emit p999 + max alongside the p50/p95/p99 trio.
+  # Emit p999 + max alongside the p50/p95/p99 trio.
   # Each runLatencyHarness run uses its own Histogram of MessageCount
   # samples (default 100K), and percentiles are averaged across runs;
-  # the harness does NOT union samples across runs. Histogram K=5000
-  # (Task 6.2) sits well above the 100-sample p999 tail at the default
+  # the harness does NOT union samples across runs. The Histogram's
+  # K=5000 top-K reservoir sits well above the 100-sample p999 tail at the default
   # MessageCount and reserves headroom for larger MessageCount overrides
   # before p999 spills into the rescaled-reservoir stratum. max is
   # `percentile(1.0)`, which after sorting the snapshotted top-K returns
