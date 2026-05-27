@@ -4,7 +4,7 @@
 import lockfreequeues/queue
 
 proc main() =
-  var q = newUnboundedSipsicQueue[int, Manual, 8, 4]()
+  var q = newUnboundedSpscQueue[int, Manual, 8, 4]()
   var c: QueueConsumer[int, ccSingle, ccSingle, Manual, 8, 4]
   c.queue = addr q
   c.attach()  # EXPECTED COMPILE ERROR

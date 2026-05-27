@@ -1,7 +1,7 @@
 ## §6.3 condition (3) / brief §3.3: a Queue with `ccCons == ccMulti`
 ## rejects a `ccSingle` DebraManager.
 ##
-## `newUnboundedMupmucQueue` (`ccMulti × ccMulti`) borrow-overload
+## `newUnboundedMpmcQueue` (`ccMulti × ccMulti`) borrow-overload
 ## requires `DebraManager[MT, debra.ccMulti]` per Doc C §3.0.4 / §3.1
 ## (Step 3.3.4.5 soundness fix: consumer-pin CC must be ccMulti for
 ## ccCons == ccMulti). Passing a ccSingle-cardinality manager must
@@ -19,7 +19,7 @@ proc main() =
   # `DebraManager[4, debra.ccSingle]`. Feed it to a ccCons == ccMulti
   # smart-constructor that demands `DebraManager[4, debra.ccMulti]`.
   var manager = initDebraManager[4]()
-  var q = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
+  var q = newUnboundedMpmcQueue[int, stEager, 16, 4](addr manager)
   discard q.segmentCount()
 
 main()

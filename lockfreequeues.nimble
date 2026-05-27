@@ -53,10 +53,10 @@ task test, "Runs the test suite":
 
 task examples, "Runs the examples":
   # Bounded queue examples
-  exec "nim c --threads:on -r -f examples/sipsic.nim"
-  exec "nim c --threads:on -r -f examples/sipmuc.nim"
-  exec "nim c --threads:on -r -f examples/mupsic.nim"
-  exec "nim c --threads:on -r -f examples/mupmuc.nim"
+  exec "nim c --threads:on -r -f examples/spsc.nim"
+  exec "nim c --threads:on -r -f examples/spmc.nim"
+  exec "nim c --threads:on -r -f examples/mpsc.nim"
+  exec "nim c --threads:on -r -f examples/mpmc.nim"
   # Advanced examples
   exec "nim c --threads:on -r -f examples/audio_buffer.nim"
   exec "nim c --threads:on -r -f examples/task_fanout.nim"
@@ -66,10 +66,10 @@ task examples, "Runs the examples":
 task benchmarks, "Runs the benchmark suite":
   # PR 2 (bench-rollup) replaced bench_throughput.nim with topology-
   # split binaries. v5.0.0 B3 further split the MPMC binary into a
-  # per-family pair (bench_mpmc_mupmuc + bench_mpmc_sipmuc) to remove
+  # per-family pair (bench_mpmc_bounded + bench_spmc_bounded) to remove
   # cross-family iCache contention; v5.0.0 3.3.9-D applied the same
   # mitigation to the unbounded binary, fanning it out into four
-  # per-family binaries (bench_unbounded_{sipsic,sipmuc,mupsic,mupmuc}).
+  # per-family binaries (bench_unbounded_{spsc,spmc,mpsc,mpmc}).
   # See the bench_mpmc_*.nim and bench_unbounded_*.nim headers for the
   # diagnostic that motivated each split. Each binary emits its own
   # Bencher Metric Format JSON fragment; merge_bmf.py unions them into
@@ -78,9 +78,9 @@ task benchmarks, "Runs the benchmark suite":
   mkDir "benchmarks/results"
   for binName in [
     "bench_spsc", "bench_mpsc",
-    "bench_mpmc_mupmuc", "bench_mpmc_sipmuc",
-    "bench_unbounded_sipsic", "bench_unbounded_sipmuc",
-    "bench_unbounded_mupsic", "bench_unbounded_mupmuc",
+    "bench_mpmc_bounded", "bench_spmc_bounded",
+    "bench_unbounded_spsc", "bench_unbounded_spmc",
+    "bench_unbounded_mpsc", "bench_unbounded_mpmc",
     "bench_latency",
   ]:
     exec "nim c -d:release --threads:on benchmarks/nim/" & binName & ".nim"
@@ -89,12 +89,12 @@ task benchmarks, "Runs the benchmark suite":
   exec "python3 benchmarks/merge_bmf.py benchmarks/results/latest.json " &
        "benchmarks/results/bench_spsc.json " &
        "benchmarks/results/bench_mpsc.json " &
-       "benchmarks/results/bench_mpmc_mupmuc.json " &
-       "benchmarks/results/bench_mpmc_sipmuc.json " &
-       "benchmarks/results/bench_unbounded_sipsic.json " &
-       "benchmarks/results/bench_unbounded_sipmuc.json " &
-       "benchmarks/results/bench_unbounded_mupsic.json " &
-       "benchmarks/results/bench_unbounded_mupmuc.json " &
+       "benchmarks/results/bench_mpmc_bounded.json " &
+       "benchmarks/results/bench_spmc_bounded.json " &
+       "benchmarks/results/bench_unbounded_spsc.json " &
+       "benchmarks/results/bench_unbounded_spmc.json " &
+       "benchmarks/results/bench_unbounded_mpsc.json " &
+       "benchmarks/results/bench_unbounded_mpmc.json " &
        "benchmarks/results/bench_latency.json"
 
 
@@ -122,7 +122,7 @@ task benchteststress, "Runs the bench harness test suite including 3.3M-sample s
 
 # task `stresstests` removed in v5.0.0 (3.3.11-B.4.2). The 9 legacy
 # `stress-tests/t_*_threaded.nim` files referenced the per-family
-# aliases (`Mupmuc[N, P, C, T]`, `Sipmuc[N, C, T]`, etc.) and the
+# aliases (`Mpmc[N, P, C, T]`, `Spmc[N, C, T]`, etc.) and the
 # pre-DEBRA EpochManager API. Rewiring 1,197 LOC to the new
 # BQueue/Queue surface with the attach/detach Claim-state idiom was
 # multi-hour scope (well beyond the v5.0.0 wrap-up budget). Per Bundle

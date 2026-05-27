@@ -81,7 +81,7 @@ def parse_slug(slug: str) -> dict | None:
 # not need to come from a real bench run.
 SAMPLE_BMF: dict = {
     # spsc
-    "lockfreequeues_sipsic/spsc/1p1c": {
+    "lockfreequeues_spsc/spsc/1p1c": {
         "throughput_ops_ms": {
             "value": 8123.4, "lower_value": 8000.0, "upper_value": 8246.8,
         },
@@ -95,7 +95,7 @@ SAMPLE_BMF: dict = {
         "throughput_ops_ms": {"value": 5400.0},
     },
     # mpsc
-    "lockfreequeues_mupsic/mpsc/2p1c": {
+    "lockfreequeues_mpsc/mpsc/2p1c": {
         "throughput_ops_ms": {
             "value": 6800.0, "lower_value": 6700.0, "upper_value": 6900.0,
         },
@@ -104,18 +104,18 @@ SAMPLE_BMF: dict = {
         "throughput_ops_ms": {"value": 1200.0},
     },
     # mpmc bounded
-    "lockfreequeues_mupmuc/mpmc/1p1c": {
+    "lockfreequeues_mpmc/mpmc/1p1c": {
         "throughput_ops_ms": {
             "value": 6280.5, "lower_value": 6200.0, "upper_value": 6361.0,
         },
         "latency_p99_ns": {"value": 871.0},
     },
-    "lockfreequeues_mupmuc/mpmc/2p2c": {
+    "lockfreequeues_mpmc/mpmc/2p2c": {
         "throughput_ops_ms": {
             "value": 7411.0, "lower_value": 7400.0, "upper_value": 7422.0,
         },
     },
-    "lockfreequeues_mupmuc/mpmc/4p4c": {
+    "lockfreequeues_mpmc/mpmc/4p4c": {
         "throughput_ops_ms": {"value": 4912.0},
     },
     "boost_lockfree_queue/mpmc/1p1c": {
@@ -128,15 +128,15 @@ SAMPLE_BMF: dict = {
         "throughput_ops_ms": {"value": 950.0},
     },
     # spsc_unbounded
-    "lockfreequeues_unbounded_sipsic/spsc_unbounded/1p1c": {
+    "lockfreequeues_unbounded_spsc/spsc_unbounded/1p1c": {
         "throughput_ops_ms": {"value": 7100.0},
     },
     # mpsc_unbounded
-    "lockfreequeues_unbounded_mupsic/mpsc_unbounded/2p1c": {
+    "lockfreequeues_unbounded_mpsc/mpsc_unbounded/2p1c": {
         "throughput_ops_ms": {"value": 5900.0},
     },
     # mpmc_unbounded
-    "lockfreequeues_unbounded_mupmuc/mpmc_unbounded/4p4c": {
+    "lockfreequeues_unbounded_mpmc/mpmc_unbounded/4p4c": {
         "throughput_ops_ms": {"value": 1024.0},
     },
     "loony/mpmc_unbounded/4p4c": {
@@ -213,8 +213,8 @@ class ChartContractTests(unittest.TestCase):
         self.assertTrue(seen, "fixture must contain at least one throughput slug")
 
     def test_parse_slug_extracts_library_topology_shape(self) -> None:
-        parsed = parse_slug("lockfreequeues_mupmuc/mpmc/4p4c")
-        self.assertEqual(parsed["library"], "lockfreequeues_mupmuc")
+        parsed = parse_slug("lockfreequeues_mpmc/mpmc/4p4c")
+        self.assertEqual(parsed["library"], "lockfreequeues_mpmc")
         self.assertEqual(parsed["topology"], "mpmc")
         self.assertEqual(parsed["shape"], "4p4c")
         self.assertEqual(parsed["p"], 4)
@@ -329,14 +329,14 @@ class ChartContractTests(unittest.TestCase):
         self.assertEqual(
             lfq_family,
             [
-                "lockfreequeues_mupmuc",
-                "lockfreequeues_mupsic",
-                "lockfreequeues_sipmuc",
-                "lockfreequeues_sipsic",
-                "lockfreequeues_unbounded_mupmuc",
-                "lockfreequeues_unbounded_mupsic",
-                "lockfreequeues_unbounded_sipmuc",
-                "lockfreequeues_unbounded_sipsic",
+                "lockfreequeues_mpmc",
+                "lockfreequeues_mpsc",
+                "lockfreequeues_spmc",
+                "lockfreequeues_spsc",
+                "lockfreequeues_unbounded_mpmc",
+                "lockfreequeues_unbounded_mpsc",
+                "lockfreequeues_unbounded_spmc",
+                "lockfreequeues_unbounded_spsc",
             ],
             "LIBRARY_COLORS must cover all 8 lockfreequeues_* family members",
         )

@@ -29,22 +29,22 @@ lockfreequeues/
 
 ### `src/lockfreequeues/` — the public API
 
-v5 collapsed the v4 per-family files (`sipsic.nim`, `mupsic.nim`,
-`unbounded_sipsic.nim`, etc.) into two unified generic types
+v5 collapsed the v4 per-family files (`spsc.nim`, `mpsc.nim`,
+`unbounded_spsc.nim`, etc.) into two unified generic types
 parameterised on cardinality phantoms:
 
 - `bqueue.nim` — bounded `BQueue[T, ccProd, ccCons, N, P, C]` with
   phantom cardinality typestates (`ccSingle` / `ccMulti`) on the
   producer and consumer axes. Family-named smart constructors
-  (`newSipsicQueue`, `newMupsicQueue`, `newSipmucQueue`,
-  `newMupmucQueue`) wrap the unified `newBQueue` ctor with the right
+  (`newSpscQueue`, `newMpscQueue`, `newSpmcQueue`,
+  `newMpmcQueue`) wrap the unified `newBQueue` ctor with the right
   phantom arguments.
 - `queue.nim` — unbounded `Queue[T, ccProd, ccCons, ST, S, MaxThreads]`
   with a deallocation-strategy phantom `ST` (`stEager` /
   `stManual`, defaulting to `DefaultDeallocationStrategy`). Family-named
-  smart constructors (`newUnboundedSipsicQueue`,
-  `newUnboundedMupsicQueue`, `newUnboundedSipmucQueue`,
-  `newUnboundedMupmucQueue`) match the bounded pattern. The SPSC variant
+  smart constructors (`newUnboundedSpscQueue`,
+  `newUnboundedMpscQueue`, `newUnboundedSpmcQueue`,
+  `newUnboundedMpmcQueue`) match the bounded pattern. The SPSC variant
   skips the debra manager allocation; the others use nim-debra EBR for
   segment reclamation.
 - `typestates/` — typestate scaffolding for the per-slot state machine
@@ -72,7 +72,7 @@ its threading dependencies do not leak into the regular test suite;
 
 `tests/test.nim` imports every individual test module and is the entry
 point for `nimble test`. The convention: one module per logical surface
-(`t_sipsic.nim`, `t_mupsic.nim`, `t_unbounded_mupmuc.nim`, etc.), with
+(`t_spsc.nim`, `t_mpsc.nim`, `t_unbounded_mpmc.nim`, etc.), with
 threaded variants in `*_threaded.nim` files. Tests use `unittest2`.
 
 ## Testing workflow
@@ -122,7 +122,7 @@ and is opt-in (~10-15 s release).
 For tight iteration, point Nim straight at one file:
 
 ```sh
-nim c --threads:on -r tests/t_sipsic.nim
+nim c --threads:on -r tests/t_spsc.nim
 ```
 
 Add flags as needed: `-d:release` for speed,
@@ -135,7 +135,7 @@ debug a TSAN report.
 New behaviour goes in a focused `t_<feature>.nim` and gets imported
 from `tests/test.nim`. Keep tests deterministic: the multi-threaded
 suites use bounded loops with timeouts rather than "wait for it to
-settle". Follow the pattern in `t_mupsic_threaded.nim` for the
+settle". Follow the pattern in `t_mpsc_threaded.nim` for the
 producer / consumer thread plumbing.
 
 ## Documentation workflow

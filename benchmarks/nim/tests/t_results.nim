@@ -19,13 +19,13 @@ suite "Results JSON":
 
   test "benchmark result to json":
     let r = BenchmarkResult(
-      implementation: "lockfreequeues/Sipsic",
+      implementation: "lockfreequeues/Spsc",
       language: "nim",
       version: "3.1.0",
       threadConfig: "1P/1C"
     )
     let j = r.toJson
-    check j["implementation"].getStr == "lockfreequeues/Sipsic"
+    check j["implementation"].getStr == "lockfreequeues/Spsc"
     check j["thread_config"].getStr == "1P/1C"
 
   test "metadata contains cores":

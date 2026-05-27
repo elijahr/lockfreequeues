@@ -15,18 +15,18 @@ By default, `lockfreequeues` requires queue item types to be lock-free.
 import lockfreequeues
 
 # These work — lock-free types.
-var q1 = newUnboundedSipsicQueue[int, stEager, 64, 4]()
-var q2 = newUnboundedSipsicQueue[uint64, stEager, 64, 4]()
-var q3 = newUnboundedSipsicQueue[pointer, stEager, 64, 4]()
+var q1 = newUnboundedSpscQueue[int, stEager, 64, 4]()
+var q2 = newUnboundedSpscQueue[uint64, stEager, 64, 4]()
+var q3 = newUnboundedSpscQueue[pointer, stEager, 64, 4]()
 
 type NodeObj = object
   value: int
-var q4 = newUnboundedSipsicQueue[ptr NodeObj, stEager, 64, 4]()
+var q4 = newUnboundedSpscQueue[ptr NodeObj, stEager, 64, 4]()
 
 # This fails on arc/orc — `ref` uses spinlocks for refcounting.
 type Node = ref object
   value: int
-var q5 = newUnboundedSipsicQueue[Node, stEager, 64, 4]()  # Compile error
+var q5 = newUnboundedSpscQueue[Node, stEager, 64, 4]()  # Compile error
 ```
 
 ### Why this matters
@@ -67,13 +67,13 @@ nim c -r --mm:orc  tests/mytest.nim
 
 ## Queue-level guarantees
 
-- **Bounded queues** (the `BQueue` generic, via `newSipsicQueue` /
-  `newSipmucQueue` / `newMupsicQueue` / `newMupmucQueue`) are ring buffers
+- **Bounded queues** (the `BQueue` generic, via `newSpscQueue` /
+  `newSpmcQueue` / `newMpscQueue` / `newMpmcQueue`) are ring buffers
   with compile-time capacity. SPSC operations are wait-free; SPMC, MPSC, and
   MPMC shapes are lock-free on the contended side.
-- **Unbounded queues** (the `Queue` generic, via `newUnboundedSipsicQueue` /
-  `newUnboundedSipmucQueue` / `newUnboundedMupsicQueue` /
-  `newUnboundedMupmucQueue`) are linked segments. The multi-cardinality
+- **Unbounded queues** (the `Queue` generic, via `newUnboundedSpscQueue` /
+  `newUnboundedSpmcQueue` / `newUnboundedMpscQueue` /
+  `newUnboundedMpmcQueue`) are linked segments. The multi-cardinality
   unbounded shapes use [DEBRA](https://github.com/elijahr/nim-debra) to
   reclaim retired segments safely.
 - All multi-producer / multi-consumer queues publish a slot's data with a

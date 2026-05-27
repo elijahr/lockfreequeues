@@ -43,17 +43,17 @@ asterisk in mind.
 If your bottleneck is **single-producer single-consumer with a known capacity**
 — an audio callback handing buffers to a render thread, a GPU command queue,
 a network read loop feeding a worker — the bounded SPSC queue
-(`newSipsicQueue`) is wait-free on both sides and clears around 7,600 ops/ms
+(`newSpscQueue`) is wait-free on both sides and clears around 7,600 ops/ms
 at `1p1c` on `ubuntu-latest`. There's no adapter for `system/Channel` at SPSC
 so the fixture has no head-to-head number against it, but the wait-free
 progress guarantee alone usually settles it.
 
 If your bottleneck is **multi-producer multi-consumer at high contention** —
 a job scheduler with dozens of producer threads, an event collector
-funneling from many sources — the bounded MPMC queue (`newMupmucQueue`) is
+funneling from many sources — the bounded MPMC queue (`newMpmcQueue`) is
 the right call. At `4p4c` it sustains around 18,200 ops/ms in the fixture,
 against 1,720 ops/ms for `system/Channel` at the same shape — roughly 10.6x
-faster. The bounded MPSC queue (`newMupsicQueue`) shows a similar gap (about
+faster. The bounded MPSC queue (`newMpscQueue`) shows a similar gap (about
 3.7x at `4p1c`) when only the producer side fans out.
 
 When NOT to reach for lockfreequeues:
@@ -108,14 +108,14 @@ matching family-named smart constructor.
 
 | Slug family                       | Topology      | Constructor               | Kind      |
 |-----------------------------------|---------------|---------------------------|-----------|
-| `lockfreequeues_sipsic`           | SPSC          | `newSipsicQueue`          | bounded   |
-| `lockfreequeues_sipmuc`           | SPMC (MPMC slug grid) | `newSipmucQueue`  | bounded   |
-| `lockfreequeues_mupsic`           | MPSC          | `newMupsicQueue`          | bounded   |
-| `lockfreequeues_mupmuc`           | MPMC          | `newMupmucQueue`          | bounded   |
-| `lockfreequeues_unbounded_sipsic` | SPSC          | `newUnboundedSipsicQueue` | unbounded |
-| `lockfreequeues_unbounded_sipmuc` | SPMC          | `newUnboundedSipmucQueue` | unbounded |
-| `lockfreequeues_unbounded_mupsic` | MPSC          | `newUnboundedMupsicQueue` | unbounded |
-| `lockfreequeues_unbounded_mupmuc` | MPMC          | `newUnboundedMupmucQueue` | unbounded |
+| `lockfreequeues_spsc`           | SPSC          | `newSpscQueue`          | bounded   |
+| `lockfreequeues_spmc`           | SPMC (MPMC slug grid) | `newSpmcQueue`  | bounded   |
+| `lockfreequeues_mpsc`           | MPSC          | `newMpscQueue`          | bounded   |
+| `lockfreequeues_mpmc`           | MPMC          | `newMpmcQueue`          | bounded   |
+| `lockfreequeues_unbounded_spsc` | SPSC          | `newUnboundedSpscQueue` | unbounded |
+| `lockfreequeues_unbounded_spmc` | SPMC          | `newUnboundedSpmcQueue` | unbounded |
+| `lockfreequeues_unbounded_mpsc` | MPSC          | `newUnboundedMpscQueue` | unbounded |
+| `lockfreequeues_unbounded_mpmc` | MPMC          | `newUnboundedMpmcQueue` | unbounded |
 
 A `lockfreequeues_queue_bounded_*` parity slug is emitted alongside each
 bounded family — it drives the same `BQueue` generic and exists only to

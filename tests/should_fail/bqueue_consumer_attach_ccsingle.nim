@@ -9,7 +9,7 @@
 import lockfreequeues/bqueue
 
 proc main() =
-  var q = newSipsicQueue[int, 8]()
+  var q = newSpscQueue[int, 8]()
   var c: BQueueConsumer[int, ccSingle, ccSingle, 8, 0, 0]
   c.queue = addr q
   c.attach()  # EXPECTED COMPILE ERROR

@@ -2,8 +2,8 @@
 ##
 ## Splits the SPSC slice out of the legacy bench_throughput.nim into a
 ## standalone binary so CI can budget SPSC and MPMC independently
-## (design 2.5; impl plan Track 2). Covers the single Sipsic queue at
-## the canonical `1p1c` smoke shape — the Sipsic type only supports
+## (design 2.5; impl plan Track 2). Covers the single Spsc queue at
+## the canonical `1p1c` smoke shape — the Spsc type only supports
 ## one producer and one consumer by construction.
 ##
 ## Per-binary intdefines (design §2.5):
@@ -12,11 +12,11 @@
 ##   -d:BenchSpscWarmup=<N>        (default 3)
 ##
 ## Emitted measure per slug: `throughput_ops_ms` (mean, lower=mean-1σ,
-## upper=mean+1σ). Slug shape: `lockfreequeues_sipsic/spsc/1p1c`.
+## upper=mean+1σ). Slug shape: `lockfreequeues_spsc/spsc/1p1c`.
 
 import std/[options, os, parseopt, sets, strformat, syncio]
 import ./bench_common
-import ./adapters/lockfreequeues_sipsic_adapter
+import ./adapters/lockfreequeues_spsc_adapter
 # v5.0.0 cascade D3.6.5: consolidated Queue-based parity adapter.
 import ./adapters/queue_bounded_adapter
 import lockfreequeues/strategy
@@ -74,18 +74,18 @@ when defined(BenchSpscTestCompileTime):
 const SpscCapacity = 1024
 
 # Variant queueInit closure. `runThroughputHarness` takes a
-# `proc(capacity: int): Q` factory; SipsicAdapter ignores the runtime
+# `proc(capacity: int): Q` factory; SpscAdapter ignores the runtime
 # capacity arg in favor of its static parameter.
-proc initSipsicQ(capacity: int): SipsicAdapter[SpscCapacity, uint64] =
+proc initSpscQ(capacity: int): SpscAdapter[SpscCapacity, uint64] =
   doAssert capacity == SpscCapacity, "capacity must equal SpscCapacity"
-  initSipsicAdapter[SpscCapacity, uint64]()
+  initSpscAdapter[SpscCapacity, uint64]()
 
 # v5.0.0 cascade D3.6.5: parallel factory via the consolidated
 # QueueBoundedAdapter at SPSC cardinality. Slug
-# `lockfreequeues_queue_bounded_sipsic/spsc/1p1c`. Output metric +
-# units (throughput_ops_ms) identical to the legacy sipsic baseline
+# `lockfreequeues_queue_bounded_spsc/spsc/1p1c`. Output metric +
+# units (throughput_ops_ms) identical to the legacy spsc baseline
 # so B3 can compute a % delta.
-proc initQueueBoundedSipsicQ(capacity: int):
+proc initQueueBoundedSpscQ(capacity: int):
     QueueBoundedAdapter[ccSingle, ccSingle, stEager,
                         SpscCapacity, 0, 0, uint64] =
   doAssert capacity == SpscCapacity, "capacity must equal SpscCapacity"
@@ -118,7 +118,7 @@ when defined(adapter_liblfds_available):
 # MVP variants are added to SupportedVariants only when the matching
 # adapter symbol is in scope (i.e. its compile-time gate is set).
 proc supportedVariantsList(): seq[string] {.compileTime.} =
-  result = @["sipsic", "queue_bounded_sipsic"]
+  result = @["spsc", "queue_bounded_spsc"]
   when declared(initBoostSpscQ):
     result.add("boost_lockfree_spsc")
   when declared(initAtomicQueueQ):
@@ -139,7 +139,7 @@ proc runMvpVariant[A](
     capacity: int,
 ) =
   ## Generic emitter for MVP comparison adapters: 1p1c throughput at
-  ## the same shape as the in-tree sipsic baseline so Bencher can compare
+  ## the same shape as the in-tree spsc baseline so Bencher can compare
   ## across libraries on identical work.
   echo fmt"{slug}:"
   let metrics = runThroughputHarness[A](
@@ -164,11 +164,11 @@ proc runMvpVariant[A](
 
 proc runVariant(variant: string, em: var BMFEmitter) =
   case variant
-  of "sipsic":
-    let slug = "lockfreequeues_sipsic/spsc/1p1c"
+  of "spsc":
+    let slug = "lockfreequeues_spsc/spsc/1p1c"
     echo fmt"{variant} ({slug}):"
-    let metrics = runThroughputHarness[SipsicAdapter[SpscCapacity, uint64]](
-      queueInit = initSipsicQ,
+    let metrics = runThroughputHarness[SpscAdapter[SpscCapacity, uint64]](
+      queueInit = initSpscQ,
       capacity = SpscCapacity,
       numProducers = 1,
       numConsumers = 1,
@@ -186,19 +186,19 @@ proc runVariant(variant: string, em: var BMFEmitter) =
       metrics.ops_ms_mean - metrics.ops_ms_stddev,
       metrics.ops_ms_mean + metrics.ops_ms_stddev,
     )
-  of "queue_bounded_sipsic":
-    # v5.0.0 cascade D3.6: same shape as `sipsic` variant above, but
+  of "queue_bounded_spsc":
+    # v5.0.0 cascade D3.6: same shape as `spsc` variant above, but
     # backed by the unified `BQueue[T, ccSingle, ccSingle, stEager,
     # rkNone, N, 0, 0, 0, 0]` generic via `QueueBoundedAdapter`. Slug +
     # metric mirror so B3
     # parity delta is a simple per-shape division across the two
     # emitted measures.
-    let slug = "lockfreequeues_queue_bounded_sipsic/spsc/1p1c"
+    let slug = "lockfreequeues_queue_bounded_spsc/spsc/1p1c"
     echo fmt"{variant} ({slug}):"
     let metrics = runThroughputHarness[
         QueueBoundedAdapter[ccSingle, ccSingle, stEager,
                             SpscCapacity, 0, 0, uint64]](
-      queueInit = initQueueBoundedSipsicQ,
+      queueInit = initQueueBoundedSpscQ,
       capacity = SpscCapacity,
       numProducers = 1,
       numConsumers = 1,

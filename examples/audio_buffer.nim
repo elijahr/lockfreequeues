@@ -1,6 +1,6 @@
 ## Audio Buffer Example
 ##
-## Demonstrates using a bounded Sipsic (SPSC) queue for real-time audio processing.
+## Demonstrates using a bounded Spsc (SPSC) queue for real-time audio processing.
 ## The producer thread captures audio samples, the consumer thread plays them.
 ##
 ## Key properties:
@@ -32,7 +32,7 @@ type
     timestamp: int64
 
 var
-  q = newSipsicQueue[AudioSample, BufferSize]()
+  q = newSpscQueue[AudioSample, BufferSize]()
   running: Atomic[bool]
   samplesProduced: Atomic[int]
   samplesConsumed: Atomic[int]

@@ -2,9 +2,9 @@
 """Slug-set superset deletion-safety check (Track 2 PR 2 Task 2.7).
 
 Verifies the post-split BMF (the union of `bench_spsc / bench_mpsc /
-bench_mpmc_mupmuc / bench_mpmc_sipmuc / bench_unbounded_sipsic /
-bench_unbounded_sipmuc / bench_unbounded_mupsic /
-bench_unbounded_mupmuc` outputs merged via `merge_bmf.py`) is a strict
+bench_mpmc_bounded / bench_spmc_bounded / bench_unbounded_spsc /
+bench_unbounded_spmc / bench_unbounded_mpsc /
+bench_unbounded_mpmc` outputs merged via `merge_bmf.py`) is a strict
 superset of the pre-split BMF captured by Task 2.1 from the legacy
 `bench_throughput` binary. v5.0.0 B3 split the `bench_mpmc` slot into
 a per-family pair; v5.0.0 3.3.9-D fanned the `bench_unbounded` slot

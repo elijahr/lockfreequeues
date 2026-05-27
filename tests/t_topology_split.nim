@@ -3,32 +3,32 @@
 ##
 ## Topology-split binaries replace the legacy `bench_throughput.nim`:
 ##
-##   bench_spsc                — Sipsic at `1p1c`.
-##   bench_mpsc                — Mupsic at `{1,2,4}p1c`.
-##   bench_mpmc_mupmuc         — Mupmuc at `{1,2,4}p{1,2,4}c` + `8p8c`
+##   bench_spsc                — Spsc at `1p1c`.
+##   bench_mpsc                — Mpsc at `{1,2,4}p1c`.
+##   bench_mpmc_bounded         — Mpmc at `{1,2,4}p{1,2,4}c` + `8p8c`
 ##                               (issue #15 livelock regression),
-##                               Queue-bounded-mupmuc parity at the same
+##                               Queue-bounded-mpmc parity at the same
 ##                               shapes, channels at `{1,2,4}p{1,2,4}c`.
-##   bench_mpmc_sipmuc         — Sipmuc at `1p{1,2,4}c`,
-##                               Queue-bounded-sipmuc parity at the same
+##   bench_spmc_bounded         — Spmc at `1p{1,2,4}c`,
+##                               Queue-bounded-spmc parity at the same
 ##                               shapes.
-##   bench_unbounded_sipsic    — UnboundedSipsic at `1p1c`.
-##   bench_unbounded_sipmuc    — UnboundedSipmuc at `1p{1,2,4}c`.
-##   bench_unbounded_mupsic    — UnboundedMupsic at `{1,2,4}p1c`.
-##   bench_unbounded_mupmuc    — UnboundedMupmuc at `{1,2,4}p{1,2,4}c`
+##   bench_unbounded_spsc    — UnboundedSpsc at `1p1c`.
+##   bench_unbounded_spmc    — UnboundedSpmc at `1p{1,2,4}c`.
+##   bench_unbounded_mpsc    — UnboundedMpsc at `{1,2,4}p1c`.
+##   bench_unbounded_mpmc    — UnboundedMpmc at `{1,2,4}p{1,2,4}c`
 ##                               (full grid).
 ##   bench_latency             — already shipped in PR 1.
 ##
 ## v5.0.0 B3 split the pre-existing `bench_mpmc` binary into the two
-## per-family binaries above because co-compiling the Mupmuc grid and
-## the Sipmuc shapes produced a cross-family iCache contention artifact
-## (-39.6% on `sipmuc/mpmc/1p1c`; see the bench_mpmc_*.nim headers).
+## per-family binaries above because co-compiling the Mpmc grid and
+## the Spmc shapes produced a cross-family iCache contention artifact
+## (-39.6% on `spmc/mpmc/1p1c`; see the bench_mpmc_*.nim headers).
 ##
 ## v5.0.0 3.3.9-D applied the same mitigation to `bench_unbounded`,
 ## fanning it out into four per-family binaries because co-compiling
 ## all four unbounded families + three MVP adapters into one release
 ## binary produced -17% to -34% throughput regressions on
-## unbounded_mupmuc/2p2c, unbounded_mupsic/2p1c, and unbounded_mupsic/
+## unbounded_mpmc/2p2c, unbounded_mpsc/2p1c, and unbounded_mpsc/
 ## 4p1c in 3.3.9 retry #4 (see the bench_unbounded_*.nim headers).
 ##
 ## The deletion-safety check (Task 2.7) verifies the union of post-split
@@ -49,18 +49,18 @@ const
     RepoRoot / "tests" / "fixtures" / "pre-split-slugs.json"
   BenchSpscSrc = RepoRoot / "benchmarks" / "nim" / "bench_spsc.nim"
   BenchMpscSrc = RepoRoot / "benchmarks" / "nim" / "bench_mpsc.nim"
-  BenchMpmcMupmucSrc =
-    RepoRoot / "benchmarks" / "nim" / "bench_mpmc_mupmuc.nim"
-  BenchMpmcSipmucSrc =
-    RepoRoot / "benchmarks" / "nim" / "bench_mpmc_sipmuc.nim"
-  BenchUnboundedSipsicSrc =
-    RepoRoot / "benchmarks" / "nim" / "bench_unbounded_sipsic.nim"
-  BenchUnboundedSipmucSrc =
-    RepoRoot / "benchmarks" / "nim" / "bench_unbounded_sipmuc.nim"
-  BenchUnboundedMupsicSrc =
-    RepoRoot / "benchmarks" / "nim" / "bench_unbounded_mupsic.nim"
-  BenchUnboundedMupmucSrc =
-    RepoRoot / "benchmarks" / "nim" / "bench_unbounded_mupmuc.nim"
+  BenchMpmcMpmcSrc =
+    RepoRoot / "benchmarks" / "nim" / "bench_mpmc_bounded.nim"
+  BenchMpmcSpmcSrc =
+    RepoRoot / "benchmarks" / "nim" / "bench_spmc_bounded.nim"
+  BenchUnboundedSpscSrc =
+    RepoRoot / "benchmarks" / "nim" / "bench_unbounded_spsc.nim"
+  BenchUnboundedSpmcSrc =
+    RepoRoot / "benchmarks" / "nim" / "bench_unbounded_spmc.nim"
+  BenchUnboundedMpscSrc =
+    RepoRoot / "benchmarks" / "nim" / "bench_unbounded_mpsc.nim"
+  BenchUnboundedMpmcSrc =
+    RepoRoot / "benchmarks" / "nim" / "bench_unbounded_mpmc.nim"
   SupersetCheckScript =
     RepoRoot / "benchmarks" / "scripts" / "superset_check.py"
 
@@ -71,16 +71,16 @@ suite "topology split: pre-split fixture (Task 2.1)":
     check fileExists(PreSplitFixturePath)
     let node = parseJson(readFile(PreSplitFixturePath))
     check node.kind == JObject
-    # Pre-split snapshot covers sipsic + mupmuc + unbounded_mupsic + channels.
+    # Pre-split snapshot covers spsc + mpmc + unbounded_mpsc + channels.
     # The exact count is locked here so future regenerations of the
     # fixture must consciously update this assertion (and the deletion-
     # safety check below) rather than silently shrinking the baseline.
     check node.len >= 11
     # Spot-check three representative slugs from the four variant groups
     # so a corruption of the file is caught early.
-    check node.hasKey("lockfreequeues_sipsic/spsc/1p1c")
-    check node.hasKey("lockfreequeues_mupmuc/mpmc/4p4c")
-    check node.hasKey("lockfreequeues_unbounded_mupsic/mpsc_unbounded/4p1c")
+    check node.hasKey("lockfreequeues_spsc/spsc/1p1c")
+    check node.hasKey("lockfreequeues_mpmc/mpmc/4p4c")
+    check node.hasKey("lockfreequeues_unbounded_mpsc/mpsc_unbounded/4p1c")
     check node.hasKey("nim_channels/mpmc/4p4c")
 
 # ---------- Helpers shared across Tasks 2.3-2.6 ----------
@@ -103,10 +103,10 @@ proc compileBench(src: string, defs: openArray[string], suffix: string): string 
 proc parseBmf(path: string): JsonNode =
   parseJson(readFile(path))
 
-# ---------- Task 2.3: bench_spsc emits sipsic/spsc/1p1c ----------
+# ---------- Task 2.3: bench_spsc emits spsc/spsc/1p1c ----------
 
 suite "topology split: bench_spsc (Task 2.3)":
-  test "compiles + emits BMF containing lockfreequeues_sipsic/spsc/1p1c":
+  test "compiles + emits BMF containing lockfreequeues_spsc/spsc/1p1c":
     let bin = compileBench(BenchSpscSrc, [
       "BenchSpscMessageCount=1000",
       "BenchSpscRuns=2",
@@ -119,16 +119,16 @@ suite "topology split: bench_spsc (Task 2.3)":
     check exitCode == 0
     check fileExists(bmf)
     let node = parseBmf(bmf)
-    check node.hasKey("lockfreequeues_sipsic/spsc/1p1c")
-    let slug = node["lockfreequeues_sipsic/spsc/1p1c"]
+    check node.hasKey("lockfreequeues_spsc/spsc/1p1c")
+    let slug = node["lockfreequeues_spsc/spsc/1p1c"]
     check slug.hasKey("throughput_ops_ms")
     check slug["throughput_ops_ms"]["value"].getFloat() > 0.0
     removeFile(bmf)
 
-# ---------- Task 2.4: bench_mpsc emits mupsic/mpsc/{1,2,4}p1c ----------
+# ---------- Task 2.4: bench_mpsc emits mpsc/mpsc/{1,2,4}p1c ----------
 
 suite "topology split: bench_mpsc (Task 2.4)":
-  test "compiles + emits BMF for mupsic 1p1c, 2p1c, 4p1c":
+  test "compiles + emits BMF for mpsc 1p1c, 2p1c, 4p1c":
     let bin = compileBench(BenchMpscSrc, [
       "BenchMpscMessageCount=1000",
       "BenchMpscRuns=2",
@@ -141,80 +141,80 @@ suite "topology split: bench_mpsc (Task 2.4)":
     check exitCode == 0
     let node = parseBmf(bmf)
     for shape in ["1p1c", "2p1c", "4p1c"]:
-      let slug = "lockfreequeues_mupsic/mpsc/" & shape
+      let slug = "lockfreequeues_mpsc/mpsc/" & shape
       check node.hasKey(slug)
       check node[slug].hasKey("throughput_ops_ms")
       check node[slug]["throughput_ops_ms"]["value"].getFloat() > 0.0
     removeFile(bmf)
 
-# ---------- Task 2.5a: bench_mpmc_mupmuc emits mupmuc grid + channels ----------
+# ---------- Task 2.5a: bench_mpmc_bounded emits mpmc grid + channels ----------
 #
 # v5.0.0 B3 split the original Task 2.5 `bench_mpmc` suite into two
-# per-family suites. The mupmuc binary owns the Mupmuc 4x4 grid + 8p8c
-# oversubscription case, the Queue-bounded-mupmuc parity grid, and the
-# nim_channels {1,2,4}p{1,2,4}c grid (channels match the mupmuc shape
-# set). The sipmuc binary (Task 2.5b below) owns the 3-shape sipmuc set.
+# per-family suites. The mpmc binary owns the Mpmc 4x4 grid + 8p8c
+# oversubscription case, the Queue-bounded-mpmc parity grid, and the
+# nim_channels {1,2,4}p{1,2,4}c grid (channels match the mpmc shape
+# set). The spmc binary (Task 2.5b below) owns the 3-shape spmc set.
 
-suite "topology split: bench_mpmc_mupmuc (Task 2.5a)":
-  test "compiles + emits BMF for mupmuc 4x4 grid + 8p8c + channels {1,2,4}p{1,2,4}c":
-    let bin = compileBench(BenchMpmcMupmucSrc, [
+suite "topology split: bench_mpmc_bounded (Task 2.5a)":
+  test "compiles + emits BMF for mpmc 4x4 grid + 8p8c + channels {1,2,4}p{1,2,4}c":
+    let bin = compileBench(BenchMpmcMpmcSrc, [
       "BenchMpmcMessageCount=1000",
       "BenchMpmcRuns=2",
       "BenchMpmcWarmup=0",
-    ], "mpmc_mupmuc")
-    let bmf = getTempDir() / "bench_mpmc_mupmuc_t25a.json"
+    ], "mpmc_mpmc")
+    let bmf = getTempDir() / "bench_mpmc_bounded_t25a.json"
     if fileExists(bmf): removeFile(bmf)
     let cmd = bin & " --bmf-out=" & bmf
     let (_, exitCode) = execCmdEx(cmd)
     check exitCode == 0
     let node = parseBmf(bmf)
-    # Mupmuc 4x4 grid plus the 8p8c oversubscription case (preserved
+    # Mpmc 4x4 grid plus the 8p8c oversubscription case (preserved
     # from pre-split fixture; #15 livelock regression coverage).
     for p in [1, 2, 4]:
       for c in [1, 2, 4]:
-        let slug = "lockfreequeues_mupmuc/mpmc/" & $p & "p" & $c & "c"
+        let slug = "lockfreequeues_mpmc/mpmc/" & $p & "p" & $c & "c"
         check node.hasKey(slug)
         check node[slug]["throughput_ops_ms"]["value"].getFloat() > 0.0
-    check node.hasKey("lockfreequeues_mupmuc/mpmc/8p8c")
+    check node.hasKey("lockfreequeues_mpmc/mpmc/8p8c")
     # Channels (Nim system Channel) — full {1,2,4}p{1,2,4}c grid.
     for p in [1, 2, 4]:
       for c in [1, 2, 4]:
         let slug = "nim_channels/mpmc/" & $p & "p" & $c & "c"
         check node.hasKey(slug)
         check node[slug]["throughput_ops_ms"]["value"].getFloat() > 0.0
-    # Sipmuc slugs must NOT appear in this binary (they live in
-    # bench_mpmc_sipmuc; co-compiling the two families was the
+    # Spmc slugs must NOT appear in this binary (they live in
+    # bench_spmc_bounded; co-compiling the two families was the
     # iCache-contention regression the split addresses).
-    check (not node.hasKey("lockfreequeues_sipmuc/mpmc/1p1c"))
+    check (not node.hasKey("lockfreequeues_spmc/mpmc/1p1c"))
     removeFile(bmf)
 
-# ---------- Task 2.5b: bench_mpmc_sipmuc emits sipmuc 1p{1,2,4}c ----------
+# ---------- Task 2.5b: bench_spmc_bounded emits spmc 1p{1,2,4}c ----------
 
-suite "topology split: bench_mpmc_sipmuc (Task 2.5b)":
-  test "compiles + emits BMF for sipmuc 1p{1,2,4}c":
-    let bin = compileBench(BenchMpmcSipmucSrc, [
+suite "topology split: bench_spmc_bounded (Task 2.5b)":
+  test "compiles + emits BMF for spmc 1p{1,2,4}c":
+    let bin = compileBench(BenchMpmcSpmcSrc, [
       "BenchMpmcMessageCount=1000",
       "BenchMpmcRuns=2",
       "BenchMpmcWarmup=0",
-    ], "mpmc_sipmuc")
-    let bmf = getTempDir() / "bench_mpmc_sipmuc_t25b.json"
+    ], "mpmc_spmc")
+    let bmf = getTempDir() / "bench_spmc_bounded_t25b.json"
     if fileExists(bmf): removeFile(bmf)
     let cmd = bin & " --bmf-out=" & bmf
     let (_, exitCode) = execCmdEx(cmd)
     check exitCode == 0
     let node = parseBmf(bmf)
-    # Sipmuc — single producer, multi consumer, lives under mpmc per
+    # Spmc — single producer, multi consumer, lives under mpmc per
     # design 2.4.
     for c in [1, 2, 4]:
-      let slug = "lockfreequeues_sipmuc/mpmc/1p" & $c & "c"
+      let slug = "lockfreequeues_spmc/mpmc/1p" & $c & "c"
       check node.hasKey(slug)
       check node[slug]["throughput_ops_ms"]["value"].getFloat() > 0.0
-    # Mupmuc + channels slugs must NOT appear here (split contract).
-    check (not node.hasKey("lockfreequeues_mupmuc/mpmc/1p1c"))
+    # Mpmc + channels slugs must NOT appear here (split contract).
+    check (not node.hasKey("lockfreequeues_mpmc/mpmc/1p1c"))
     check (not node.hasKey("nim_channels/mpmc/1p1c"))
     removeFile(bmf)
 
-# ---------- Task 2.6a: bench_unbounded_sipsic emits sipsic 1p1c ----------
+# ---------- Task 2.6a: bench_unbounded_spsc emits spsc 1p1c ----------
 #
 # v5.0.0 3.3.9-D split the original Task 2.6 `bench_unbounded` suite
 # into four per-family suites (Task 2.6a..2.6d). Each binary owns one
@@ -223,39 +223,39 @@ suite "topology split: bench_mpmc_sipmuc (Task 2.5b)":
 # v5.0.0 B3 mpmc-binary split; see the bench_unbounded_*.nim headers
 # for the iCache-contention diagnostic.
 
-suite "topology split: bench_unbounded_sipsic (Task 2.6a)":
-  test "compiles + emits BMF for unbounded_sipsic 1p1c":
-    let bin = compileBench(BenchUnboundedSipsicSrc, [
-      "UnboundedSipsicMessageCount=500",
-      "UnboundedSipsicRuns=2",
+suite "topology split: bench_unbounded_spsc (Task 2.6a)":
+  test "compiles + emits BMF for unbounded_spsc 1p1c":
+    let bin = compileBench(BenchUnboundedSpscSrc, [
+      "UnboundedSpscMessageCount=500",
+      "UnboundedSpscRuns=2",
       "BenchUnboundedWarmup=0",
-    ], "unbounded_sipsic")
-    let bmf = getTempDir() / "bench_unbounded_sipsic_t26a.json"
+    ], "unbounded_spsc")
+    let bmf = getTempDir() / "bench_unbounded_spsc_t26a.json"
     if fileExists(bmf): removeFile(bmf)
     let cmd = bin & " --bmf-out=" & bmf
     let (_, exitCode) = execCmdEx(cmd)
     check exitCode == 0
     let node = parseBmf(bmf)
-    check node.hasKey("lockfreequeues_unbounded_sipsic/spsc_unbounded/1p1c")
+    check node.hasKey("lockfreequeues_unbounded_spsc/spsc_unbounded/1p1c")
     # Other unbounded families must NOT appear here (split contract).
     check (not node.hasKey(
-      "lockfreequeues_unbounded_sipmuc/mpmc_unbounded/1p1c"))
+      "lockfreequeues_unbounded_spmc/mpmc_unbounded/1p1c"))
     check (not node.hasKey(
-      "lockfreequeues_unbounded_mupsic/mpsc_unbounded/1p1c"))
+      "lockfreequeues_unbounded_mpsc/mpsc_unbounded/1p1c"))
     check (not node.hasKey(
-      "lockfreequeues_unbounded_mupmuc/mpmc_unbounded/1p1c"))
+      "lockfreequeues_unbounded_mpmc/mpmc_unbounded/1p1c"))
     removeFile(bmf)
 
-# ---------- Task 2.6b: bench_unbounded_sipmuc emits sipmuc 1p{1,2,4}c -----
+# ---------- Task 2.6b: bench_unbounded_spmc emits spmc 1p{1,2,4}c -----
 
-suite "topology split: bench_unbounded_sipmuc (Task 2.6b)":
-  test "compiles + emits BMF for unbounded_sipmuc 1p{1,2,4}c":
-    let bin = compileBench(BenchUnboundedSipmucSrc, [
-      "UnboundedSipmucMessageCount=500",
-      "UnboundedSipmucRuns=2",
+suite "topology split: bench_unbounded_spmc (Task 2.6b)":
+  test "compiles + emits BMF for unbounded_spmc 1p{1,2,4}c":
+    let bin = compileBench(BenchUnboundedSpmcSrc, [
+      "UnboundedSpmcMessageCount=500",
+      "UnboundedSpmcRuns=2",
       "BenchUnboundedWarmup=0",
-    ], "unbounded_sipmuc")
-    let bmf = getTempDir() / "bench_unbounded_sipmuc_t26b.json"
+    ], "unbounded_spmc")
+    let bmf = getTempDir() / "bench_unbounded_spmc_t26b.json"
     if fileExists(bmf): removeFile(bmf)
     let cmd = bin & " --bmf-out=" & bmf
     let (_, exitCode) = execCmdEx(cmd)
@@ -263,26 +263,26 @@ suite "topology split: bench_unbounded_sipmuc (Task 2.6b)":
     let node = parseBmf(bmf)
     for c in [1, 2, 4]:
       check node.hasKey(
-        "lockfreequeues_unbounded_sipmuc/mpmc_unbounded/1p" & $c & "c")
+        "lockfreequeues_unbounded_spmc/mpmc_unbounded/1p" & $c & "c")
     # Other unbounded families must NOT appear here (split contract).
     check (not node.hasKey(
-      "lockfreequeues_unbounded_sipsic/spsc_unbounded/1p1c"))
+      "lockfreequeues_unbounded_spsc/spsc_unbounded/1p1c"))
     check (not node.hasKey(
-      "lockfreequeues_unbounded_mupsic/mpsc_unbounded/1p1c"))
+      "lockfreequeues_unbounded_mpsc/mpsc_unbounded/1p1c"))
     check (not node.hasKey(
-      "lockfreequeues_unbounded_mupmuc/mpmc_unbounded/1p1c"))
+      "lockfreequeues_unbounded_mpmc/mpmc_unbounded/1p1c"))
     removeFile(bmf)
 
-# ---------- Task 2.6c: bench_unbounded_mupsic emits mupsic {1,2,4}p1c -----
+# ---------- Task 2.6c: bench_unbounded_mpsc emits mpsc {1,2,4}p1c -----
 
-suite "topology split: bench_unbounded_mupsic (Task 2.6c)":
-  test "compiles + emits BMF for unbounded_mupsic {1,2,4}p1c":
-    let bin = compileBench(BenchUnboundedMupsicSrc, [
-      "UnboundedMupsicMessageCount=500",
-      "UnboundedMupsicRuns=2",
+suite "topology split: bench_unbounded_mpsc (Task 2.6c)":
+  test "compiles + emits BMF for unbounded_mpsc {1,2,4}p1c":
+    let bin = compileBench(BenchUnboundedMpscSrc, [
+      "UnboundedMpscMessageCount=500",
+      "UnboundedMpscRuns=2",
       "BenchUnboundedWarmup=0",
-    ], "unbounded_mupsic")
-    let bmf = getTempDir() / "bench_unbounded_mupsic_t26c.json"
+    ], "unbounded_mpsc")
+    let bmf = getTempDir() / "bench_unbounded_mpsc_t26c.json"
     if fileExists(bmf): removeFile(bmf)
     let cmd = bin & " --bmf-out=" & bmf
     let (_, exitCode) = execCmdEx(cmd)
@@ -290,26 +290,26 @@ suite "topology split: bench_unbounded_mupsic (Task 2.6c)":
     let node = parseBmf(bmf)
     for p in [1, 2, 4]:
       check node.hasKey(
-        "lockfreequeues_unbounded_mupsic/mpsc_unbounded/" & $p & "p1c")
+        "lockfreequeues_unbounded_mpsc/mpsc_unbounded/" & $p & "p1c")
     # Other unbounded families must NOT appear here (split contract).
     check (not node.hasKey(
-      "lockfreequeues_unbounded_sipsic/spsc_unbounded/1p1c"))
+      "lockfreequeues_unbounded_spsc/spsc_unbounded/1p1c"))
     check (not node.hasKey(
-      "lockfreequeues_unbounded_sipmuc/mpmc_unbounded/1p1c"))
+      "lockfreequeues_unbounded_spmc/mpmc_unbounded/1p1c"))
     check (not node.hasKey(
-      "lockfreequeues_unbounded_mupmuc/mpmc_unbounded/1p1c"))
+      "lockfreequeues_unbounded_mpmc/mpmc_unbounded/1p1c"))
     removeFile(bmf)
 
-# ---------- Task 2.6d: bench_unbounded_mupmuc emits mupmuc full grid -----
+# ---------- Task 2.6d: bench_unbounded_mpmc emits mpmc full grid -----
 
-suite "topology split: bench_unbounded_mupmuc (Task 2.6d)":
-  test "compiles + emits BMF for unbounded_mupmuc {1,2,4}p{1,2,4}c":
-    let bin = compileBench(BenchUnboundedMupmucSrc, [
-      "UnboundedMupmucMessageCount=500",
-      "UnboundedMupmucRuns=2",
+suite "topology split: bench_unbounded_mpmc (Task 2.6d)":
+  test "compiles + emits BMF for unbounded_mpmc {1,2,4}p{1,2,4}c":
+    let bin = compileBench(BenchUnboundedMpmcSrc, [
+      "UnboundedMpmcMessageCount=500",
+      "UnboundedMpmcRuns=2",
       "BenchUnboundedWarmup=0",
-    ], "unbounded_mupmuc")
-    let bmf = getTempDir() / "bench_unbounded_mupmuc_t26d.json"
+    ], "unbounded_mpmc")
+    let bmf = getTempDir() / "bench_unbounded_mpmc_t26d.json"
     if fileExists(bmf): removeFile(bmf)
     let cmd = bin & " --bmf-out=" & bmf
     let (_, exitCode) = execCmdEx(cmd)
@@ -318,15 +318,15 @@ suite "topology split: bench_unbounded_mupmuc (Task 2.6d)":
     for p in [1, 2, 4]:
       for c in [1, 2, 4]:
         check node.hasKey(
-          "lockfreequeues_unbounded_mupmuc/mpmc_unbounded/" &
+          "lockfreequeues_unbounded_mpmc/mpmc_unbounded/" &
           $p & "p" & $c & "c")
     # Other unbounded families must NOT appear here (split contract).
     check (not node.hasKey(
-      "lockfreequeues_unbounded_sipsic/spsc_unbounded/1p1c"))
+      "lockfreequeues_unbounded_spsc/spsc_unbounded/1p1c"))
     check (not node.hasKey(
-      "lockfreequeues_unbounded_sipmuc/mpmc_unbounded/1p1c"))
+      "lockfreequeues_unbounded_spmc/mpmc_unbounded/1p1c"))
     check (not node.hasKey(
-      "lockfreequeues_unbounded_mupsic/mpsc_unbounded/1p1c"))
+      "lockfreequeues_unbounded_mpsc/mpsc_unbounded/1p1c"))
     removeFile(bmf)
 
 # ---------- Task 2.7: strict-superset deletion-safety check ----------
@@ -334,11 +334,11 @@ suite "topology split: bench_unbounded_mupmuc (Task 2.6d)":
 suite "topology split: deletion-safety (Task 2.7)":
   test "post-split union is a strict superset of pre-split fixture":
     # Compile and run all eight post-split binaries at small overrides
-    # (spsc + mpsc + mpmc_mupmuc + mpmc_sipmuc + unbounded_sipsic +
-    # unbounded_sipmuc + unbounded_mupsic + unbounded_mupmuc); merge
+    # (spsc + mpsc + mpmc_mpmc + mpmc_spmc + unbounded_spsc +
+    # unbounded_spmc + unbounded_mpsc + unbounded_mpmc); merge
     # the outputs via merge_bmf.py; invoke superset_check.py and assert
     # exit 0 + no output to stderr. v5.0.0 B3 added the
-    # mpmc_mupmuc/mpmc_sipmuc split; v5.0.0 3.3.9-D added the four-way
+    # mpmc_mpmc/mpmc_spmc split; v5.0.0 3.3.9-D added the four-way
     # unbounded split.
     let dir = createTempDir("topology_split_superset_", "")
     defer: removeDir(dir)
@@ -352,54 +352,54 @@ suite "topology split: deletion-safety (Task 2.7)":
       "BenchMpscRuns=2",
       "BenchMpscWarmup=0",
     ], "superset_mpsc")
-    let mpmcMupmucBin = compileBench(BenchMpmcMupmucSrc, [
+    let mpmcMpmcBin = compileBench(BenchMpmcMpmcSrc, [
       "BenchMpmcMessageCount=1000",
       "BenchMpmcRuns=2",
       "BenchMpmcWarmup=0",
-    ], "superset_mpmc_mupmuc")
-    let mpmcSipmucBin = compileBench(BenchMpmcSipmucSrc, [
+    ], "superset_mpmc_mpmc")
+    let mpmcSpmcBin = compileBench(BenchMpmcSpmcSrc, [
       "BenchMpmcMessageCount=1000",
       "BenchMpmcRuns=2",
       "BenchMpmcWarmup=0",
-    ], "superset_mpmc_sipmuc")
-    let unboundedSipsicBin = compileBench(BenchUnboundedSipsicSrc, [
-      "UnboundedSipsicMessageCount=500",
-      "UnboundedSipsicRuns=2",
+    ], "superset_mpmc_spmc")
+    let unboundedSpscBin = compileBench(BenchUnboundedSpscSrc, [
+      "UnboundedSpscMessageCount=500",
+      "UnboundedSpscRuns=2",
       "BenchUnboundedWarmup=0",
-    ], "superset_unbounded_sipsic")
-    let unboundedSipmucBin = compileBench(BenchUnboundedSipmucSrc, [
-      "UnboundedSipmucMessageCount=500",
-      "UnboundedSipmucRuns=2",
+    ], "superset_unbounded_spsc")
+    let unboundedSpmcBin = compileBench(BenchUnboundedSpmcSrc, [
+      "UnboundedSpmcMessageCount=500",
+      "UnboundedSpmcRuns=2",
       "BenchUnboundedWarmup=0",
-    ], "superset_unbounded_sipmuc")
-    let unboundedMupsicBin = compileBench(BenchUnboundedMupsicSrc, [
-      "UnboundedMupsicMessageCount=500",
-      "UnboundedMupsicRuns=2",
+    ], "superset_unbounded_spmc")
+    let unboundedMpscBin = compileBench(BenchUnboundedMpscSrc, [
+      "UnboundedMpscMessageCount=500",
+      "UnboundedMpscRuns=2",
       "BenchUnboundedWarmup=0",
-    ], "superset_unbounded_mupsic")
-    let unboundedMupmucBin = compileBench(BenchUnboundedMupmucSrc, [
-      "UnboundedMupmucMessageCount=500",
-      "UnboundedMupmucRuns=2",
+    ], "superset_unbounded_mpsc")
+    let unboundedMpmcBin = compileBench(BenchUnboundedMpmcSrc, [
+      "UnboundedMpmcMessageCount=500",
+      "UnboundedMpmcRuns=2",
       "BenchUnboundedWarmup=0",
-    ], "superset_unbounded_mupmuc")
+    ], "superset_unbounded_mpmc")
     let spscJson = dir / "spsc.json"
     let mpscJson = dir / "mpsc.json"
-    let mpmcMupmucJson = dir / "mpmc_mupmuc.json"
-    let mpmcSipmucJson = dir / "mpmc_sipmuc.json"
-    let unboundedSipsicJson = dir / "unbounded_sipsic.json"
-    let unboundedSipmucJson = dir / "unbounded_sipmuc.json"
-    let unboundedMupsicJson = dir / "unbounded_mupsic.json"
-    let unboundedMupmucJson = dir / "unbounded_mupmuc.json"
+    let mpmcMpmcJson = dir / "mpmc_mpmc.json"
+    let mpmcSpmcJson = dir / "mpmc_spmc.json"
+    let unboundedSpscJson = dir / "unbounded_spsc.json"
+    let unboundedSpmcJson = dir / "unbounded_spmc.json"
+    let unboundedMpscJson = dir / "unbounded_mpsc.json"
+    let unboundedMpmcJson = dir / "unbounded_mpmc.json"
     let mergedJson = dir / "merged.json"
     for (bin, outPath) in [
       (spscBin, spscJson),
       (mpscBin, mpscJson),
-      (mpmcMupmucBin, mpmcMupmucJson),
-      (mpmcSipmucBin, mpmcSipmucJson),
-      (unboundedSipsicBin, unboundedSipsicJson),
-      (unboundedSipmucBin, unboundedSipmucJson),
-      (unboundedMupsicBin, unboundedMupsicJson),
-      (unboundedMupmucBin, unboundedMupmucJson),
+      (mpmcMpmcBin, mpmcMpmcJson),
+      (mpmcSpmcBin, mpmcSpmcJson),
+      (unboundedSpscBin, unboundedSpscJson),
+      (unboundedSpmcBin, unboundedSpmcJson),
+      (unboundedMpscBin, unboundedMpscJson),
+      (unboundedMpmcBin, unboundedMpmcJson),
     ]:
       let (output, exitCode) = execCmdEx(bin & " --bmf-out=" & outPath)
       check exitCode == 0
@@ -408,9 +408,9 @@ suite "topology split: deletion-safety (Task 2.7)":
     # Merge.
     let mergeCmd = "python3 " & RepoRoot / "benchmarks" / "merge_bmf.py" &
       " " & mergedJson & " " & spscJson & " " & mpscJson & " " &
-      mpmcMupmucJson & " " & mpmcSipmucJson & " " &
-      unboundedSipsicJson & " " & unboundedSipmucJson & " " &
-      unboundedMupsicJson & " " & unboundedMupmucJson
+      mpmcMpmcJson & " " & mpmcSpmcJson & " " &
+      unboundedSpscJson & " " & unboundedSpmcJson & " " &
+      unboundedMpscJson & " " & unboundedMpmcJson
     let (mergeOutput, mergeExit) = execCmdEx(mergeCmd)
     check mergeExit == 0
     if mergeExit != 0:

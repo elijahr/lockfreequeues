@@ -4,14 +4,14 @@
 Orchestrates benchmark execution across languages and collects results.
 PR 2 (bench-rollup) replaced the single `bench_throughput` driver with
 topology-split binaries; v5.0.0 B3 further split the MPMC slice into a
-per-family pair (bench_mpmc_mupmuc + bench_mpmc_sipmuc); v5.0.0 3.3.9-D
+per-family pair (bench_mpmc_bounded + bench_spmc_bounded); v5.0.0 3.3.9-D
 applied the same mitigation to the unbounded slice, fanning the legacy
 `bench_unbounded` binary out into four per-family binaries
-(bench_unbounded_sipsic + bench_unbounded_sipmuc +
-bench_unbounded_mupsic + bench_unbounded_mupmuc) so each unbounded
+(bench_unbounded_spsc + bench_unbounded_spmc +
+bench_unbounded_mpsc + bench_unbounded_mpmc) so each unbounded
 family no longer shares a release binary (cross-family iCache contention
-reproduced -17% to -34% throughput regressions on unbounded_mupmuc/2p2c,
-unbounded_mupsic/2p1c, and unbounded_mupsic/4p1c in 3.3.9 retry #4).
+reproduced -17% to -34% throughput regressions on unbounded_mpmc/2p2c,
+unbounded_mpsc/2p1c, and unbounded_mpsc/4p1c in 3.3.9 retry #4).
 This runner builds + runs all nine binaries in sequence and merges the
 BMF fragments via `merge_bmf.py` so callers keep getting one combined
 JSON file.
@@ -36,12 +36,12 @@ RESULTS_DIR = BENCHMARK_DIR / "results"
 NIM_BINARIES = (
     "bench_spsc",
     "bench_mpsc",
-    "bench_mpmc_mupmuc",
-    "bench_mpmc_sipmuc",
-    "bench_unbounded_sipsic",
-    "bench_unbounded_sipmuc",
-    "bench_unbounded_mupsic",
-    "bench_unbounded_mupmuc",
+    "bench_mpmc_bounded",
+    "bench_spmc_bounded",
+    "bench_unbounded_spsc",
+    "bench_unbounded_spmc",
+    "bench_unbounded_mpsc",
+    "bench_unbounded_mpmc",
     "bench_latency",
 )
 

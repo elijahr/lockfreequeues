@@ -3,32 +3,32 @@ import ./t_atomic_dsl
 import ./t_backoff
 import ./t_slot_seq_generation_rollover
 # v5.0.0 cascade (Track D3.2): legacy bounded test imports removed.
-# Per-family Mupsic/Sipmuc/Mupmuc/Sipsic coverage now lives in the
+# Per-family Mpsc/Spmc/Mpmc/Spsc coverage now lives in the
 # t_queue_bounded_* files below (Manager B / Task B2 verified pass-count
-# parity: mupsic 28/28, sipmuc 27/27, mupmuc 28/28, sipsic 21/21,
-# mupsic_threaded 2/2, sipsic_threaded 2/2). Files
-# tests/t_{mupsic,sipmuc,mupmuc,sipsic}{,_threaded}.nim remain on disk
+# parity: mpsc 28/28, spmc 27/27, mpmc 28/28, spsc 21/21,
+# mpsc_threaded 2/2, spsc_threaded 2/2). Files
+# tests/t_{mpsc,spmc,mpmc,spsc}{,_threaded}.nim remain on disk
 # until Track F5 deletes them with their src/ counterparts.
 import ./t_queue_enums
 import ./t_queue_type_shell
-import ./t_queue_bounded_mupsic_smoke
-import ./t_queue_bounded_mupsic
-import ./t_queue_bounded_sipmuc
-import ./t_queue_bounded_mupmuc
-import ./t_queue_bounded_sipsic
-import ./t_queue_bounded_mupsic_threaded
-import ./t_queue_bounded_sipsic_threaded
-import ./t_queue_bounded_mupmuc_threaded
-import ./t_queue_bounded_sipmuc_threaded
-import ./t_unbounded_mupmuc
-import ./t_unbounded_mupmuc_threaded
-import ./t_unbounded_mupsic
-import ./t_unbounded_mupsic_threaded
+import ./t_queue_bounded_mpsc_smoke
+import ./t_queue_bounded_mpsc
+import ./t_queue_bounded_spmc
+import ./t_queue_bounded_mpmc
+import ./t_queue_bounded_spsc
+import ./t_queue_bounded_mpsc_threaded
+import ./t_queue_bounded_spsc_threaded
+import ./t_queue_bounded_mpmc_threaded
+import ./t_queue_bounded_spmc_threaded
+import ./t_unbounded_mpmc
+import ./t_unbounded_mpmc_threaded
+import ./t_unbounded_mpsc
+import ./t_unbounded_mpsc_threaded
 import ./t_unbounded_padding
-import ./t_unbounded_sipmuc
-import ./t_unbounded_sipmuc_threaded
-import ./t_unbounded_sipsic
-import ./t_unbounded_sipsic_threaded
+import ./t_unbounded_spmc
+import ./t_unbounded_spmc_threaded
+import ./t_unbounded_spsc
+import ./t_unbounded_spsc_threaded
 import ./t_unbounded_auto_create
 import ./t_queue_strategy_phantom
 
@@ -41,24 +41,24 @@ export
   t_slot_seq_generation_rollover,
   t_queue_enums,
   t_queue_type_shell,
-  t_queue_bounded_mupsic_smoke,
-  t_queue_bounded_mupsic,
-  t_queue_bounded_sipmuc,
-  t_queue_bounded_mupmuc,
-  t_queue_bounded_sipsic,
-  t_queue_bounded_mupsic_threaded,
-  t_queue_bounded_sipsic_threaded,
-  t_queue_bounded_mupmuc_threaded,
-  t_queue_bounded_sipmuc_threaded,
-  t_unbounded_mupmuc,
-  t_unbounded_mupmuc_threaded,
-  t_unbounded_mupsic,
-  t_unbounded_mupsic_threaded,
+  t_queue_bounded_mpsc_smoke,
+  t_queue_bounded_mpsc,
+  t_queue_bounded_spmc,
+  t_queue_bounded_mpmc,
+  t_queue_bounded_spsc,
+  t_queue_bounded_mpsc_threaded,
+  t_queue_bounded_spsc_threaded,
+  t_queue_bounded_mpmc_threaded,
+  t_queue_bounded_spmc_threaded,
+  t_unbounded_mpmc,
+  t_unbounded_mpmc_threaded,
+  t_unbounded_mpsc,
+  t_unbounded_mpsc_threaded,
   t_unbounded_padding,
-  t_unbounded_sipmuc,
-  t_unbounded_sipmuc_threaded,
-  t_unbounded_sipsic,
-  t_unbounded_sipsic_threaded,
+  t_unbounded_spmc,
+  t_unbounded_spmc_threaded,
+  t_unbounded_spsc,
+  t_unbounded_spsc_threaded,
   t_unbounded_auto_create,
   t_queue_strategy_phantom,
   t_wraparound

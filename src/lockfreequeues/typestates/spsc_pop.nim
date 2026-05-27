@@ -13,7 +13,7 @@ import ./virtual_values_n1
 import ./storage_n1
 import ./atomic_loaders
 import ./fullness_checks
-import ./spsc_push # For SipsicBase
+import ./spsc_push # For SpscBase
 
 type
   SPSCPopStart*[N: static int] = object ## Entry point. No data yet.
@@ -48,7 +48,7 @@ proc start*[N: static int](): SPSCPopStart[N] {.inline.} =
   SPSCPopStart[N]()
 
 proc loadPointers*[N: static int, T](
-    op: SPSCPopStart[N], queue: var SipsicBase[N, T]
+    op: SPSCPopStart[N], queue: var SpscBase[N, T]
 ): SPSCPopPointersLoaded[N] {.inline, transition.} =
   ## Load head and tail atomically.
   let head = loadAcquireN1[N](queue.head).validate()
@@ -66,7 +66,7 @@ proc checkEmpty*[N: static int](
     SPSCEmptyCheck[N] -> SPSCPopNotEmpty[N](head: op.head, slot: slot)
 
 proc complete*[N: static int, T](
-    op: SPSCPopNotEmpty[N], queue: var SipsicBase[N, T]
+    op: SPSCPopNotEmpty[N], queue: var SpscBase[N, T]
 ): T {.inline, notATransition.} =
   ## Read value, advance head. Returns the value.
   let value = queue.storage[op.slot]

@@ -11,11 +11,11 @@
 ## both adapters is fine — the pragmas execute once.
 ##
 ## A common CI configuration sets BOTH adapter gates globally but only
-## imports one adapter into a given bench binary (e.g. ``bench_mpmc_mupmuc``
-## uses the array variant only; ``bench_unbounded_mupmuc`` uses the seg
+## imports one adapter into a given bench binary (e.g. ``bench_mpmc_bounded``
+## uses the array variant only; ``bench_unbounded_mpmc`` uses the seg
 ## variant only — v5.0.0 B3 split the original ``bench_mpmc`` into
 ## per-family binaries and v5.0.0 3.3.9-D split ``bench_unbounded`` the
-## same way; the MVP comparison adapters live in the mupmuc-shaped
+## same way; the MVP comparison adapters live in the mpmc-shaped
 ## binary of each family).
 ## The previous design — gating link emission on the OTHER adapter's gate —
 ## broke this case: with both gates set, the array adapter would skip

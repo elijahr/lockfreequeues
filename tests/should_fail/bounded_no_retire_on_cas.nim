@@ -25,10 +25,10 @@ proc main() =
   let handle = registerThread(manager)
   var scope = pinScope(unpinned(handle))
   # Bounded receiver (RK = rkNone) — no `retireOnCAS` overload exists.
-  # Use newMupmucQueue smart-ctor to dodge bare ccMulti type-literal
+  # Use newMpmcQueue smart-ctor to dodge bare ccMulti type-literal
   # collisions (umbrella enum + debra enum share the same identifier
   # in this module since both are imported).
-  var bq = newMupmucQueue[int, 16, 4, 4]()
+  var bq = newMpmcQueue[int, 16, 4, 4]()
   var dummyAtomic: Atomic[pointer]
   discard bq.retireOnCAS(
     scope, dummyAtomic, pointer(nil), pointer(nil), Destructor(nil)

@@ -15,7 +15,7 @@
 ## an additional, parallel API. Sub-dispatch B.2 (Bundle C) strips the
 ## bounded arm from `queue.nim`, after which BQueue is the sole owner
 ## of the bounded shape and `queue.nim` carries only the unbounded
-## (debra-integrated) body plus the absorbed UnboundedSipsic branch.
+## (debra-integrated) body plus the absorbed UnboundedSpsc branch.
 ##
 ## **No cross-import.** Per pepper M2, `bqueue.nim` MUST NOT
 ## `import ./queue` (or vice-versa). Shared helpers route through
@@ -24,18 +24,18 @@
 ## that would defeat the split.
 ##
 ## **Field-layout invariant.** Bounded queue bodies preserve the
-## offset prefix required by the typestate Base types (`SipsicBase`,
-## `MupsicBase`, `SipmucBase`, `MupmucBase`, `*PushBase`). The
+## offset prefix required by the typestate Base types (`SpscBase`,
+## `MpscBase`, `SpmcBase`, `MpmcBase`, `*PushBase`). The
 ## `static:` offsetOf asserts below lock the prefix at canonical
 ## instantiations so the unsafe casts in the push/pop bodies remain
 ## sound. Object-field offsets are computed structurally, so a match
 ## for one instantiation implies a match for all (per legacy
-## `mupsic.nim` lines 60-72 rationale).
+## `mpsc.nim` lines 60-72 rationale).
 ##
 ## **Cardinality dispatch ladder.** The four (ccProd × ccCons) combos
 ## are handled by `when` arms inside the procs, matching the layout
-## the legacy per-family files (`sipsic.nim` / `mupsic.nim` /
-## `sipmuc.nim` / `mupmuc.nim`) used pre-unification:
+## the legacy per-family files (`spsc.nim` / `mpsc.nim` /
+## `spmc.nim` / `mpmc.nim`) used pre-unification:
 ##   - `ccSingle × ccSingle` (SPSC):   direct `Queue.push` / `Queue.pop`.
 ##   - `ccMulti  × ccSingle` (MPSC):   producer.push / direct pop.
 ##   - `ccSingle × ccMulti`  (SPMC):   direct push / consumer.pop.
@@ -278,7 +278,7 @@ type
       N, P, C: static int,
   ] {.BQueueLifecycle: BQueueInit.} = object
     ## Bounded lock-free queue with cardinality-dispatched Vyukov /
-    ## Sipsic internals. No debra integration; the bounded body owns no
+    ## Spsc internals. No debra integration; the bounded body owns no
     ## heap state and the default destructor is sufficient.
     ##
     ## Field-layout split by cardinality matches the unified
@@ -353,68 +353,68 @@ proc validateBQueueParams*[
 ## Field-offset prefix invariants vs typestate Base types.
 ##
 ## The bounded push/pop ladders below cast `BQueue` pointers to the
-## per-family typestate Base types (`SipsicBase`, `MupsicBase`,
-## `SipmucBase`, `MupmucBase`, `*PushBase`). For those casts to be
+## per-family typestate Base types (`SpscBase`, `MpscBase`,
+## `SpmcBase`, `MpmcBase`, `*PushBase`). For those casts to be
 ## sound the BQueue object must share its leading field layout with
 ## each Base. Pin one canonical instantiation per cardinality (per
-## legacy `mupsic.nim:60-72` rationale: object-field offsets are
+## legacy `mpsc.nim:60-72` rationale: object-field offsets are
 ## computed structurally, so a match for one instantiation implies a
 ## match for all).
 ## ----------------------------------------------------------------------
 
 static:
-  # SPSC (ccSingle × ccSingle) shares head/tail/storage with SipsicBase.
+  # SPSC (ccSingle × ccSingle) shares head/tail/storage with SpscBase.
   doAssert offsetOf(BQueue[int, ccSingle, ccSingle, 8, 0, 0], head) ==
-    offsetOf(SipsicBase[8, int], head)
+    offsetOf(SpscBase[8, int], head)
   doAssert offsetOf(BQueue[int, ccSingle, ccSingle, 8, 0, 0], tail) ==
-    offsetOf(SipsicBase[8, int], tail)
+    offsetOf(SpscBase[8, int], tail)
   doAssert offsetOf(BQueue[int, ccSingle, ccSingle, 8, 0, 0], storage) ==
-    offsetOf(SipsicBase[8, int], storage)
+    offsetOf(SpscBase[8, int], storage)
 
   # MPSC (ccMulti × ccSingle) shares head/tail/cells with
-  # MupsicPushBase / MupsicBase.
+  # MpscPushBase / MpscBase.
   doAssert offsetOf(BQueue[int, ccMulti, ccSingle, 8, 4, 0], head) ==
-    offsetOf(MupsicPushBase[8, 4, int], head)
+    offsetOf(MpscPushBase[8, 4, int], head)
   doAssert offsetOf(BQueue[int, ccMulti, ccSingle, 8, 4, 0], tail) ==
-    offsetOf(MupsicPushBase[8, 4, int], tail)
+    offsetOf(MpscPushBase[8, 4, int], tail)
   doAssert offsetOf(BQueue[int, ccMulti, ccSingle, 8, 4, 0], cells) ==
-    offsetOf(MupsicPushBase[8, 4, int], cells)
+    offsetOf(MpscPushBase[8, 4, int], cells)
   doAssert offsetOf(BQueue[int, ccMulti, ccSingle, 8, 4, 0], head) ==
-    offsetOf(MupsicBase[8, 4, int], head)
+    offsetOf(MpscBase[8, 4, int], head)
   doAssert offsetOf(BQueue[int, ccMulti, ccSingle, 8, 4, 0], tail) ==
-    offsetOf(MupsicBase[8, 4, int], tail)
+    offsetOf(MpscBase[8, 4, int], tail)
   doAssert offsetOf(BQueue[int, ccMulti, ccSingle, 8, 4, 0], cells) ==
-    offsetOf(MupsicBase[8, 4, int], cells)
+    offsetOf(MpscBase[8, 4, int], cells)
 
   # SPMC (ccSingle × ccMulti) shares head/tail/cells with
-  # SipmucPushBase / SipmucBase.
+  # SpmcPushBase / SpmcBase.
   doAssert offsetOf(BQueue[int, ccSingle, ccMulti, 8, 0, 4], head) ==
-    offsetOf(SipmucPushBase[8, 4, int], head)
+    offsetOf(SpmcPushBase[8, 4, int], head)
   doAssert offsetOf(BQueue[int, ccSingle, ccMulti, 8, 0, 4], tail) ==
-    offsetOf(SipmucPushBase[8, 4, int], tail)
+    offsetOf(SpmcPushBase[8, 4, int], tail)
   doAssert offsetOf(BQueue[int, ccSingle, ccMulti, 8, 0, 4], cells) ==
-    offsetOf(SipmucPushBase[8, 4, int], cells)
+    offsetOf(SpmcPushBase[8, 4, int], cells)
   doAssert offsetOf(BQueue[int, ccSingle, ccMulti, 8, 0, 4], head) ==
-    offsetOf(SipmucBase[8, 4, int], head)
+    offsetOf(SpmcBase[8, 4, int], head)
   doAssert offsetOf(BQueue[int, ccSingle, ccMulti, 8, 0, 4], tail) ==
-    offsetOf(SipmucBase[8, 4, int], tail)
+    offsetOf(SpmcBase[8, 4, int], tail)
   doAssert offsetOf(BQueue[int, ccSingle, ccMulti, 8, 0, 4], cells) ==
-    offsetOf(SipmucBase[8, 4, int], cells)
+    offsetOf(SpmcBase[8, 4, int], cells)
 
   # MPMC (ccMulti × ccMulti) shares head/tail/cells with
-  # MupmucPushBase / MupmucBase.
+  # MpmcPushBase / MpmcBase.
   doAssert offsetOf(BQueue[int, ccMulti, ccMulti, 8, 4, 4], head) ==
-    offsetOf(MupmucPushBase[8, 4, 4, int], head)
+    offsetOf(MpmcPushBase[8, 4, 4, int], head)
   doAssert offsetOf(BQueue[int, ccMulti, ccMulti, 8, 4, 4], tail) ==
-    offsetOf(MupmucPushBase[8, 4, 4, int], tail)
+    offsetOf(MpmcPushBase[8, 4, 4, int], tail)
   doAssert offsetOf(BQueue[int, ccMulti, ccMulti, 8, 4, 4], cells) ==
-    offsetOf(MupmucPushBase[8, 4, 4, int], cells)
+    offsetOf(MpmcPushBase[8, 4, 4, int], cells)
   doAssert offsetOf(BQueue[int, ccMulti, ccMulti, 8, 4, 4], head) ==
-    offsetOf(MupmucBase[8, 4, 4, int], head)
+    offsetOf(MpmcBase[8, 4, 4, int], head)
   doAssert offsetOf(BQueue[int, ccMulti, ccMulti, 8, 4, 4], tail) ==
-    offsetOf(MupmucBase[8, 4, 4, int], tail)
+    offsetOf(MpmcBase[8, 4, 4, int], tail)
   doAssert offsetOf(BQueue[int, ccMulti, ccMulti, 8, 4, 4], cells) ==
-    offsetOf(MupmucBase[8, 4, 4, int], cells)
+    offsetOf(MpmcBase[8, 4, 4, int], cells)
 
 ## ----------------------------------------------------------------------
 ## View types — distinct from QueueProducer / QueueConsumer.
@@ -518,8 +518,8 @@ proc newBQueue*[
   ## returns the user-visible `BQueue` alias, never a backing type).
   ##
   ## Forwards to `initBQueue`. The family-named helpers
-  ## (`newSipsicQueue` / `newMupsicQueue` / `newSipmucQueue` /
-  ## `newMupmucQueue`) are thin wrappers around this generic ctor with
+  ## (`newSpscQueue` / `newMpscQueue` / `newSpmcQueue` /
+  ## `newMpmcQueue`) are thin wrappers around this generic ctor with
   ## the cardinality pre-bound; they exist for ergonomic continuity with
   ## the v3.x → v4.x naming and minimize churn in the test suite.
   initBQueue[T, ccProd, ccCons, N, P, C]()
@@ -531,27 +531,27 @@ proc newBQueue*[
 ## alias-return lock honored — every signature returns the user-visible
 ## `BQueue` alias, never a backing `*Multi`/`*Single` type. The wrappers
 ## stay because the test suite (and downstream user code) reach
-## `newSipsicQueue`/`newMupsicQueue`/`newSipmucQueue`/`newMupmucQueue`
+## `newSpscQueue`/`newMpscQueue`/`newSpmcQueue`/`newMpmcQueue`
 ## widely; replacing them all with raw `newBQueue[...]` invocations
 ## would be a large mechanical change with no semantic benefit.
 ## ----------------------------------------------------------------------
 
-proc newSipsicQueue*[T; N: static int](): BQueue[T, ccSingle, ccSingle, N, 0, 0] {.inline.} =
-  ## Bounded sipsic-equivalent (`ccSingle × ccSingle`) smart-constructor.
+proc newSpscQueue*[T; N: static int](): BQueue[T, ccSingle, ccSingle, N, 0, 0] {.inline.} =
+  ## Bounded spsc-equivalent (`ccSingle × ccSingle`) smart-constructor.
   newBQueue[T, ccSingle, ccSingle, N, 0, 0]()
 
-proc newMupsicQueue*[T; N, P: static int](): BQueue[T, ccMulti, ccSingle, N, P, 0] {.inline.} =
-  ## Bounded mupsic-equivalent (`ccMulti × ccSingle`) smart-constructor.
+proc newMpscQueue*[T; N, P: static int](): BQueue[T, ccMulti, ccSingle, N, P, 0] {.inline.} =
+  ## Bounded mpsc-equivalent (`ccMulti × ccSingle`) smart-constructor.
   ## `P` is the producer-registry capacity.
   newBQueue[T, ccMulti, ccSingle, N, P, 0]()
 
-proc newSipmucQueue*[T; N, C: static int](): BQueue[T, ccSingle, ccMulti, N, 0, C] {.inline.} =
-  ## Bounded sipmuc-equivalent (`ccSingle × ccMulti`) smart-constructor.
+proc newSpmcQueue*[T; N, C: static int](): BQueue[T, ccSingle, ccMulti, N, 0, C] {.inline.} =
+  ## Bounded spmc-equivalent (`ccSingle × ccMulti`) smart-constructor.
   ## `C` is the consumer-registry capacity.
   newBQueue[T, ccSingle, ccMulti, N, 0, C]()
 
-proc newMupmucQueue*[T; N, P, C: static int](): BQueue[T, ccMulti, ccMulti, N, P, C] {.inline.} =
-  ## Bounded mupmuc-equivalent (`ccMulti × ccMulti`) smart-constructor.
+proc newMpmcQueue*[T; N, P, C: static int](): BQueue[T, ccMulti, ccMulti, N, P, C] {.inline.} =
+  ## Bounded mpmc-equivalent (`ccMulti × ccMulti`) smart-constructor.
   ## `P` is the producer-registry capacity, `C` is the consumer-registry
   ## capacity.
   newBQueue[T, ccMulti, ccMulti, N, P, C]()
@@ -667,7 +667,7 @@ proc getConsumer*[
   raise newException(NoConsumersAvailableError, "All consumers assigned")
 
 ## ----------------------------------------------------------------------
-## push / pop — cardinality-dispatched Vyukov / Sipsic logic.
+## push / pop — cardinality-dispatched Vyukov / Spsc logic.
 ##
 ## Single-item push:
 ##   - SPSC: BQueue.push(item)        -> spsc_push
@@ -691,7 +691,7 @@ proc push*[T; N: static int](
     self: var BQueue[T, ccSingle, ccSingle, N, 0, 0], item: T
 ): bool =
   ## SPSC single-item push (lock-free; uses the SPSC typestate verbs).
-  var queueBase = cast[ptr SipsicBase[N, T]](addr self)
+  var queueBase = cast[ptr SpscBase[N, T]](addr self)
 
   let op = spsc_push.start[N]()
   let loaded = op.loadPointers(queueBase[])
@@ -708,7 +708,7 @@ proc push*[T; N, C: static int](
     self: var BQueue[T, ccSingle, ccMulti, N, 0, C], item: T
 ): bool =
   ## SPMC single-item push (defensive CAS, single-producer-side).
-  var queueBase = cast[ptr SipmucPushBase[N, C, T]](addr self)
+  var queueBase = cast[ptr SpmcPushBase[N, C, T]](addr self)
 
   var op = spmc_push.start[N]()
   var spins = InitialSpin
@@ -729,7 +729,7 @@ proc push*[T; N, P: static int](
     self: BQueueProducer[T, ccMulti, ccSingle, N, P, 0], item: T
 ): bool =
   ## MPSC single-item push (lock-free; uses the MPSC typestate verbs).
-  var queueBase = cast[ptr MupsicPushBase[N, P, T]](self.queue)
+  var queueBase = cast[ptr MpscPushBase[N, P, T]](self.queue)
 
   var op = mpsc_push.start[N]()
   var spins = InitialSpin
@@ -750,7 +750,7 @@ proc push*[T; N, P, C: static int](
     self: BQueueProducer[T, ccMulti, ccMulti, N, P, C], item: T
 ): bool =
   ## MPMC single-item push (lock-free; uses the MPMC typestate verbs).
-  var queueBase = cast[ptr MupmucPushBase[N, P, C, T]](self.queue)
+  var queueBase = cast[ptr MpmcPushBase[N, P, C, T]](self.queue)
 
   var op = mpmc_push.start[N]()
   var spins = InitialSpin
@@ -788,7 +788,7 @@ proc pop*[T; N: static int](
     self: var BQueue[T, ccSingle, ccSingle, N, 0, 0]
 ): Option[T] =
   ## SPSC single-item pop.
-  var queueBase = cast[ptr SipsicBase[N, T]](addr self)
+  var queueBase = cast[ptr SpscBase[N, T]](addr self)
 
   let op = spsc_pop.start[N]()
   let loaded = op.loadPointers(queueBase[])
@@ -805,7 +805,7 @@ proc pop*[T; N, P: static int](
     self: var BQueue[T, ccMulti, ccSingle, N, P, 0]
 ): Option[T] =
   ## MPSC single-item pop (defensive CAS, single-consumer-side).
-  var queueBase = cast[ptr MupsicBase[N, P, T]](addr self)
+  var queueBase = cast[ptr MpscBase[N, P, T]](addr self)
 
   var op = mpsc_pop.start[N]()
   var spins = InitialSpin
@@ -826,7 +826,7 @@ proc pop*[T; N, C: static int](
     self: BQueueConsumer[T, ccSingle, ccMulti, N, 0, C]
 ): Option[T] =
   ## SPMC single-item pop.
-  var queueBase = cast[ptr SipmucBase[N, C, T]](self.queue)
+  var queueBase = cast[ptr SpmcBase[N, C, T]](self.queue)
 
   var op = spmc_pop.start[N]()
   var spins = InitialSpin
@@ -847,7 +847,7 @@ proc pop*[T; N, P, C: static int](
     self: BQueueConsumer[T, ccMulti, ccMulti, N, P, C]
 ): Option[T] =
   ## MPMC single-item pop.
-  var queueBase = cast[ptr MupmucBase[N, P, C, T]](self.queue)
+  var queueBase = cast[ptr MpmcBase[N, P, C, T]](self.queue)
 
   var op = mpmc_pop.start[N]()
   var spins = InitialSpin

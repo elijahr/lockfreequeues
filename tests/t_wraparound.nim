@@ -6,7 +6,7 @@ import lockfreequeues
 
 suite "wraparound":
   test "basic":
-    var q = newSipsicQueue[string, 2]()
+    var q = newSpscQueue[string, 2]()
     check q.head.load == 0
     check q.tail.load == 0
 

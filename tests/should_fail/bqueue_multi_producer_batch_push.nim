@@ -8,7 +8,7 @@ import std/options
 import lockfreequeues/bqueue
 
 proc main() =
-  var q = newMupmucQueue[int, 8, 4, 4]()
+  var q = newMpmcQueue[int, 8, 4, 4]()
   let items = @[1, 2, 3]
   # Direct batch push on ccProd=ccMulti BQueue must compile-fail.
   discard q.push(items)

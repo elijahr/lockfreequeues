@@ -45,7 +45,7 @@ nimble install lockfreequeues
 import lockfreequeues
 
 # Single-producer, single-consumer bounded queue with capacity 16.
-var queue = newSipsicQueue[int, 16]()
+var queue = newSpscQueue[int, 16]()
 
 discard queue.push(42)
 discard queue.push(123)

@@ -1,4 +1,4 @@
-## Example helpers for v5.0.0 unbounded mupmuc job-scheduler example.
+## Example helpers for v5.0.0 unbounded mpmc job-scheduler example.
 ##
 ## See `tests/debra_cc_helpers.nim` for the canonical version. We
 ## duplicate the helper here so example sources can stay self-contained
@@ -10,7 +10,7 @@
 ## `ccMulti` members. v5.0.0 keeps the lockfreequeues stub in place until
 ## Track E1 re-homes the canonical enum into nim-debra and deletes the
 ## stub. Until then, example files that need a ccMulti-typed
-## `DebraManager` (mupmuc-equiv) cannot import both `debra` and
+## `DebraManager` (mpmc-equiv) cannot import both `debra` and
 ## `lockfreequeues/queue` unqualified without colliding on `ccMulti`.
 ##
 ## This helper module imports `debra` in isolation and exposes a single
@@ -22,5 +22,5 @@ import debra
 
 proc initMultiConsumerManager*[MaxThreads: static int](): DebraManager[MaxThreads, ccMulti] =
   ## Returns a fresh `DebraManager[MaxThreads, ccMulti]` for examples of
-  ## `ccCons == ccMulti` queues (mupmuc-equiv).
+  ## `ccCons == ccMulti` queues (mpmc-equiv).
   initDebraManager[MaxThreads, ccMulti]()

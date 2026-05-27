@@ -331,11 +331,11 @@ suite "bench_common runLatencyHarness":
 # ---------- Task 0.8: lockfreequeues adapter smoke tests ----------
 
 import std/sets
-import ../benchmarks/nim/adapters/lockfreequeues_sipmuc_adapter
-import ../benchmarks/nim/adapters/lockfreequeues_mupsic_adapter
-import ../benchmarks/nim/adapters/lockfreequeues_unbounded_sipsic_adapter
-import ../benchmarks/nim/adapters/lockfreequeues_unbounded_sipmuc_adapter
-import ../benchmarks/nim/adapters/lockfreequeues_unbounded_mupmuc_adapter
+import ../benchmarks/nim/adapters/lockfreequeues_spmc_adapter
+import ../benchmarks/nim/adapters/lockfreequeues_mpsc_adapter
+import ../benchmarks/nim/adapters/lockfreequeues_unbounded_spsc_adapter
+import ../benchmarks/nim/adapters/lockfreequeues_unbounded_spmc_adapter
+import ../benchmarks/nim/adapters/lockfreequeues_unbounded_mpmc_adapter
 
 const SmokeMessageCount = 100
 
@@ -360,36 +360,36 @@ proc roundTripUint64Set[A](
   result = (seen.len, seen == expected)
 
 suite "bench_common adapters: lockfreequeues smoke (Task 0.8)":
-  test "Sipmuc 1024-cap, 1p1c, 100 sequential round-trip":
-    var a = makeLockfreequeuesSipmucAdapter[1024, 1, uint64](1024)
+  test "Spmc 1024-cap, 1p1c, 100 sequential round-trip":
+    var a = makeLockfreequeuesSpmcAdapter[1024, 1, uint64](1024)
     let r = roundTripUint64Set(a, SmokeMessageCount)
     a.cleanup()
     check r.popped == SmokeMessageCount
     check r.ok
 
-  test "Mupsic 1024-cap, 1p1c, 100 sequential round-trip":
-    var a = makeLockfreequeuesMupsicAdapter[1024, 1, uint64](1024)
+  test "Mpsc 1024-cap, 1p1c, 100 sequential round-trip":
+    var a = makeLockfreequeuesMpscAdapter[1024, 1, uint64](1024)
     let r = roundTripUint64Set(a, SmokeMessageCount)
     a.cleanup()
     check r.popped == SmokeMessageCount
     check r.ok
 
-  test "UnboundedSipsic seg=64, 100 sequential round-trip":
-    var a = makeLockfreequeuesUnboundedSipsicAdapter[64, uint64](0)
+  test "UnboundedSpsc seg=64, 100 sequential round-trip":
+    var a = makeLockfreequeuesUnboundedSpscAdapter[64, uint64](0)
     let r = roundTripUint64Set(a, SmokeMessageCount)
     a.cleanup()
     check r.popped == SmokeMessageCount
     check r.ok
 
-  test "UnboundedSipmuc seg=64, MaxThreads=4, 100 sequential round-trip":
-    var a = makeLockfreequeuesUnboundedSipmucAdapter[64, uint64, 4](0)
+  test "UnboundedSpmc seg=64, MaxThreads=4, 100 sequential round-trip":
+    var a = makeLockfreequeuesUnboundedSpmcAdapter[64, uint64, 4](0)
     let r = roundTripUint64Set(a, SmokeMessageCount)
     a.cleanup()
     check r.popped == SmokeMessageCount
     check r.ok
 
-  test "UnboundedMupmuc seg=64, MaxThreads=4, 100 sequential round-trip":
-    var a = makeLockfreequeuesUnboundedMupmucAdapter[64, uint64, 4](0)
+  test "UnboundedMpmc seg=64, MaxThreads=4, 100 sequential round-trip":
+    var a = makeLockfreequeuesUnboundedMpmcAdapter[64, uint64, 4](0)
     let r = roundTripUint64Set(a, SmokeMessageCount)
     a.cleanup()
     check r.popped == SmokeMessageCount
@@ -399,9 +399,9 @@ suite "bench_common adapters: lockfreequeues smoke (Task 0.8)":
 #
 # PR 0 Task 0.10 originally compiled bench_throughput.nim against
 # `--bmf-out=` and asserted the emitted BMF carried the expected
-# `lockfreequeues_sipsic/spsc/1p1c` slug. PR 2 Task 2.10 deleted
+# `lockfreequeues_spsc/spsc/1p1c` slug. PR 2 Task 2.10 deleted
 # bench_throughput.nim in favor of five topology-split binaries, and
 # tests/t_topology_split.nim now covers the equivalent BMF-emission
-# contract for each new binary (bench_spsc covers the sipsic/spsc/1p1c
+# contract for each new binary (bench_spsc covers the spsc/spsc/1p1c
 # slug specifically). The bench_throughput-specific suite is removed
 # here intentionally; do not reintroduce.

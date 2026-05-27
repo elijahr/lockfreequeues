@@ -47,13 +47,13 @@ const cases = @[
     name: "t_queue_cardinality_mismatch §6.3 (2) — ccCons=ccSingle queue rejects ccMulti handle",
     file: "tests/should_fail/cc_consumer_single_rejects_multi.nim",
     outcome: eoCompileFails,
-    substring: "newUnboundedMupsicQueue",
+    substring: "newUnboundedMpscQueue",
   ),
   Case(
     name: "t_queue_cardinality_mismatch §6.3 (3) — ccCons=ccMulti queue rejects ccSingle manager",
     file: "tests/should_fail/cc_consumer_multi_rejects_single.nim",
     outcome: eoCompileFails,
-    substring: "newUnboundedMupmucQueue",
+    substring: "newUnboundedMpmcQueue",
   ),
   Case(
     name: "t_queue_bounded_no_retire §6.3 (4) — retireOnCAS on Queue[..., rkNone, ...] (γ guard)",
@@ -70,8 +70,8 @@ const cases = @[
   # 3.3.11-B Bundle J + M8 (family-level coverage of Bundle E
   # `{.error.}` cardinality gates). One case per BQueue/Queue * push/pop
   # family, exercising the cardinality `{.error.}` overload through the
-  # family-named thin-wrappers (`newMupsicQueue`, `newSipmucQueue`,
-  # `newMupmucQueue`, `newUnboundedSipmucQueue`). Family-level rather
+  # family-named thin-wrappers (`newMpscQueue`, `newSpmcQueue`,
+  # `newMpmcQueue`, `newUnboundedSpmcQueue`). Family-level rather
   # than per-individual-wrapper per the M8 light-touch policy.
   Case(
     name: "t_bqueue_cardinality §6.3 (6) — direct push on ccProd=ccMulti BQueue is forbidden",

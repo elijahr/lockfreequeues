@@ -10,12 +10,12 @@ API documentation: <https://elijahr.github.io/lockfreequeues>
 
 > **v5.0.0 breaking change.**
 > v5.0.0 collapses the seven typestate queue families plus the standalone
-> `UnboundedSipsic` into two generic types: `BQueue[T, ccProd, ccCons, N, P, C]`
+> `UnboundedSpsc` into two generic types: `BQueue[T, ccProd, ccCons, N, P, C]`
 > (bounded) and `Queue[T, ccProd, ccCons, ST, S, MaxThreads]` (unbounded, with
-> the `(ccSingle, ccSingle)` arm absorbing the standalone `UnboundedSipsic`
+> the `(ccSingle, ccSingle)` arm absorbing the standalone `UnboundedSpsc`
 > body). Smart constructors collapse from 11 family-prefixed entry points to
 > two generics (`newBQueue`, `newQueue`) plus family-named thin wrappers
-> (`newSipsicQueue`, `newMupsicQueue`, `newUnboundedMupmucQueue`, …) for
+> (`newSpscQueue`, `newMpscQueue`, `newUnboundedMpmcQueue`, …) for
 > ergonomic continuity. See [`CHANGELOG.md`](CHANGELOG.md) for the v5.0.0
 > reshape note with worked examples and the canonical surface reference.
 
@@ -53,8 +53,8 @@ bounded ring buffer; `Queue[T, ccProd, ccCons, ST, S, MaxThreads]` is the
 unbounded linked-segment queue. The `ccProd` / `ccCons` parameters
 (`ccSingle` / `ccMulti`) select the producer and consumer cardinality. For
 ergonomic continuity each cell of the SPSC/SPMC/MPSC/MPMC grid has a
-family-named smart constructor (`newSipsicQueue`, `newMupmucQueue`,
-`newUnboundedMupmucQueue`, …).
+family-named smart constructor (`newSpscQueue`, `newMpmcQueue`,
+`newUnboundedMpmcQueue`, …).
 
 ### Bounded SPSC
 
@@ -64,7 +64,7 @@ import lockfreequeues
 
 # Bounded single-producer, single-consumer queue, capacity 16.
 # Single-cardinality sides push/pop directly on the queue.
-var queue = newSipsicQueue[int, 16]()
+var queue = newSpscQueue[int, 16]()
 
 discard queue.push(42)   # push returns false when the queue is full
 discard queue.push(123)
@@ -86,7 +86,7 @@ import options
 import lockfreequeues
 
 # Unbounded MPMC: segment size 8, registry sized for 4 lifetime threads.
-var queue = newUnboundedMupmucQueue[int, stEager, 8, 4]()
+var queue = newUnboundedMpmcQueue[int, stEager, 8, 4]()
 
 var producer = queue.getProducer()
 producer.attach()         # on the producer thread, before push
@@ -102,7 +102,7 @@ assert item == some(42)
 that will ever operate the queue, not the concurrent count: nim-debra has no
 per-thread unregister, so each `attach()` consumes a registry slot for the
 manager's lifetime. Size it accordingly. The unbounded SPSC arm
-(`newUnboundedSipsicQueue`) is debra-free and needs no `attach()`.
+(`newUnboundedSpscQueue`) is debra-free and needs no `attach()`.
 
 ### Copy semantics
 
@@ -128,10 +128,10 @@ smart constructor.
 
 | Topology | Constructor       | Producers | Consumers | Push      | Pop       |
 |----------|-------------------|-----------|-----------|-----------|-----------|
-| SPSC     | `newSipsicQueue`  | 1         | 1         | wait-free | wait-free |
-| SPMC     | `newSipmucQueue`  | 1         | many      | wait-free | lock-free |
-| MPSC     | `newMupsicQueue`  | many      | 1         | lock-free | wait-free |
-| MPMC     | `newMupmucQueue`  | many      | many      | lock-free | lock-free |
+| SPSC     | `newSpscQueue`  | 1         | 1         | wait-free | wait-free |
+| SPMC     | `newSpmcQueue`  | 1         | many      | wait-free | lock-free |
+| MPSC     | `newMpscQueue`  | many      | 1         | lock-free | wait-free |
+| MPMC     | `newMpmcQueue`  | many      | many      | lock-free | lock-free |
 
 Bounded queues are ring buffers with compile-time capacity. None require a `DebraManager` or per-thread handles.
 
@@ -142,10 +142,10 @@ smart constructor.
 
 | Topology | Constructor               | Producers | Consumers | Push      | Pop       | `DebraManager` | Per-thread handle |
 |----------|---------------------------|-----------|-----------|-----------|-----------|----------------|-------------------|
-| SPSC     | `newUnboundedSipsicQueue` | 1         | 1         | wait-free | wait-free | not needed     | not needed        |
-| SPMC     | `newUnboundedSipmucQueue` | 1         | many      | wait-free | lock-free | required       | consumer side     |
-| MPSC     | `newUnboundedMupsicQueue` | many      | 1         | lock-free | wait-free | required       | producer side     |
-| MPMC     | `newUnboundedMupmucQueue` | many      | many      | lock-free | lock-free | required       | both              |
+| SPSC     | `newUnboundedSpscQueue` | 1         | 1         | wait-free | wait-free | not needed     | not needed        |
+| SPMC     | `newUnboundedSpmcQueue` | 1         | many      | wait-free | lock-free | required       | consumer side     |
+| MPSC     | `newUnboundedMpscQueue` | many      | 1         | lock-free | wait-free | required       | producer side     |
+| MPMC     | `newUnboundedMpmcQueue` | many      | many      | lock-free | lock-free | required       | both              |
 
 The unbounded SPSC queue is special: with one producer and one consumer the consumer is the only thread freeing segments, so it does not need DEBRA. Every other unbounded variant does, because multiple threads can race to detach a segment.
 
@@ -200,17 +200,17 @@ every devel push, and may lag the live data by up to one release
 cycle. The "always-fresh" view lives at the chart page below.
 
 <!-- BENCHMARKS:start -->
-**Headline:** `Mupmuc` (MPMC, bounded) sustains **18,209 ops/ms at 4p4c** on
+**Headline:** `Mpmc` (MPMC, bounded) sustains **18,209 ops/ms at 4p4c** on
 `ubuntu-latest`, against **1,723 ops/ms** for Nim's stdlib `Channel` at the
 same shape — about **10.6x** faster under heavy multi-producer multi-consumer
 contention.
 
 | Variant  | Topology | Shape | Throughput (ops/ms) | vs `system/Channel` (same shape) |
 |----------|----------|-------|--------------------:|----------------------------------|
-| `Sipsic` | SPSC     | 1p1c  |               7,592 | — (no SPSC `Channel` adapter)    |
-| `Sipmuc` | SPMC     | 1p2c  |              22,399 | — (no SPMC `Channel` adapter)    |
-| `Mupsic` | MPSC     | 4p1c  |              13,667 | 3.7x (3,667 ops/ms)              |
-| `Mupmuc` | MPMC     | 4p4c  |              18,209 | 10.6x (1,723 ops/ms)             |
+| `Spsc` | SPSC     | 1p1c  |               7,592 | — (no SPSC `Channel` adapter)    |
+| `Spmc` | SPMC     | 1p2c  |              22,399 | — (no SPMC `Channel` adapter)    |
+| `Mpsc` | MPSC     | 4p1c  |              13,667 | 3.7x (3,667 ops/ms)              |
+| `Mpmc` | MPMC     | 4p4c  |              18,209 | 10.6x (1,723 ops/ms)             |
 
 Numbers are pulled from `docs/assets/bench-results/example.json`, the
 checked-in `ubuntu-latest` snapshot used as the chart's offline fallback.

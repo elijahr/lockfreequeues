@@ -23,7 +23,7 @@ proc main() =
   var scope = pinScope(unpinned(handle))
   # ccCons = ccMulti, RK = rkEbr — `retireOnPublish` is gated to
   # ccCons = ccSingle only, so no overload accepts this receiver.
-  var q = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
+  var q = newUnboundedMpmcQueue[int, stEager, 16, 4](addr manager)
   var dummyAtomic: Atomic[pointer]
   q.retireOnPublish(scope, dummyAtomic, pointer(nil), Destructor(nil))
 

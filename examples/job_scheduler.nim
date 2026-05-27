@@ -1,6 +1,6 @@
 ## Job Scheduler Example
 ##
-## Demonstrates using an unbounded Mupmuc (MPMC) queue for a dynamic job
+## Demonstrates using an unbounded Mpmc (MPMC) queue for a dynamic job
 ## scheduling system with multiple producers and consumers.
 ##
 ## Pattern: Multiple submitters → Job queue → Multiple workers
@@ -65,7 +65,7 @@ var
   # to `lockfreequeues/internal/pinscope_stub.ccMulti` when the Queue
   # type is instantiated below.
   manager = initMultiConsumerManager[MaxThreads]()
-  queue = newUnboundedMupmucQueue[Job, stEager, SegmentSize, MaxThreads](addr manager)
+  queue = newUnboundedMpmcQueue[Job, stEager, SegmentSize, MaxThreads](addr manager)
   running: Atomic[bool]
   jobsSubmitted: array[NumSubmitters, Atomic[int]]
   jobsCompleted: array[NumWorkers, Atomic[int]]

@@ -2,8 +2,8 @@
 ## the unified Queue's rkEbr branch (Doc C §3.7).
 ##
 ## Asserts that both `stManual` and `stEager` compile across the three
-## multi-segment cardinality variants — mupsic-equiv, sipmuc-equiv,
-## mupmuc-equiv — and that the segment-count semantics differ between
+## multi-segment cardinality variants — mpsc-equiv, spmc-equiv,
+## mpmc-equiv — and that the segment-count semantics differ between
 ## the two strategies per Doc C §3.0.2:
 ##
 ## * `stEager` — the rkEbr pop body decrements `self.segments` after
@@ -34,11 +34,11 @@ import lockfreequeues/internal/pinscope_stub
 import debra as debra_mod
 from debra import initDebraManager, registerThread
 
-suite "Strategy phantom — mupsic-equiv (ccMulti × ccSingle)":
+suite "Strategy phantom — mpsc-equiv (ccMulti × ccSingle)":
   test "stManual: drained segments are retained (segmentCount stays at 3)":
     var manager = initDebraManager[4]()
     let consumerHandle = registerThread(manager)
-    var q = newUnboundedMupsicQueue[int, stManual, 4, 4](addr manager, consumerHandle)
+    var q = newUnboundedMpscQueue[int, stManual, 4, 4](addr manager, consumerHandle)
     var p = q.getProducer()
     p.attach()
     for i in 0 ..< 9:
@@ -55,7 +55,7 @@ suite "Strategy phantom — mupsic-equiv (ccMulti × ccSingle)":
   test "stEager: drained segments are reclaimed (segmentCount decreases)":
     var manager = initDebraManager[4]()
     let consumerHandle = registerThread(manager)
-    var q = newUnboundedMupsicQueue[int, stEager, 4, 4](addr manager, consumerHandle)
+    var q = newUnboundedMpscQueue[int, stEager, 4, 4](addr manager, consumerHandle)
     var p = q.getProducer()
     p.attach()
     for i in 0 ..< 9:
@@ -70,10 +70,10 @@ suite "Strategy phantom — mupsic-equiv (ccMulti × ccSingle)":
     check q.segmentCount() < 3
     check q.pop().isNone
 
-suite "Strategy phantom — sipmuc-equiv (ccSingle × ccMulti)":
+suite "Strategy phantom — spmc-equiv (ccSingle × ccMulti)":
   test "stManual: drained segments are retained (segmentCount stays at 3)":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
-    var q = newUnboundedSipmucQueue[int, stManual, 4, 4](addr manager)
+    var q = newUnboundedSpmcQueue[int, stManual, 4, 4](addr manager)
     var p = q.getProducer()
     var c = q.getConsumer()
     c.attach()
@@ -89,7 +89,7 @@ suite "Strategy phantom — sipmuc-equiv (ccSingle × ccMulti)":
 
   test "stEager: drained segments are reclaimed (segmentCount decreases)":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
-    var q = newUnboundedSipmucQueue[int, stEager, 4, 4](addr manager)
+    var q = newUnboundedSpmcQueue[int, stEager, 4, 4](addr manager)
     var p = q.getProducer()
     var c = q.getConsumer()
     c.attach()
@@ -103,10 +103,10 @@ suite "Strategy phantom — sipmuc-equiv (ccSingle × ccMulti)":
     check q.segmentCount() < 3
     check c.pop().isNone
 
-suite "Strategy phantom — mupmuc-equiv (ccMulti × ccMulti)":
+suite "Strategy phantom — mpmc-equiv (ccMulti × ccMulti)":
   test "stManual: drained segments are retained (segmentCount stays at 3)":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
-    var q = newUnboundedMupmucQueue[int, stManual, 4, 4](addr manager)
+    var q = newUnboundedMpmcQueue[int, stManual, 4, 4](addr manager)
     var p = q.getProducer()
     p.attach()
     var c = q.getConsumer()
@@ -123,7 +123,7 @@ suite "Strategy phantom — mupmuc-equiv (ccMulti × ccMulti)":
 
   test "stEager: drained segments are reclaimed (segmentCount decreases)":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
-    var q = newUnboundedMupmucQueue[int, stEager, 4, 4](addr manager)
+    var q = newUnboundedMpmcQueue[int, stEager, 4, 4](addr manager)
     var p = q.getProducer()
     p.attach()
     var c = q.getConsumer()

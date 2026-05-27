@@ -4,8 +4,8 @@
 ## PR 1 Task 1.2 — `PushResult` / `PopResult` are now re-exported
 ## aliases of the canonical types defined in `bench_common`. PR 0 Task 0.1
 ## introduced parallel definitions in bench_common, leaving two nominally
-## distinct enums. With both adapter packs (legacy sipsic / mupmuc /
-## channels and the newer sipmuc / mupsic / unbounded_*) flowing through
+## distinct enums. With both adapter packs (legacy spsc / mpmc /
+## channels and the newer spmc / mpsc / unbounded_*) flowing through
 ## the same `bench_common.runLatencyHarness` / `runThroughputHarness`,
 ## the two-enum split forced cross-conversion at every call site. Aliasing
 ## here unifies the surface: `prSuccess` / `prFull` are now equal regardless

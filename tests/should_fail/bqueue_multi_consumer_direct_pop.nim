@@ -5,7 +5,7 @@
 ## at `BQueue.getConsumer().pop()`.
 ##
 ## M8 light-touch coverage: this is the multi-consumer family proof.
-## Both `newSipmucQueue` and `newMupmucQueue` thin-wrappers resolve to
+## Both `newSpmcQueue` and `newMpmcQueue` thin-wrappers resolve to
 ## a `ccCons == ccMulti` BQueue, so the same `{.error.}` overload fires
 ## for them.
 
@@ -13,7 +13,7 @@ import std/options
 import lockfreequeues/bqueue
 
 proc main() =
-  var q = newSipmucQueue[int, 8, 4]()
+  var q = newSpmcQueue[int, 8, 4]()
   # Direct pop on ccCons=ccMulti BQueue must compile-fail.
   discard q.pop()
 

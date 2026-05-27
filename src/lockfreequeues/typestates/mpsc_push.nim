@@ -6,7 +6,7 @@
 ##   SlotClaimed -> bool                  (terminal: write data + publish seq)
 ##
 ## Multiple producers race on `tail` — identical in shape to `mpmc_push`, only
-## the facade name differs (MupsicPushBase vs MupmucPushBase).
+## the facade name differs (MpscPushBase vs MpmcPushBase).
 ##
 ## Key invariant: Once a slot is claimed via CAS on `tail`, data MUST be
 ## written and the per-slot `seq` MUST be advanced to `pos + 1` (release).
@@ -49,13 +49,13 @@ typestate MPSCPushOp[N: static int]:
       MPSCPushSlotClaimed[N] | MPSCPushFull[N] | MPSCPushStart[N] as
       MPSCPushClaimResult[N]
 
-# Forward declaration for Mupsic (avoid circular import).
+# Forward declaration for Mpsc (avoid circular import).
 # Note: even though push only writes `tail`, the shared base type carries
-# `head` too so the facade can cast a single Mupsic[N,P,T] to either
-# MupsicPushBase or MupsicBase (pop-side). Field order MUST stay in lockstep
-# with MupsicBase in mpsc_pop.nim — see design doc §10.11 for the offsetof
+# `head` too so the facade can cast a single Mpsc[N,P,T] to either
+# MpscPushBase or MpscBase (pop-side). Field order MUST stay in lockstep
+# with MpscBase in mpsc_pop.nim — see design doc §10.11 for the offsetof
 # asserts the facade emits.
-type MupsicPushBase*[N, P: static int, T] = object
+type MpscPushBase*[N, P: static int, T] = object
   head* {.align: CacheLineBytes.}: Atomic[uint64]
   tail* {.align: CacheLineBytes.}: Atomic[uint64]
   cells*: MPMCCellArrayN[N, T]
@@ -65,7 +65,7 @@ proc start*[N: static int](): MPSCPushStart[N] {.inline.} =
   MPSCPushStart[N]()
 
 proc tryClaim*[N, P: static int, T](
-    op: MPSCPushStart[N], queue: var MupsicPushBase[N, P, T]
+    op: MPSCPushStart[N], queue: var MpscPushBase[N, P, T]
 ): MPSCPushClaimResult[N] {.inline, transition.} =
   ## Vyukov producer claim. Returns one of:
   ## - SlotClaimed: tail CAS won; caller must call `complete`.
@@ -93,7 +93,7 @@ proc tryClaim*[N, P: static int, T](
     MPSCPushClaimResult[N] -> MPSCPushStart[N]() # producer raced ahead: retry
 
 proc complete*[N, P: static int, T](
-    op: MPSCPushSlotClaimed[N], queue: var MupsicPushBase[N, P, T], item: T
+    op: MPSCPushSlotClaimed[N], queue: var MpscPushBase[N, P, T], item: T
 ): bool {.inline, notATransition.} =
   ## Write item to the claimed slot, then publish the seq advance.
   ## The `seq.store(pos+1, moRelease)` is the producer->consumer edge.

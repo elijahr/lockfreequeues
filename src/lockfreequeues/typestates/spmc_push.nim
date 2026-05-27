@@ -9,7 +9,7 @@
 ## written and the per-slot `seq` MUST be advanced to `pos + 1` (release).
 ## That release is the producer->consumer happens-before edge.
 ##
-## Single-producer by *contract*, but Nim's `Sipmuc` facade does NOT enforce
+## Single-producer by *contract*, but Nim's `Spmc` facade does NOT enforce
 ## single-thread access. Per the C4 design-review decision (design doc §10.6),
 ## we keep `compareExchangeWeak` on `tail` even on the single-producer side as
 ## defense in depth: an accidental two-thread mis-use surfaces as a benign
@@ -52,13 +52,13 @@ typestate SPMCPushOp[N: static int]:
       SPMCPushSlotClaimed[N] | SPMCPushFull[N] | SPMCPushStart[N] as
       SPMCPushClaimResult[N]
 
-# Forward declaration for Sipmuc (avoid circular import).
+# Forward declaration for Spmc (avoid circular import).
 # Note: even though push only writes `tail`, the shared base type carries
-# `head` too so the facade can cast a single Sipmuc[N,C,T] to either
-# SipmucPushBase or SipmucBase (pop-side). Field order MUST stay in lockstep
-# with SipmucBase in spmc_pop.nim — see design doc §10.12 for the offsetof
+# `head` too so the facade can cast a single Spmc[N,C,T] to either
+# SpmcPushBase or SpmcBase (pop-side). Field order MUST stay in lockstep
+# with SpmcBase in spmc_pop.nim — see design doc §10.12 for the offsetof
 # asserts the facade emits.
-type SipmucPushBase*[N, C: static int, T] = object
+type SpmcPushBase*[N, C: static int, T] = object
   head* {.align: CacheLineBytes.}: Atomic[uint64]
   tail* {.align: CacheLineBytes.}: Atomic[uint64]
   cells*: MPMCCellArrayN[N, T]
@@ -68,7 +68,7 @@ proc start*[N: static int](): SPMCPushStart[N] {.inline.} =
   SPMCPushStart[N]()
 
 proc tryClaim*[N, C: static int, T](
-    op: SPMCPushStart[N], queue: var SipmucPushBase[N, C, T]
+    op: SPMCPushStart[N], queue: var SpmcPushBase[N, C, T]
 ): SPMCPushClaimResult[N] {.inline, transition.} =
   ## Vyukov producer claim. Returns one of:
   ## - SlotClaimed: tail CAS won; caller must call `complete`.
@@ -111,7 +111,7 @@ proc tryClaim*[N, C: static int, T](
     SPMCPushClaimResult[N] -> SPMCPushStart[N]()
 
 proc complete*[N, C: static int, T](
-    op: SPMCPushSlotClaimed[N], queue: var SipmucPushBase[N, C, T], item: T
+    op: SPMCPushSlotClaimed[N], queue: var SpmcPushBase[N, C, T], item: T
 ): bool {.inline, notATransition.} =
   ## Write item to the claimed slot, then publish the seq advance.
   ## The `seq.store(pos+1, moRelease)` is the producer->consumer edge.

@@ -21,7 +21,7 @@ proc requireManualConsumer[
   discard
 
 proc main() =
-  var q = newUnboundedMupmucQueue[int, stEager, 16, 4]()
+  var q = newUnboundedMpmcQueue[int, stEager, 16, 4]()
   var c = q.getConsumer()
   requireManualConsumer(c)
 

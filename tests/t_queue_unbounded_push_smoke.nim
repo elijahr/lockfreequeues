@@ -1,6 +1,6 @@
 ## Smoke fixtures for the v5.0.0 Track E Step 3.3.3 — rkEbr push body
-## across all 4 cardinality variants (sipsic-equiv, sipmuc-equiv,
-## mupsic-equiv, mupmuc-equiv).
+## across all 4 cardinality variants (spsc-equiv, spmc-equiv,
+## mpsc-equiv, mpmc-equiv).
 ##
 ## Exercises:
 ##   - 4-variant push compiles and runs end-to-end via the unified
@@ -30,7 +30,7 @@ import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
 
-suite "rkEbr push smoke — sipsic-equiv (ccSingle × ccSingle)":
+suite "rkEbr push smoke — spsc-equiv (ccSingle × ccSingle)":
   test "single item push increments len":
     var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
     var p = q.getProducer()
@@ -54,7 +54,7 @@ suite "rkEbr push smoke — sipsic-equiv (ccSingle × ccSingle)":
     check q.len() == 9
     check q.segmentCount() == 2
 
-suite "rkEbr push smoke — sipmuc-equiv (ccSingle × ccMulti)":
+suite "rkEbr push smoke — spmc-equiv (ccSingle × ccMulti)":
   test "single item push increments len":
     var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, 8, 4])
     var p = q.getProducer()
@@ -70,7 +70,7 @@ suite "rkEbr push smoke — sipmuc-equiv (ccSingle × ccMulti)":
     check q.len() == 17
     check q.segmentCount() == 3
 
-suite "rkEbr push smoke — mupsic-equiv (ccMulti × ccSingle)":
+suite "rkEbr push smoke — mpsc-equiv (ccMulti × ccSingle)":
   ## §3.5.4 pin-only site. Pin acquired BEFORE segment-pointer load
   ## (§3.5.6 Pin-Claim Ordering).
   test "single producer pushes items, pin/unpin cycle clean":
@@ -91,7 +91,7 @@ suite "rkEbr push smoke — mupsic-equiv (ccMulti × ccSingle)":
     check q.len() == 17
     check q.segmentCount() == 3
 
-suite "rkEbr push smoke — mupmuc-equiv (ccMulti × ccMulti)":
+suite "rkEbr push smoke — mpmc-equiv (ccMulti × ccMulti)":
   ## §3.5.5 pin-only site. Pin acquired BEFORE segment-pointer load
   ## (§3.5.6 Pin-Claim Ordering).
   test "single producer pushes items, pin/unpin cycle clean":

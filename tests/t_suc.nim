@@ -1,4 +1,4 @@
-## Shared test templates for single-producer, multi-consumer queues (Sipmuc).
+## Shared test templates for single-producer, multi-consumer queues (Spmc).
 
 import sequtils
 

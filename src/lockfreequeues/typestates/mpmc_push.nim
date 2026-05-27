@@ -46,13 +46,13 @@ typestate MPMCPushOp[N: static int]:
       MPMCPushSlotClaimed[N] | MPMCPushFull[N] | MPMCPushStart[N] as
       MPMCPushClaimResult[N]
 
-# Forward declaration for Mupmuc (avoid circular import).
+# Forward declaration for Mpmc (avoid circular import).
 # Note: even though push only writes `tail`, the shared base type carries
-# `head` too so the facade can cast a single Mupmuc[N,P,C,T] to either
-# MupmucPushBase or MupmucBase (pop-side). Field order MUST stay in lockstep
-# with MupmucBase in mpmc_pop.nim — see design doc §10.10 for the offsetof
+# `head` too so the facade can cast a single Mpmc[N,P,C,T] to either
+# MpmcPushBase or MpmcBase (pop-side). Field order MUST stay in lockstep
+# with MpmcBase in mpmc_pop.nim — see design doc §10.10 for the offsetof
 # asserts the facade emits.
-type MupmucPushBase*[N, P, C: static int, T] = object
+type MpmcPushBase*[N, P, C: static int, T] = object
   head* {.align: CacheLineBytes.}: Atomic[uint64]
   tail* {.align: CacheLineBytes.}: Atomic[uint64]
   cells*: MPMCCellArrayN[N, T]
@@ -62,7 +62,7 @@ proc start*[N: static int](): MPMCPushStart[N] {.inline.} =
   MPMCPushStart[N]()
 
 proc tryClaim*[N, P, C: static int, T](
-    op: MPMCPushStart[N], queue: var MupmucPushBase[N, P, C, T]
+    op: MPMCPushStart[N], queue: var MpmcPushBase[N, P, C, T]
 ): MPMCPushClaimResult[N] {.inline, transition.} =
   ## Vyukov producer claim. Returns one of:
   ## - SlotClaimed: tail CAS won; caller must call `complete`.
@@ -91,7 +91,7 @@ proc tryClaim*[N, P, C: static int, T](
     MPMCPushClaimResult[N] -> MPMCPushStart[N]() # producer raced ahead: retry
 
 proc complete*[N, P, C: static int, T](
-    op: MPMCPushSlotClaimed[N], queue: var MupmucPushBase[N, P, C, T], item: T
+    op: MPMCPushSlotClaimed[N], queue: var MpmcPushBase[N, P, C, T], item: T
 ): bool {.inline, notATransition.} =
   ## Write item to the claimed slot, then publish the seq advance.
   ## The `seq.store(pos+1, moRelease)` is the producer->consumer edge.

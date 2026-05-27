@@ -1,8 +1,8 @@
 ## Tests for the v5.0.0 shared enum modules.
 ##
 ## These modules consolidate the triplicated `DeallocationStrategy` enum
-## (was identically defined at unbounded_mupsic.nim:52, unbounded_sipmuc.nim:54,
-## unbounded_mupmuc.nim:50) and introduce `ReclamationKind` for the unified
+## (was identically defined at unbounded_mpsc.nim:52, unbounded_spmc.nim:54,
+## unbounded_mpmc.nim:50) and introduce `ReclamationKind` for the unified
 ## `Queue` generic's `RK` phantom.
 ##
 ## Doc C §3.0.5 (ReclamationKind), §3.1 (DeallocationStrategy), §5

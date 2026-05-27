@@ -12,8 +12,8 @@
 ## each Segment field that participates in producer/consumer coordination.
 ##
 ## v5.0.0 migration note: post-3.3.11-B.2.5 the standalone
-## `UnboundedSipsic[S, T]` was absorbed into
-## `Queue[T, ccSingle, ccSingle, stEager, S, MaxThreads]`. The sipsic
+## `UnboundedSpsc[S, T]` was absorbed into
+## `Queue[T, ccSingle, ccSingle, stEager, S, MaxThreads]`. The spsc
 ## padding checks now go through the unified Queue + Segment helpers
 ## like the other three variants.
 
@@ -37,35 +37,35 @@ import unittest2
 const Cl = CacheLineBytes
 
 suite "Unbounded queue Segment cache-line padding":
-  test "Segment field offsets are CacheLineBytes-aligned (sipsic)":
-    # Queue[T, ccSingle, ccSingle, _, 64, 4] — sipsic-absorbed Segment
+  test "Segment field offsets are CacheLineBytes-aligned (spsc)":
+    # Queue[T, ccSingle, ccSingle, _, 64, 4] — spsc-absorbed Segment
     # carries `tail` (Atomic) and `head` (non-atomic int) as cache-line-
     # padded fields. `committed` and `prevConsumerIdx` are not present.
     type Seg = q_mod.Segment[uint64, ccSingle, ccSingle, 64]
     check segmentTailOffsetForTest(Seg) mod Cl == 0
     check segmentHeadOffsetForTest(Seg) mod Cl == 0
 
-  test "Segment field offsets are CacheLineBytes-aligned (sipmuc)":
+  test "Segment field offsets are CacheLineBytes-aligned (spmc)":
     # Queue[T, ccSingle, ccMulti, _, 64, 4] — Segment for
-    # the sipmuc-equiv shape carries `tail` and `prevConsumerIdx` as
+    # the spmc-equiv shape carries `tail` and `prevConsumerIdx` as
     # cache-line-padded fields. `head` and `committed` are not present
     # on this shape (their helpers would compile-fail here).
     type Seg = q_mod.Segment[uint64, ccSingle, ccMulti, 64]
     check segmentTailOffsetForTest(Seg) mod Cl == 0
     check segmentPrevConsumerIdxOffsetForTest(Seg) mod Cl == 0
 
-  test "Segment field offsets are CacheLineBytes-aligned (mupsic)":
+  test "Segment field offsets are CacheLineBytes-aligned (mpsc)":
     # Queue[T, ccMulti, ccSingle, _, rkEbr, ...] — Segment for the
-    # mupsic-equiv shape carries `tail`, `head`, and `committed` as
+    # mpsc-equiv shape carries `tail`, `head`, and `committed` as
     # cache-line-padded fields. `prevConsumerIdx` is not present.
     type Seg = q_mod.Segment[uint64, ccMulti, ccSingle, 64]
     check segmentTailOffsetForTest(Seg) mod Cl == 0
     check segmentHeadOffsetForTest(Seg) mod Cl == 0
     check segmentCommittedOffsetForTest(Seg) mod Cl == 0
 
-  test "Segment field offsets are CacheLineBytes-aligned (mupmuc)":
+  test "Segment field offsets are CacheLineBytes-aligned (mpmc)":
     # Queue[T, ccMulti, ccMulti, _, rkEbr, ...] — Segment for the
-    # mupmuc-equiv shape carries `tail`, `prevConsumerIdx`, and
+    # mpmc-equiv shape carries `tail`, `prevConsumerIdx`, and
     # `committed` as cache-line-padded fields. `head` is not present on
     # the ccProd==ccMulti × ccCons==ccMulti shape (only on
     # ccProd==ccMulti × ccCons==ccSingle).
@@ -74,31 +74,31 @@ suite "Unbounded queue Segment cache-line padding":
     check segmentPrevConsumerIdxOffsetForTest(Seg) mod Cl == 0
     check segmentCommittedOffsetForTest(Seg) mod Cl == 0
 
-  test "freshly-allocated Segment base is CacheLineBytes-aligned (sipsic)":
-    var q = newUnboundedSipsicQueue[uint64, stEager, 64, 4]()
+  test "freshly-allocated Segment base is CacheLineBytes-aligned (spsc)":
+    var q = newUnboundedSpscQueue[uint64, stEager, 64, 4]()
     let segPtr = headSegmentForTest(q)
     check segPtr != nil
     check (cast[uint](segPtr) mod Cl.uint) == 0
 
-  test "freshly-allocated Segment base is CacheLineBytes-aligned (sipmuc)":
+  test "freshly-allocated Segment base is CacheLineBytes-aligned (spmc)":
     var manager = initDebraManager[4, debra.ccMulti]()
-    var q = newUnboundedSipmucQueue[uint64, stEager, 64, 4](addr manager)
+    var q = newUnboundedSpmcQueue[uint64, stEager, 64, 4](addr manager)
     let segPtr = headSegmentForTest(q)
     check segPtr != nil
     check (cast[uint](segPtr) mod Cl.uint) == 0
 
-  test "freshly-allocated Segment base is CacheLineBytes-aligned (mupsic)":
+  test "freshly-allocated Segment base is CacheLineBytes-aligned (mpsc)":
     var manager = initDebraManager[4]()
     let consumerHandle = registerThread(manager)
-    var q = newUnboundedMupsicQueue[uint64, stEager, 64, 4](
+    var q = newUnboundedMpscQueue[uint64, stEager, 64, 4](
         addr manager, consumerHandle)
     let segPtr = headSegmentForTest(q)
     check segPtr != nil
     check (cast[uint](segPtr) mod Cl.uint) == 0
 
-  test "freshly-allocated Segment base is CacheLineBytes-aligned (mupmuc)":
+  test "freshly-allocated Segment base is CacheLineBytes-aligned (mpmc)":
     var manager = initDebraManager[4, debra.ccMulti]()
-    var q = newUnboundedMupmucQueue[uint64, stEager, 64, 4](addr manager)
+    var q = newUnboundedMpmcQueue[uint64, stEager, 64, 4](addr manager)
     let segPtr = headSegmentForTest(q)
     check segPtr != nil
     check (cast[uint](segPtr) mod Cl.uint) == 0

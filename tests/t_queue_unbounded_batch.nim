@@ -3,8 +3,8 @@
 ##
 ## Exercises (8 tests):
 ##   - `QueueProducer.push(items: openArray[T])` round-trip across the
-##     4 rkEbr cardinality variants (sipsic-equiv, sipmuc-equiv,
-##     mupsic-equiv, mupmuc-equiv): push N items via openArray, drain
+##     4 rkEbr cardinality variants (spsc-equiv, spmc-equiv,
+##     mpsc-equiv, mpmc-equiv): push N items via openArray, drain
 ##     via single-item pop, assert order + content.
 ##   - `pop(count: int): Option[seq[T]]` round-trip across the 4
 ##     rkEbr cardinality variants: push N items via the new batch
@@ -15,7 +15,7 @@
 ##     elements.
 ##
 ## Step 3.3.6.5 of Phase 3.3 lockfreequeues v5.0.0 implementation.
-## Gap-fill between 3.3.6a (sipsic call-site migration) and 3.3.6b-e
+## Gap-fill between 3.3.6a (spsc call-site migration) and 3.3.6b-e
 ## (bulk migration). Pure additive; thin loop wrappers over the
 ## existing single-item rkEbr push/pop bodies.
 
@@ -29,7 +29,7 @@ import lockfreequeues/internal/pinscope_stub
 
 # --- push(openArray) round-trip — all 4 cardinality variants -------------
 
-suite "rkEbr batch push (openArray) — sipsic-equiv (ccSingle × ccSingle)":
+suite "rkEbr batch push (openArray) — spsc-equiv (ccSingle × ccSingle)":
   test "openArray push then drain via single-item pop preserves FIFO":
     var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
     var p = q.getProducer()
@@ -42,7 +42,7 @@ suite "rkEbr batch push (openArray) — sipsic-equiv (ccSingle × ccSingle)":
       check r.get == items[i]
     check q.pop().isNone
 
-suite "rkEbr batch push (openArray) — sipmuc-equiv (ccSingle × ccMulti)":
+suite "rkEbr batch push (openArray) — spmc-equiv (ccSingle × ccMulti)":
   test "openArray push then drain via single-item pop preserves FIFO":
     var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, 8, 4])
     var p = q.getProducer()
@@ -57,7 +57,7 @@ suite "rkEbr batch push (openArray) — sipmuc-equiv (ccSingle × ccMulti)":
       check r.get == items[i]
     check c.pop().isNone
 
-suite "rkEbr batch push (openArray) — mupsic-equiv (ccMulti × ccSingle)":
+suite "rkEbr batch push (openArray) — mpsc-equiv (ccMulti × ccSingle)":
   test "openArray push then drain via single-item pop preserves FIFO":
     var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 8, 4])
     q.attachConsumer()
@@ -72,7 +72,7 @@ suite "rkEbr batch push (openArray) — mupsic-equiv (ccMulti × ccSingle)":
       check r.get == items[i]
     check q.pop().isNone
 
-suite "rkEbr batch push (openArray) — mupmuc-equiv (ccMulti × ccMulti)":
+suite "rkEbr batch push (openArray) — mpmc-equiv (ccMulti × ccMulti)":
   test "openArray push then drain via single-item pop preserves FIFO":
     var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, 8, 4])
     var p = q.getProducer()
@@ -90,7 +90,7 @@ suite "rkEbr batch push (openArray) — mupmuc-equiv (ccMulti × ccMulti)":
 
 # --- pop(count) round-trip — all 4 cardinality variants ------------------
 
-suite "rkEbr batch pop (count) — sipsic-equiv (ccSingle × ccSingle)":
+suite "rkEbr batch pop (count) — spsc-equiv (ccSingle × ccSingle)":
   test "push then pop(count) returns some(seq) with correct elements":
     var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
     var p = q.getProducer()
@@ -124,7 +124,7 @@ suite "rkEbr batch pop (count) — sipsic-equiv (ccSingle × ccSingle)":
     check got == @[1, 2, 3]
     check q.pop().isNone
 
-suite "rkEbr batch pop (count) — mupsic-equiv (ccMulti × ccSingle)":
+suite "rkEbr batch pop (count) — mpsc-equiv (ccMulti × ccSingle)":
   test "push then pop(count) returns some(seq) with correct elements":
     var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 8, 4])
     q.attachConsumer()
@@ -140,7 +140,7 @@ suite "rkEbr batch pop (count) — mupsic-equiv (ccMulti × ccSingle)":
       check got[i] == items[i]
     check q.pop().isNone
 
-suite "rkEbr batch pop (count) — sipmuc-equiv (ccSingle × ccMulti)":
+suite "rkEbr batch pop (count) — spmc-equiv (ccSingle × ccMulti)":
   test "push then pop(count) via QueueConsumer returns some(seq)":
     var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, 8, 4])
     var p = q.getProducer()
@@ -160,7 +160,7 @@ suite "rkEbr batch pop (count) — sipmuc-equiv (ccSingle × ccMulti)":
   # a compile-time `{.error.}`. Bundle J compile-fail negative-controls
   # under tests/should_fail/ exercise the gate (added in 3.3.11-B.3).
 
-suite "rkEbr batch pop (count) — mupmuc-equiv (ccMulti × ccMulti)":
+suite "rkEbr batch pop (count) — mpmc-equiv (ccMulti × ccMulti)":
   test "push then pop(count) via QueueConsumer returns some(seq)":
     var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, 8, 4])
     var p = q.getProducer()

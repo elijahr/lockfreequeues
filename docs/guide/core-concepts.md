@@ -63,14 +63,14 @@ the lock blocks every other thread until it is rescheduled.
 
 | Cardinality shape | push | pop |
 |-------------------|------|-----|
-| bounded SPSC (`newSipsicQueue`) | wait-free | wait-free |
-| bounded SPMC (`newSipmucQueue`) | wait-free | lock-free |
-| bounded MPSC (`newMupsicQueue`) | lock-free | wait-free |
-| bounded MPMC (`newMupmucQueue`) | lock-free | lock-free |
-| unbounded SPSC (`newUnboundedSipsicQueue`) | wait-free | wait-free |
-| unbounded SPMC (`newUnboundedSipmucQueue`) | wait-free | lock-free |
-| unbounded MPSC (`newUnboundedMupsicQueue`) | lock-free | wait-free |
-| unbounded MPMC (`newUnboundedMupmucQueue`) | lock-free | lock-free |
+| bounded SPSC (`newSpscQueue`) | wait-free | wait-free |
+| bounded SPMC (`newSpmcQueue`) | wait-free | lock-free |
+| bounded MPSC (`newMpscQueue`) | lock-free | wait-free |
+| bounded MPMC (`newMpmcQueue`) | lock-free | lock-free |
+| unbounded SPSC (`newUnboundedSpscQueue`) | wait-free | wait-free |
+| unbounded SPMC (`newUnboundedSpmcQueue`) | wait-free | lock-free |
+| unbounded MPSC (`newUnboundedMpscQueue`) | lock-free | wait-free |
+| unbounded MPMC (`newUnboundedMpmcQueue`) | lock-free | lock-free |
 
 The single-cardinality side of each shape (the single-producer or
 single-consumer end) is wait-free because there is no CAS contention —
@@ -89,10 +89,10 @@ The four producer/consumer patterns and the queue type that implements each.
 
 | Producers | Consumers | Bounded constructor | Unbounded constructor |
 |-----------|-----------|---------------------|-----------------------|
-| 1 | 1 | `newSipsicQueue` | `newUnboundedSipsicQueue` |
-| 1 | many | `newSipmucQueue` | `newUnboundedSipmucQueue` |
-| many | 1 | `newMupsicQueue` | `newUnboundedMupsicQueue` |
-| many | many | `newMupmucQueue` | `newUnboundedMupmucQueue` |
+| 1 | 1 | `newSpscQueue` | `newUnboundedSpscQueue` |
+| 1 | many | `newSpmcQueue` | `newUnboundedSpmcQueue` |
+| many | 1 | `newMpscQueue` | `newUnboundedMpscQueue` |
+| many | many | `newMpmcQueue` | `newUnboundedMpmcQueue` |
 
 In v5.0.0 every shape is one of two unified generics: bounded queues are
 `BQueue[T, ccProd, ccCons, N, P, C]` and unbounded queues are
@@ -101,8 +101,8 @@ by the `ccProd` / `ccCons` parameters (`ccSingle` or `ccMulti`); the
 smart constructors above are thin wrappers that pick the right
 cardinality pair for you. The constructor names stay mnemonic:
 **Si**ngle vs **Mu**ltiple, **p**roducer, **s**ingle vs multiple,
-**c**onsumer. `newSipsicQueue` = Single-producer / Single-consumer;
-`newMupmucQueue` = Multi-producer / Multi-consumer.
+**c**onsumer. `newSpscQueue` = Single-producer / Single-consumer;
+`newMpmcQueue` = Multi-producer / Multi-consumer.
 
 For the full API reference, see the API pages:
 [Bounded Queue (BQueue)](../api/bqueue.md) and
@@ -114,13 +114,13 @@ The choice is made by counting threads, not by guessing which queue is
 "fastest". A queue used incorrectly — say, two producer threads sharing a
 single-producer (`ccSingle`) queue — has undefined behaviour.
 
-- One producer, one consumer: use `newSipsicQueue`. Wait-free both sides;
+- One producer, one consumer: use `newSpscQueue`. Wait-free both sides;
   lowest per-op cost in the library.
-- One producer, many consumers (fan-out): use `newSipmucQueue`. The
+- One producer, many consumers (fan-out): use `newSpmcQueue`. The
   producer side stays wait-free; consumers race a CAS to claim a slot.
 - Many producers, one consumer (fan-in, the most common server pattern):
-  use `newMupsicQueue`. Producers race; consumer is wait-free.
-- Many on both sides: use `newMupmucQueue`. Both sides race.
+  use `newMpscQueue`. Producers race; consumer is wait-free.
+- Many on both sides: use `newMpmcQueue`. Both sides race.
 
 If your producer or consumer count is "1 most of the time but occasionally
 2", you still need the multi-cardinality variant. The library cannot
@@ -153,7 +153,7 @@ import options
 import lockfreequeues
 
 # Capacity 8: 8 slots usable, plus 1 sentinel for SPSC.
-var queue = newSipsicQueue[int, 8]()
+var queue = newSpscQueue[int, 8]()
 
 discard queue.push(1)
 discard queue.push(2)
@@ -185,7 +185,7 @@ import lockfreequeues
 # deallocation strategy; the trailing 4 is the debra registry capacity
 # (a type-uniform phantom for the SPSC shape, which carries no debra).
 # The queue grows segment-by-segment as load demands.
-var queue = newUnboundedSipsicQueue[int, stEager, 64, 4]()
+var queue = newUnboundedSpscQueue[int, stEager, 64, 4]()
 var producer = queue.getProducer()
 
 producer.push(1)

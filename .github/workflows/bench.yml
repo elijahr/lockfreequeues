@@ -145,7 +145,7 @@ jobs:
   bench:
     # Track 2 PR 2 + v5.0.0 B3 split: matrix over the topology-split
     # binaries. v5.0.0 B3 split the original `bench_mpmc` into a
-    # per-family pair (bench_mpmc_mupmuc + bench_mpmc_sipmuc) to
+    # per-family pair (bench_mpmc_bounded + bench_spmc_bounded) to
     # eliminate cross-family iCache contention; see the bench_mpmc_*.nim
     # headers for the diagnostic. Each matrix entry is its own GitHub
     # Actions job with an independent `timeout-minutes: 18` budget so a
@@ -176,12 +176,12 @@ jobs:
         binary:
           - bench_spsc
           - bench_mpsc
-          - bench_mpmc_mupmuc
-          - bench_mpmc_sipmuc
-          - bench_unbounded_sipsic
-          - bench_unbounded_sipmuc
-          - bench_unbounded_mupsic
-          - bench_unbounded_mupmuc
+          - bench_mpmc_bounded
+          - bench_spmc_bounded
+          - bench_unbounded_spsc
+          - bench_unbounded_spmc
+          - bench_unbounded_mpsc
+          - bench_unbounded_mpmc
           - bench_latency
     timeout-minutes: 18
 
@@ -242,7 +242,7 @@ jobs:
         id: install-boost
         if: |
           env.FORCE_SKIP_BOOST != '1' &&
-          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc_mupmuc')
+          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc_bounded')
         continue-on-error: true
         run: |
           sudo apt-get install -qq -y libboost-dev
@@ -252,7 +252,7 @@ jobs:
         if: |
           env.FORCE_SKIP_BOOST != '1' &&
           steps.install-boost.outcome == 'success' &&
-          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc_mupmuc')
+          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc_bounded')
         continue-on-error: true
         run: |
           set -eu
@@ -279,7 +279,7 @@ jobs:
 
       - name: Annotate boost skipped
         if: |
-          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc_mupmuc') &&
+          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc_bounded') &&
           (env.FORCE_SKIP_BOOST == '1' ||
            steps.install-boost.outcome != 'success' ||
            steps.smoke-boost.outcome != 'success')
@@ -288,12 +288,12 @@ jobs:
 
       - name: Install loony (nimble)
         # Loony is a Nim-only unbounded MPMC queue; nimble pulls it from
-        # the registry. Only bench_unbounded_mupmuc uses it (matches the
-        # mupmuc unbounded MVP-adapter slot post-3.3.9-D split).
+        # the registry. Only bench_unbounded_mpmc uses it (matches the
+        # mpmc unbounded MVP-adapter slot post-3.3.9-D split).
         id: install-loony
         if: |
           env.FORCE_SKIP_LOONY != '1' &&
-          matrix.binary == 'bench_unbounded_mupmuc'
+          matrix.binary == 'bench_unbounded_mpmc'
         continue-on-error: true
         run: |
           nimble install -y loony
@@ -303,7 +303,7 @@ jobs:
         if: |
           env.FORCE_SKIP_LOONY != '1' &&
           steps.install-loony.outcome == 'success' &&
-          matrix.binary == 'bench_unbounded_mupmuc'
+          matrix.binary == 'bench_unbounded_mpmc'
         continue-on-error: true
         run: |
           # The smoke is the round-trip test in tests/t_bench_adapters.nim.
@@ -323,7 +323,7 @@ jobs:
 
       - name: Annotate loony skipped
         if: |
-          matrix.binary == 'bench_unbounded_mupmuc' &&
+          matrix.binary == 'bench_unbounded_mpmc' &&
           (env.FORCE_SKIP_LOONY == '1' ||
            steps.install-loony.outcome != 'success' ||
            steps.smoke-loony.outcome != 'success')
@@ -336,14 +336,14 @@ jobs:
       # benchmarks/vendor/concurrentqueue/concurrentqueue.h. The
       # "install" step is therefore a `test -f` rather than a fetch, so
       # the bench is reproducible without network egress. Only
-      # bench_unbounded_mupmuc wires the moodycamel adapter
-      # (mpmc_unbounded; matches the mupmuc unbounded MVP-adapter slot
+      # bench_unbounded_mpmc wires the moodycamel adapter
+      # (mpmc_unbounded; matches the mpmc unbounded MVP-adapter slot
       # post-3.3.9-D split).
       - name: Install MoodyCamel (vendored header presence check)
         id: install-moodycamel
         if: |
           env.FORCE_SKIP_MOODYCAMEL != '1' &&
-          matrix.binary == 'bench_unbounded_mupmuc'
+          matrix.binary == 'bench_unbounded_mpmc'
         continue-on-error: true
         run: |
           test -f benchmarks/vendor/concurrentqueue/concurrentqueue.h
@@ -354,7 +354,7 @@ jobs:
         if: |
           env.FORCE_SKIP_MOODYCAMEL != '1' &&
           steps.install-moodycamel.outcome == 'success' &&
-          matrix.binary == 'bench_unbounded_mupmuc'
+          matrix.binary == 'bench_unbounded_mpmc'
         continue-on-error: true
         run: |
           set -eu
@@ -375,20 +375,20 @@ jobs:
 
       - name: Annotate MoodyCamel skipped
         if: |
-          matrix.binary == 'bench_unbounded_mupmuc' &&
+          matrix.binary == 'bench_unbounded_mpmc' &&
           (env.FORCE_SKIP_MOODYCAMEL == '1' ||
            steps.install-moodycamel.outcome != 'success' ||
            steps.smoke-moodycamel.outcome != 'success')
         run: |
           echo "::warning title=Adapter skipped::moodycamel install or smoke failed; bench will omit moodycamel slugs."
 
-      # threading.Chan (nimble package): only used by bench_mpmc_mupmuc
+      # threading.Chan (nimble package): only used by bench_mpmc_bounded
       # (matches the channels/MVP-adapter slot post-B3 split).
       - name: Install threading (nimble)
         id: install-threading-channels
         if: |
           env.FORCE_SKIP_THREADING_CHANNELS != '1' &&
-          matrix.binary == 'bench_mpmc_mupmuc'
+          matrix.binary == 'bench_mpmc_bounded'
         continue-on-error: true
         run: |
           nimble install -y threading
@@ -398,7 +398,7 @@ jobs:
         if: |
           env.FORCE_SKIP_THREADING_CHANNELS != '1' &&
           steps.install-threading-channels.outcome == 'success' &&
-          matrix.binary == 'bench_mpmc_mupmuc'
+          matrix.binary == 'bench_mpmc_bounded'
         continue-on-error: true
         run: |
           set -eu
@@ -417,7 +417,7 @@ jobs:
 
       - name: Annotate threading.Chan skipped
         if: |
-          matrix.binary == 'bench_mpmc_mupmuc' &&
+          matrix.binary == 'bench_mpmc_bounded' &&
           (env.FORCE_SKIP_THREADING_CHANNELS == '1' ||
            steps.install-threading-channels.outcome != 'success' ||
            steps.smoke-threading-channels.outcome != 'success')
@@ -500,11 +500,11 @@ jobs:
         # column. Bounded throughput binaries: 1M messages × 5 runs ×
         # 2 warmup; cheap, single-digit seconds total. The four
         # bench_unbounded_* binaries (post 3.3.9-D split) each carry
-        # only their own family's overrides — sipsic 200K×3, sipmuc/
-        # mupsic 100K×2, mupmuc 50K×2 — because the previously-monolithic
+        # only their own family's overrides — spsc 200K×3, spmc/
+        # mpsc 100K×2, mpmc 50K×2 — because the previously-monolithic
         # 16-shape total (1+3+3+9) plus oversubscribed shapes like 1p4c
         # on 4-vCPU runners exhausted the budget at higher N. The
-        # mupmuc 9-shape grid still dominates its own job's wall clock
+        # mpmc 9-shape grid still dominates its own job's wall clock
         # so it gets the deepest cut. bench_latency keeps PR 1's
         # tighter shape (50K × 11 × 2) because each ping-pong RTT
         # records exactly one sample, so 1M messages would never fit.
@@ -540,88 +540,88 @@ jobs:
                 $ADAPTER_FLAGS \
                 benchmarks/nim/bench_mpsc.nim
               ;;
-            bench_mpmc_mupmuc)
-              # v5.0.0 B3 split: this binary owns the Mupmuc grid +
-              # Queue-bounded-mupmuc parity + nim_channels grid + MVP
+            bench_mpmc_bounded)
+              # v5.0.0 B3 split: this binary owns the Mpmc grid +
+              # Queue-bounded-mpmc parity + nim_channels grid + MVP
               # comparison adapters (boost.lockfree, crossbeam ArrayQueue,
               # threading.Chan). Shares the BenchMpmc* intdefines with
-              # bench_mpmc_sipmuc so existing CI overrides apply unchanged.
+              # bench_spmc_bounded so existing CI overrides apply unchanged.
               nim "$NIM_MODE" -d:release -d:danger --threads:on \
                 -d:BenchMpmcMessageCount=1000000 \
                 -d:BenchMpmcRuns=5 \
                 -d:BenchMpmcWarmup=2 \
                 $ADAPTER_FLAGS \
-                benchmarks/nim/bench_mpmc_mupmuc.nim
+                benchmarks/nim/bench_mpmc_bounded.nim
               ;;
-            bench_mpmc_sipmuc)
-              # v5.0.0 B3 split: this binary owns the Sipmuc 1p{1,2,4}c
-              # set + Queue-bounded-sipmuc parity. No MVP adapters live
-              # here (sipmuc-shape MVP adapters do not exist), so
+            bench_spmc_bounded)
+              # v5.0.0 B3 split: this binary owns the Spmc 1p{1,2,4}c
+              # set + Queue-bounded-spmc parity. No MVP adapters live
+              # here (spmc-shape MVP adapters do not exist), so
               # ADAPTER_FLAGS is ignored; stay on `nim c` because none
               # of the imported types require C++.
               nim c -d:release -d:danger --threads:on \
                 -d:BenchMpmcMessageCount=1000000 \
                 -d:BenchMpmcRuns=5 \
                 -d:BenchMpmcWarmup=2 \
-                benchmarks/nim/bench_mpmc_sipmuc.nim
+                benchmarks/nim/bench_spmc_bounded.nim
               ;;
-            bench_unbounded_sipsic)
-              # v5.0.0 3.3.9-D split: this binary owns UnboundedSipsic
-              # at 1p1c. No MVP adapters live here (sipsic is SPSC only
+            bench_unbounded_spsc)
+              # v5.0.0 3.3.9-D split: this binary owns UnboundedSpsc
+              # at 1p1c. No MVP adapters live here (spsc is SPSC only
               # and has no Loony/Crossbeam-SegQueue/MoodyCamel analog).
               # -d:benchProgress enables per-10k progress prints in the
               # producer/consumer workers so an intermittent hang shows
               # which thread stalled (CI-only; local-dev stays clean).
               nim c -d:release -d:danger --threads:on \
-                -d:UnboundedSipsicMessageCount=200000 \
-                -d:UnboundedSipsicRuns=3 \
+                -d:UnboundedSpscMessageCount=200000 \
+                -d:UnboundedSpscRuns=3 \
                 -d:BenchUnboundedWarmup=1 \
                 -d:benchProgress \
-                benchmarks/nim/bench_unbounded_sipsic.nim
+                benchmarks/nim/bench_unbounded_spsc.nim
               ;;
-            bench_unbounded_sipmuc)
-              # v5.0.0 3.3.9-D split: this binary owns UnboundedSipmuc
+            bench_unbounded_spmc)
+              # v5.0.0 3.3.9-D split: this binary owns UnboundedSpmc
               # at 1p{1,2,4}c. No MVP adapters live here. Stays on `nim
               # c` because no imported types require C++.
-              # See bench_unbounded_sipsic above for -d:benchProgress.
+              # See bench_unbounded_spsc above for -d:benchProgress.
               nim c -d:release -d:danger --threads:on \
-                -d:UnboundedSipmucMessageCount=100000 \
-                -d:UnboundedSipmucRuns=2 \
+                -d:UnboundedSpmcMessageCount=100000 \
+                -d:UnboundedSpmcRuns=2 \
                 -d:BenchUnboundedWarmup=1 \
                 -d:BenchSkipOversubscribed \
                 -d:benchProgress \
-                benchmarks/nim/bench_unbounded_sipmuc.nim
+                benchmarks/nim/bench_unbounded_spmc.nim
               ;;
-            bench_unbounded_mupsic)
-              # v5.0.0 3.3.9-D split: this binary owns UnboundedMupsic
+            bench_unbounded_mpsc)
+              # v5.0.0 3.3.9-D split: this binary owns UnboundedMpsc
               # at {1,2,4}p1c. No MVP adapters live here.
-              # See bench_unbounded_sipsic above for -d:benchProgress.
+              # See bench_unbounded_spsc above for -d:benchProgress.
               nim c -d:release -d:danger --threads:on \
-                -d:UnboundedMupsicMessageCount=100000 \
-                -d:UnboundedMupsicRuns=2 \
+                -d:UnboundedMpscMessageCount=100000 \
+                -d:UnboundedMpscRuns=2 \
                 -d:BenchUnboundedWarmup=1 \
                 -d:benchProgress \
-                benchmarks/nim/bench_unbounded_mupsic.nim
+                benchmarks/nim/bench_unbounded_mpsc.nim
               ;;
-            bench_unbounded_mupmuc)
-              # v5.0.0 3.3.9-D split: this binary owns UnboundedMupmuc
+            bench_unbounded_mpmc)
+              # v5.0.0 3.3.9-D split: this binary owns UnboundedMpmc
               # at the full {1,2,4}p{1,2,4}c grid PLUS the MVP
-              # comparison adapters whose slug shape matches the mupmuc
+              # comparison adapters whose slug shape matches the mpmc
               # unbounded grid: loony (Nim, plain `nim c`), Crossbeam
               # SegQueue (Rust/cdylib via the existing link wrapper),
               # and PR 4's MoodyCamel (C++ vendored header, requires
               # `nim cpp`). NIM_MODE is "cpp" iff ADAPTER_MOODYCAMEL was
               # set; otherwise it stays "c". loony and Crossbeam
               # SegQueue are mode-neutral.
-              # See bench_unbounded_sipsic above for -d:benchProgress.
+              # See bench_unbounded_spsc above for -d:benchProgress.
               nim "$NIM_MODE" -d:release -d:danger --threads:on \
-                -d:UnboundedMupmucMessageCount=50000 \
-                -d:UnboundedMupmucRuns=2 \
+                -d:UnboundedMpmcMessageCount=50000 \
+                -d:UnboundedMpmcRuns=2 \
                 -d:BenchUnboundedWarmup=1 \
                 -d:BenchSkipOversubscribed \
                 -d:benchProgress \
                 $ADAPTER_FLAGS \
-                benchmarks/nim/bench_unbounded_mupmuc.nim
+                benchmarks/nim/bench_unbounded_mpmc.nim
               ;;
             bench_latency)
               nim c -d:release -d:danger --threads:on \
@@ -647,10 +647,10 @@ jobs:
         # invocation. The unbounded variants get a separate retried
         # step below.
         if: |
-          matrix.binary != 'bench_unbounded_sipsic' &&
-          matrix.binary != 'bench_unbounded_sipmuc' &&
-          matrix.binary != 'bench_unbounded_mupsic' &&
-          matrix.binary != 'bench_unbounded_mupmuc'
+          matrix.binary != 'bench_unbounded_spsc' &&
+          matrix.binary != 'bench_unbounded_spmc' &&
+          matrix.binary != 'bench_unbounded_mpsc' &&
+          matrix.binary != 'bench_unbounded_mpmc'
         timeout-minutes: 10
         run: |
           set -euo pipefail
@@ -673,10 +673,10 @@ jobs:
         # NOT a third-party action so the retry stays auditable and
         # the workflow keeps zero new dependencies.
         if: |
-          matrix.binary == 'bench_unbounded_sipsic' ||
-          matrix.binary == 'bench_unbounded_sipmuc' ||
-          matrix.binary == 'bench_unbounded_mupsic' ||
-          matrix.binary == 'bench_unbounded_mupmuc'
+          matrix.binary == 'bench_unbounded_spsc' ||
+          matrix.binary == 'bench_unbounded_spmc' ||
+          matrix.binary == 'bench_unbounded_mpsc' ||
+          matrix.binary == 'bench_unbounded_mpmc'
         timeout-minutes: 20
         run: |
           set -eo pipefail
@@ -762,11 +762,11 @@ jobs:
       - name: Download BMF artifacts
         # Pattern matches every per-binary artifact uploaded by the
         # bench matrix (`bench-bench_spsc-bmf`, `bench-bench_mpsc-bmf`,
-        # `bench-bench_mpmc_mupmuc-bmf`, `bench-bench_mpmc_sipmuc-bmf`,
-        # `bench-bench_unbounded_sipsic-bmf`,
-        # `bench-bench_unbounded_sipmuc-bmf`,
-        # `bench-bench_unbounded_mupsic-bmf`,
-        # `bench-bench_unbounded_mupmuc-bmf`,
+        # `bench-bench_mpmc_bounded-bmf`, `bench-bench_spmc_bounded-bmf`,
+        # `bench-bench_unbounded_spsc-bmf`,
+        # `bench-bench_unbounded_spmc-bmf`,
+        # `bench-bench_unbounded_mpsc-bmf`,
+        # `bench-bench_unbounded_mpmc-bmf`,
         # `bench-bench_latency-bmf`). Each artifact lands in its own
         # subdir under `bmf-inputs/` (no `merge-multiple`) so any future
         # filename overlap between binaries cannot silently overwrite.
@@ -911,7 +911,7 @@ jobs:
       # the per-topology bench binaries is `throughput_ops_ms`, so the
       # earlier threshold never matched any measure. Track 6 corrects this.
       # v5.0.0 3.3.9-D split bench_unbounded into 4 per-family binaries
-      # (sipsic/sipmuc/mupsic/mupmuc); the throughput_ops_ms key is
+      # (spsc/spmc/mpsc/mpmc); the throughput_ops_ms key is
       # unchanged.
       #
       # NOTE on continue-on-error (v4.2.0): the Bencher CLI is currently

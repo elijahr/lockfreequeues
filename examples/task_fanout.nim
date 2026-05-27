@@ -1,6 +1,6 @@
 ## Task Fan-Out Example
 ##
-## Demonstrates using a bounded Sipmuc (SPMC) queue for distributing work
+## Demonstrates using a bounded Spmc (SPMC) queue for distributing work
 ## from a single producer to multiple consumer workers.
 ##
 ## Pattern: Single dispatcher → Multiple workers
@@ -41,7 +41,7 @@ type
     payload: int
 
 var
-  q = newSipmucQueue[Task, QueueCapacity, NumWorkers]()
+  q = newSpmcQueue[Task, QueueCapacity, NumWorkers]()
   done: Atomic[bool]
   tasksCompleted: array[NumWorkers, Atomic[int]]
   totalLatency: array[NumWorkers, Atomic[int64]]

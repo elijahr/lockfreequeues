@@ -4,8 +4,8 @@
 lock-free queue. A single generic type covers all four
 producer/consumer cardinality combinations — SPSC, MPSC, SPMC, and
 MPMC — selected at compile time through `ccProd` and `ccCons`. It
-replaces the v4.x family-prefixed unbounded types (`UnboundedSipsic`,
-`UnboundedSipmuc`, `UnboundedMupsic`, `UnboundedMupmuc`).
+replaces the v4.x family-prefixed unbounded types (`UnboundedSpsc`,
+`UnboundedSpmc`, `UnboundedMpsc`, `UnboundedMpmc`).
 
 ## Overview
 
@@ -18,7 +18,7 @@ Body layout splits on `(ccProd, ccCons) is (ccSingle, ccSingle)`:
 
 - **SPSC** (`ccSingle × ccSingle`): no memory-reclamation manager. The
   linked-segment, committed-flag-free SPSC protocol (formerly the
-  standalone `UnboundedSipsic` type) is absorbed verbatim; retired
+  standalone `UnboundedSpsc` type) is absorbed verbatim; retired
   segments are freed inline by the consumer-side advance.
 - **MPSC / SPMC / MPMC**: DEBRA+ epoch-based memory reclamation via
   [nim-debra](https://github.com/elijahr/nim-debra). The queue owns or
@@ -55,10 +55,10 @@ SPSC shape. Manager-borrowed overloads accept an existing
 Family-named thin wrappers are retained for ergonomic continuity with
 the v3.x/v4.x naming; all compile to the same `Queue` type:
 
-- `newUnboundedSipsicQueue` — `ccSingle × ccSingle` (SPSC)
-- `newUnboundedMupsicQueue` — `ccMulti × ccSingle` (MPSC)
-- `newUnboundedSipmucQueue` — `ccSingle × ccMulti` (SPMC)
-- `newUnboundedMupmucQueue` — `ccMulti × ccMulti` (MPMC)
+- `newUnboundedSpscQueue` — `ccSingle × ccSingle` (SPSC)
+- `newUnboundedMpscQueue` — `ccMulti × ccSingle` (MPSC)
+- `newUnboundedSpmcQueue` — `ccSingle × ccMulti` (SPMC)
+- `newUnboundedMpmcQueue` — `ccMulti × ccMulti` (MPMC)
 
 ## Attach-Time Thread Registration
 

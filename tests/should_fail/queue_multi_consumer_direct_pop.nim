@@ -5,8 +5,8 @@
 ## pointing the caller at `Queue.getConsumer().pop()`.
 ##
 ## M8 light-touch coverage: this is the multi-consumer family proof
-## for the unbounded surface. Both `newUnboundedSipmucQueue` and
-## `newUnboundedMupmucQueue` thin-wrappers resolve to a
+## for the unbounded surface. Both `newUnboundedSpmcQueue` and
+## `newUnboundedMpmcQueue` thin-wrappers resolve to a
 ## `ccCons == ccMulti` Queue, so the same `{.error.}` overload fires.
 
 import std/options
@@ -16,7 +16,7 @@ import lockfreequeues/internal/pinscope_stub
 
 proc main() =
   # Auto-create overload: ccCons=ccMulti unbounded Queue.
-  var q = newUnboundedSipmucQueue[int, stEager, 16, 4]()
+  var q = newUnboundedSpmcQueue[int, stEager, 16, 4]()
   # Direct pop on ccCons=ccMulti Queue must compile-fail.
   discard q.pop()
 

@@ -7,7 +7,7 @@
 ##   - `BQueue[T, ccProd, ccCons, N, P, C]` — bounded, no debra.
 ##   - `Queue[T, ccProd, ccCons, ST, S, MaxThreads]` — unbounded,
 ##     with the `(ccSingle, ccSingle)` branch absorbing the standalone
-##     `UnboundedSipsic[S, T]` (debra-free).
+##     `UnboundedSpsc[S, T]` (debra-free).
 ##
 ## What IS exercised here:
 ##   - All 4 cardinality combos instantiate under both BQueue and Queue.
@@ -25,44 +25,44 @@ import lockfreequeues/internal/pinscope_stub
 
 suite "BQueue type shell — positive instantiations":
 
-  test "bounded mupsic-equivalent shape compiles and validates":
+  test "bounded mpsc-equivalent shape compiles and validates":
     var q: BQueue[int, ccMulti, ccSingle, 16, 4, 0]
     discard addr q
     validateBQueueParams(BQueue[int, ccMulti, ccSingle, 16, 4, 0])
 
-  test "bounded sipmuc-equivalent shape compiles and validates":
+  test "bounded spmc-equivalent shape compiles and validates":
     var q: BQueue[int, ccSingle, ccMulti, 16, 0, 4]
     discard addr q
     validateBQueueParams(BQueue[int, ccSingle, ccMulti, 16, 0, 4])
 
-  test "bounded mupmuc-equivalent shape compiles and validates":
+  test "bounded mpmc-equivalent shape compiles and validates":
     var q: BQueue[int, ccMulti, ccMulti, 16, 4, 4]
     discard addr q
     validateBQueueParams(BQueue[int, ccMulti, ccMulti, 16, 4, 4])
 
-  test "bounded sipsic-equivalent shape compiles and validates":
+  test "bounded spsc-equivalent shape compiles and validates":
     var q: BQueue[int, ccSingle, ccSingle, 16, 0, 0]
     discard addr q
     validateBQueueParams(BQueue[int, ccSingle, ccSingle, 16, 0, 0])
 
 suite "Queue type shell — positive instantiations (unbounded)":
 
-  test "unbounded sipsic-absorbed shape compiles and validates":
+  test "unbounded spsc-absorbed shape compiles and validates":
     var q: Queue[int, ccSingle, ccSingle, stEager, 16, 4]
     discard addr q
     validateQueueParams(Queue[int, ccSingle, ccSingle, stEager, 16, 4])
 
-  test "unbounded mupsic-equivalent shape compiles and validates":
+  test "unbounded mpsc-equivalent shape compiles and validates":
     var q: Queue[int, ccMulti, ccSingle, stEager, 16, 4]
     discard addr q
     validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, 16, 4])
 
-  test "unbounded sipmuc-equivalent shape compiles and validates":
+  test "unbounded spmc-equivalent shape compiles and validates":
     var q: Queue[int, ccSingle, ccMulti, stEager, 16, 4]
     discard addr q
     validateQueueParams(Queue[int, ccSingle, ccMulti, stEager, 16, 4])
 
-  test "unbounded mupmuc-equivalent shape compiles and validates":
+  test "unbounded mpmc-equivalent shape compiles and validates":
     var q: Queue[int, ccMulti, ccMulti, stEager, 16, 4]
     discard addr q
     validateQueueParams(Queue[int, ccMulti, ccMulti, stEager, 16, 4])

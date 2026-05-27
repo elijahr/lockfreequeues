@@ -1,4 +1,4 @@
-## Shared test templates for single-consumer queues (Sipsic, Mupsic).
+## Shared test templates for single-consumer queues (Spsc, Mpsc).
 
 template testSicPopOne*(queue: untyped) =
   when compiles(queue.getProducer(0)):

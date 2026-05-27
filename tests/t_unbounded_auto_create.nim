@@ -2,10 +2,10 @@
 ## `getProducer()` / `getConsumer()` overloads on the unbounded MP/SP
 ## variants of the unified Queue.
 ##
-## v5.0.0 cascade migration: the legacy `newUnboundedMupmuc` /
-## `newUnboundedSipmuc` / `newUnboundedMupsic` constructors collapsed
-## into the smart-constructors `newUnboundedMupmucQueue` /
-## `newUnboundedSipmucQueue` / `newUnboundedMupsicQueue`. The auto-create
+## v5.0.0 cascade migration: the legacy `newUnboundedMpmc` /
+## `newUnboundedSpmc` / `newUnboundedMpsc` constructors collapsed
+## into the smart-constructors `newUnboundedMpmcQueue` /
+## `newUnboundedSpmcQueue` / `newUnboundedMpscQueue`. The auto-create
 ## overload returns a Queue with a privately-owned `DebraManager`; the
 ## borrow overload takes `ptr DebraManager` as the first arg.
 
@@ -20,10 +20,10 @@ import lockfreequeues/internal/pinscope_stub
 import debra as debra_mod
 from debra import DebraManager, initDebraManager, registerThread
 
-suite "Unbounded auto-create (Mupmuc)":
+suite "Unbounded auto-create (Mpmc)":
   test "auto-create: push/pop round-trip and scope-exit teardown":
     block:
-      var queue = newUnboundedMupmucQueue[int, stEager, 16, 4]()
+      var queue = newUnboundedMpmcQueue[int, stEager, 16, 4]()
       var producer = queue.getProducer()
       producer.attach()
       var consumer = queue.getConsumer()
@@ -36,7 +36,7 @@ suite "Unbounded auto-create (Mupmuc)":
     # privately-owned manager.
 
   test "auto-register getProducer / getConsumer return usable handles":
-    var queue = newUnboundedMupmucQueue[int, stEager, 16, 4]()
+    var queue = newUnboundedMpmcQueue[int, stEager, 16, 4]()
     var producer = queue.getProducer()
     producer.attach()
     var consumer = queue.getConsumer()
@@ -57,7 +57,7 @@ suite "Unbounded auto-create (Mupmuc)":
     check(got == @[1, 2, 3, 4, 5])
 
   test "auto-create: bulk push/pop":
-    var queue = newUnboundedMupmucQueue[int, stEager, 8, 4]()
+    var queue = newUnboundedMpmcQueue[int, stEager, 8, 4]()
     var producer = queue.getProducer()
     producer.attach()
     var consumer = queue.getConsumer()
@@ -67,10 +67,10 @@ suite "Unbounded auto-create (Mupmuc)":
     check(got.isSome)
     check(got.get == @[1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
-suite "Unbounded auto-create (Sipmuc)":
+suite "Unbounded auto-create (Spmc)":
   test "auto-create: push/pop round-trip and scope-exit teardown":
     block:
-      var queue = newUnboundedSipmucQueue[int, stEager, 16, 4]()
+      var queue = newUnboundedSpmcQueue[int, stEager, 16, 4]()
       var producer = queue.getProducer()
       var consumer = queue.getConsumer()
       consumer.attach()
@@ -79,7 +79,7 @@ suite "Unbounded auto-create (Sipmuc)":
       check(consumer.pop() == none(int))
 
   test "auto-register getConsumer returns usable handle":
-    var queue = newUnboundedSipmucQueue[int, stEager, 16, 4]()
+    var queue = newUnboundedSpmcQueue[int, stEager, 16, 4]()
     var producer = queue.getProducer()
     var consumer = queue.getConsumer()
     consumer.attach()
@@ -94,10 +94,10 @@ suite "Unbounded auto-create (Sipmuc)":
       got.add(item.get)
     check(got == @[10, 20, 30, 40])
 
-suite "Unbounded auto-create (Mupsic)":
+suite "Unbounded auto-create (Mpsc)":
   test "auto-create: caller is the consumer; producer auto-registers":
     block:
-      var queue = newUnboundedMupsicQueue[int, stEager, 16, 4]()
+      var queue = newUnboundedMpscQueue[int, stEager, 16, 4]()
       # Single-threaded: this thread is both producer and consumer.
       queue.attachConsumer()
       var producer = queue.getProducer()
@@ -107,7 +107,7 @@ suite "Unbounded auto-create (Mupsic)":
       check(queue.pop() == none(int))
 
   test "auto-register getProducer returns usable handle":
-    var queue = newUnboundedMupsicQueue[int, stEager, 16, 4]()
+    var queue = newUnboundedMpscQueue[int, stEager, 16, 4]()
     queue.attachConsumer()
     var producer = queue.getProducer()
     producer.attach()
@@ -123,10 +123,10 @@ suite "Unbounded auto-create (Mupsic)":
     check(got == @[1, 2, 3])
 
 suite "Existing borrow-manager API still works":
-  test "borrow: shared manager across multiple Mupmuc queues":
+  test "borrow: shared manager across multiple Mpmc queues":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
-    var queueA = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
-    var queueB = newUnboundedMupmucQueue[int, stEager, 16, 4](addr manager)
+    var queueA = newUnboundedMpmcQueue[int, stEager, 16, 4](addr manager)
+    var queueB = newUnboundedMpmcQueue[int, stEager, 16, 4](addr manager)
 
     var producerA = queueA.getProducer()
     producerA.attach()
@@ -142,19 +142,19 @@ suite "Existing borrow-manager API still works":
     check(consumerA.pop() == some(1))
     check(consumerB.pop() == some(2))
 
-  test "borrow: Sipmuc with shared manager":
+  test "borrow: Spmc with shared manager":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
-    var queue = newUnboundedSipmucQueue[int, stEager, 16, 4](addr manager)
+    var queue = newUnboundedSpmcQueue[int, stEager, 16, 4](addr manager)
     var producer = queue.getProducer()
     var consumer = queue.getConsumer()
     consumer.attach()
     producer.push(123)
     check(consumer.pop() == some(123))
 
-  test "borrow: Mupsic with shared manager and explicit consumer handle":
+  test "borrow: Mpsc with shared manager and explicit consumer handle":
     var manager = initDebraManager[4]()
     let consumerHandle = registerThread(manager)
-    var queue = newUnboundedMupsicQueue[int, stEager, 16, 4](
+    var queue = newUnboundedMpscQueue[int, stEager, 16, 4](
         addr manager, consumerHandle)
     # Escape hatch: the consumer handle was registered + supplied at
     # construction (consumerAttached set true there). The producer still

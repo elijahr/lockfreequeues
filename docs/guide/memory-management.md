@@ -54,7 +54,7 @@ import lockfreequeues
 type Payload = object
   data: array[64, int]
 
-var queue = newSipsicQueue[ptr Payload, 16]()
+var queue = newSpscQueue[ptr Payload, 16]()
 
 # WRONG: consumer might read uninitialized data through the pointer.
 # proc badProducer(slot: ptr Payload, value: int) =
@@ -195,7 +195,7 @@ type Node = ref object
 #   "Queue item type 'Node' is a ref type. Slots are stored in a shared
 #    array; `=copy`/`=sink` hooks mutate the refcount on the same object
 #    multiple threads can read or write..."
-var queue = newUnboundedSipsicQueue[Node, stEager, 64, 4]()
+var queue = newUnboundedSpscQueue[Node, stEager, 64, 4]()
 ```
 
 ### Why the rejection is a feature
@@ -218,10 +218,10 @@ type Node = object
   value: int
 
 # Pointer to a heap-allocated Node, lifetime managed by the producer.
-var q1 = newUnboundedSipsicQueue[ptr Node, stEager, 64, 4]()
+var q1 = newUnboundedSpscQueue[ptr Node, stEager, 64, 4]()
 
 # Index into a shared side-table.
-var q2 = newUnboundedSipsicQueue[int, stEager, 64, 4]()
+var q2 = newUnboundedSpscQueue[int, stEager, 64, 4]()
 ```
 
 ### `-d:allowNonLockFreeQueueItems` escape hatch
@@ -244,7 +244,7 @@ DEBRA is the epoch-based reclamation (EBR) scheme used by the
 multi-cardinality unbounded shapes (any unbounded `Queue` with a multi
 producer or multi consumer — MPSC, SPMC, MPMC) to retire and free
 segments safely under contention. The single-cardinality unbounded shape
-(SPSC, `newUnboundedSipsicQueue`) is debra-free: it owns no
+(SPSC, `newUnboundedSpscQueue`) is debra-free: it owns no
 `DebraManager` and reclaims segments directly.
 
 ### What DEBRA solves (epoch-based reclamation)
@@ -278,7 +278,7 @@ import lockfreequeues
 
 # Auto-create: the queue owns its DebraManager. `stEager` strategy,
 # segment size 64, debra registry capacity 8.
-var queue = newUnboundedMupmucQueue[int, stEager, 64, 8]()
+var queue = newUnboundedMpmcQueue[int, stEager, 64, 8]()
 
 # On the producer thread:
 var producer = queue.getProducer()
@@ -298,7 +298,7 @@ queue directly:
 import options
 import lockfreequeues
 
-var queue = newUnboundedMupsicQueue[int, stEager, 64, 8]()
+var queue = newUnboundedMpscQueue[int, stEager, 64, 8]()
 
 # Single consumer registers on its own thread:
 queue.attachConsumer()
@@ -336,7 +336,7 @@ from debra import DebraManager, initDebraManager
 
 # Manager owned by the caller; the queue borrows it (ownsManager = false).
 var manager = initDebraManager[8, debra.ccMulti]()
-var queue = newUnboundedMupmucQueue[int, stEager, 64, 8](addr manager)
+var queue = newUnboundedMpmcQueue[int, stEager, 64, 8](addr manager)
 var producer = queue.getProducer()
 producer.attach()
 producer.push(1)

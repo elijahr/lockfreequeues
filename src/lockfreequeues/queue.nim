@@ -10,14 +10,14 @@
 ##   T, ccProd, ccCons, ST, S, MaxThreads
 ##
 ## The bounded surface moved to `bqueue.nim` (`BQueue[T, ccProd, ccCons,
-## N, P, C]`) in B.1. The standalone `UnboundedSipsic[S, T]` from
-## `unbounded_sipsic.nim` was absorbed into this `Queue` via the
+## N, P, C]`) in B.1. The standalone `UnboundedSpsc[S, T]` from
+## `unbounded_spsc.nim` was absorbed into this `Queue` via the
 ## `when (ccProd, ccCons) is (ccSingle, ccSingle):` branch of the
 ## object body — that branch carries no debra integration (no
 ## `manager`, no `ownsManager`, no pin/retire wrappers) and uses the
 ## committed-flag-free linked-segment protocol verbatim from the
-## legacy module. The other three cardinality combos (mupsic-,
-## sipmuc-, mupmuc-equiv) carry debra integration unchanged.
+## legacy module. The other three cardinality combos (mpsc-,
+## spmc-, mpmc-equiv) carry debra integration unchanged.
 ##
 ## Cardinality-illegal direct-on-queue calls (multi-producer `push`
 ## or multi-consumer `pop` against `Queue` directly rather than via
@@ -45,12 +45,12 @@ import std/typetraits
 
 import ./exceptions
 
-# nim-debra 0.8.0 surface — used for non-sipsic cardinality combos only.
+# nim-debra 0.8.0 surface — used for non-spsc cardinality combos only.
 # The `(ccSingle, ccSingle)` branch is debra-free (committed-flag-free
-# linked-segment protocol absorbed from the standalone `UnboundedSipsic`
+# linked-segment protocol absorbed from the standalone `UnboundedSpsc`
 # type). The import set is intentionally maintained for the other three
 # cardinalities; Nim's dead-code elimination strips the unused symbols
-# from the sipsic-only instantiation.
+# from the spsc-only instantiation.
 from debra import
   DebraManager, ThreadHandle, PinnedScope, Destructor, initDebraManager, registerThread,
   bindClient, unbindClient, unpinned, pinScope, advanceEvery, reclaimNow,
@@ -243,11 +243,11 @@ type
     ##   - `data: array[S, T]` — slot storage (all variants).
     ##   - `next: Atomic[ptr Segment[...]]` — linked-list pointer.
     ##   - `tail: Atomic[int]` — producer write index. Atomic for
-    ##     multi-producer coordination and for sipsic-equiv (publish
+    ##     multi-producer coordination and for spsc-equiv (publish
     ##     via release).
     ##   - `head: int` — single-consumer non-atomic read position.
-    ##     Present on `(ccProd × ccSingle)` shapes (mupsic-equiv and
-    ##     the absorbed sipsic-equiv). Only the single consumer ever
+    ##     Present on `(ccProd × ccSingle)` shapes (mpsc-equiv and
+    ##     the absorbed spsc-equiv). Only the single consumer ever
     ##     writes it.
     ##   - `committed: array[S, Atomic[bool]]` — multi-producer
     ##     publication flags. Present on `ccProd == ccMulti`.
@@ -257,14 +257,14 @@ type
     next* {.align: CacheLineBytes.}: Atomic[ptr Segment[T, ccProd, ccCons, S]]
     tail* {.align: CacheLineBytes.}: Atomic[int]
     when ccCons == ccSingle:
-      # mupsic-equiv + absorbed sipsic-equiv: single-consumer
+      # mpsc-equiv + absorbed spsc-equiv: single-consumer
       # non-atomic read position.
       head* {.align: CacheLineBytes.}: int
     when ccProd == ccMulti:
-      # mupsic-equiv + mupmuc-equiv: multi-producer publication flags.
+      # mpsc-equiv + mpmc-equiv: multi-producer publication flags.
       committed* {.align: CacheLineBytes.}: array[S, Atomic[bool]]
     when ccCons == ccMulti:
-      # sipmuc-equiv + mupmuc-equiv: multi-consumer CAS coordination.
+      # spmc-equiv + mpmc-equiv: multi-consumer CAS coordination.
       prevConsumerIdx* {.align: CacheLineBytes.}: Atomic[int]
 
   Queue*[
@@ -279,16 +279,16 @@ type
     ##
     ## Body layout splits on `(ccProd, ccCons) is (ccSingle, ccSingle)`:
     ##
-    ##   - **sipsic-absorbed** (ccSingle × ccSingle): no debra
+    ##   - **spsc-absorbed** (ccSingle × ccSingle): no debra
     ##     integration. Linked-segment with committed-flag-free
     ##     SPSC protocol absorbed verbatim from the legacy
-    ##     `UnboundedSipsic[S, T]` type. `MaxThreads` is a type-uniform
+    ##     `UnboundedSpsc[S, T]` type. `MaxThreads` is a type-uniform
     ##     phantom — no thread-registry capacity is consumed.
-    ##   - **non-sipsic** (mupsic-/sipmuc-/mupmuc-equiv): debra-
+    ##   - **non-spsc** (mpsc-/spmc-/mpmc-equiv): debra-
     ##     integrated. Owns `manager`, walks pin/retire chains in
     ##     `push`/`pop`. `MaxThreads` sizes the debra registry.
     when ccProd == ccSingle and ccCons == ccSingle:
-      # Absorbed `UnboundedSipsic` body — no manager, no debra.
+      # Absorbed `UnboundedSpsc` body — no manager, no debra.
       headSegment* {.align: CacheLineBytes.}: Atomic[ptr Segment[T, ccProd, ccCons, S]]
       tailSegment* {.align: CacheLineBytes.}: Atomic[ptr Segment[T, ccProd, ccCons, S]]
       itemCount*: Atomic[int]
@@ -312,16 +312,16 @@ type
         consumerCount*: Atomic[int]
       when ccProd == ccMulti and ccCons == ccSingle:
         handle*: ThreadHandle[MaxThreads, debra.ccSingle]
-        # mupsic-equiv: the single consumer's debra handle is registered
+        # mpsc-equiv: the single consumer's debra handle is registered
         # at attach-time (`attachConsumer`) on the operating consumer
         # thread, NOT at construction (registerThread is thread-affine).
-        # This flag records that attachConsumer has run; the mupsic
+        # This flag records that attachConsumer has run; the mpsc
         # `pop` asserts it in debug builds.
         consumerAttached*: bool
         when defined(debug):
           # Debug-only thread-affinity stamp. Records the thread that ran
           # `attachConsumer()` (which registered the debra handle via
-          # debra's `currentThreadId()`). The mupsic `pop()` asserts the
+          # debra's `currentThreadId()`). The mpsc `pop()` asserts the
           # operating thread matches. `when defined(debug):` so release
           # builds carry NO field — zero layout change, zero cost.
           attachedTid*: ThreadId
@@ -371,7 +371,7 @@ type
     ## For `ccProd == ccMulti` the producer carries a
     ## `ThreadHandle[MaxThreads, ...]` for the pin/unpin cycle in
     ## `push`. For `ccProd == ccSingle` the producer carries no
-    ## handle (sipsic/sipmuc-equiv have no pin requirement on push).
+    ## handle (spsc/spmc-equiv have no pin requirement on push).
     ##
     ## Claim-state typestate (Bundle F.2): every view begins in
     ## `QCUnclaimed`. The optional `claimed` runtime flag (ccMulti
@@ -420,8 +420,8 @@ type
         attachedTid*: ThreadId
 
 ## ----------------------------------------------------------------------
-## Unbounded-queue body — Track E (Steps 3.3.2-3.3.4), absorbed sipsic
-## from `unbounded_sipsic.nim` (B.2.5).
+## Unbounded-queue body — Track E (Steps 3.3.2-3.3.4), absorbed spsc
+## from `unbounded_spsc.nim` (B.2.5).
 ## ----------------------------------------------------------------------
 
 proc newSegment[T; ccProd, ccCons: static PinScopeCardinality, S: static int](): ptr Segment[
@@ -434,7 +434,7 @@ proc newSegment[T; ccProd, ccCons: static PinScopeCardinality, S: static int]():
   result.next.store(nil, moRelaxed)
   result.tail.store(0, moRelaxed)
   when ccCons == ccSingle:
-    # mupsic-equiv + absorbed sipsic-equiv carry a `head: int` field.
+    # mpsc-equiv + absorbed spsc-equiv carry a `head: int` field.
     result.head = 0
   when ccProd == ccMulti:
     for i in 0 ..< S:
@@ -445,19 +445,19 @@ proc newSegment[T; ccProd, ccCons: static PinScopeCardinality, S: static int]():
 ## ----------------------------------------------------------------------
 ## Per-queue retire wrappers — Doc C §3.0.2 + γ guard.
 ##
-## Defined only for non-sipsic cardinalities (debra-integrated). Sipsic-
+## Defined only for non-spsc cardinalities (debra-integrated). Spsc-
 ## absorbed (`(ccSingle, ccSingle)`) has no debra integration and thus
-## no retire-bearing site; UFCS lookup of `q.retireOn*` on a sipsic
+## no retire-bearing site; UFCS lookup of `q.retireOn*` on a spsc
 ## queue fails with method-not-defined, which is the desired guard.
 ##
 ## `retireOnCAS` is callable under any consumer cardinality (DR-S3).
 ## `retireOnPublish` is additionally gated on `ccCons == ccSingle`
-## (DR-S4 single-writer foot-gun). The sipsic exclusion is also
-## structurally enforced: sipsic's `(ccCons == ccSingle)` could match
+## (DR-S4 single-writer foot-gun). The spsc exclusion is also
+## structurally enforced: spsc's `(ccCons == ccSingle)` could match
 ## `retireOnPublish`'s gate, but the receiver `var Queue[..., ccSingle,
 ## ccSingle, ...]` body lacks the segment-pointer atomics the wrapper
 ## consumes — the guard fires before any harm is done, and the
-## documented design is that sipsic is debra-free.
+## documented design is that spsc is debra-free.
 ## ----------------------------------------------------------------------
 
 proc retireOnCAS*[
@@ -518,14 +518,14 @@ proc segmentDestructor[T; ccProd, ccCons: static PinScopeCardinality, S: static 
 ##
 ## Three overloads, distinguished by signature:
 ##   1. **typedesc-only** — auto-create. Allocates a manager internally
-##      (non-sipsic) or just initializes the body (sipsic). Works for
+##      (non-spsc) or just initializes the body (spsc). Works for
 ##      all 4 cardinality combos.
 ##   2. **typedesc + manager + handle** — manager-borrowed for
-##      ccCons==ccSingle. The handle is consumed by mupsic-equiv only.
+##      ccCons==ccSingle. The handle is consumed by mpsc-equiv only.
 ##   3. **typedesc + manager** — manager-borrowed for ccCons==ccMulti.
 ##
 ## A 4th overload `{.error.}`-gates the manager-borrowed signature on
-## sipsic-absorbed (`(ccSingle, ccSingle)`) since debra is not used
+## spsc-absorbed (`(ccSingle, ccSingle)`) since debra is not used
 ## there.
 ## ----------------------------------------------------------------------
 
@@ -540,20 +540,20 @@ proc newQueue*[
     handle: ThreadHandle[MaxThreads, debra.ccSingle],
 ): Queue[T, ccProd, ccSingle, ST, S, MaxThreads] =
   ## Manager-borrowed unbounded `newQueue` overload — ccCons == ccSingle
-  ## variants (mupsic-equiv only; the sipsic-absorbed `(ccSingle,
+  ## variants (mpsc-equiv only; the spsc-absorbed `(ccSingle,
   ## ccSingle)` shape is debra-free and uses a separate `{.error.}`
   ## overload below).
   ##
   ## Caller owns the `DebraManager`. Sets `ownsManager = false`. The
-  ## handle is consumed by mupsic-equiv (`ccProd == ccMulti`) and stored
-  ## on the queue. ccProd-ccSingle sipsic-equiv would be type-uniformly
-  ## constructable here, but is excluded by the dedicated sipsic
+  ## handle is consumed by mpsc-equiv (`ccProd == ccMulti`) and stored
+  ## on the queue. ccProd-ccSingle spsc-equiv would be type-uniformly
+  ## constructable here, but is excluded by the dedicated spsc
   ## `{.error.}` overload further below.
   validateQueueParams(Queue[T, ccProd, ccSingle, ST, S, MaxThreads])
-  # ccProd == ccSingle here means sipsic-absorbed, which is debra-free
+  # ccProd == ccSingle here means spsc-absorbed, which is debra-free
   # and routes through the dedicated `{.error.}` overload below — so by
   # the time we reach this body, ccProd is effectively ccMulti
-  # (mupsic-equiv).
+  # (mpsc-equiv).
   result.manager = manager
   result.ownsManager = false
   result.itemCount.store(0, moRelaxed)
@@ -562,7 +562,7 @@ proc newQueue*[
     result.handle = handle
     # Escape hatch: the caller registered the consumer thread itself and
     # supplied the handle, so the queue is already attached on the
-    # consumer side. Record it so the mupsic `pop` debug assert passes
+    # consumer side. Record it so the mpsc `pop` debug assert passes
     # without requiring a redundant `attachConsumer` call. (The auto-
     # create path leaves this false until `attachConsumer` runs.)
     result.consumerAttached = true
@@ -590,7 +590,7 @@ proc newQueue*[
     manager: ptr DebraManager[MaxThreads, debra.ccSingle],
 ): Queue[T, ccProd, ccSingle, ST, S, MaxThreads] =
   ## Handle-free manager-borrowed unbounded `newQueue` overload for
-  ## ccCons == ccSingle (mupsic-equiv). The single consumer's debra
+  ## ccCons == ccSingle (mpsc-equiv). The single consumer's debra
   ## handle is NOT registered here; the consumer thread registers itself
   ## via `attachConsumer()` before its first `pop`. The handle-carrying
   ## overload above remains the escape hatch for callers who register
@@ -618,7 +618,7 @@ proc newQueue*[
     handle: ThreadHandle[MaxThreads, debra.ccMulti],
 ): Queue[T, ccProd, ccMulti, ST, S, MaxThreads] =
   ## Manager-borrowed unbounded `newQueue` overload — ccCons == ccMulti
-  ## variants (sipmuc-equiv + mupmuc-equiv).
+  ## variants (spmc-equiv + mpmc-equiv).
   validateQueueParams(Queue[T, ccProd, ccMulti, ST, S, MaxThreads])
   result.manager = manager
   result.ownsManager = false
@@ -643,7 +643,7 @@ proc newQueue*[
     manager: ptr DebraManager[MaxThreads, debra.ccMulti],
 ): Queue[T, ccProd, ccMulti, ST, S, MaxThreads] =
   ## Handle-free manager-borrowed unbounded `newQueue` overload for
-  ## ccCons == ccMulti (sipmuc-equiv and mupmuc-equiv).
+  ## ccCons == ccMulti (spmc-equiv and mpmc-equiv).
   validateQueueParams(Queue[T, ccProd, ccMulti, ST, S, MaxThreads])
   result.manager = manager
   result.ownsManager = false
@@ -657,7 +657,7 @@ proc newQueue*[
   result.segments.store(1, moRelaxed)
   bindClient(manager[])
 
-# Sipsic-absorbed manager-borrowed `{.error.}` gate. The sipsic-absorbed
+# Spsc-absorbed manager-borrowed `{.error.}` gate. The spsc-absorbed
 # `(ccSingle, ccSingle)` body is debra-free; routing through a borrow
 # overload would mis-shape the body. M5 R9: error string references
 # user-visible alias names only.
@@ -671,7 +671,7 @@ proc newQueue*[
     manager: ptr DebraManager[MaxThreads, CC],
     handle: ThreadHandle[MaxThreads, CC],
 ): Queue[T, ccSingle, ccSingle, ST, S, MaxThreads] {.error:
-    "Sipsic-absorbed Queue (ccSingle × ccSingle) is debra-free. " &
+    "Spsc-absorbed Queue (ccSingle × ccSingle) is debra-free. " &
     "Use the typedesc-only newQueue(Queue[..., ccSingle, ccSingle, ST, S, MaxThreads]) " &
     "overload instead.".} =
   discard
@@ -685,7 +685,7 @@ proc newQueue*[
     _: typedesc[Queue[T, ccSingle, ccSingle, ST, S, MaxThreads]],
     manager: ptr DebraManager[MaxThreads, CC],
 ): Queue[T, ccSingle, ccSingle, ST, S, MaxThreads] {.error:
-    "Sipsic-absorbed Queue (ccSingle × ccSingle) is debra-free. " &
+    "Spsc-absorbed Queue (ccSingle × ccSingle) is debra-free. " &
     "Use the typedesc-only newQueue(Queue[..., ccSingle, ccSingle, ST, S, MaxThreads]) " &
     "overload instead.".} =
   discard
@@ -698,7 +698,7 @@ proc newQueue*[
 ](
     _: typedesc[Queue[T, ccProd, ccCons, ST, S, MaxThreads]]
 ): Queue[T, ccProd, ccCons, ST, S, MaxThreads] =
-  ## Auto-create unbounded `newQueue` overload. For the sipsic-absorbed
+  ## Auto-create unbounded `newQueue` overload. For the spsc-absorbed
   ## `(ccSingle, ccSingle)` branch this skips manager allocation
   ## entirely. For the other three cardinality combos, allocates a
   ## private `DebraManager[MaxThreads, ...]` and sets `ownsManager =
@@ -710,11 +710,11 @@ proc newQueue*[
   ## mis-route the handle when the queue is later operated on a
   ## different thread. Each operating thread registers itself at
   ## attach-time: producers/consumers via `getProducer().attach()` /
-  ## `getConsumer().attach()`, and the mupsic-equiv single consumer via
+  ## `getConsumer().attach()`, and the mpsc-equiv single consumer via
   ## `attachConsumer()` before its first `pop`.
   validateQueueParams(Queue[T, ccProd, ccCons, ST, S, MaxThreads])
   when ccProd == ccSingle and ccCons == ccSingle:
-    # Sipsic-absorbed: no manager, no debra. Allocate initial segment
+    # Spsc-absorbed: no manager, no debra. Allocate initial segment
     # and zero the counters; that's it.
     let seg = newSegment[T, ccSingle, ccSingle, S]()
     result.headSegment.store(seg, moRelaxed)
@@ -739,7 +739,7 @@ proc newQueue*[
         result = newQueue(Queue[T, ccProd, ccCons, ST, S, MaxThreads], mgr)
       else:
         mgr[] = initDebraManager[MaxThreads, debra.ccSingle]()
-        # mupsic-equiv: no consumer handle registered here. The single
+        # mpsc-equiv: no consumer handle registered here. The single
         # consumer calls `attachConsumer()` on its own thread.
         result = newQueue(Queue[T, ccProd, ccCons, ST, S, MaxThreads], mgr)
       result.ownsManager = true
@@ -823,12 +823,12 @@ proc segmentCount*[
 ## Push body — single-item.
 ##
 ## Per-cardinality dispatch via `when (ccProd, ccCons) is`:
-##   - sipsic-absorbed (ccSingle × ccSingle): no pin, no committed-flag;
+##   - spsc-absorbed (ccSingle × ccSingle): no pin, no committed-flag;
 ##     simple tail/`next` linked-segment advance. Lifted verbatim from
-##     the legacy `unbounded_sipsic.nim` push.
-##   - sipmuc-equiv (ccSingle × ccMulti): no pin (single producer),
+##     the legacy `unbounded_spsc.nim` push.
+##   - spmc-equiv (ccSingle × ccMulti): no pin (single producer),
 ##     simple tail advance.
-##   - mupsic/mupmuc-equiv (ccMulti × _): pin via
+##   - mpsc/mpmc-equiv (ccMulti × _): pin via
 ##     `pinScope(unpinned(self.handle))`, CAS slot claim with segment
 ##     growth on full.
 ## ----------------------------------------------------------------------
@@ -858,8 +858,8 @@ proc push*[
         .}
 
   when ccProd == ccSingle and ccCons == ccSingle:
-    # Sipsic-absorbed — no pin, no committed flag, no debra.
-    # Lifted verbatim from `unbounded_sipsic.nim:83-115`.
+    # Spsc-absorbed — no pin, no committed flag, no debra.
+    # Lifted verbatim from `unbounded_spsc.nim:83-115`.
     var seg = self.queue.tailSegment.load(moRelaxed)
     let tail = seg.tail.load(moRelaxed)
     if tail >= S:
@@ -873,7 +873,7 @@ proc push*[
     seg.tail.store(pos + 1, moRelease)
     discard self.queue.itemCount.fetchAdd(1, moRelaxed)
   elif ccProd == ccSingle and ccCons == ccMulti:
-    # sipmuc-equiv — no pin (single producer).
+    # spmc-equiv — no pin (single producer).
     var seg = self.queue.tailSegment.load(moRelaxed)
     var tail = seg.tail.load(moRelaxed)
     if tail >= S:
@@ -887,12 +887,12 @@ proc push*[
     seg.tail.store(tail + 1, moRelease)
     discard self.queue.itemCount.fetchAdd(1, moRelaxed)
   else:
-    # ccProd == ccMulti — mupsic-equiv + mupmuc-equiv share the push
+    # ccProd == ccMulti — mpsc-equiv + mpmc-equiv share the push
     # body shape (the cardinality difference is on the consumer side).
     # Debug precondition: the producer view must have been claimed via
     # `attach()` on this thread (which registers the debra handle), so
     # the handle pinned below routes to the calling thread's slot.
-    # Mirrors the mupsic-equiv `pop` assert form (bare `assert`,
+    # Mirrors the mpsc-equiv `pop` assert form (bare `assert`,
     # compiled out under `-d:release` / `--assertions:off`).
     assert self.claimed,
       "producer view: call attach() on this thread before push()"
@@ -956,19 +956,19 @@ proc push*[
 ## Pop body — single-item.
 ##
 ## Doc C §3.5 carrier decision: pop lives on bare `Queue` for
-## ccCons == ccSingle variants (sipsic-absorbed + mupsic-equiv) and on
-## `QueueConsumer` for ccCons == ccMulti variants (sipmuc-equiv,
-## mupmuc-equiv).
+## ccCons == ccSingle variants (spsc-absorbed + mpsc-equiv) and on
+## `QueueConsumer` for ccCons == ccMulti variants (spmc-equiv,
+## mpmc-equiv).
 ## ----------------------------------------------------------------------
 
-# --- sipsic-absorbed pop (ccSingle × ccSingle, direct on Queue, no pin) -----
+# --- spsc-absorbed pop (ccSingle × ccSingle, direct on Queue, no pin) -----
 proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
     self: var Queue[T, ccSingle, ccSingle, ST, S, MaxThreads]
 ): Option[T] =
-  ## Sipsic-absorbed pop — direct slot read + segment advance with
+  ## Spsc-absorbed pop — direct slot read + segment advance with
   ## `freeAligned(oldSeg)`. No pin (no retire-race; only one consumer
   ## ever runs, only one producer ever writes). Lifted verbatim from
-  ## `unbounded_sipsic.nim:122-166`.
+  ## `unbounded_spsc.nim:122-166`.
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
       when T is ref:
@@ -1001,11 +1001,11 @@ proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
     discard self.segments.fetchSub(1, moRelaxed)
     freeAligned(oldSeg)
 
-# --- mupsic-equiv pop (ccMulti × ccSingle, direct on Queue, retireOnPublish) -
+# --- mpsc-equiv pop (ccMulti × ccSingle, direct on Queue, retireOnPublish) -
 proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
     self: var Queue[T, ccMulti, ccSingle, ST, S, MaxThreads]
 ): Option[T] =
-  ## mupsic-equiv pop — §3.5.1 retire-bearing site.
+  ## mpsc-equiv pop — §3.5.1 retire-bearing site.
   ##
   ## Debug precondition: the consumer thread must have registered its
   ## debra handle via `attachConsumer()` (or supplied it through the
@@ -1013,11 +1013,11 @@ proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
   ## assert is compiled out under `-d:release` / `--assertions:off`, so
   ## it adds no hot-path cost in release builds.
   assert self.consumerAttached,
-    "mupsic Queue.pop called before attachConsumer(): the consumer " &
+    "mpsc Queue.pop called before attachConsumer(): the consumer " &
     "thread must register its debra handle on its own thread first"
   when defined(debug):
     assert self.attachedTid == currentThreadId(),
-      "mupsic Queue.pop: attachConsumer() was called on a different " &
+      "mpsc Queue.pop: attachConsumer() was called on a different " &
       "thread than this pop(); the operating thread must be the thread " &
       "that registered the debra handle (thread-affinity contract)"
   when not defined(allowNonLockFreeQueueItems):
@@ -1082,22 +1082,22 @@ proc pop*[
   else:
     some(items)
 
-# --- sipmuc-equiv pop (ccSingle × ccMulti, via QueueConsumer, retireOnCAS) -
+# --- spmc-equiv pop (ccSingle × ccMulti, via QueueConsumer, retireOnCAS) -
 proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
     self: var QueueConsumer[T, ccSingle, ccMulti, ST, S, MaxThreads]
 ): Option[T] =
-  ## sipmuc-equiv pop — §3.5.3 retire-bearing site.
+  ## spmc-equiv pop — §3.5.3 retire-bearing site.
   ##
   ## Debug precondition: the consumer view must have been claimed via
   ## `attach()` on this thread (which registers the debra handle), so the
   ## handle pinned below routes to the calling thread's slot. Mirrors the
-  ## mupsic-equiv `pop` assert form (bare `assert`, compiled out under
+  ## mpsc-equiv `pop` assert form (bare `assert`, compiled out under
   ## `-d:release` / `--assertions:off`).
   assert self.claimed,
     "consumer view: call attach() on this thread before pop()"
   when defined(debug):
     assert self.attachedTid == currentThreadId(),
-      "sipmuc consumer view: attach() was called on a different thread " &
+      "spmc consumer view: attach() was called on a different thread " &
       "than this pop(); the operating thread must be the thread that " &
       "registered the debra handle (thread-affinity contract)"
   when not defined(allowNonLockFreeQueueItems):
@@ -1150,22 +1150,22 @@ proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
     if self.handle.advanceEvery(LockFreeQueuesAdvanceEvery):
       discard reclaimNow(self.handle)
 
-# --- mupmuc-equiv pop (ccMulti × ccMulti, via QueueConsumer, retireOnCAS) -
+# --- mpmc-equiv pop (ccMulti × ccMulti, via QueueConsumer, retireOnCAS) -
 proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
     self: var QueueConsumer[T, ccMulti, ccMulti, ST, S, MaxThreads]
 ): Option[T] =
-  ## mupmuc-equiv pop — §3.5.2 retire-bearing site.
+  ## mpmc-equiv pop — §3.5.2 retire-bearing site.
   ##
   ## Debug precondition: the consumer view must have been claimed via
   ## `attach()` on this thread (which registers the debra handle), so the
   ## handle pinned below routes to the calling thread's slot. Mirrors the
-  ## mupsic-equiv `pop` assert form (bare `assert`, compiled out under
+  ## mpsc-equiv `pop` assert form (bare `assert`, compiled out under
   ## `-d:release` / `--assertions:off`).
   assert self.claimed,
     "consumer view: call attach() on this thread before pop()"
   when defined(debug):
     assert self.attachedTid == currentThreadId(),
-      "mupmuc consumer view: attach() was called on a different thread " &
+      "mpmc consumer view: attach() was called on a different thread " &
       "than this pop(); the operating thread must be the thread that " &
       "registered the debra handle (thread-affinity contract)"
   when not defined(allowNonLockFreeQueueItems):
@@ -1396,7 +1396,7 @@ proc detach*[
   self.claimed = false
 
 ## ----------------------------------------------------------------------
-## mupsic-equiv (ccMulti × ccSingle) consumer attach.
+## mpsc-equiv (ccMulti × ccSingle) consumer attach.
 ##
 ## The single consumer pops directly through `Queue.pop` (no view), so
 ## it has no `attach()`. Instead it registers its debra handle once, on
@@ -1412,7 +1412,7 @@ proc attachConsumer*[
 ](
     self: var Queue[T, ccMulti, ccSingle, ST, S, MaxThreads]
 ) {.raises: [DebraRegistrationError].} =
-  ## Register the calling thread as the mupsic-equiv single consumer.
+  ## Register the calling thread as the mpsc-equiv single consumer.
   ##
   ## **Thread-affinity contract:** MUST be called on the thread that
   ## will subsequently `pop`, before the first `pop`. Registering on one
@@ -1456,7 +1456,7 @@ proc `=copy`*[
     src: Queue[T, ccProd, ccCons, ST, S, MaxThreads],
 ) {.error:
     "Queue is non-copyable: it owns a `ptr Segment` chain and (for " &
-    "non-sipsic cardinalities) a `ptr DebraManager`. Copying would " &
+    "non-spsc cardinalities) a `ptr DebraManager`. Copying would " &
     "alias these owned pointers and double-free / use-after-free at " &
     "`=destroy`. Move the Queue (it has `=destroy` move semantics) or " &
     "share it by `ptr`/`var` parameter instead.".}
@@ -1478,7 +1478,7 @@ proc `=destroy`*[
       "Queue used after =destroy (lifecycle: QueueInit -> QueueDestroyed).",
 .} =
   ## Destructor. Walks `headSegment` → `next` → ... freeing each
-  ## segment. For non-sipsic cardinalities, additionally unbinds the
+  ## segment. For non-spsc cardinalities, additionally unbinds the
   ## client refcount on the manager and (when `ownsManager`) runs the
   ## manager's destructor.
   ##
@@ -1548,17 +1548,17 @@ proc `=destroy`*[
 ## `Queue[...]`, never a backing type.
 ## ----------------------------------------------------------------------
 
-proc newUnboundedSipsicQueue*[
+proc newUnboundedSpscQueue*[
     T;
     ST: static DeallocationStrategy = DefaultDeallocationStrategy,
     S, MaxThreads: static int,
 ](): Queue[T, ccSingle, ccSingle, ST, S, MaxThreads] {.inline.} =
-  ## Unbounded sipsic-absorbed (`ccSingle × ccSingle`) auto-create
-  ## smart-constructor. Skips manager allocation (sipsic-absorbed has
+  ## Unbounded spsc-absorbed (`ccSingle × ccSingle`) auto-create
+  ## smart-constructor. Skips manager allocation (spsc-absorbed has
   ## no debra integration). Added in B.2.5 alongside the absorption.
   newQueue(Queue[T, ccSingle, ccSingle, ST, S, MaxThreads])
 
-proc newUnboundedMupsicQueue*[
+proc newUnboundedMpscQueue*[
     T;
     ST: static DeallocationStrategy = DefaultDeallocationStrategy,
     S, MaxThreads: static int,
@@ -1566,18 +1566,18 @@ proc newUnboundedMupsicQueue*[
     manager: ptr DebraManager[MaxThreads, debra.ccSingle],
     consumerHandle: ThreadHandle[MaxThreads, debra.ccSingle],
 ): Queue[T, ccMulti, ccSingle, ST, S, MaxThreads] {.inline.} =
-  ## Unbounded mupsic-equivalent (`ccMulti × ccSingle`) borrow
+  ## Unbounded mpsc-equivalent (`ccMulti × ccSingle`) borrow
   ## smart-constructor.
   newQueue(Queue[T, ccMulti, ccSingle, ST, S, MaxThreads], manager, consumerHandle)
 
-proc newUnboundedMupsicQueue*[
+proc newUnboundedMpscQueue*[
     T;
     ST: static DeallocationStrategy = DefaultDeallocationStrategy,
     S, MaxThreads: static int,
 ](
     manager: ptr DebraManager[MaxThreads, debra.ccSingle]
 ): Queue[T, ccMulti, ccSingle, ST, S, MaxThreads] {.inline.} =
-  ## Unbounded mupsic-equivalent (`ccMulti × ccSingle`) borrow
+  ## Unbounded mpsc-equivalent (`ccMulti × ccSingle`) borrow
   ## smart-constructor — manager-only form. The consumer's debra handle
   ## is NOT registered here; the consumer thread registers itself via
   ## `attachConsumer()` before its first `pop`. Use the
@@ -1585,54 +1585,54 @@ proc newUnboundedMupsicQueue*[
   ## consumer thread yourself and supply the handle at construction.
   newQueue(Queue[T, ccMulti, ccSingle, ST, S, MaxThreads], manager)
 
-proc newUnboundedMupsicQueue*[
+proc newUnboundedMpscQueue*[
     T;
     ST: static DeallocationStrategy = DefaultDeallocationStrategy,
     S, MaxThreads: static int,
 ](): Queue[T, ccMulti, ccSingle, ST, S, MaxThreads] {.inline.} =
-  ## Unbounded mupsic-equivalent (`ccMulti × ccSingle`) auto-create
+  ## Unbounded mpsc-equivalent (`ccMulti × ccSingle`) auto-create
   ## smart-constructor. No thread is registered at construction: the
   ## consumer thread calls `attachConsumer()` and producer threads call
   ## `getProducer().attach()` on their own threads.
   newQueue(Queue[T, ccMulti, ccSingle, ST, S, MaxThreads])
 
-proc newUnboundedSipmucQueue*[
+proc newUnboundedSpmcQueue*[
     T;
     ST: static DeallocationStrategy = DefaultDeallocationStrategy,
     S, MaxThreads: static int,
 ](
     manager: ptr DebraManager[MaxThreads, debra.ccMulti]
 ): Queue[T, ccSingle, ccMulti, ST, S, MaxThreads] {.inline.} =
-  ## Unbounded sipmuc-equivalent (`ccSingle × ccMulti`) borrow
+  ## Unbounded spmc-equivalent (`ccSingle × ccMulti`) borrow
   ## smart-constructor.
   newQueue(Queue[T, ccSingle, ccMulti, ST, S, MaxThreads], manager)
 
-proc newUnboundedSipmucQueue*[
+proc newUnboundedSpmcQueue*[
     T;
     ST: static DeallocationStrategy = DefaultDeallocationStrategy,
     S, MaxThreads: static int,
 ](): Queue[T, ccSingle, ccMulti, ST, S, MaxThreads] {.inline.} =
-  ## Unbounded sipmuc-equivalent (`ccSingle × ccMulti`) auto-create
+  ## Unbounded spmc-equivalent (`ccSingle × ccMulti`) auto-create
   ## smart-constructor.
   newQueue(Queue[T, ccSingle, ccMulti, ST, S, MaxThreads])
 
-proc newUnboundedMupmucQueue*[
+proc newUnboundedMpmcQueue*[
     T;
     ST: static DeallocationStrategy = DefaultDeallocationStrategy,
     S, MaxThreads: static int,
 ](
     manager: ptr DebraManager[MaxThreads, debra.ccMulti]
 ): Queue[T, ccMulti, ccMulti, ST, S, MaxThreads] {.inline.} =
-  ## Unbounded mupmuc-equivalent (`ccMulti × ccMulti`) borrow
+  ## Unbounded mpmc-equivalent (`ccMulti × ccMulti`) borrow
   ## smart-constructor.
   newQueue(Queue[T, ccMulti, ccMulti, ST, S, MaxThreads], manager)
 
-proc newUnboundedMupmucQueue*[
+proc newUnboundedMpmcQueue*[
     T;
     ST: static DeallocationStrategy = DefaultDeallocationStrategy,
     S, MaxThreads: static int,
 ](): Queue[T, ccMulti, ccMulti, ST, S, MaxThreads] {.inline.} =
-  ## Unbounded mupmuc-equivalent (`ccMulti × ccMulti`) auto-create
+  ## Unbounded mpmc-equivalent (`ccMulti × ccMulti`) auto-create
   ## smart-constructor.
   newQueue(Queue[T, ccMulti, ccMulti, ST, S, MaxThreads])
 

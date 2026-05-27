@@ -1,6 +1,6 @@
 ## Smoke fixtures for the v5.0.0 Track E Step 3.3.4 — rkEbr pop body
-## across all 4 cardinality variants (sipsic-equiv, sipmuc-equiv,
-## mupsic-equiv, mupmuc-equiv).
+## across all 4 cardinality variants (spsc-equiv, spmc-equiv,
+## mpsc-equiv, mpmc-equiv).
 ##
 ## Exercises:
 ##   - 4-variant pop compiles and pops in steady-state via the unified
@@ -10,10 +10,10 @@
 ##     are retired (Eager strategy reclaims promptly via per-pop
 ##     `reclaimNow`).
 ##   - Multi-segment drain (1 → 0 segments via multiple advances).
-##   - For multi-consumer variants (sipmuc-equiv, mupmuc-equiv): 2
+##   - For multi-consumer variants (spmc-equiv, mpmc-equiv): 2
 ##     consumer threads contend on `headSegment` CAS (sanity test, not
 ##     full stress).
-##   - §3.5.6 Pin-Claim Ordering: multi-consumer + mupsic-equiv
+##   - §3.5.6 Pin-Claim Ordering: multi-consumer + mpsc-equiv
 ##     variants exercise the `pinScope(unpinned(self.handle))` path.
 ##     The visual-review guarantee that pin is acquired BEFORE the
 ##     segment-pointer load is encoded in `src/lockfreequeues/queue.nim`'s
@@ -33,8 +33,8 @@ import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
 
-suite "rkEbr pop smoke — sipsic-equiv (ccSingle × ccSingle)":
-  ## §3.0.3: UnboundedSipsic is the canonical SPSC unbounded type;
+suite "rkEbr pop smoke — spsc-equiv (ccSingle × ccSingle)":
+  ## §3.0.3: UnboundedSpsc is the canonical SPSC unbounded type;
   ## this rkEbr instantiation is type-uniformity only. No pin, no
   ## retire — direct slot read + segment advance + freeAligned.
 
@@ -69,7 +69,7 @@ suite "rkEbr pop smoke — sipsic-equiv (ccSingle × ccSingle)":
       check r.isSome
       check r.get == i
     # After draining we may sit at 1 segment (last in-use) or
-    # transient state — accept ≥1 ≤3 (sipsic free-on-advance reduces
+    # transient state — accept ≥1 ≤3 (spsc free-on-advance reduces
     # segments as it advances).
     check q.segmentCount() >= 1
     check q.pop().isNone
@@ -78,7 +78,7 @@ suite "rkEbr pop smoke — sipsic-equiv (ccSingle × ccSingle)":
     var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
     check q.pop().isNone
 
-suite "rkEbr pop smoke — mupsic-equiv (ccMulti × ccSingle)":
+suite "rkEbr pop smoke — mpsc-equiv (ccMulti × ccSingle)":
   ## §3.5.1 retire-bearing site (retireOnPublish, single consumer =
   ## single writer to headSegment). §3.5.6 Pin-Claim Ordering:
   ## pinScope FIRST, segment-pointer load NEXT.
@@ -114,7 +114,7 @@ suite "rkEbr pop smoke — mupsic-equiv (ccMulti × ccSingle)":
     q.attachConsumer()
     check q.pop().isNone
 
-suite "rkEbr pop smoke — sipmuc-equiv (ccSingle × ccMulti)":
+suite "rkEbr pop smoke — spmc-equiv (ccSingle × ccMulti)":
   ## §3.5.3 retire-bearing site (retireOnCAS, weak compareExchange).
   ## §3.5.6 Pin-Claim Ordering: pinScope FIRST, segment-pointer load
   ## NEXT.
@@ -149,7 +149,7 @@ suite "rkEbr pop smoke — sipmuc-equiv (ccSingle × ccMulti)":
   # compile-time `{.error.}`. Bundle J compile-fail negative-controls
   # under tests/should_fail/ exercise the gate (added in 3.3.11-B.3).
 
-suite "rkEbr pop smoke — mupmuc-equiv (ccMulti × ccMulti)":
+suite "rkEbr pop smoke — mpmc-equiv (ccMulti × ccMulti)":
   ## §3.5.2 retire-bearing site (retireOnCAS, strong
   ## compareExchangeStrong). §3.5.6 Pin-Claim Ordering: pinScope
   ## FIRST, segment-pointer load NEXT.

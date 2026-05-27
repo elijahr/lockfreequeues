@@ -1,4 +1,4 @@
-## Shared test templates for multi-producer queues (Mupsic, Mupmuc).
+## Shared test templates for multi-producer queues (Mpsc, Mpmc).
 
 when defined(posix):
   import posix # pthread_join, used by testMupGetProducerThrowsNoProducersAvailable

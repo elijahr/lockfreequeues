@@ -5,9 +5,9 @@
 ## (`t_queue_bounded_*.nim`, `t_queue_unbounded_push_smoke.nim`,
 ## `t_queue_unbounded_pop_smoke.nim`) and the §3.0.2.4 soundness gates.
 ##
-## Post-3.3.11-B.2.5: the standalone `UnboundedSipsic[S, T]` was absorbed
+## Post-3.3.11-B.2.5: the standalone `UnboundedSpsc[S, T]` was absorbed
 ## into `Queue[T, ccSingle, ccSingle, stEager, S, MaxThreads]` and now
-## ships its own smart-ctor (`newUnboundedSipsicQueue`) exercised below.
+## ships its own smart-ctor (`newUnboundedSpscQueue`) exercised below.
 ##
 ## **Push-uniform / pop-asymmetric**: `push` always goes through
 ## `QueueProducer.push` for `ccProd == ccMulti` and through
@@ -33,16 +33,16 @@ import lockfreequeues/internal/pinscope_stub
 from debra import DebraManager, initDebraManager, registerThread
 
 suite "bounded smart-constructors (RK = rkNone)":
-  test "newSipsicQueue: construct + push/pop round-trip":
-    var q = newSipsicQueue[int, 8]()
+  test "newSpscQueue: construct + push/pop round-trip":
+    var q = newSpscQueue[int, 8]()
     check q.capacity == 8
     check q.push(42)
     let r = q.pop()
     check r.isSome
     check r.get == 42
 
-  test "newMupsicQueue: construct + push (via producer) + pop":
-    var q = newMupsicQueue[int, 16, 4]()
+  test "newMpscQueue: construct + push (via producer) + pop":
+    var q = newMpscQueue[int, 16, 4]()
     check q.capacity == 16
     var p = q.getProducer(0)
     check p.push(7)
@@ -50,8 +50,8 @@ suite "bounded smart-constructors (RK = rkNone)":
     check r.isSome
     check r.get == 7
 
-  test "newSipmucQueue: construct + push + pop (via consumer)":
-    var q = newSipmucQueue[int, 16, 4]()
+  test "newSpmcQueue: construct + push + pop (via consumer)":
+    var q = newSpmcQueue[int, 16, 4]()
     check q.capacity == 16
     check q.push(99)
     var c = q.getConsumer(0)
@@ -59,8 +59,8 @@ suite "bounded smart-constructors (RK = rkNone)":
     check r.isSome
     check r.get == 99
 
-  test "newMupmucQueue: construct + push (producer) + pop (consumer)":
-    var q = newMupmucQueue[int, 16, 4, 4]()
+  test "newMpmcQueue: construct + push (producer) + pop (consumer)":
+    var q = newMpmcQueue[int, 16, 4, 4]()
     check q.capacity == 16
     var p = q.getProducer(0)
     check p.push(123)
@@ -69,12 +69,12 @@ suite "bounded smart-constructors (RK = rkNone)":
     check r.isSome
     check r.get == 123
 
-suite "unbounded smart-constructors — newUnboundedSipsicQueue":
-  ## Sipsic-absorbed branch: no debra, no manager. Only an auto-create
+suite "unbounded smart-constructors — newUnboundedSpscQueue":
+  ## Spsc-absorbed branch: no debra, no manager. Only an auto-create
   ## overload is supported (manager-borrow is `{.error.}`-gated since
-  ## sipsic has no debra integration).
+  ## spsc has no debra integration).
   test "auto-create: construct + push + pop":
-    var q = newUnboundedSipsicQueue[int, stEager, 8, 4]()
+    var q = newUnboundedSpscQueue[int, stEager, 8, 4]()
     var p = q.getProducer()
     p.push(10)
     p.push(20)
@@ -84,9 +84,9 @@ suite "unbounded smart-constructors — newUnboundedSipsicQueue":
     check r2.isSome and r2.get == 20
     check q.pop().isNone
 
-suite "unbounded smart-constructors — newUnboundedMupsicQueue":
+suite "unbounded smart-constructors — newUnboundedMpscQueue":
   test "auto-create: construct + push + pop":
-    var q = newUnboundedMupsicQueue[int, stEager, 8, 4]()
+    var q = newUnboundedMpscQueue[int, stEager, 8, 4]()
     q.attachConsumer()
     var p = q.getProducer()
     p.attach()
@@ -102,7 +102,7 @@ suite "unbounded smart-constructors — newUnboundedMupsicQueue":
     var mgr = initDebraManager[4, debra.ccSingle]()
     let consumerHandle = registerThread(mgr)
     block:
-      var q = newUnboundedMupsicQueue[int, stEager, 8, 4](addr mgr, consumerHandle)
+      var q = newUnboundedMpscQueue[int, stEager, 8, 4](addr mgr, consumerHandle)
       var p = q.getProducer()
       p.attach()
       p.push(11)
@@ -113,9 +113,9 @@ suite "unbounded smart-constructors — newUnboundedMupsicQueue":
     # `mgr` intact (ownsManager = false). `mgr` is dropped by Nim's
     # default destructor at suite-test scope exit.
 
-suite "unbounded smart-constructors — newUnboundedSipmucQueue":
+suite "unbounded smart-constructors — newUnboundedSpmcQueue":
   test "auto-create: construct + push + pop":
-    var q = newUnboundedSipmucQueue[int, stEager, 8, 4]()
+    var q = newUnboundedSpmcQueue[int, stEager, 8, 4]()
     var p = q.getProducer()
     p.push(3)
     p.push(4)
@@ -130,7 +130,7 @@ suite "unbounded smart-constructors — newUnboundedSipmucQueue":
   test "borrow: construct + push + pop (manager owned externally)":
     var mgr = initDebraManager[4, debra.ccMulti]()
     block:
-      var q = newUnboundedSipmucQueue[int, stEager, 8, 4](addr mgr)
+      var q = newUnboundedSpmcQueue[int, stEager, 8, 4](addr mgr)
       var p = q.getProducer()
       p.push(22)
       var c = q.getConsumer()
@@ -139,9 +139,9 @@ suite "unbounded smart-constructors — newUnboundedSipmucQueue":
       check r.isSome and r.get == 22
       check c.pop().isNone
 
-suite "unbounded smart-constructors — newUnboundedMupmucQueue":
+suite "unbounded smart-constructors — newUnboundedMpmcQueue":
   test "auto-create: construct + push + pop":
-    var q = newUnboundedMupmucQueue[int, stEager, 8, 4]()
+    var q = newUnboundedMpmcQueue[int, stEager, 8, 4]()
     var p = q.getProducer()
     p.attach()
     p.push(5)
@@ -157,7 +157,7 @@ suite "unbounded smart-constructors — newUnboundedMupmucQueue":
   test "borrow: construct + push + pop (manager owned externally)":
     var mgr = initDebraManager[4, debra.ccMulti]()
     block:
-      var q = newUnboundedMupmucQueue[int, stEager, 8, 4](addr mgr)
+      var q = newUnboundedMpmcQueue[int, stEager, 8, 4](addr mgr)
       var p = q.getProducer()
       p.attach()
       p.push(33)
@@ -174,9 +174,9 @@ suite "smart-constructor =destroy soundness":
   ## mis-routed by the smart-constructors, manager destruction would
   ## crash here. Exiting the inner block cleanly is the test.
 
-  test "newUnboundedMupsicQueue auto-create destructor runs cleanly":
+  test "newUnboundedMpscQueue auto-create destructor runs cleanly":
     block:
-      var q = newUnboundedMupsicQueue[int, stEager, 8, 4]()
+      var q = newUnboundedMpscQueue[int, stEager, 8, 4]()
       q.attachConsumer()
       var p = q.getProducer()
       p.attach()
@@ -184,9 +184,9 @@ suite "smart-constructor =destroy soundness":
       discard q.pop()
     check true # reached only if =destroy did not assert/crash
 
-  test "newUnboundedSipmucQueue auto-create destructor runs cleanly":
+  test "newUnboundedSpmcQueue auto-create destructor runs cleanly":
     block:
-      var q = newUnboundedSipmucQueue[int, stEager, 8, 4]()
+      var q = newUnboundedSpmcQueue[int, stEager, 8, 4]()
       var p = q.getProducer()
       p.push(1)
       var c = q.getConsumer()
@@ -194,9 +194,9 @@ suite "smart-constructor =destroy soundness":
       discard c.pop()
     check true
 
-  test "newUnboundedMupmucQueue auto-create destructor runs cleanly":
+  test "newUnboundedMpmcQueue auto-create destructor runs cleanly":
     block:
-      var q = newUnboundedMupmucQueue[int, stEager, 8, 4]()
+      var q = newUnboundedMpmcQueue[int, stEager, 8, 4]()
       var p = q.getProducer()
       p.attach()
       p.push(1)

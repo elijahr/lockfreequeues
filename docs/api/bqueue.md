@@ -4,8 +4,8 @@
 queue. A single generic type covers all four producer/consumer
 cardinality combinations — SPSC, MPSC, SPMC, and MPMC — selected at
 compile time through the `ccProd` and `ccCons` parameters. It replaces
-the v4.x family-prefixed bounded types (`Sipsic`, `Sipmuc`, `Mupsic`,
-`Mupmuc`).
+the v4.x family-prefixed bounded types (`Spsc`, `Spmc`, `Mpsc`,
+`Mpmc`).
 
 ## Overview
 
@@ -47,10 +47,10 @@ smart constructor. Family-named thin wrappers are retained for
 ergonomic continuity with the v3.x/v4.x naming and to minimize churn
 in downstream call sites; all compile to the same `BQueue` type:
 
-- `newSipsicQueue[T, N]()` — `ccSingle × ccSingle` (SPSC)
-- `newMupsicQueue[T, N, P]()` — `ccMulti × ccSingle` (MPSC)
-- `newSipmucQueue[T, N, C]()` — `ccSingle × ccMulti` (SPMC)
-- `newMupmucQueue[T, N, P, C]()` — `ccMulti × ccMulti` (MPMC)
+- `newSpscQueue[T, N]()` — `ccSingle × ccSingle` (SPSC)
+- `newMpscQueue[T, N, P]()` — `ccMulti × ccSingle` (MPSC)
+- `newSpmcQueue[T, N, C]()` — `ccSingle × ccMulti` (SPMC)
+- `newMpmcQueue[T, N, P, C]()` — `ccMulti × ccMulti` (MPMC)
 
 ## Usage
 
@@ -59,7 +59,7 @@ import lockfreequeues
 
 # SPSC: single producer, single consumer, capacity 16.
 # No handles needed — push/pop go directly on the queue.
-var spsc = newSipsicQueue[int, 16]()
+var spsc = newSpscQueue[int, 16]()
 discard spsc.push(42)
 let a = spsc.pop()                 # some(42)
 

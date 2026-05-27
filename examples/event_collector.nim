@@ -1,6 +1,6 @@
 ## Event Collector Example
 ##
-## Demonstrates using an unbounded Mupsic (MPSC) queue for collecting events
+## Demonstrates using an unbounded Mpsc (MPSC) queue for collecting events
 ## from multiple sources into a single processing pipeline.
 ##
 ## Pattern: Multiple event sources → Single processor
@@ -62,7 +62,7 @@ var
   # consumer thread calls `attachConsumer()` on its OWN thread before its
   # first push/pop (thread-affine debra registration).
   manager = initDebraManager[MaxThreads]()
-  queue = newUnboundedMupsicQueue[Event, stEager, SegmentSize, MaxThreads](
+  queue = newUnboundedMpscQueue[Event, stEager, SegmentSize, MaxThreads](
     addr manager
   )
   running: Atomic[bool]

@@ -32,13 +32,13 @@ A reasonable starting trio:
 import lockfreequeues
 
 # Audio frame queue: 64 samples × 4 bytes = 256 B; 1 cache line of slack.
-var audio = newSipsicQueue[float32, 64]()
+var audio = newSpscQueue[float32, 64]()
 
 # HTTP request fan-in: segment size 256, debra registry capacity 16.
-var requests = newUnboundedMupsicQueue[int, stEager, 256, 16]()
+var requests = newUnboundedMpscQueue[int, stEager, 256, 16]()
 
 # Sustained event ingest: large segments amortize alloc.
-var events = newUnboundedMupmucQueue[int, stEager, 1024, 8]()
+var events = newUnboundedMpmcQueue[int, stEager, 1024, 8]()
 ```
 
 ### Empirical data
@@ -108,7 +108,7 @@ on the producer side and an integer count on the consumer side:
 import options
 import lockfreequeues
 
-var queue = newSipsicQueue[int, 256]()
+var queue = newSpscQueue[int, 256]()
 let items = @[1, 2, 3, 4, 5, 6, 7, 8]
 
 # Single batch push — one cursor advance for the whole batch.

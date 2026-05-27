@@ -373,11 +373,11 @@ jobs:
         run: |
           echo "::warning title=Adapter skipped::liblfds build or smoke failed or force-skipped (the vendored subset lacks the gcc_gnumake Makefile); comparison bench will omit liblfds slugs."
 
-      - name: Compile bench_mpmc_mupmuc with crossbeam_array_queue
+      - name: Compile bench_mpmc_bounded with crossbeam_array_queue
         # v5.0.0 B3 split: crossbeam_array_queue's slug shape matches
-        # the mupmuc grid so it lives in the mupmuc binary (the sipmuc
+        # the mpmc grid so it lives in the mpmc binary (the spmc
         # binary has no MVP-adapter wiring). CI run shape mirrors
-        # bench.yml's bench_mpmc_mupmuc settings (1M / 5 / 2). rpath
+        # bench.yml's bench_mpmc_bounded settings (1M / 5 / 2). rpath
         # ensures the dylib loads from the in-tree build dir at runtime
         # without needing LD_LIBRARY_PATH.
         run: |
@@ -388,35 +388,35 @@ jobs:
             -d:BenchMpmcWarmup=2 \
             -d:adapter_crossbeam_array_queue_available \
             --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
-            benchmarks/nim/bench_mpmc_mupmuc.nim
+            benchmarks/nim/bench_mpmc_bounded.nim
 
-      - name: Compile bench_unbounded_mupmuc with crossbeam_seg_queue
+      - name: Compile bench_unbounded_mpmc with crossbeam_seg_queue
         # v5.0.0 3.3.9-D split: the Crossbeam SegQueue adapter lives in
-        # bench_unbounded_mupmuc (matches the mupmuc unbounded
+        # bench_unbounded_mpmc (matches the mpmc unbounded
         # MVP-adapter slot post-split).
         run: |
           set -euo pipefail
           nim c -d:release -d:danger --threads:on \
-            -d:UnboundedMupmucMessageCount=500000 \
-            -d:UnboundedMupmucRuns=3 \
+            -d:UnboundedMpmcMessageCount=500000 \
+            -d:UnboundedMpmcRuns=3 \
             -d:BenchUnboundedWarmup=2 \
             -d:adapter_crossbeam_seg_queue_available \
             --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
-            benchmarks/nim/bench_unbounded_mupmuc.nim
+            benchmarks/nim/bench_unbounded_mpmc.nim
 
-      - name: Run bench_mpmc_mupmuc (crossbeam_array_queue only)
+      - name: Run bench_mpmc_bounded (crossbeam_array_queue only)
         timeout-minutes: 12
         run: |
           set -euo pipefail
-          ./.tmp/bench_mpmc_mupmuc crossbeam_array_queue \
+          ./.tmp/bench_mpmc_bounded crossbeam_array_queue \
             --bmf-out=bench_mpmc_crossbeam.json \
             | tee bench_mpmc_crossbeam_output.txt
 
-      - name: Run bench_unbounded_mupmuc (crossbeam_seg_queue only)
+      - name: Run bench_unbounded_mpmc (crossbeam_seg_queue only)
         timeout-minutes: 12
         run: |
           set -euo pipefail
-          ./.tmp/bench_unbounded_mupmuc crossbeam_seg_queue \
+          ./.tmp/bench_unbounded_mpmc crossbeam_seg_queue \
             --bmf-out=bench_unbounded_crossbeam.json \
             | tee bench_unbounded_crossbeam_output.txt
 
@@ -431,9 +431,9 @@ jobs:
       # gated on the ADAPTER_<LIB> env flag set by the smoke steps, so a
       # soft-skipped adapter contributes no compile, no run, and no BMF
       # fragment. CI run shapes mirror bench.yml: bench_spsc 1M/5/2,
-      # bench_mpmc_mupmuc 1M/5/2, bench_unbounded_mupmuc 500K/3/2.
+      # bench_mpmc_bounded 1M/5/2, bench_unbounded_mpmc 500K/3/2.
 
-      # --- atomic_queue: bench_spsc + bench_mpmc_mupmuc ---
+      # --- atomic_queue: bench_spsc + bench_mpmc_bounded ---
       - name: Compile + run bench_spsc with atomic_queue
         if: env.ADAPTER_ATOMIC_QUEUE == '1'
         timeout-minutes: 12
@@ -450,7 +450,7 @@ jobs:
             --bmf-out=bench_spsc_atomic_queue.json \
             | tee bench_spsc_atomic_queue_output.txt
 
-      - name: Compile + run bench_mpmc_mupmuc with atomic_queue
+      - name: Compile + run bench_mpmc_bounded with atomic_queue
         if: env.ADAPTER_ATOMIC_QUEUE == '1'
         timeout-minutes: 12
         run: |
@@ -461,7 +461,7 @@ jobs:
             -d:BenchMpmcWarmup=2 \
             -d:adapter_atomic_queue_available \
             -o:.tmp/bench_mpmc_atomic_queue \
-            benchmarks/nim/bench_mpmc_mupmuc.nim
+            benchmarks/nim/bench_mpmc_bounded.nim
           ./.tmp/bench_mpmc_atomic_queue atomic_queue \
             --bmf-out=bench_mpmc_atomic_queue.json \
             | tee bench_mpmc_atomic_queue_output.txt
@@ -483,8 +483,8 @@ jobs:
             --bmf-out=bench_spsc_rigtorp_spsc.json \
             | tee bench_spsc_rigtorp_spsc_output.txt
 
-      # --- rigtorp/MPMCQueue: bench_mpmc_mupmuc only ---
-      - name: Compile + run bench_mpmc_mupmuc with rigtorp_mpmc
+      # --- rigtorp/MPMCQueue: bench_mpmc_bounded only ---
+      - name: Compile + run bench_mpmc_bounded with rigtorp_mpmc
         if: env.ADAPTER_RIGTORP_MPMC == '1'
         timeout-minutes: 12
         run: |
@@ -495,13 +495,13 @@ jobs:
             -d:BenchMpmcWarmup=2 \
             -d:adapter_rigtorp_mpmc_available \
             -o:.tmp/bench_mpmc_rigtorp_mpmc \
-            benchmarks/nim/bench_mpmc_mupmuc.nim
+            benchmarks/nim/bench_mpmc_bounded.nim
           ./.tmp/bench_mpmc_rigtorp_mpmc rigtorp_mpmc \
             --bmf-out=bench_mpmc_rigtorp_mpmc.json \
             | tee bench_mpmc_rigtorp_mpmc_output.txt
 
-      # --- flume: bench_mpmc_mupmuc (bounded) + bench_unbounded_mupmuc ---
-      - name: Compile + run bench_mpmc_mupmuc with flume
+      # --- flume: bench_mpmc_bounded (bounded) + bench_unbounded_mpmc ---
+      - name: Compile + run bench_mpmc_bounded with flume
         if: env.ADAPTER_FLUME == '1'
         timeout-minutes: 12
         run: |
@@ -513,29 +513,29 @@ jobs:
             -d:adapter_flume_available \
             --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
             -o:.tmp/bench_mpmc_flume \
-            benchmarks/nim/bench_mpmc_mupmuc.nim
+            benchmarks/nim/bench_mpmc_bounded.nim
           ./.tmp/bench_mpmc_flume flume \
             --bmf-out=bench_mpmc_flume.json \
             | tee bench_mpmc_flume_output.txt
 
-      - name: Compile + run bench_unbounded_mupmuc with flume_unbounded
+      - name: Compile + run bench_unbounded_mpmc with flume_unbounded
         if: env.ADAPTER_FLUME == '1'
         timeout-minutes: 12
         run: |
           set -euo pipefail
           nim c -d:release -d:danger --threads:on \
-            -d:UnboundedMupmucMessageCount=500000 \
-            -d:UnboundedMupmucRuns=3 \
+            -d:UnboundedMpmcMessageCount=500000 \
+            -d:UnboundedMpmcRuns=3 \
             -d:BenchUnboundedWarmup=2 \
             -d:adapter_flume_available \
             --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
             -o:.tmp/bench_unbounded_flume \
-            benchmarks/nim/bench_unbounded_mupmuc.nim
+            benchmarks/nim/bench_unbounded_mpmc.nim
           ./.tmp/bench_unbounded_flume flume_unbounded \
             --bmf-out=bench_unbounded_flume.json \
             | tee bench_unbounded_flume_output.txt
 
-      # --- kanal: bench_spsc + bench_mpmc_mupmuc (bounded) + bench_unbounded_mupmuc ---
+      # --- kanal: bench_spsc + bench_mpmc_bounded (bounded) + bench_unbounded_mpmc ---
       - name: Compile + run bench_spsc with kanal
         if: env.ADAPTER_KANAL == '1'
         timeout-minutes: 12
@@ -553,7 +553,7 @@ jobs:
             --bmf-out=bench_spsc_kanal.json \
             | tee bench_spsc_kanal_output.txt
 
-      - name: Compile + run bench_mpmc_mupmuc with kanal
+      - name: Compile + run bench_mpmc_bounded with kanal
         if: env.ADAPTER_KANAL == '1'
         timeout-minutes: 12
         run: |
@@ -565,29 +565,29 @@ jobs:
             -d:adapter_kanal_available \
             --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
             -o:.tmp/bench_mpmc_kanal \
-            benchmarks/nim/bench_mpmc_mupmuc.nim
+            benchmarks/nim/bench_mpmc_bounded.nim
           ./.tmp/bench_mpmc_kanal kanal \
             --bmf-out=bench_mpmc_kanal.json \
             | tee bench_mpmc_kanal_output.txt
 
-      - name: Compile + run bench_unbounded_mupmuc with kanal_unbounded
+      - name: Compile + run bench_unbounded_mpmc with kanal_unbounded
         if: env.ADAPTER_KANAL == '1'
         timeout-minutes: 12
         run: |
           set -euo pipefail
           nim c -d:release -d:danger --threads:on \
-            -d:UnboundedMupmucMessageCount=500000 \
-            -d:UnboundedMupmucRuns=3 \
+            -d:UnboundedMpmcMessageCount=500000 \
+            -d:UnboundedMpmcRuns=3 \
             -d:BenchUnboundedWarmup=2 \
             -d:adapter_kanal_available \
             --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
             -o:.tmp/bench_unbounded_kanal \
-            benchmarks/nim/bench_unbounded_mupmuc.nim
+            benchmarks/nim/bench_unbounded_mpmc.nim
           ./.tmp/bench_unbounded_kanal kanal_unbounded \
             --bmf-out=bench_unbounded_kanal.json \
             | tee bench_unbounded_kanal_output.txt
 
-      # --- liblfds: bench_spsc (bss) + bench_mpmc_mupmuc (bmm) ---
+      # --- liblfds: bench_spsc (bss) + bench_mpmc_bounded (bmm) ---
       - name: Compile + run bench_spsc with liblfds
         if: env.ADAPTER_LIBLFDS == '1'
         timeout-minutes: 12
@@ -605,7 +605,7 @@ jobs:
             --bmf-out=bench_spsc_liblfds.json \
             | tee bench_spsc_liblfds_output.txt
 
-      - name: Compile + run bench_mpmc_mupmuc with liblfds
+      - name: Compile + run bench_mpmc_bounded with liblfds
         if: env.ADAPTER_LIBLFDS == '1'
         timeout-minutes: 12
         run: |
@@ -617,7 +617,7 @@ jobs:
             -d:adapter_liblfds_available \
             --passL:"-L${LIBLFDS_LIB_DIR} -llfds711" \
             -o:.tmp/bench_mpmc_liblfds \
-            benchmarks/nim/bench_mpmc_mupmuc.nim
+            benchmarks/nim/bench_mpmc_bounded.nim
           ./.tmp/bench_mpmc_liblfds liblfds \
             --bmf-out=bench_mpmc_liblfds.json \
             | tee bench_mpmc_liblfds_output.txt

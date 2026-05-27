@@ -1,4 +1,4 @@
-## Shared test templates for multi-consumer queues (Mupmuc).
+## Shared test templates for multi-consumer queues (Mpmc).
 
 template testMucPopOne*(queue: untyped) =
   discard queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])

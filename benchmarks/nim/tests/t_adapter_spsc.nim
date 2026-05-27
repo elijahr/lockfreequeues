@@ -1,0 +1,29 @@
+import unittest2
+import ../adapters/lockfreequeues_spsc_adapter
+import ../adapter
+
+suite "SpscAdapter":
+  test "push and pop":
+    var q = initSpscAdapter[16, int]()
+    check q.push(42) == prSuccess
+    let popResult = q.pop()
+    check popResult.success
+    check popResult.value == 42
+
+  test "empty pop":
+    var q = initSpscAdapter[16, int]()
+    let popResult = q.pop()
+    check not popResult.success
+
+  test "full queue":
+    var q = initSpscAdapter[4, int]()
+    check q.push(1) == prSuccess
+    check q.push(2) == prSuccess
+    check q.push(3) == prSuccess
+    check q.push(4) == prSuccess
+    # Queue is now full (4 items in capacity-4 queue)
+    check q.push(5) == prFull
+
+  test "name":
+    var q = initSpscAdapter[16, int]()
+    check q.name == "lockfreequeues/Spsc[16]"

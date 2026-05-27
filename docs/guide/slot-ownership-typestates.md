@@ -212,7 +212,7 @@ Each transition consumes its predecessor (a `sink` parameter), so a stale
 token cannot be reused — the compiler rejects any code path that skips a
 state or double-uses a claim. Application code never touches these states
 directly; they are the compile-time scaffolding behind a single
-`producer.push(item)` call on a `Queue` built with `newUnboundedMupsicQueue`.
+`producer.push(item)` call on a `Queue` built with `newUnboundedMpscQueue`.
 
 ## Performance
 

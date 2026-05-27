@@ -14,7 +14,7 @@
 import lockfreequeues/bqueue
 
 proc main() =
-  var q = newSipsicQueue[int, 8]()
+  var q = newSpscQueue[int, 8]()
   # A ccSingle BQueueProducer is constructible but has no attach
   # overload. The type-mismatch diagnostic comes from Nim's overload
   # resolution — there is literally no proc named `attach` whose

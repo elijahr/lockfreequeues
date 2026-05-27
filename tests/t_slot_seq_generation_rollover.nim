@@ -1,12 +1,12 @@
-## Deterministic regression test for the original mupmuc protocol bug.
+## Deterministic regression test for the original mpmc protocol bug.
 ##
 ## This test reproduces the §3 walk-through from the design doc step-by-step
 ## using the typestate primitives directly (no thread spawning). Three
 ## walkthroughs cover the three affected variants:
 ##
-##   1. Mupmuc (multi-producer, multi-consumer)
-##   2. Sipmuc (single-producer, multi-consumer)
-##   3. Mupsic (multi-producer, single-consumer)
+##   1. Mpmc (multi-producer, multi-consumer)
+##   2. Spmc (single-producer, multi-consumer)
+##   3. Mpsc (multi-producer, single-consumer)
 ##
 ## In every variant the original protocol allowed a preempted consumer's
 ## reservation to be silently re-claimed by a later consumer at a wrap-around
@@ -39,17 +39,17 @@ import lockfreequeues/typestates/mpsc_pop
 
 
 # ---------------------------------------------------------------------------
-# Mupmuc walkthrough
+# Mpmc walkthrough
 # ---------------------------------------------------------------------------
 
-suite "slot-seq generation rollover - Mupmuc":
+suite "slot-seq generation rollover - Mpmc":
 
-  test "preempted consumer cannot be re-claimed by wrap-around consumer (Mupmuc)":
+  test "preempted consumer cannot be re-claimed by wrap-around consumer (Mpmc)":
     # N=4 is the smallest capacity that exercises the wrap. P/C are arbitrary
     # for this single-threaded drive; we never call getProducer/getConsumer.
-    var q = newMupmucQueue[int, 4, 2, 2]()
-    let pushBase = cast[ptr MupmucPushBase[4, 2, 2, int]](addr q)
-    let popBase = cast[ptr MupmucBase[4, 2, 2, int]](addr q)
+    var q = newMpmcQueue[int, 4, 2, 2]()
+    let pushBase = cast[ptr MpmcPushBase[4, 2, 2, int]](addr q)
+    let popBase = cast[ptr MpmcBase[4, 2, 2, int]](addr q)
 
     # ----- Phase 1: P0..P3 push items, leaving head=0, tail=4, all cells
     # holding their producer's value with seq[i] = i+1.
@@ -140,7 +140,7 @@ suite "slot-seq generation rollover - Mupmuc":
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 4'u64)
 
     # ----- Phase 6: Consumer A finally completes (executes C5).
-    # cell[3].data is whatever A was reading; Mupmuc's complete returns it.
+    # cell[3].data is whatever A was reading; Mpmc's complete returns it.
     let valA = pendingA.complete(popBase[])
     check(valA == 103) # The original item_A pushed in Phase 1.
     # seq[3] is now pos + N = 3 + 4 = 7, matching the next producer
@@ -170,18 +170,18 @@ suite "slot-seq generation rollover - Mupmuc":
 
 
 # ---------------------------------------------------------------------------
-# Sipmuc walkthrough (single producer, multi-consumer)
+# Spmc walkthrough (single producer, multi-consumer)
 # ---------------------------------------------------------------------------
 
-suite "slot-seq generation rollover - Sipmuc":
+suite "slot-seq generation rollover - Spmc":
 
-  test "preempted consumer cannot be re-claimed by wrap-around consumer (Sipmuc)":
-    # Same trace structure as Mupmuc, but the producer side uses the
+  test "preempted consumer cannot be re-claimed by wrap-around consumer (Spmc)":
+    # Same trace structure as Mpmc, but the producer side uses the
     # spmc_push (defensive-CAS) verb. The bug shape is identical - the
     # consumer side is what re-armed the slot in the original protocol.
-    var q = newSipmucQueue[int, 4, 2]()
-    let pushBase = cast[ptr SipmucPushBase[4, 2, int]](addr q)
-    let popBase = cast[ptr SipmucBase[4, 2, int]](addr q)
+    var q = newSpmcQueue[int, 4, 2]()
+    let pushBase = cast[ptr SpmcPushBase[4, 2, int]](addr q)
+    let popBase = cast[ptr SpmcBase[4, 2, int]](addr q)
 
     # Phase 1: push 4 items via the SPMC push verb.
     for i in 0 .. 3:
@@ -262,17 +262,17 @@ suite "slot-seq generation rollover - Sipmuc":
 
 
 # ---------------------------------------------------------------------------
-# Mupsic walkthrough (multi-producer, single consumer)
+# Mpsc walkthrough (multi-producer, single consumer)
 # ---------------------------------------------------------------------------
 
-suite "slot-seq generation rollover - Mupsic":
+suite "slot-seq generation rollover - Mpsc":
 
-  test "preempted consumer cannot be re-claimed by wrap-around consumer (Mupsic)":
+  test "preempted consumer cannot be re-claimed by wrap-around consumer (Mpsc)":
     # Same trace structure. Producer side uses mpsc_push; consumer side
     # uses mpsc_pop (defensive-CAS form per design §10.9).
-    var q = newMupsicQueue[int, 4, 2]()
-    let pushBase = cast[ptr MupsicPushBase[4, 2, int]](addr q)
-    let popBase = cast[ptr MupsicBase[4, 2, int]](addr q)
+    var q = newMpscQueue[int, 4, 2]()
+    let pushBase = cast[ptr MpscPushBase[4, 2, int]](addr q)
+    let popBase = cast[ptr MpscBase[4, 2, int]](addr q)
 
     # Phase 1: push 4 items.
     for i in 0 .. 3:

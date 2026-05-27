@@ -5,14 +5,14 @@
 ## at `BQueue.getProducer().push(item)`.
 ##
 ## M8 light-touch coverage: this is the multi-producer family proof.
-## The thin-wrapper `newMupsicQueue` family resolves to
+## The thin-wrapper `newMpscQueue` family resolves to
 ## `newBQueue[..., ccMulti, ccSingle, ...]()`, so the same `{.error.}`
 ## overload fires for it.
 
 import lockfreequeues/bqueue
 
 proc main() =
-  var q = newMupsicQueue[int, 8, 4]()
+  var q = newMpscQueue[int, 8, 4]()
   # Direct push on ccProd=ccMulti BQueue must compile-fail.
   discard q.push(42)
 

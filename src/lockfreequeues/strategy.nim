@@ -1,8 +1,8 @@
 ## Deallocation strategy enum for the v5.0.0 unified `Queue` generic.
 ##
 ## Consolidates the triplicated `DeallocationStrategy` enum that previously
-## lived in `unbounded_mupsic.nim`, `unbounded_sipmuc.nim`, and
-## `unbounded_mupmuc.nim`. v4.x callers used the bare-symbol forms `Manual`
+## lived in `unbounded_mpsc.nim`, `unbounded_spmc.nim`, and
+## `unbounded_mpmc.nim`. v4.x callers used the bare-symbol forms `Manual`
 ## and `Eager`; those are preserved as constant aliases (Doc C §3.1) so the
 ## migration to the prefixed `stManual` / `stEager` is non-breaking at the
 ## call site.

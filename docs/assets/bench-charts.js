@@ -43,15 +43,15 @@
   // CONTRACT-TEST-PARSED-START LIBRARY_COLORS
   const LIBRARY_COLORS = Object.freeze({
     // lockfreequeues family (bounded) — Material indigo 500
-    lockfreequeues_sipsic:           '#3f51b5',
-    lockfreequeues_sipmuc:           '#3f51b5',
-    lockfreequeues_mupsic:           '#3f51b5',
-    lockfreequeues_mupmuc:           '#3f51b5',
+    lockfreequeues_spsc:           '#3f51b5',
+    lockfreequeues_spmc:           '#3f51b5',
+    lockfreequeues_mpsc:           '#3f51b5',
+    lockfreequeues_mpmc:           '#3f51b5',
     // lockfreequeues family (unbounded) — Material indigo 400
-    lockfreequeues_unbounded_sipsic: '#5c6bc0',
-    lockfreequeues_unbounded_sipmuc: '#5c6bc0',
-    lockfreequeues_unbounded_mupsic: '#5c6bc0',
-    lockfreequeues_unbounded_mupmuc: '#5c6bc0',
+    lockfreequeues_unbounded_spsc: '#5c6bc0',
+    lockfreequeues_unbounded_spmc: '#5c6bc0',
+    lockfreequeues_unbounded_mpsc: '#5c6bc0',
+    lockfreequeues_unbounded_mpmc: '#5c6bc0',
     // comparison libraries — distinct stable colors
     crossbeam_array_queue:           '#f4511e',
     crossbeam_seg_queue:             '#fb8c00',
@@ -75,10 +75,10 @@
   const BLOCKING_SET = new Set(BLOCKING_LIBRARIES);
 
   const LOCKFREEQUEUES_FAMILY = [
-    'lockfreequeues_sipsic', 'lockfreequeues_sipmuc',
-    'lockfreequeues_mupsic', 'lockfreequeues_mupmuc',
-    'lockfreequeues_unbounded_sipsic', 'lockfreequeues_unbounded_sipmuc',
-    'lockfreequeues_unbounded_mupsic', 'lockfreequeues_unbounded_mupmuc',
+    'lockfreequeues_spsc', 'lockfreequeues_spmc',
+    'lockfreequeues_mpsc', 'lockfreequeues_mpmc',
+    'lockfreequeues_unbounded_spsc', 'lockfreequeues_unbounded_spmc',
+    'lockfreequeues_unbounded_mpsc', 'lockfreequeues_unbounded_mpmc',
   ];
   const LFQ_FAMILY_SET = new Set(LOCKFREEQUEUES_FAMILY);
 
@@ -945,8 +945,8 @@
     // carries latency, but not all four. This is the visible
     // "adapter coverage in progress" cue.
     const lfqBoundedExpected = [
-      'lockfreequeues_sipsic', 'lockfreequeues_sipmuc',
-      'lockfreequeues_mupsic', 'lockfreequeues_mupmuc',
+      'lockfreequeues_spsc', 'lockfreequeues_spmc',
+      'lockfreequeues_mpsc', 'lockfreequeues_mpmc',
     ];
     const present = new Set(libraries.map((l) => l.library));
     const lfqHits = lfqBoundedExpected.filter((l) => present.has(l)).length;

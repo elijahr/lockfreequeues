@@ -76,7 +76,7 @@ the facade's CAS that advances `headSegment` past `oldSeg` (multi-
 consumer coordination requires the CAS to live outside the verb to keep
 the verb pipeline single-CAS-free). The defense — re-acquire-load
 `consumerHead` and abort if items remain unclaimed — lives at the
-facade, immediately before that CAS, in `unbounded_sipmuc.nim`'s
+facade, immediately before that CAS, in `unbounded_spmc.nim`'s
 `USPMCPopReady` arm. In SPSC/MPSC pop (`7296240`), the irreversible
 commit is the plain `headSegment.store` inside `advanceSegment`
 (single-consumer; no coordination required, so the commit stays
