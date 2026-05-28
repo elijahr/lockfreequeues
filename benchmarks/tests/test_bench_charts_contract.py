@@ -235,15 +235,12 @@ class ChartContractTests(unittest.TestCase):
         self.assertIsNone(parse_slug("lib/topo/abc"))  # bad shape
 
     def test_chart_assets_present(self) -> None:
-        """The chart wiring requires three checked-in assets. If any
-        is missing the chart silently fails with a console error
-        (uPlot global undefined) or a 404 on the JS file. Keep the
-        test as a tripwire."""
+        """The chart wiring requires two checked-in assets plus an
+        ECharts CDN reference in benchmarks.md. If any is missing the
+        chart silently fails with a console error (ECharts global
+        undefined) or a 404 on the JS file. Keep the test as a
+        tripwire."""
         assets = REPO_ROOT / "docs" / "assets"
-        self.assertTrue(
-            (assets / "uplot-1.6.27.iife.min.js").is_file(),
-            "uPlot bundle missing",
-        )
         self.assertTrue(
             (assets / "bench-charts.js").is_file(),
             "bench-charts.js missing",
@@ -251,6 +248,11 @@ class ChartContractTests(unittest.TestCase):
         self.assertTrue(
             (assets / "bench-charts.css").is_file(),
             "bench-charts.css missing",
+        )
+        bm = (REPO_ROOT / "docs" / "benchmarks.md").read_text()
+        self.assertIn(
+            "echarts", bm.lower(),
+            "benchmarks.md must reference the ECharts library",
         )
         self.assertTrue(
             (assets / "bench-results" / ".gitkeep").is_file(),

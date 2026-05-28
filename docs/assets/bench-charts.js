@@ -1,4 +1,4 @@
-/* lockfreequeues bench charts — uPlot wiring for docs/benchmarks.md.
+/* lockfreequeues bench charts — ECharts wiring for docs/benchmarks.md.
  *
  * Loads the merged Bencher Metric Format (BMF) snapshot from
  * `../assets/bench-results/latest.json` — page lives at
@@ -6,30 +6,32 @@
  * so we go up one level to reach `/<version>/assets/`. The same
  * relative path works under /dev/, /latest/, and /v*\/ aliases.
  *
+ * Rendering: Apache ECharts 5.x via CDN. We use the `dark` theme as a
+ * baseline and override foreground/background/grid colors with the
+ * mkdocs Material palette CSS variables so the charts pick up both
+ * dark and light schemes. We listen for the Material color-scheme
+ * attribute on `<body>` and re-paint when it flips.
+ *
  * Page architecture (multi-panel):
- *   #bench-hero                       — hand-rendered DOM bar chart at
- *                                       a canonical shape (lfq vs alts)
- *   #bench-throughput-spsc            — uPlot line chart, SPSC topology
- *   #bench-throughput-mpsc            — uPlot line chart, MPSC topology
- *   #bench-throughput-mpmc-bounded    — uPlot line chart, MPMC bounded
- *   #bench-throughput-mpmc-unbounded  — uPlot line chart, MPMC unbounded
- *   #bench-latency                    — placeholder (filled by A2)
- *   #bench-status                     — banner injected on fallback/fixture
+ *   #bench-hero                       — ECharts horizontal bar at a
+ *                                       canonical shape (lfq vs alts)
+ *   #bench-throughput-spsc            — line chart, SPSC topology
+ *   #bench-throughput-mpsc            — line chart, MPSC topology
+ *   #bench-throughput-mpmc-bounded    — line chart, MPMC bounded
+ *   #bench-throughput-mpmc-unbounded  — line chart, MPMC unbounded
+ *   #bench-latency                    — line chart, percentile ladder
+ *   #bench-status                     — banner injected on fallback
  *
- * Slug shape: `<library>/<topology>/<P>p<C>c`
- *   library  = everything up to the first '/'
- *   topology = e.g. spsc, mpmc, mpsc, mpmc_unbounded, spsc_unbounded
- *   shape    = `<P>p<C>c` where P,C are non-negative ints
+ * Slug shape: `<library>/<topology>/<P>p<C>c`.
  *
- * BMF measure shape: `{ value: number, lower_value?: number, upper_value?: number }`.
- * `lower_value` / `upper_value` are mean ± stddev when present (throughput);
- * latency percentile measures emit `value` only.
+ * BMF measure shape: `{ value, lower_value?, upper_value? }`.
  *
  * Failure modes (graceful):
  *   - latest.json fetch fails or returns _status: "fallback" -> try
  *     example.json fixture and surface a status banner.
  *   - fixture also unavailable -> error banner; panels show empty state.
- *   - uPlot global missing -> per-panel message; hero still renders.
+ *   - ECharts global missing -> per-panel message; hero falls back to
+ *     a hand-rendered DOM bar list so the headline still reads.
  */
 
 (function () {
@@ -39,6 +41,7 @@
   const SNAPSHOT_URL  = '../assets/bench-results/latest.json';
   const FIXTURE_URL   = '../assets/bench-results/example.json';
   const CHART_MEASURE = 'throughput_ops_ms';
+  const CHART_HEIGHT  = 360;
 
   // CONTRACT-TEST-PARSED-START LIBRARY_COLORS
   const LIBRARY_COLORS = Object.freeze({
@@ -82,19 +85,13 @@
   ];
   const LFQ_FAMILY_SET = new Set(LOCKFREEQUEUES_FAMILY);
 
-  // Hero is "lockfreequeues vs alternatives at a canonical bounded
-  // shape." Bounded topologies only — the per-topology panels below
-  // already show bounded vs unbounded side-by-side; mixing them in the
-  // hero adds DEBRA-reclamation overhead noise that obscures the
-  // headline comparison.
   const HERO_SHAPE_PREFERENCE = [
-    { topology: 'mpmc',           shape: '4p4c' },
-    { topology: 'mpmc',           shape: '2p2c' },
-    { topology: 'mpsc',           shape: '4p1c' },
-    { topology: 'spsc',           shape: '1p1c' },
+    { topology: 'mpmc', shape: '4p4c' },
+    { topology: 'mpmc', shape: '2p2c' },
+    { topology: 'mpsc', shape: '4p1c' },
+    { topology: 'spsc', shape: '1p1c' },
   ];
 
-  // Pretty labels for topology slugs used in headings and tooltips.
   const TOPOLOGY_LABELS = Object.freeze({
     spsc: 'SPSC',
     mpsc: 'MPSC',
@@ -112,16 +109,6 @@
     return !topology.endsWith('_unbounded');
   }
 
-  // Map a topology slug substring to its DOM panel id.
-  // Topologies in BMF: spsc, mpsc, mpmc, mpmc_unbounded, spsc_unbounded.
-  // Bounded + unbounded variants share a panel for each core topology
-  // (SPSC, MPSC) so unbounded data renders alongside its bounded peer.
-  // MPMC keeps two panels (bounded vs unbounded) because the MPMC
-  // bounded panel is already crowded with comparison libraries; mixing
-  // unbounded in there would muddle the comparison.
-  // Library color discipline (LIBRARY_COLORS) gives lockfreequeues
-  // bounded #3f51b5 and unbounded #5c6bc0, so co-located series stay
-  // visually distinguishable.
   const THROUGHPUT_PANELS = [
     { id: 'bench-throughput-spsc',           label: 'SPSC',
       includes: (topology) => topology === 'spsc'
@@ -135,8 +122,72 @@
       includes: (topology) => topology === 'mpmc_unbounded' },
   ];
 
-  // Index-based fallback palette for libraries not in LIBRARY_COLORS.
-  // Picked to be distinguishable on the slate-dark Material theme.
+  // Source-code links per panel container id. Each panel heading gets
+  // a small superscript-style anchor pointing at the bench binary that
+  // produces the topology's slugs. Keep this map in sync with the
+  // `benchmarks/nim/` bench harness — adding a new panel here without
+  // a real source target produces a broken link.
+  const BENCH_SOURCE_URLS = Object.freeze({
+    'bench-throughput-spsc':
+      'https://github.com/elijahr/lockfreequeues/blob/devel/benchmarks/nim/bench_bounded.nim',
+    'bench-throughput-mpsc':
+      'https://github.com/elijahr/lockfreequeues/blob/devel/benchmarks/nim/bench_bounded.nim',
+    'bench-throughput-mpmc-bounded':
+      'https://github.com/elijahr/lockfreequeues/blob/devel/benchmarks/nim/bench_bounded.nim',
+    'bench-throughput-mpmc-unbounded':
+      'https://github.com/elijahr/lockfreequeues/blob/devel/benchmarks/nim/bench_unbounded_mpmc.nim',
+    'bench-latency':
+      'https://github.com/elijahr/lockfreequeues/blob/devel/benchmarks/nim/bench_latency.nim',
+  });
+
+  // Build the small "↗ source" anchor next to a panel heading. Uses
+  // Material foreground--light for muted contrast and opens in a new
+  // tab. Safe to call multiple times for the same panel — the helper
+  // is idempotent via a `data-bench-source-link` marker.
+  function buildSourceLink(panelId) {
+    const url = BENCH_SOURCE_URLS[panelId];
+    if (!url) return null;
+    return el('a', {
+      class: 'bench-source-link',
+      href: url,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      title: 'View benchmark source on GitHub',
+    }, '↗ source');
+  }
+
+  function appendSourceLink(headingNode, panelId) {
+    if (!headingNode || !panelId) return;
+    if (headingNode.querySelector('.bench-source-link')) return;
+    const link = buildSourceLink(panelId);
+    if (link) headingNode.appendChild(link);
+  }
+
+  // Locate the markdown-rendered heading (h3/h4/h5/h6) that immediately
+  // precedes a panel container, walking up siblings through `<div>`
+  // wrappers that mkdocs injects for `markdown="0"` blocks. Returns
+  // null if no heading is found within a small lookback budget.
+  function findPrecedingHeading(panelNode) {
+    let node = panelNode;
+    // Walk up through wrapping divs until we find a heading sibling.
+    for (let hop = 0; hop < 4 && node; hop += 1) {
+      let sib = node.previousElementSibling;
+      while (sib) {
+        if (/^H[1-6]$/.test(sib.tagName)) return sib;
+        // Skip over noscript/script/empty wrappers but stop on
+        // anything substantive.
+        if (sib.tagName !== 'SCRIPT' && sib.tagName !== 'NOSCRIPT') {
+          // A non-heading substantive sibling means the heading is
+          // not directly before this panel; bubble up to the parent.
+          break;
+        }
+        sib = sib.previousElementSibling;
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
   const FALLBACK_PALETTE = [
     '#7eb6ff', '#ff9f7e', '#9ee37e', '#d77eff', '#ffeb7e',
     '#7effd9', '#ff7e9c', '#bfff7e', '#7e9cff', '#ffb87e',
@@ -147,7 +198,6 @@
   function getColor(library) {
     if (LIBRARY_COLORS[library]) return LIBRARY_COLORS[library];
     if (_fallbackAssigned.has(library)) return _fallbackAssigned.get(library);
-    // First time seeing this library: warn once and assign a stable color.
     console.warn(
       "[bench-charts] library '" + library +
       "' has no entry in LIBRARY_COLORS; falling back to palette[" +
@@ -187,8 +237,6 @@
   }
 
   function parseSlug(slug) {
-    // `<library>/<topology>/<P>p<C>c` — first segment library, last shape.
-    // Topology may include internal slashes; we join all middle segments.
     const parts = slug.split('/');
     if (parts.length < 3) return null;
     const library = parts[0];
@@ -201,7 +249,6 @@
     return { library, topology, shape, p, c, totalThreads: p + c };
   }
 
-  // Sort shape labels by total thread count, then by P, then by C.
   function sortShapeLabels(labels) {
     return Array.from(labels)
       .map((label) => {
@@ -220,26 +267,116 @@
       .map((item) => item.label);
   }
 
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ── module: Material palette wiring ────────────────────────────────
+  //
+  // ECharts theme is `dark`/`light`-baseline; we override the visible
+  // chrome (text, axis lines, splitlines, tooltip) with the mkdocs
+  // Material palette CSS variables so charts match body text regardless
+  // of scheme. We read computed style on `<body>` to resolve the
+  // variables — ECharts wants actual color strings, not `var(...)`.
+  function readPalette() {
+    const cs = getComputedStyle(document.body);
+    const get = (name, fallback) => {
+      const v = cs.getPropertyValue(name).trim();
+      return v || fallback;
+    };
+    return {
+      fg:        get('--md-default-fg-color',           '#e8e8ea'),
+      fgLight:   get('--md-default-fg-color--light',    '#aaaaaa'),
+      fgLightest: get('--md-default-fg-color--lightest', '#444444'),
+      bg:        get('--md-default-bg-color',           '#1a1a1d'),
+      codeBg:    get('--md-code-bg-color',              '#23232a'),
+    };
+  }
+
+  function currentScheme() {
+    return document.body.getAttribute('data-md-color-scheme') || 'default';
+  }
+
+  function isLightScheme() {
+    // mkdocs Material: default | slate (slate == dark). `default` is light.
+    return currentScheme() !== 'slate';
+  }
+
+  // Build a partial ECharts option that styles axes/tooltip/legend with
+  // the current Material palette. Merged into every chart's option so
+  // the theme switch only needs to re-call `setOption(buildPaletteOpt())`.
+  function buildPaletteOpt() {
+    const p = readPalette();
+    return {
+      backgroundColor: 'transparent',
+      textStyle:       { color: p.fg },
+      title:           { textStyle: { color: p.fg } },
+      legend:          {
+        textStyle: { color: p.fg },
+        inactiveColor: p.fgLightest,
+      },
+      tooltip: {
+        backgroundColor: p.bg,
+        borderColor:     p.fgLightest,
+        textStyle:       { color: p.fg },
+        extraCssText:    'box-shadow: 0 2px 8px rgba(0,0,0,0.3);',
+      },
+      xAxis: {
+        axisLine:  { lineStyle: { color: p.fgLight } },
+        axisLabel: { color: p.fg },
+        axisTick:  { lineStyle: { color: p.fgLight } },
+        splitLine: { lineStyle: { color: p.fgLightest } },
+        nameTextStyle: { color: p.fgLight },
+      },
+      yAxis: {
+        axisLine:  { lineStyle: { color: p.fgLight } },
+        axisLabel: { color: p.fg },
+        axisTick:  { lineStyle: { color: p.fgLight } },
+        splitLine: { lineStyle: { color: p.fgLightest } },
+        nameTextStyle: { color: p.fgLight },
+      },
+    };
+  }
+
+  // Registry of live ECharts instances + their option builders, so we
+  // can re-apply the palette on color-scheme flip and resize on
+  // window resize.
+  const _charts = [];
+  function registerChart(instance, rebuild) {
+    _charts.push({ instance, rebuild });
+  }
+
+  function repaintAllForScheme() {
+    for (const entry of _charts) {
+      try {
+        // Disposing and rebuilding is simpler than diffing every
+        // sub-option for theme baseline. The data pipeline is cheap.
+        entry.rebuild();
+      } catch (err) {
+        console.warn('[bench-charts] re-render failed', err);
+      }
+    }
+  }
+
+  function resizeAll() {
+    for (const entry of _charts) {
+      try { entry.instance.resize(); } catch (_) { /* noop */ }
+    }
+  }
+
   // ── module: data ────────────────────────────────────────────────────
 
-  /* Build a nested grouping for downstream rendering:
-   *   byTopology: Map<topology, Map<library, Map<shape, MeasureValue>>>
-   *
-   * Reserved keys (`_status`, `_reason`, `_merge_outcome`, anything
-   * leading with `_`) are ignored so fallback metadata doesn't leak
-   * into the grouping. The v5.0.0-wave `meta` sibling key (adapter
-   * version capture; see `benchmarks/nim/adapter_versions.nim`) is also
-   * skipped — it carries no measurement payload and `parseSlug` would
-   * reject its shape anyway. The shared `isMeasurementSlug` predicate
-   * keeps both iteration sites in lockstep so a future reserved key
-   * only needs to be added in one place.
-   */
   function isMeasurementSlug(slug) {
     if (typeof slug !== 'string') return false;
     if (slug.startsWith('_')) return false;
     if (slug === 'meta') return false;
     return true;
   }
+
   function groupByTopology(bmf) {
     const byTopology = new Map();
     for (const slug in bmf) {
@@ -279,8 +416,7 @@
     for (const pref of HERO_SHAPE_PREFERENCE) {
       const inTopology = byTopology.get(pref.topology);
       if (!inTopology) continue;
-      let hasLfq = false;
-      let hasAlt = false;
+      let hasLfq = false, hasAlt = false;
       for (const [library, shapeMap] of inTopology.entries()) {
         const m = shapeMap.get(pref.shape);
         if (!m || typeof m.value !== 'number') continue;
@@ -293,14 +429,9 @@
   }
 
   function findFallbackHeroShape(byTopology) {
-    let best = null;
-    let bestScore = 0;
+    let best = null, bestScore = 0;
     for (const [topology, libsByShape] of byTopology) {
-      // Hero is bounded-only (see HERO_SHAPE_PREFERENCE comment).
-      // Skip unbounded topologies even in the fallback search so the
-      // headline comparison never silently picks an unbounded shape.
       if (!isBoundedTopology(topology)) continue;
-      // Pivot to Map<shape, Map<library, MeasureValue>> for scoring.
       const byShape = new Map();
       for (const [library, shapeMap] of libsByShape) {
         for (const [shape, mv] of shapeMap) {
@@ -327,21 +458,7 @@
     return best;
   }
 
-  // ── module: hero panel (hand-rendered) ──────────────────────────────
-
-  // Build a hover-tooltip string for one library at the hero shape.
-  // Mirrors the uPlot tooltip format so the hero and panels speak the
-  // same language: "<library>: <value> ops/ms (±stddev) — <topology shape>".
-  function heroRowTitle(library, mv, topology, shape) {
-    let line = library + ': ' + mv.value.toFixed(1) + ' ops/ms';
-    if (mv.lower != null && mv.upper != null) {
-      const stddev = (mv.upper - mv.lower) / 2;
-      line += ' (±' + stddev.toFixed(1) + ')';
-    }
-    line += ' — ' + topologyLabel(topology) + ' ' + shape;
-    if (isBlocking(library)) line += ' (blocking)';
-    return line;
-  }
+  // ── module: hero panel (ECharts horizontal bar) ─────────────────────
 
   function renderHero(host, byTopology) {
     host.innerHTML = '';
@@ -359,136 +476,150 @@
       const mv = shapeMap.get(pick.shape);
       if (!mv || typeof mv.value !== 'number') continue;
       rows.push({
-        library,
-        value: mv.value,
-        lower: mv.lower,
-        upper: mv.upper,
+        library, value: mv.value, lower: mv.lower, upper: mv.upper,
         slug: mv.slug,
       });
     }
-
-    // Heading: "MPMC 4p4c — lockfreequeues vs alternatives". When no
-    // alternative is present (lfq-only at this shape) the suffix
-    // collapses gracefully.
-    const hasAlt = rows.some((r) => !isLockfreequeues(r.library));
-    const headingText = topologyLabel(pick.topology) + ' ' + pick.shape +
-      (hasAlt ? ' — lockfreequeues vs alternatives'
-              : ' — lockfreequeues throughput');
-    host.appendChild(el('h3', { class: 'bench-hero-heading' }, headingText));
-
     if (rows.length === 0) {
       host.appendChild(el('p', { class: 'bench-hero-empty' },
         'No data at the chosen hero shape.'));
       return;
     }
 
-    // Order: lockfreequeues bars first (descending value within the
-    // family), then alternatives sorted by descending value so the
-    // strongest non-lockfreequeues entry sits next to the lockfreequeues
-    // block for easy visual comparison.
+    // Order: lockfreequeues first (by value desc), then alts (by value desc).
     rows.sort((a, b) => {
       const aLfq = isLockfreequeues(a.library) ? 0 : 1;
       const bLfq = isLockfreequeues(b.library) ? 0 : 1;
       if (aLfq !== bLfq) return aLfq - bLfq;
       return b.value - a.value;
     });
-    const max = Math.max.apply(null, rows.map((r) => r.value));
 
+    const hasAlt = rows.some((r) => !isLockfreequeues(r.library));
+    const headingText = topologyLabel(pick.topology) + ' ' + pick.shape +
+      (hasAlt ? ' — lockfreequeues vs alternatives'
+              : ' — lockfreequeues throughput');
+    host.appendChild(el('h3', { class: 'bench-hero-heading' }, headingText));
+
+    if (typeof window.echarts !== 'object' || !window.echarts.init) {
+      // Fallback: hand-rendered DOM bars so the headline still reads.
+      renderHeroDomFallback(host, rows, pick);
+      return;
+    }
+
+    const mount = el('div', { class: 'bench-chart-plot bench-chart-plot-hero' });
+    host.appendChild(mount);
+    const sawBlocking = rows.some((r) => isBlocking(r.library));
+    if (sawBlocking) {
+      host.appendChild(el('p', { class: 'bench-hero-footnote' },
+        'Dotted-edge bars mark libraries that block on full; throughput ' +
+        'reflects blocking semantics, not the non-blocking try_push path.'));
+    }
+
+    const build = () => {
+      const inst = window.echarts.init(
+        mount, isLightScheme() ? null : 'dark',
+        { renderer: 'canvas' }
+      );
+      const categories = rows.map((r) => r.library);
+      const values = rows.map((r) => ({
+        value: r.value,
+        itemStyle: {
+          color: getColor(r.library),
+          borderColor: getColor(r.library),
+          borderType: isBlocking(r.library) ? 'dashed' : 'solid',
+          borderWidth: isBlocking(r.library) ? 2 : 0,
+          opacity: isBlocking(r.library) ? 0.55 : 1,
+        },
+        _row: r,
+      }));
+      const opt = Object.assign({}, buildPaletteOpt(), {
+        grid: { left: 160, right: 80, top: 16, bottom: 36, containLabel: true },
+        tooltip: Object.assign({}, buildPaletteOpt().tooltip, {
+          trigger: 'axis',
+          axisPointer: { type: 'shadow' },
+          formatter: (params) => {
+            if (!params || !params.length) return '';
+            const p = params[0];
+            const r = p.data && p.data._row;
+            if (!r) return '';
+            let line = '<strong>' + escapeHtml(r.library) + '</strong><br>' +
+              r.value.toFixed(1) + ' ops/ms';
+            if (r.lower != null && r.upper != null) {
+              const stddev = (r.upper - r.lower) / 2;
+              line += ' (±' + stddev.toFixed(1) + ')';
+            }
+            line += '<br>' + escapeHtml(topologyLabel(pick.topology)) +
+              ' ' + escapeHtml(pick.shape);
+            if (isBlocking(r.library)) line += ' (blocking)';
+            return line;
+          },
+        }),
+        xAxis: Object.assign({}, buildPaletteOpt().xAxis, {
+          type: 'value',
+          name: 'throughput (ops/ms)',
+          nameLocation: 'middle',
+          nameGap: 28,
+        }),
+        yAxis: Object.assign({}, buildPaletteOpt().yAxis, {
+          type: 'category',
+          data: categories,
+          inverse: true,
+        }),
+        series: [{
+          type: 'bar',
+          data: values,
+          barCategoryGap: '30%',
+          label: {
+            show: true, position: 'right',
+            formatter: (p) => p.value.toFixed(1),
+            color: readPalette().fg,
+          },
+        }],
+      });
+      inst.setOption(opt);
+      return inst;
+    };
+    const inst = build();
+    registerChart(inst, () => {
+      inst.dispose();
+      const fresh = build();
+      // Swap registry entry's instance so subsequent rebuilds use the
+      // current one.
+      const idx = _charts.findIndex((c) => c.instance === inst);
+      if (idx >= 0) _charts[idx].instance = fresh;
+    });
+  }
+
+  // DOM-bar fallback (used only when ECharts global is missing).
+  function renderHeroDomFallback(host, rows, pick) {
+    const max = Math.max.apply(null, rows.map((r) => r.value));
     const list = el('ol', { class: 'bench-hero-bars' });
-    let sawBlocking = false;
     for (const r of rows) {
       const pct = max > 0 ? (r.value / max * 100) : 0;
       const blocking = isBlocking(r.library);
-      if (blocking) sawBlocking = true;
       const color = getColor(r.library);
       const barClass = 'bench-hero-bar' +
         (blocking ? ' bench-hero-bar-blocking' : '');
-      // Blocking bars use border-color instead of background; setting
-      // the inline `color` lets `currentColor` pick up the library hue.
       const barStyle = blocking
         ? 'width: ' + pct.toFixed(1) + '%; color: ' + color + ';'
         : 'width: ' + pct.toFixed(1) + '%; background: ' + color + ';';
-      const li = el('li', {
+      list.appendChild(el('li', {
         class: 'bench-hero-row',
         'data-library': r.library,
         'data-slug': r.slug,
-        title: heroRowTitle(r.library, r, pick.topology, pick.shape),
       },
         el('span', { class: 'bench-hero-label' }, r.library),
         el('span', { class: barClass, style: barStyle }),
         el('span', { class: 'bench-hero-value' },
           r.value.toFixed(1) + ' ops/ms')
-      );
-      list.appendChild(li);
+      ));
     }
     host.appendChild(list);
-
-    // Y-axis equivalent for a horizontal-bar layout: a small caption
-    // under the bars naming the unit. Matches the throughput panels'
-    // "throughput (ops/ms)" Y-axis label.
     host.appendChild(el('p', { class: 'bench-hero-axis-caption' },
-      'throughput (ops/ms)'));
-
-    // Always emit the legend with a stable structure, regardless of
-    // whether a blocking library appears. Blocking rows carry a
-    // "(blocking)" badge; the legend itself documents what the dotted
-    // bar means, so there is no inline footnote.
-    host.appendChild(buildHeroLegend(rows, sawBlocking));
+      'throughput (ops/ms) — ' + topologyLabel(pick.topology) + ' ' + pick.shape));
   }
 
-  function buildHeroLegend(rows, sawBlocking) {
-    const wrap = el('div', { class: 'bench-hero-legend' });
-    for (const r of rows) {
-      const blocking = isBlocking(r.library);
-      const swatch = el('span', {
-        class: 'bench-chart-swatch' +
-          (blocking ? ' bench-chart-swatch-blocking' : ''),
-        style: blocking
-          ? 'color: ' + getColor(r.library) + ';'
-          : 'background: ' + getColor(r.library) + ';',
-      });
-      const children = [swatch, document.createTextNode(r.library)];
-      if (blocking) {
-        children.push(el('span', { class: 'bench-hero-blocking-badge' },
-          '(blocking)'));
-      }
-      wrap.appendChild(el('span', { class: 'bench-legend-item' },
-        ...children));
-    }
-    if (sawBlocking) {
-      wrap.appendChild(el('p', { class: 'bench-hero-legend-note' },
-        'Dotted bars mark libraries that block on full; throughput ' +
-        'reflects blocking semantics, not the non-blocking try_push path.'));
-    }
-    return wrap;
-  }
-
-  // ── module: throughput panels (uPlot) ───────────────────────────────
-
-  function renderError(host, message) {
-    host.innerHTML = '';
-    host.appendChild(el('div', { class: 'bench-chart-error' }, message));
-  }
-
-  function buildLegend(libraries, onToggle) {
-    const wrap = el('div', { class: 'bench-chart-legend' });
-    libraries.forEach((lib, i) => {
-      const id = 'bench-legend-' + lib.panelId + '-' + i;
-      const cb = el('input', { type: 'checkbox', id });
-      cb.checked = true;
-      cb.addEventListener('change', () => onToggle(i, cb.checked));
-      const swatch = el('span', {
-        class: 'bench-chart-swatch' +
-          (isBlocking(lib.library) ? ' bench-chart-swatch-blocking' : ''),
-        style: isBlocking(lib.library)
-          ? 'color: ' + getColor(lib.library) + ';'
-          : 'background: ' + getColor(lib.library) + ';',
-      });
-      const lbl = el('label', { for: id }, swatch, displayLabel(lib.library));
-      wrap.appendChild(el('span', { class: 'bench-legend-item' }, cb, lbl));
-    });
-    return wrap;
-  }
+  // ── module: throughput / latency shared controls ────────────────────
 
   function buildControls(panelId, initialLogScale, onLogToggle) {
     const wrap = el('div', { class: 'bench-chart-controls' });
@@ -501,218 +632,164 @@
     return wrap;
   }
 
-  // Escape any HTML metacharacters so library names can be inlined in
-  // the tooltip's innerHTML without risk of injection. The values that
-  // reach this function are constrained by the slug grammar (`[a-z0-9_]+`)
-  // so no escape is strictly required today, but the helper future-proofs
-  // the path against fixture or BMF schema drift.
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
-  function tooltipPlugin(libraries, xLabels, panelLabel) {
-    let tip;
-    return {
-      hooks: {
-        init: (u) => {
-          tip = el('div', { class: 'bench-chart-tooltip' });
-          tip.style.display = 'none';
-          u.over.appendChild(tip);
+  // Common throughput option builder. `series` is a list of
+  // `{ library, points: [{ shape, value, lower, upper }], _shapeMap }`.
+  function buildThroughputOption(series, xLabels, logScale, panelLabel) {
+    const echartsSeries = series.map((lib) => {
+      const isLfq = isLockfreequeues(lib.library);
+      const data = xLabels.map((label) => {
+        const p = lib._shapeMap.get(label);
+        return p == null ? null : p.value;
+      });
+      return {
+        name:   displayLabel(lib.library),
+        type:   'line',
+        data:   data,
+        connectNulls: false,
+        showSymbol: true,
+        symbolSize: isLfq ? 8 : 6,
+        emphasis: { focus: 'series' },
+        lineStyle: {
+          width: isLfq ? 3 : 2,
+          type: isBlocking(lib.library) ? 'dashed' : 'solid',
         },
-        setCursor: (u) => {
-          const { idx, left, top } = u.cursor;
-          if (idx == null || left < 0 || top < 0) {
-            if (tip) tip.style.display = 'none';
-            return;
-          }
-          const shape = xLabels[idx];
-          const lines = [];
-          for (let i = 0; i < libraries.length; i++) {
-            const s = u.series[i + 1];
-            if (!s.show) continue;
-            const lib = libraries[i];
-            if (!lib._shapeMap) {
-              lib._shapeMap = new Map(lib.points.map((p) => [p.shape, p]));
-            }
-            const point = lib._shapeMap.get(shape);
-            if (!point) continue;
-            // Tooltip line: "<library>: <value> ops/ms (±stddev) (blocking)?".
-            // Stddev only when the BMF carried lower/upper bounds.
-            let line = escapeHtml(lib.library) + ': ' +
-              point.value.toFixed(1) + ' ops/ms';
-            if (point.lower != null && point.upper != null) {
-              const stddev = (point.upper - point.lower) / 2;
-              line += ' (±' + stddev.toFixed(1) + ')';
-            }
-            if (isBlocking(lib.library)) line += ' (blocking)';
-            lines.push(line);
-          }
-          if (lines.length === 0) {
-            tip.style.display = 'none';
-            return;
-          }
-          // Header: "<panel label> <shape>" e.g. "MPMC (bounded) 4p4c",
-          // so the user always knows the topology context without
-          // looking at the panel title.
+        itemStyle: { color: getColor(lib.library) },
+        _library: lib.library,
+        _points: lib.points,
+      };
+    });
+
+    return Object.assign({}, buildPaletteOpt(), {
+      grid: { left: 50, right: 24, top: 16, bottom: '22%', containLabel: false },
+      tooltip: Object.assign({}, buildPaletteOpt().tooltip, {
+        trigger: 'axis',
+        axisPointer: { type: 'cross' },
+        formatter: (params) => {
+          if (!params || !params.length) return '';
+          const shape = params[0].axisValueLabel || params[0].name;
           const header = panelLabel
             ? escapeHtml(panelLabel) + ' ' + escapeHtml(shape)
             : escapeHtml(shape);
-          tip.innerHTML =
-            '<strong>' + header + '</strong><br>' + lines.join('<br>');
-          tip.style.display = 'block';
-          tip.style.left = left + 12 + 'px';
-          tip.style.top = top + 12 + 'px';
+          const lines = ['<strong>' + header + '</strong>'];
+          for (const p of params) {
+            if (p.value == null) continue;
+            const lib = (p.seriesName || '').replace(/ \*$/, '');
+            // Find the matching point for stddev.
+            const sObj = echartsSeries[p.seriesIndex];
+            const point = sObj && sObj._points
+              && sObj._points.find((q) => q.shape === shape);
+            let line = '<span style="display:inline-block;width:8px;height:8px;'
+              + 'border-radius:50%;background:' + p.color
+              + ';margin-right:6px;"></span>'
+              + escapeHtml(lib) + ': ' + p.value.toFixed(1) + ' ops/ms';
+            if (point && point.lower != null && point.upper != null) {
+              const stddev = (point.upper - point.lower) / 2;
+              line += ' (±' + stddev.toFixed(1) + ')';
+            }
+            if (isBlocking(lib)) line += ' (blocking)';
+            lines.push(line);
+          }
+          return lines.join('<br>');
         },
-      },
-    };
-  }
-
-  function makeThroughputOpts(host, libraries, xLabels, logScale, panelLabel) {
-    const series = [{ label: 'shape' }].concat(
-      libraries.map((lib) => {
-        const opt = {
-          label: displayLabel(lib.library),
-          stroke: getColor(lib.library),
-          width: 2,
-          points: { show: true, size: 6 },
-          spanGaps: false,
-        };
-        if (isBlocking(lib.library)) opt.dash = [6, 4];
-        return opt;
-      })
-    );
-
-    return {
-      width: host.clientWidth || 800,
-      height: 360,
-      series,
-      scales: {
-        x: { time: false },
-        y: { distr: logScale ? 3 : 1 },
-      },
-      axes: [
-        {
-          values: (_, ticks) => ticks.map((t) => xLabels[t - 1] || ''),
-          label: 'producer/consumer shape (P×C)',
-        },
-        {
-          label: 'throughput (ops/ms)' + (logScale ? ' — log scale' : ''),
-          values: (_, ticks) =>
-            ticks.map((v) => (v >= 1000 ? v.toExponential(1) : '' + v)),
-        },
-      ],
-      cursor: { drag: { x: false, y: false } },
-      legend: { show: false },
-      plugins: [tooltipPlugin(libraries, xLabels, panelLabel)],
-    };
-  }
-
-  function attachResizeObserver(host, getPlot) {
-    if (typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => {
-      const plot = getPlot();
-      if (plot) plot.setSize({ width: host.clientWidth, height: 360 });
+      }),
+      legend: Object.assign({}, buildPaletteOpt().legend, {
+        type: 'plain',
+        bottom: 0,
+        left: 'center',
+        width: '100%',
+        data: series.map((lib) => displayLabel(lib.library)),
+      }),
+      xAxis: Object.assign({}, buildPaletteOpt().xAxis, {
+        type: 'category',
+        data: xLabels,
+        name: 'producer/consumer shape (P×C)',
+        nameLocation: 'middle',
+        nameGap: 32,
+      }),
+      yAxis: Object.assign({}, buildPaletteOpt().yAxis, {
+        type: logScale ? 'log' : 'value',
+        name: 'throughput (ops/ms)' + (logScale ? ' [log]' : ''),
+        nameLocation: 'middle',
+        nameGap: 44,
+        logBase: 10,
+      }),
+      series: echartsSeries,
     });
-    ro.observe(host);
   }
 
-  /* Render one throughput panel for a topology group.
-   * `libsByShape` is Map<library, Map<shape, MeasureValue>>.
-   */
   function renderThroughputPanel(host, panel, libsByShape) {
     host.innerHTML = '';
-    host.appendChild(el('h4', { class: 'bench-panel-title' }, panel.label));
+    const heading = el('h4', { class: 'bench-panel-title' }, panel.label);
+    appendSourceLink(heading, panel.id);
+    host.appendChild(heading);
 
     if (!libsByShape || libsByShape.size === 0) {
       host.appendChild(el('p', { class: 'bench-chart-empty' },
         'No data for this topology yet.'));
       return;
     }
-    if (typeof window.uPlot !== 'function') {
+    if (typeof window.echarts !== 'object' || !window.echarts.init) {
       host.appendChild(el('p', { class: 'bench-chart-error' },
-        'Chart unavailable: uPlot library failed to load.'));
+        'Chart unavailable: ECharts library failed to load.'));
       return;
     }
 
-    // Collect shapes and assemble per-library point arrays.
     const shapeSet = new Set();
-    const libraries = [];
+    const series = [];
     for (const [library, shapeMap] of libsByShape) {
       const points = [];
       for (const [shape, mv] of shapeMap) {
         if (!mv || typeof mv.value !== 'number' || mv.value <= 0) continue;
         shapeSet.add(shape);
         points.push({
-          shape,
-          value: mv.value,
-          lower: mv.lower,
-          upper: mv.upper,
+          shape, value: mv.value, lower: mv.lower, upper: mv.upper,
           slug: mv.slug,
         });
       }
       if (points.length === 0) continue;
-      libraries.push({
-        library,
-        points,
-        panelId: panel.id,
+      series.push({
+        library, points,
+        _shapeMap: new Map(points.map((p) => [p.shape, p])),
       });
     }
-    libraries.sort((a, b) => a.library.localeCompare(b.library));
+    series.sort((a, b) => a.library.localeCompare(b.library));
 
-    if (libraries.length === 0) {
+    if (series.length === 0) {
       host.appendChild(el('p', { class: 'bench-chart-empty' },
         'No plottable values for this topology.'));
       return;
     }
 
     const xLabels = sortShapeLabels(shapeSet);
-    const xs = xLabels.map((_, i) => i + 1);
-    const seriesData = libraries.map((lib) => {
-      const byShape = new Map(lib.points.map((p) => [p.shape, p]));
-      return xLabels.map((label) => {
-        const p = byShape.get(label);
-        return p ? p.value : null;
-      });
-    });
-    const data = [xs, ...seriesData];
-
     let logScale = true;
-    let plot;
-
-    const plotMount = el('div', { class: 'bench-chart-plot' });
-    const rebuild = () => {
-      if (plot) plot.destroy();
-      plotMount.innerHTML = '';
-      plot = new window.uPlot(
-        makeThroughputOpts(plotMount, libraries, xLabels, logScale, panel.label),
-        data,
-        plotMount
-      );
-    };
 
     const controls = buildControls(panel.id, logScale, (next) => {
       logScale = next;
-      rebuild();
+      inst.setOption(buildThroughputOption(series, xLabels, logScale, panel.label),
+        { notMerge: true });
     });
-    const legend = buildLegend(libraries, (i, show) => {
-      if (plot) plot.setSeries(i + 1, { show });
-    });
-
+    const mount = el('div', { class: 'bench-chart-plot' });
     host.appendChild(controls);
-    host.appendChild(plotMount);
-    host.appendChild(legend);
-    rebuild();
-    attachResizeObserver(plotMount, () => plot);
+    host.appendChild(mount);
+
+    let inst = window.echarts.init(
+      mount, isLightScheme() ? null : 'dark', { renderer: 'canvas' }
+    );
+    inst.setOption(buildThroughputOption(series, xLabels, logScale, panel.label));
+    registerChart(inst, () => {
+      inst.dispose();
+      inst = window.echarts.init(
+        mount, isLightScheme() ? null : 'dark', { renderer: 'canvas' }
+      );
+      inst.setOption(buildThroughputOption(series, xLabels, logScale, panel.label));
+      const idx = _charts.findIndex((c) => c.instance && c.instance.isDisposed
+        && c.instance.isDisposed());
+      if (idx >= 0) _charts[idx].instance = inst;
+    });
   }
 
-  // ── module: latency panel (uPlot stepped ladder) ────────────────────
+  // ── module: latency panel ──────────────────────────────────────────
 
-  // Percentile axis — fixed order p50 → p95 → p99 → p999 → max. The
-  // categorical x-axis uses integer ticks 1..5 mapping to these labels.
   const LATENCY_PERCENTILES = Object.freeze([
     { key: 'latency_p50_ns',  label: 'p50'  },
     { key: 'latency_p95_ns',  label: 'p95'  },
@@ -721,20 +798,6 @@
     { key: 'latency_max_ns',  label: 'max'  },
   ]);
 
-  /* Build the per-library latency series from a BMF snapshot.
-   * Returns { libraries, hadAny } where:
-   *   libraries: Array<{ library, slug, values: Array<number|null> }>
-   *              with values aligned to LATENCY_PERCENTILES order.
-   *   hadAny: true if at least one slug carried any latency_* measure.
-   *
-   * Filtering rules:
-   *   - Only slugs with at least one latency_* measure contribute.
-   *   - A library appears once even if multiple slugs match (rare —
-   *     latency is collected for bounded 1p1c only); the first slug
-   *     wins, deterministic by sort order.
-   *   - Missing percentiles within an otherwise-present series become
-   *     null gaps so uPlot's stepped path skips them gracefully.
-   */
   function collectLatencySeries(bmf) {
     const byLibrary = new Map();
     let hadAny = false;
@@ -759,107 +822,11 @@
         if (m.value <= 0) return null;
         return m.value;
       });
-      byLibrary.set(parsed.library, {
-        library: parsed.library,
-        slug,
-        values,
-      });
+      byLibrary.set(parsed.library, { library: parsed.library, slug, values });
     }
     const libraries = Array.from(byLibrary.values())
       .sort((a, b) => a.library.localeCompare(b.library));
     return { libraries, hadAny };
-  }
-
-  function latencyTooltipPlugin(libraries, xLabels) {
-    let tip;
-    return {
-      hooks: {
-        init: (u) => {
-          tip = el('div', { class: 'bench-chart-tooltip' });
-          tip.style.display = 'none';
-          u.over.appendChild(tip);
-        },
-        setCursor: (u) => {
-          const { idx, left, top } = u.cursor;
-          if (idx == null || left < 0 || top < 0) {
-            if (tip) tip.style.display = 'none';
-            return;
-          }
-          const label = xLabels[idx];
-          const lines = [];
-          for (let i = 0; i < libraries.length; i++) {
-            const s = u.series[i + 1];
-            if (!s.show) continue;
-            const lib = libraries[i];
-            const v = lib.values[idx];
-            if (v == null) continue;
-            lines.push(displayLabel(lib.library) + ': ' +
-              v.toFixed(0) + ' ns');
-          }
-          if (lines.length === 0) {
-            tip.style.display = 'none';
-            return;
-          }
-          tip.innerHTML =
-            '<strong>' + label + '</strong><br>' + lines.join('<br>');
-          tip.style.display = 'block';
-          tip.style.left = left + 12 + 'px';
-          tip.style.top = top + 12 + 'px';
-        },
-      },
-    };
-  }
-
-  function makeLatencyOpts(host, libraries, xLabels) {
-    // Prefer uPlot's stepped path when available (1.6.27 ships it on
-    // the global uPlot.paths). Fall back to default linear path if the
-    // helper is missing — the ladder shape is still readable.
-    const stepped =
-      (window.uPlot && window.uPlot.paths && window.uPlot.paths.stepped)
-        ? window.uPlot.paths.stepped({ align: 1 })
-        : null;
-    const series = [{ label: 'percentile' }].concat(
-      libraries.map((lib) => {
-        const opt = {
-          label: displayLabel(lib.library),
-          stroke: getColor(lib.library),
-          width: 2,
-          points: { show: true, size: 6 },
-          spanGaps: false,
-        };
-        if (stepped) opt.paths = stepped;
-        if (isBlocking(lib.library)) opt.dash = [6, 4];
-        return opt;
-      })
-    );
-
-    return {
-      width: host.clientWidth || 800,
-      height: 360,
-      series,
-      // Log-scale Y axis — latency tail dynamics span 3-4 decades, so
-      // a linear scale would compress p50/p95 against the noise floor
-      // and obscure the tail behavior that matters for production
-      // sizing. distr: 3 = log scale in uPlot.
-      scales: {
-        x: { time: false },
-        y: { distr: 3 },
-      },
-      axes: [
-        {
-          values: (_, ticks) => ticks.map((t) => xLabels[t - 1] || ''),
-          label: 'percentile',
-        },
-        {
-          label: 'latency (ns) [log]',
-          values: (_, ticks) =>
-            ticks.map((v) => (v >= 1000 ? v.toExponential(1) : '' + v)),
-        },
-      ],
-      cursor: { drag: { x: false, y: false } },
-      legend: { show: false },
-      plugins: [latencyTooltipPlugin(libraries, xLabels)],
-    };
   }
 
   // CONTRACT-TEST-PARSED-START LATENCY_EMPTY_MESSAGE
@@ -873,26 +840,92 @@
     "Some libraries don't yet have latency measurements — adapter " +
     'coverage is in progress.';
 
-  /* Render the latency panel. `bmf` is the raw snapshot object so the
-   * latency renderer can pick its own measure keys (different from the
-   * throughput pipeline's CHART_MEASURE).
-   *
-   * Empty-state triggers:
-   *   - bmf null/undefined or no slugs → "unavailable" message.
-   *   - no slug carries any latency_* measure → "unavailable" message.
-   * Partial-state trigger:
-   *   - latency present but fewer libraries than expected coverage —
-   *     we surface a soft footnote rather than blocking the render.
-   *     Threshold: lockfreequeues family alone (4 bounded 1p1c slugs)
-   *     → no footnote; if any non-lfq library carries latency we don't
-   *     warn either; the footnote fires only when at least one
-   *     lockfreequeues library is missing latency data while others
-   *     have it (i.e. coverage is incomplete inside the family).
-   */
+  function buildLatencyOption(libraries, xLabels) {
+    const echartsSeries = libraries.map((lib) => {
+      const isLfq = isLockfreequeues(lib.library);
+      return {
+        name: displayLabel(lib.library),
+        type: 'line',
+        step: 'end',
+        data: lib.values.slice(),
+        connectNulls: false,
+        showSymbol: true,
+        symbolSize: isLfq ? 8 : 6,
+        emphasis: { focus: 'series' },
+        lineStyle: {
+          width: isLfq ? 3 : 2,
+          type: isBlocking(lib.library) ? 'dashed' : 'solid',
+        },
+        itemStyle: { color: getColor(lib.library) },
+      };
+    });
+
+    return Object.assign({}, buildPaletteOpt(), {
+      grid: { left: 50, right: 24, top: 16, bottom: '25%', containLabel: false },
+      tooltip: Object.assign({}, buildPaletteOpt().tooltip, {
+        trigger: 'axis',
+        axisPointer: { type: 'cross' },
+        formatter: (params) => {
+          if (!params || !params.length) return '';
+          const label = params[0].axisValueLabel || params[0].name;
+          const lines = ['<strong>' + escapeHtml(label) + '</strong>'];
+          for (const p of params) {
+            if (p.value == null) continue;
+            const lib = (p.seriesName || '').replace(/ \*$/, '');
+            let line = '<span style="display:inline-block;width:8px;height:8px;'
+              + 'border-radius:50%;background:' + p.color
+              + ';margin-right:6px;"></span>'
+              + escapeHtml(lib) + ': ' + p.value.toFixed(0) + ' ns';
+            if (isBlocking(lib)) line += ' (blocking)';
+            lines.push(line);
+          }
+          return lines.join('<br>');
+        },
+      }),
+      legend: Object.assign({}, buildPaletteOpt().legend, {
+        type: 'plain',
+        bottom: 0,
+        left: 'center',
+        width: '100%',
+        data: libraries.map((lib) => displayLabel(lib.library)),
+      }),
+      xAxis: Object.assign({}, buildPaletteOpt().xAxis, {
+        type: 'category',
+        data: xLabels,
+        name: 'percentile',
+        nameLocation: 'middle',
+        nameGap: 28,
+      }),
+      yAxis: Object.assign({}, buildPaletteOpt().yAxis, {
+        type: 'log',
+        logBase: 10,
+        name: 'latency (ns) [log]',
+        nameLocation: 'middle',
+        nameGap: 52,
+        axisLabel: Object.assign({}, buildPaletteOpt().yAxis.axisLabel, {
+          // Compact scientific notation for large values keeps the
+          // y-axis label band narrow on a log scale (e.g. "1e7" instead
+          // of "10,000,000"), so grid.left: 50 doesn't clip. Small
+          // values pass through unchanged for readability.
+          formatter: (value) => {
+            if (value >= 10000) return value.toExponential(0).replace('e+', 'e');
+            return value.toString();
+          },
+        }),
+      }),
+      series: echartsSeries,
+    });
+  }
+
   function renderLatencyPanel(host, bmf) {
     if (!host) return;
     host.innerHTML = '';
-    host.appendChild(el('h4', { class: 'bench-panel-title' }, 'Latency'));
+    // NOTE: heading text is owned by the `#### Latency` markdown in
+    // docs/benchmarks.md; do NOT inject a duplicate <h4> here. Locate
+    // the markdown-rendered heading and decorate it with the source-
+    // code link so the latency panel matches the throughput panels.
+    const latencyHeading = findPrecedingHeading(host);
+    if (latencyHeading) appendSourceLink(latencyHeading, 'bench-latency');
 
     if (!bmf || typeof bmf !== 'object') {
       host.appendChild(el('p', { class: 'bench-chart-empty' },
@@ -906,44 +939,28 @@
         LATENCY_EMPTY_MESSAGE));
       return;
     }
-    if (typeof window.uPlot !== 'function') {
+    if (typeof window.echarts !== 'object' || !window.echarts.init) {
       host.appendChild(el('p', { class: 'bench-chart-error' },
-        'Chart unavailable: uPlot library failed to load.'));
+        'Chart unavailable: ECharts library failed to load.'));
       return;
     }
 
     const xLabels = LATENCY_PERCENTILES.map((p) => p.label);
-    const xs = xLabels.map((_, i) => i + 1);
-    const seriesData = libraries.map((lib) => lib.values.slice());
-    const data = [xs, ...seriesData];
+    const mount = el('div', { class: 'bench-chart-plot' });
+    host.appendChild(mount);
 
-    let plot;
-    const plotMount = el('div', { class: 'bench-chart-plot' });
-    const rebuild = () => {
-      if (plot) plot.destroy();
-      plotMount.innerHTML = '';
-      plot = new window.uPlot(
-        makeLatencyOpts(plotMount, libraries, xLabels),
-        data,
-        plotMount
+    let inst = window.echarts.init(
+      mount, isLightScheme() ? null : 'dark', { renderer: 'canvas' }
+    );
+    inst.setOption(buildLatencyOption(libraries, xLabels));
+    registerChart(inst, () => {
+      inst.dispose();
+      inst = window.echarts.init(
+        mount, isLightScheme() ? null : 'dark', { renderer: 'canvas' }
       );
-    };
-
-    // Decorate libraries with the panelId expected by buildLegend.
-    const legendLibs = libraries.map((lib) => ({
-      library: lib.library,
-      panelId: 'bench-latency',
-    }));
-    const legend = buildLegend(legendLibs, (i, show) => {
-      if (plot) plot.setSeries(i + 1, { show });
+      inst.setOption(buildLatencyOption(libraries, xLabels));
     });
 
-    host.appendChild(plotMount);
-    host.appendChild(legend);
-
-    // Partial-coverage footnote: at least one lfq bounded variant
-    // carries latency, but not all four. This is the visible
-    // "adapter coverage in progress" cue.
     const lfqBoundedExpected = [
       'lockfreequeues_spsc', 'lockfreequeues_spmc',
       'lockfreequeues_mpsc', 'lockfreequeues_mpmc',
@@ -954,9 +971,6 @@
       host.appendChild(el('p', { class: 'bench-hero-footnote' },
         LATENCY_PARTIAL_FOOTNOTE));
     }
-
-    rebuild();
-    attachResizeObserver(plotMount, () => plot);
   }
 
   // ── module: fallback chain ──────────────────────────────────────────
@@ -990,8 +1004,7 @@
       return { data, status: 'fixture', reason };
     } catch (err) {
       return {
-        data: null,
-        status: 'error',
+        data: null, status: 'error',
         reason: reason + '; example.json also unavailable: ' +
           (err && err.message ? err.message : err),
       };
@@ -1039,7 +1052,9 @@
       const host = document.getElementById(panel.id);
       if (host) {
         host.innerHTML = '';
-        host.appendChild(el('h4', { class: 'bench-panel-title' }, panel.label));
+        const heading = el('h4', { class: 'bench-panel-title' }, panel.label);
+        appendSourceLink(heading, panel.id);
+        host.appendChild(heading);
         host.appendChild(el('p', { class: 'bench-chart-empty' },
           'Awaiting next bench run.'));
       }
@@ -1057,8 +1072,6 @@
       document.getElementById('bench-latency');
     if (!hasAnyHost) return;
 
-    // Pre-paint the latency panel with the empty-state message so the
-    // section isn't blank during fetch (or if fetch fails entirely).
     renderLatencyPanel(document.getElementById('bench-latency'), null);
 
     const result = await loadBMF();
@@ -1076,9 +1089,6 @@
     for (const panel of THROUGHPUT_PANELS) {
       const host = document.getElementById(panel.id);
       if (!host) continue;
-      // Collect every topology that this panel includes (e.g. the
-      // SPSC panel includes both spsc and spsc_unbounded so bounded
-      // and unbounded SPSC libraries render side-by-side).
       const merged = new Map();
       for (const [topology, libsByShape] of byTopology) {
         if (!panel.includes(topology)) continue;
@@ -1091,27 +1101,56 @@
       renderThroughputPanel(host, panel, merged);
     }
 
-    // Latency panel — re-render with the loaded BMF (replaces the
-    // pre-paint empty state from the top of `render`).
     renderLatencyPanel(
       document.getElementById('bench-latency'),
       result.data || null
     );
 
-    // Hash routing: native scroll-to-id is enough because the IDs match
-    // the URL fragments. We just nudge the browser to re-evaluate the
-    // hash now that panels are populated (otherwise an initial load
-    // with #bench-throughput-spsc lands above the rendered panel).
+    // After initial layout settles, resize all charts to fill their
+    // containers. ECharts auto-sizes at init only if the container has
+    // its final dimensions at that moment; with mkdocs Material, layout
+    // can shift after the script runs (sidebar/nav fonts settle, etc.).
+    requestAnimationFrame(() => {
+      resizeAll();
+      // A second pass after a short tick catches any late reflow from
+      // font loading or theme palette readback.
+      setTimeout(resizeAll, 50);
+    });
+
     if (window.location.hash) {
       const id = window.location.hash.slice(1);
       const node = document.getElementById(id);
       if (node) {
-        // Defer to next frame so uPlot has finished sizing.
         requestAnimationFrame(() => {
           node.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
       }
     }
+  }
+
+  // Window resize: ECharts requires explicit instance.resize().
+  // Debounce so a drag doesn't fire dozens of resizes per second.
+  let _resizeTimer = null;
+  window.addEventListener('resize', () => {
+    if (_resizeTimer) clearTimeout(_resizeTimer);
+    _resizeTimer = setTimeout(resizeAll, 100);
+  });
+
+  // mkdocs Material color-scheme flips `data-md-color-scheme` on
+  // `<body>`. We watch for that and re-paint every chart with the
+  // matching ECharts baseline theme + Material palette.
+  if (typeof MutationObserver !== 'undefined') {
+    const mo = new MutationObserver((records) => {
+      for (const r of records) {
+        if (r.type === 'attributes' &&
+            (r.attributeName === 'data-md-color-scheme' ||
+             r.attributeName === 'data-md-color-primary')) {
+          repaintAllForScheme();
+          return;
+        }
+      }
+    });
+    mo.observe(document.body, { attributes: true });
   }
 
   if (document.readyState === 'loading') {

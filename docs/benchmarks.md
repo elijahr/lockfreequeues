@@ -124,7 +124,8 @@ guard the unification against per-shape throughput regressions.
 ### Cross-library comparison set
 
 The comparison adapters (`benchmarks/nim/adapters/`) plot third-party
-queues on the same Bencher dashboard. All adapters are gated behind
+queues alongside the in-tree families in the same BMF snapshot consumed
+by the charts on this page. All adapters are gated behind
 `-d:adapter_<library_slug>_available`; absent gates produce no symbol
 references and the production builds are unchanged. The set below was
 expanded for the v5.0.0 benchmark suite so every topology has multiple
@@ -215,7 +216,7 @@ section below.
 <div markdown="0">
   <div id="bench-latency" class="bench-panel"></div>
 
-  <script src="../assets/uplot-1.6.27.iife.min.js"></script>
+  <script src="../assets/echarts-5.5.1.min.js"></script>
   <script src="../assets/bench-charts.js"></script>
 </div>
 
@@ -230,8 +231,7 @@ Specific caveats:
 
 - **Cache-line padding asymmetry.** Some libraries (lockfreequeues, MoodyCamel,
   Boost.LockFree, atomic_queue, rigtorp) pad their head/tail/sequence fields to
-  64 bytes; others may not. The lockfreequeues MPMC types were padding-audited
-  during the queue unification.
+  64 bytes; others may not.
 - **Memory ordering.** lockfreequeues uses `acquire`/`release` ordering on its
   hot paths; some external libraries default to `seq_cst`, which is stricter
   and may show as higher latency.

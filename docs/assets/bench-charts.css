@@ -1,9 +1,9 @@
-/* lockfreequeues bench chart styling — sits inside docs/benchmarks.md.
- * The charts are built imperatively by bench-charts.js; these rules
- * cover layout, the legend, the controls bar, the hover tooltip, the
- * hand-rendered hero panel, the per-topology uPlot panels, and the
- * status banner. uPlot's own stylesheet is vendored separately
- * (uplot-1.6.27.min.css).
+/* lockfreequeues bench chart styling — paired with bench-charts.js.
+ * The charts are rendered by Apache ECharts (loaded via CDN); ECharts
+ * owns the tooltip, axis, and series chrome. These rules cover the
+ * page-level layout (panel containers, controls bar, status banner,
+ * hero panel scaffolding) plus the DOM-bar fallback that runs when
+ * the ECharts global is missing.
  */
 
 /* ── panel layout ─────────────────────────────────────────────────── */
@@ -19,10 +19,27 @@
   font-weight: 600;
 }
 
-/* Backwards-compat: the old single-chart container still renders an
- * empty-state if the page somehow includes #bench-chart instead of
- * the new multi-panel layout.
- */
+/* Source-code link injected next to panel/section headings. Kept
+ * unobtrusive: small font, muted color via Material foreground--light,
+ * no underline until hover. Applies both to JS-injected throughput
+ * headings and to the markdown-owned `#### Latency` heading decorated
+ * at render time. */
+.bench-source-link {
+  margin-left: 0.6em;
+  font-size: 0.72em;
+  font-weight: 400;
+  color: var(--md-default-fg-color--light, #aaaaaa);
+  text-decoration: none;
+  vertical-align: middle;
+  letter-spacing: 0;
+}
+
+.bench-source-link:hover,
+.bench-source-link:focus {
+  color: var(--md-accent-fg-color, #3f51b5);
+  text-decoration: underline;
+}
+
 #bench-chart,
 #bench-hero,
 #bench-throughput-spsc,
@@ -33,9 +50,10 @@
   width: 100%;
   max-width: 100%;
   margin: 1.5em 0;
+  box-sizing: border-box;
 }
 
-/* ── controls / legend / tooltip (shared by every uPlot panel) ────── */
+/* ── controls / chart mount ───────────────────────────────────────── */
 .bench-chart-controls {
   display: flex;
   gap: 1em;
@@ -56,59 +74,11 @@
   width: 100%;
   max-width: 100%;
   min-height: 360px;
+  box-sizing: border-box;
 }
 
-.bench-chart-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4em 1em;
-  margin-top: 0.75em;
-  padding: 0.5em;
-  border-top: 1px solid var(--md-default-fg-color--lightest, #ccc);
-  font-size: 0.85em;
-}
-
-.bench-legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25em;
-}
-
-.bench-legend-item label {
-  cursor: pointer;
-  user-select: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4em;
-}
-
-.bench-chart-swatch {
-  display: inline-block;
-  width: 0.9em;
-  height: 0.9em;
-  border-radius: 2px;
-  vertical-align: middle;
-}
-
-.bench-chart-swatch-blocking {
-  background: transparent !important;
-  border: 2px dotted currentColor;
-  border-radius: 2px;
-}
-
-.bench-chart-tooltip {
-  position: absolute;
-  pointer-events: none;
-  background: var(--md-default-bg-color, #1e1e2e);
-  color: var(--md-default-fg-color, #eee);
-  border: 1px solid var(--md-default-fg-color--lightest, #555);
-  border-radius: 4px;
-  padding: 0.5em 0.75em;
-  font-size: 0.85em;
-  z-index: 10;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  max-width: 320px;
-  line-height: 1.4;
+.bench-chart-plot-hero {
+  min-height: 280px;
 }
 
 .bench-chart-error {
@@ -127,18 +97,11 @@
   text-align: center;
 }
 
-/* ── hero panel (hand-rendered DOM bars) ──────────────────────────── */
+/* ── hero panel ───────────────────────────────────────────────────── */
 .bench-panel-hero {
   background: var(--md-code-bg-color, rgba(0, 0, 0, 0.05));
   padding: 1em;
   border-radius: 8px;
-}
-
-.bench-hero-shape {
-  margin: 0 0 0.75em 0;
-  font-family: var(--md-code-font, monospace);
-  font-size: 0.9em;
-  color: var(--md-default-fg-color--light, #888);
 }
 
 .bench-hero-heading {
@@ -147,6 +110,19 @@
   font-weight: 600;
 }
 
+.bench-hero-footnote {
+  font-size: 0.8em;
+  color: var(--md-default-fg-color--light, #aaa);
+  margin-top: 0.5em;
+}
+
+.bench-hero-empty {
+  padding: 1em 0;
+  color: var(--md-default-fg-color--light, #aaa);
+  font-style: italic;
+}
+
+/* ── hero DOM-bar fallback (only when ECharts global is missing) ─── */
 .bench-hero-bars {
   list-style: none;
   margin: 0;
@@ -184,59 +160,12 @@
   font-size: 0.85em;
 }
 
-.bench-hero-footnote {
-  font-size: 0.8em;
-  color: var(--md-default-fg-color--light, #aaa);
-  margin-top: 0.5em;
-}
-
-/* Sub-axis caption under the hero bars; matches the Y-axis label on
- * the throughput panels so the hero and panels speak the same units. */
 .bench-hero-axis-caption {
   margin: 0.4em 0 0.6em 0;
   font-size: 0.8em;
   color: var(--md-default-fg-color--light, #aaa);
   text-align: right;
   font-variant-numeric: tabular-nums;
-}
-
-/* Hero legend: stable structure even when no library is blocking, so
- * the layout doesn't shift as data changes. Mirrors .bench-chart-legend
- * but without the per-row checkbox affordance (hero rows aren't
- * toggleable; the visualization is a static bar comparison). */
-.bench-hero-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4em 1em;
-  margin-top: 0.75em;
-  padding: 0.5em 0 0 0;
-  border-top: 1px solid var(--md-default-fg-color--lightest, #ccc);
-  font-size: 0.85em;
-}
-
-.bench-hero-legend .bench-legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4em;
-}
-
-.bench-hero-blocking-badge {
-  font-size: 0.85em;
-  color: var(--md-default-fg-color--light, #aaa);
-  font-style: italic;
-}
-
-.bench-hero-legend-note {
-  flex: 1 0 100%;
-  margin: 0.4em 0 0 0;
-  font-size: 0.8em;
-  color: var(--md-default-fg-color--light, #aaa);
-}
-
-.bench-hero-empty {
-  padding: 1em 0;
-  color: var(--md-default-fg-color--light, #aaa);
-  font-style: italic;
 }
 
 /* ── status banner ────────────────────────────────────────────────── */
@@ -265,7 +194,6 @@
 @media (max-width: 767px) {
   .bench-panel { font-size: 0.875em; }
   .bench-chart-plot { min-height: 320px; }
-  .bench-chart-legend { font-size: 0.8em; gap: 0.3em 0.6em; }
   .bench-hero-row {
     grid-template-columns: 1fr;
     gap: 0.1em;
@@ -274,8 +202,6 @@
 }
 
 @media (max-width: 374px) {
-  /* iPhone SE — let the X axis scroll horizontally rather than
-   * squeeze unreadably. */
   .bench-chart-plot {
     overflow-x: auto;
     min-width: 320px;
