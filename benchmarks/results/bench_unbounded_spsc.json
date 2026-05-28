@@ -1,0 +1,112 @@
+{
+  "meta": {
+    "schema": 1,
+    "generated_at": "2026-05-28T01:01:24Z",
+    "host": {
+      "os": "macosx",
+      "arch": "arm64"
+    },
+    "lockfreequeues_version": "5.0.0",
+    "nim_version": "2.2.10",
+    "adapters": {
+      "atomic_queue": {
+        "version": null,
+        "fingerprint": "sha1:a06e168c1af7a98e4934c9c391f2148d5f97902f",
+        "kind": "vendored-content-hash",
+        "pinned_sha_per_readme": "1a3774a89c86ecfdf08753dbd41018ace5a833a4"
+      },
+      "concurrentqueue": {
+        "version": null,
+        "fingerprint": "sha1:ef30ae5c0cbad10474e0cf27c05fa1d1604d241a",
+        "kind": "vendored-content-hash",
+        "pinned_sha_per_readme": "d655418bb644b7f85159d94c591d7d983949fb81"
+      },
+      "moodycamel": {
+        "version": null,
+        "fingerprint": "sha1:ef30ae5c0cbad10474e0cf27c05fa1d1604d241a",
+        "kind": "vendored-content-hash",
+        "pinned_sha_per_readme": "d655418bb644b7f85159d94c591d7d983949fb81"
+      },
+      "rigtorp_mpmc": {
+        "version": null,
+        "fingerprint": "sha1:63983bec702b4eea208969cba78ad3f7fb709e8a",
+        "kind": "vendored-content-hash",
+        "pinned_sha_per_readme": "b9808ede08f26fa9df4df4e081d19cace8f6c6ea"
+      },
+      "rigtorp_spsc": {
+        "version": null,
+        "fingerprint": "sha1:47018c1d7d672e9a83b05dd6f1656ce7ab734e05",
+        "kind": "vendored-content-hash",
+        "pinned_sha_per_readme": "1053918dbd251fbff69b24ef27fa5d51c29ec2af"
+      },
+      "liblfds": {
+        "version": null,
+        "fingerprint": null,
+        "kind": "vendored-version-macro",
+        "status": "build-without-liblfds"
+      },
+      "crossbeam_queue": {
+        "kind": "cargo-locked",
+        "version": null,
+        "fingerprint": null,
+        "status": "build-without-rust-cdylib"
+      },
+      "flume": {
+        "kind": "cargo-locked",
+        "version": null,
+        "fingerprint": null,
+        "status": "build-without-rust-cdylib"
+      },
+      "kanal": {
+        "kind": "cargo-locked",
+        "version": null,
+        "fingerprint": null,
+        "status": "build-without-rust-cdylib"
+      },
+      "loony": {
+        "version": null,
+        "fingerprint": null,
+        "kind": "nimble-resolved",
+        "status": "absent"
+      },
+      "threading": {
+        "version": null,
+        "fingerprint": null,
+        "kind": "nimble-resolved",
+        "status": "absent"
+      },
+      "boost_lockfree": {
+        "version": null,
+        "fingerprint": null,
+        "kind": "system-package",
+        "status": "build-without-boost"
+      },
+      "nim_channel": {
+        "version": "2.2.10",
+        "fingerprint": null,
+        "kind": "compiler-builtin"
+      },
+      "lockfreequeues": {
+        "version": "5.0.0",
+        "fingerprint": null,
+        "kind": "in-tree"
+      }
+    },
+    "absent_adapters": [
+      "liblfds",
+      "crossbeam_queue",
+      "flume",
+      "kanal",
+      "loony",
+      "threading",
+      "boost_lockfree"
+    ]
+  },
+  "lockfreequeues_unbounded_spsc/spsc_unbounded/1p1c": {
+    "throughput_ops_ms": {
+      "value": 51794.62325966168,
+      "lower_value": 28410.233731629953,
+      "upper_value": 75179.01278769341
+    }
+  }
+}

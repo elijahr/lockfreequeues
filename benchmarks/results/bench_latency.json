@@ -1,0 +1,241 @@
+{
+  "meta": {
+    "schema": 1,
+    "generated_at": "2026-05-28T01:01:54Z",
+    "host": {
+      "os": "macosx",
+      "arch": "arm64"
+    },
+    "lockfreequeues_version": "5.0.0",
+    "nim_version": "2.2.10",
+    "adapters": {
+      "atomic_queue": {
+        "version": null,
+        "fingerprint": "sha1:a06e168c1af7a98e4934c9c391f2148d5f97902f",
+        "kind": "vendored-content-hash",
+        "pinned_sha_per_readme": "1a3774a89c86ecfdf08753dbd41018ace5a833a4"
+      },
+      "concurrentqueue": {
+        "version": null,
+        "fingerprint": "sha1:ef30ae5c0cbad10474e0cf27c05fa1d1604d241a",
+        "kind": "vendored-content-hash",
+        "pinned_sha_per_readme": "d655418bb644b7f85159d94c591d7d983949fb81"
+      },
+      "moodycamel": {
+        "version": null,
+        "fingerprint": "sha1:ef30ae5c0cbad10474e0cf27c05fa1d1604d241a",
+        "kind": "vendored-content-hash",
+        "pinned_sha_per_readme": "d655418bb644b7f85159d94c591d7d983949fb81"
+      },
+      "rigtorp_mpmc": {
+        "version": null,
+        "fingerprint": "sha1:63983bec702b4eea208969cba78ad3f7fb709e8a",
+        "kind": "vendored-content-hash",
+        "pinned_sha_per_readme": "b9808ede08f26fa9df4df4e081d19cace8f6c6ea"
+      },
+      "rigtorp_spsc": {
+        "version": null,
+        "fingerprint": "sha1:47018c1d7d672e9a83b05dd6f1656ce7ab734e05",
+        "kind": "vendored-content-hash",
+        "pinned_sha_per_readme": "1053918dbd251fbff69b24ef27fa5d51c29ec2af"
+      },
+      "liblfds": {
+        "version": null,
+        "fingerprint": null,
+        "kind": "vendored-version-macro",
+        "status": "build-without-liblfds"
+      },
+      "crossbeam_queue": {
+        "kind": "cargo-locked",
+        "version": null,
+        "fingerprint": null,
+        "status": "build-without-rust-cdylib"
+      },
+      "flume": {
+        "kind": "cargo-locked",
+        "version": null,
+        "fingerprint": null,
+        "status": "build-without-rust-cdylib"
+      },
+      "kanal": {
+        "kind": "cargo-locked",
+        "version": null,
+        "fingerprint": null,
+        "status": "build-without-rust-cdylib"
+      },
+      "loony": {
+        "version": null,
+        "fingerprint": null,
+        "kind": "nimble-resolved",
+        "status": "absent"
+      },
+      "threading": {
+        "version": null,
+        "fingerprint": null,
+        "kind": "nimble-resolved",
+        "status": "absent"
+      },
+      "boost_lockfree": {
+        "version": null,
+        "fingerprint": null,
+        "kind": "system-package",
+        "status": "build-without-boost"
+      },
+      "nim_channel": {
+        "version": "2.2.10",
+        "fingerprint": null,
+        "kind": "compiler-builtin"
+      },
+      "lockfreequeues": {
+        "version": "5.0.0",
+        "fingerprint": null,
+        "kind": "in-tree"
+      }
+    },
+    "absent_adapters": [
+      "liblfds",
+      "crossbeam_queue",
+      "flume",
+      "kanal",
+      "loony",
+      "threading",
+      "boost_lockfree"
+    ]
+  },
+  "lockfreequeues_mpmc/mpmc/1p1c": {
+    "latency_max_ns": {
+      "value": 1380897.7272727273
+    },
+    "latency_p50_ns": {
+      "value": 272.8787878787879
+    },
+    "latency_p95_ns": {
+      "value": 798.1212121212121
+    },
+    "latency_p999_ns": {
+      "value": 1574.5454545454545
+    },
+    "latency_p99_ns": {
+      "value": 921.8181818181819
+    }
+  },
+  "lockfreequeues_mpsc/mpsc/1p1c": {
+    "latency_max_ns": {
+      "value": 1387335.878787879
+    },
+    "latency_p50_ns": {
+      "value": 335.969696969697
+    },
+    "latency_p95_ns": {
+      "value": 872.5454545454545
+    },
+    "latency_p999_ns": {
+      "value": 2263.939393939394
+    },
+    "latency_p99_ns": {
+      "value": 969.7575757575758
+    }
+  },
+  "lockfreequeues_queue_bounded_mpmc/mpmc/1p1c": {
+    "latency_max_ns": {
+      "value": 1697780.1818181819
+    },
+    "latency_p50_ns": {
+      "value": 248.96969696969697
+    },
+    "latency_p95_ns": {
+      "value": 832.0
+    },
+    "latency_p999_ns": {
+      "value": 1808.3030303030303
+    },
+    "latency_p99_ns": {
+      "value": 934.5151515151515
+    }
+  },
+  "lockfreequeues_queue_bounded_mpsc/mpsc/1p1c": {
+    "latency_max_ns": {
+      "value": 1434971.0
+    },
+    "latency_p50_ns": {
+      "value": 208.57575757575756
+    },
+    "latency_p95_ns": {
+      "value": 803.1818181818181
+    },
+    "latency_p999_ns": {
+      "value": 1958.4848484848485
+    },
+    "latency_p99_ns": {
+      "value": 955.8181818181819
+    }
+  },
+  "lockfreequeues_queue_bounded_spmc/mpmc/1p1c": {
+    "latency_max_ns": {
+      "value": 1333330.8484848484
+    },
+    "latency_p50_ns": {
+      "value": 245.1818181818182
+    },
+    "latency_p95_ns": {
+      "value": 745.030303030303
+    },
+    "latency_p999_ns": {
+      "value": 1333.5454545454545
+    },
+    "latency_p99_ns": {
+      "value": 887.6363636363636
+    }
+  },
+  "lockfreequeues_queue_bounded_spsc/spsc/1p1c": {
+    "latency_max_ns": {
+      "value": 749681.9393939395
+    },
+    "latency_p50_ns": {
+      "value": 290.45454545454544
+    },
+    "latency_p95_ns": {
+      "value": 669.2727272727273
+    },
+    "latency_p999_ns": {
+      "value": 1939.3939393939395
+    },
+    "latency_p99_ns": {
+      "value": 761.5454545454545
+    }
+  },
+  "lockfreequeues_spmc/mpmc/1p1c": {
+    "latency_max_ns": {
+      "value": 1322304.2424242424
+    },
+    "latency_p50_ns": {
+      "value": 212.33333333333334
+    },
+    "latency_p95_ns": {
+      "value": 816.969696969697
+    },
+    "latency_p999_ns": {
+      "value": 3251.3333333333335
+    },
+    "latency_p99_ns": {
+      "value": 955.969696969697
+    }
+  },
+  "lockfreequeues_spsc/spsc/1p1c": {
+    "latency_max_ns": {
+      "value": 916988.6060606061
+    },
+    "latency_p50_ns": {
+      "value": 334.6969696969697
+    },
+    "latency_p95_ns": {
+      "value": 617.3636363636364
+    },
+    "latency_p999_ns": {
+      "value": 1314.4545454545455
+    },
+    "latency_p99_ns": {
+      "value": 730.0
+    }
+  }
+}
