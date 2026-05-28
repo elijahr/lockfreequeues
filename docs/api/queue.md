@@ -98,6 +98,17 @@ producer.push(99)
 var consumer = mpmc.getConsumer()
 consumer.attach()
 let b = consumer.pop()             # some(99)
+
+# MPMC: when the calling thread is also the operating thread,
+# `getProducerHere` / `getConsumerHere` are sugar for getX() + attach().
+# Prefer this same-thread form; use the explicit getX() + attach()
+# pair above when the view is handed off to a worker thread that does
+# the push/pop (the attach() must run on that worker thread).
+var mpmc2 = newQueue(Queue[int, ccMulti, ccMulti, stEager, 64, 8])
+var producer2 = mpmc2.getProducerHere()  # registers on current thread
+producer2.push(99)
+var consumer2 = mpmc2.getConsumerHere()
+let c = consumer2.pop()            # some(99)
 ```
 
 ## Calling Convention by Cardinality
@@ -111,6 +122,15 @@ while `ccCons == ccMulti` requires a `QueueConsumer` view from
 `Queue` or direct `pop` on a multi-consumer `Queue` is a
 **compile-time error** whose diagnostic names only the user-visible
 `QueueProducer` / `QueueConsumer` aliases.
+
+For the common same-thread case (the calling thread is also the
+thread that will push/pop through the returned view),
+`getProducerHere()` / `getConsumerHere()` are templates that combine
+`getX()` + `attach()` in one call. They are pure sugar: identical
+runtime behavior, identical diagnostics. Use the explicit
+`getX()` + `attach()` pair when the view is handed off to a worker
+thread that does the push/pop, so the `attach()` registers the
+correct thread.
 
 ## Typestate Notes
 

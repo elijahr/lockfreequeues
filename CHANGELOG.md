@@ -401,6 +401,12 @@ honoured regardless of build mode.
 
 ### Added
 
+- `getProducerHere` / `getConsumerHere` templates as ergonomic sugar
+  for `getProducer()` + `attach()` (and `getConsumer()` + `attach()`)
+  when the calling thread is also the operating thread. Producer-to-
+  worker handoff patterns still use the explicit form so the debra
+  registration lands on the worker thread. Available on both `Queue`
+  (unbounded) and `BQueue` (bounded) multi-cardinality shapes.
 - Multi-panel benchmark chart layout on `docs/benchmarks.md`: a hero
   panel highlighting lockfreequeues vs alternatives at the most-relevant
   shape, per-topology throughput panels, and a dedicated latency panel.

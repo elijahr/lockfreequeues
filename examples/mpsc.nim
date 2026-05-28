@@ -35,7 +35,7 @@ proc consumerFunc() {.thread.} =
 
 proc producerFunc() {.thread.} =
   # Get a unique producer for this thread
-  var producer = q.getProducer()
+  var producer = q.getProducerHere()
 
   let item = rand(100)
 

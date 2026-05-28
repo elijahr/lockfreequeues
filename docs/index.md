@@ -106,14 +106,20 @@ import lockfreequeues
 # Auto-create MPMC: segment size 64, registry capacity 4.
 var queue = newQueue(Queue[int, ccMulti, ccMulti, stEager, 64, 4])
 
-var producer = queue.getProducer()
-producer.attach()  # registers this thread; may raise DebraRegistrationError
-producer.push(42)
+var producer = queue.getProducerHere()  # registers this thread
+producer.push(42)                       # may raise DebraRegistrationError
 
-var consumer = queue.getConsumer()
-consumer.attach()
-let item = consumer.pop()  # some(42)
+var consumer = queue.getConsumerHere()
+let item = consumer.pop()               # some(42)
 ```
+
+The `*Here` templates are sugar for `getProducer()` + `attach()` (and
+`getConsumer()` + `attach()`) when the calling thread is also the
+operating thread. For the producer-to-worker handoff pattern (a
+parent thread obtains the view and hands it off to a worker thread
+that does the push/pop), use the explicit `getProducer()` +
+`attach()` pair so the debra registration lands on the worker thread.
+See the [Queue API reference](api/queue.md) for details.
 
 ## Choosing a Queue
 

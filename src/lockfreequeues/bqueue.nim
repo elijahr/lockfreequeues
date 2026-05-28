@@ -650,6 +650,68 @@ proc getConsumer*[
 
   raise newException(NoConsumersAvailableError, "All consumers assigned")
 
+template getProducerHere*[
+    T;
+    ccCons: static PinScopeCardinality,
+    N, P, C: static int,
+](
+    self: var BQueue[T, ccMulti, ccCons, N, P, C], idx: int = -1
+): BQueueProducer[T, ccMulti, ccCons, N, P, C] =
+  ## Sugar: `getProducer()` + `attach()` in one call.
+  ##
+  ## Use when the calling thread is also the operating thread (the
+  ## thread that will subsequently `push()` through the returned view).
+  ## This is the common same-thread MP/MC case for bounded queues
+  ## (e.g., bench harnesses where the spawning thread is also the
+  ## producer).
+  ##
+  ## For the producer-to-worker handoff pattern (a parent thread
+  ## obtains the view and hands it off to a worker thread that does
+  ## the pushing), use `getProducer()` + `attach()` separately so the
+  ## claim lands on the worker thread. See `getProducer` and `attach`
+  ## for the thread-affinity contract.
+  ##
+  ## BQueue is a bounded ring with sequence-counter publication (no
+  ## segments, no debra integration); the `attach()` here only marks
+  ## the view's runtime `claimed` flag.
+  ##
+  ## Raises `NoProducersAvailableError` from the underlying
+  ## `getProducer()` when the queue's `P` producer-registry capacity
+  ## is exhausted.
+  var view = self.getProducer(idx)
+  view.attach()
+  view
+
+template getConsumerHere*[
+    T;
+    ccProd: static PinScopeCardinality,
+    N, P, C: static int,
+](
+    self: var BQueue[T, ccProd, ccMulti, N, P, C], idx: int = -1
+): BQueueConsumer[T, ccProd, ccMulti, N, P, C] =
+  ## Sugar: `getConsumer()` + `attach()` in one call.
+  ##
+  ## Use when the calling thread is also the operating thread (the
+  ## thread that will subsequently `pop()` through the returned view).
+  ## This is the common same-thread MP/MC case for bounded queues.
+  ##
+  ## For the consumer-to-worker handoff pattern (a parent thread
+  ## obtains the view and hands it off to a worker thread that does
+  ## the popping), use `getConsumer()` + `attach()` separately so the
+  ## claim lands on the worker thread. See `getConsumer` and `attach`
+  ## for the thread-affinity contract.
+  ##
+  ## BQueue is a bounded ring with sequence-counter publication (no
+  ## segments, no debra integration); the `attach()` here only marks
+  ## the view's runtime `claimed` flag.
+  ##
+  ## Raises `NoConsumersAvailableError` from the underlying
+  ## `getConsumer()` when the queue's `C` consumer-registry capacity
+  ## is exhausted.
+  var view = self.getConsumer(idx)
+  view.attach()
+  view
+
 ## ----------------------------------------------------------------------
 ## push / pop — cardinality-dispatched Vyukov / Spsc logic.
 ##

@@ -5,7 +5,10 @@
 ## collapsed into `BQueue[T, ccMulti, ccMulti, N, P, C]` (the bounded
 ## 6-param shape — capacity `N`, `P` producer views, `C` consumer
 ## views). Producers and consumers are obtained via `q.getProducer()`
-## / `q.getConsumer()` (one per thread).
+## / `q.getConsumer()` (one per thread). This example uses the
+## `getProducerHere()` / `getConsumerHere()` sugar — each worker
+## thread is also the operating thread, so the view's `attach()`
+## lands on the right thread automatically.
 
 import options
 import random
@@ -20,7 +23,7 @@ var
 
 proc consumerFunc() {.thread.} =
   # Get a unique consumer for this thread
-  var consumer = q.getConsumer()
+  var consumer = q.getConsumerHere()
 
   # Try to pop a single item from the queue; pop() returns Option[int]
   let item = consumer.pop()
@@ -35,7 +38,7 @@ proc consumerFunc() {.thread.} =
 
 proc producerFunc() {.thread.} =
   # Get a unique producer for this thread
-  var producer = q.getProducer()
+  var producer = q.getProducerHere()
 
   let item = rand(100)
 

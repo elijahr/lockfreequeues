@@ -66,9 +66,20 @@ let a = spsc.pop()                 # some(42)
 # MPMC: capacity 64, up to 4 producers and 4 consumers.
 var mpmc = newBQueue[int, ccMulti, ccMulti, 64, 4, 4]()
 var producer = mpmc.getProducer()
+producer.attach()                  # claim the view on this thread
 discard producer.push(99)
 var consumer = mpmc.getConsumer()
+consumer.attach()
 let b = consumer.pop()             # some(99)
+
+# MPMC: when the calling thread is also the operating thread,
+# `getProducerHere` / `getConsumerHere` are sugar for getX() + attach().
+# Use the explicit form when handing the view off to a worker thread.
+var mpmc2 = newBQueue[int, ccMulti, ccMulti, 64, 4, 4]()
+var producer2 = mpmc2.getProducerHere()
+discard producer2.push(99)
+var consumer2 = mpmc2.getConsumerHere()
+let c = consumer2.pop()            # some(99)
 ```
 
 ## Calling Convention by Cardinality
@@ -93,6 +104,13 @@ user-visible `BQueueProducer` / `BQueueConsumer` aliases.
 When all `P` producer slots are taken, `getProducer()` raises
 `NoProducersAvailableError`; when all `C` consumer slots are taken,
 `getConsumer()` raises `NoConsumersAvailableError`.
+
+For the common same-thread case (the calling thread is also the
+thread that will push/pop through the returned view),
+`getProducerHere()` / `getConsumerHere()` are templates that combine
+`getX()` + `attach()` in one call. Use the explicit
+`getX()` + `attach()` pair when the view is handed off to a worker
+thread that does the push/pop.
 
 ## Typestate Notes
 

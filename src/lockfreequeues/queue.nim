@@ -787,6 +787,72 @@ proc getConsumer*[
   else:
     result.idx = -1
 
+template getProducerHere*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
+): QueueProducer[T, ccProd, ccCons, ST, S, MaxThreads] =
+  ## Sugar: `getProducer()` + `attach()` in one call.
+  ##
+  ## Use when the calling thread is also the operating thread (the
+  ## thread that will subsequently `push()` through the returned view).
+  ## This is the common SPSC case and the same-thread MP/MC case
+  ## (e.g., bench harnesses where the spawning thread is also the
+  ## producer).
+  ##
+  ## For the producer-to-worker handoff pattern (a parent thread
+  ## obtains the view and hands it off to a worker thread that does
+  ## the pushing), use `getProducer()` + `attach()` separately so the
+  ## debra registration lands on the worker thread. See `getProducer`
+  ## and `attach` for the thread-affinity contract.
+  ##
+  ## For `ccProd == ccSingle` (SPSC / SPMC producer side) `attach()`
+  ## is a no-op (debra-free), so this template is purely syntactic
+  ## sugar for those shapes.
+  ##
+  ## Raises `DebraRegistrationError` from the underlying `attach()`
+  ## when `ccProd == ccMulti` and the manager's `MaxThreads` registry
+  ## capacity is exhausted.
+  var view = self.getProducer()
+  when ccProd == ccMulti:
+    view.attach()
+  view
+
+template getConsumerHere*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
+): QueueConsumer[T, ccProd, ccCons, ST, S, MaxThreads] =
+  ## Sugar: `getConsumer()` + `attach()` in one call.
+  ##
+  ## Use when the calling thread is also the operating thread (the
+  ## thread that will subsequently `pop()` through the returned view).
+  ## This is the common SPSC case and the same-thread MP/MC case.
+  ##
+  ## For the consumer-to-worker handoff pattern (a parent thread
+  ## obtains the view and hands it off to a worker thread that does
+  ## the popping), use `getConsumer()` + `attach()` separately so the
+  ## debra registration lands on the worker thread. See `getConsumer`
+  ## and `attach` for the thread-affinity contract.
+  ##
+  ## For `ccCons == ccSingle` (SPSC / MPSC consumer side) `attach()`
+  ## is a no-op (debra-free), so this template is purely syntactic
+  ## sugar for those shapes.
+  ##
+  ## Raises `DebraRegistrationError` from the underlying `attach()`
+  ## when `ccCons == ccMulti` and the manager's `MaxThreads` registry
+  ## capacity is exhausted.
+  var view = self.getConsumer()
+  when ccCons == ccMulti:
+    view.attach()
+  view
+
 ## ----------------------------------------------------------------------
 ## len / segmentCount accessors.
 ## ----------------------------------------------------------------------

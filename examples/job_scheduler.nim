@@ -75,9 +75,9 @@ var
 proc submitterThread(ctx: ptr SubmitterContext) {.thread.} =
   ## Job submitter - creates and enqueues jobs.
   {.cast(gcsafe).}:
-    var producer = ctx.queue[].getProducer()
-    # Register THIS submitter thread with debra before any push.
-    producer.attach()
+    # Sugar: `getProducerHere()` combines `getProducer()` + `attach()`,
+    # registering THIS submitter thread with debra before any push.
+    var producer = ctx.queue[].getProducerHere()
     var submitted = 0
 
     for i in 0..<JobsPerSubmitter:
@@ -113,9 +113,9 @@ proc submitterThread(ctx: ptr SubmitterContext) {.thread.} =
 proc workerThread(ctx: ptr WorkerContext) {.thread.} =
   ## Worker - fetches and executes jobs.
   {.cast(gcsafe).}:
-    var consumer = ctx.queue[].getConsumer()
-    # Register THIS worker thread with debra before any pop.
-    consumer.attach()
+    # Sugar: `getConsumerHere()` combines `getConsumer()` + `attach()`,
+    # registering THIS worker thread with debra before any pop.
+    var consumer = ctx.queue[].getConsumerHere()
     var completed = 0
     var workTime: int64 = 0
 

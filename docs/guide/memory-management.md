@@ -297,6 +297,16 @@ consumer.attach()       # register THIS thread before the first pop
 let item = consumer.pop()
 ```
 
+For the common same-thread case — the calling thread is also the
+operating thread that will subsequently push or pop through the
+returned view — `getProducerHere()` / `getConsumerHere()` combine
+`getX()` and `attach()` in one call. The pair above becomes
+`var producer = queue.getProducerHere()` followed by
+`producer.push(42)`. Behavior is identical; the templates are pure
+sugar. Use the explicit `getX()` + `attach()` pair only when the
+view is handed off to a worker thread that does the push/pop, so the
+debra registration lands on that worker thread.
+
 For an unbounded MPSC queue the single consumer attaches through the
 queue directly:
 

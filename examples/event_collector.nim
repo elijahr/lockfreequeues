@@ -58,9 +58,10 @@ type
 
 var
   # v5.0.0 registration model: no thread is registered at construction.
-  # Each producer thread calls `getProducer().attach()` and the single
-  # consumer thread calls `attachConsumer()` on its OWN thread before its
-  # first push/pop (thread-affine debra registration).
+  # Each producer thread calls `getProducerHere()` (sugar for
+  # `getProducer()` + `attach()`) and the single consumer thread calls
+  # `attachConsumer()` on its OWN thread before its first push/pop
+  # (thread-affine debra registration).
   manager = initDebraManager[MaxThreads]()
   queue = newUnboundedMpscQueue[Event, stEager, SegmentSize, MaxThreads](
     addr manager
@@ -75,9 +76,9 @@ proc eventSourceThread(ctx: ptr SourceContext) {.thread.} =
   ## Simulates an event source generating events at variable rates.
   ## Sources occasionally burst to simulate real traffic patterns.
   {.cast(gcsafe).}:
-    var producer = ctx.queue[].getProducer()
-    # Register THIS producer thread with debra before any push.
-    producer.attach()
+    # Sugar: `getProducerHere()` combines `getProducer()` + `attach()`,
+    # registering THIS thread with debra before any push.
+    var producer = ctx.queue[].getProducerHere()
     var produced = 0
 
     while running.load(moAcquire):
