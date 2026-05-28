@@ -13,8 +13,8 @@
     },
     "typestates": {
       "version": "0.10.0",
-      "vcsRevision": "",
-      "url": "",
+      "vcsRevision": "f3955be472e8353f8736bb639c3133023889ddb8",
+      "url": "https://github.com/elijahr/nim-typestates",
       "downloadMethod": "git",
       "dependencies": [],
       "checksums": {
@@ -23,8 +23,8 @@
     },
     "debra": {
       "version": "0.8.0",
-      "vcsRevision": "",
-      "url": "",
+      "vcsRevision": "123f29c9efbf9b646f80e385cdde95a690200a89",
+      "url": "https://github.com/elijahr/nim-debra",
       "downloadMethod": "git",
       "dependencies": [
         "typestates",
