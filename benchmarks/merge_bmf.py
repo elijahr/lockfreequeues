@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Merge multiple BMF JSON files into one before `bencher run` upload.
+"""Merge multiple BMF JSON files into one for the docs chart snapshot.
 
-Bencher.dev creates a separate Report per `bencher run` invocation; multiple
-uploads from sibling CI jobs (bench-throughput / bench-latency / topology
-splits) would NOT co-locate measures on a single per-slug history. This
-utility unions the per-slug measure dicts from N input BMF JSONs into one
-output BMF JSON, validates the schema, and guards against collisions.
+Sibling CI jobs (bench-throughput / bench-latency / topology splits) each
+emit their own BMF JSON fragment. This utility unions the per-slug measure
+dicts from N input BMF JSONs into one output BMF JSON, validates the
+schema, and guards against collisions. The merged result is what the
+docs charts read out of `docs/assets/bench-results/latest.json`.
 
 Contract (design doc section 4.3):
     merge_bmf.py <output_path> <input1> [input2 ...]

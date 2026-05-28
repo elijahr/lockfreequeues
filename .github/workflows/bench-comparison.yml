@@ -59,7 +59,6 @@ concurrency:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
   CARGO_TERM_COLOR: always
   # v5.0.0 Bundle 5 soft-skip overrides. Empty string when the
   # workflow_dispatch input is unset (the default), '1' when the
@@ -81,8 +80,8 @@ jobs:
     # which would inflate the bench.yml critical path on every PR. Per
     # design 2.6 / impl plan 3.13 it lives in this dedicated workflow,
     # gated on nightly cron + workflow_dispatch + targeted path pushes
-    # to devel only. PR check feedback for crossbeam comes from this
-    # workflow's separate Bencher report.
+    # to devel only. Output flows into the merged BMF artifact consumed
+    # by the docs charts.
     name: bench-crossbeam (ubuntu-22.04)
     # Pinned to ubuntu-22.04 (not ubuntu-latest) so bench wall-clock
     # numbers stay reproducible across runs — the GitHub-hosted ubuntu-
@@ -91,17 +90,9 @@ jobs:
     # throughput shifts that have no relationship to a code change.
     # Mirrors bench.yml's identical pin.
     runs-on: ubuntu-22.04
-    # Mirror bench.yml's bench-upload permissions: bencher run uses
-    # `--github-actions ${{ secrets.GITHUB_TOKEN }}` to publish check
-    # runs / PR annotations, which require explicit `checks: write` and
-    # `pull-requests: write` on repos with default read-only token
-    # permissions. `contents: read` and `actions: read` cover
-    # actions/checkout and any future artifact downloads.
     permissions:
       contents: read
       actions: read
-      pull-requests: write
-      checks: write
     timeout-minutes: 30
 
     steps:
@@ -664,54 +655,3 @@ jobs:
           name: bench-comparison-external-bmf
           path: merged.json
 
-      - name: Install Bencher CLI
-        uses: bencherdev/bencher@main
-
-      - name: Bencher token preflight
-        run: |
-          if [ -z "$BENCHER_API_TOKEN" ]; then
-            echo "::warning title=Bencher upload skipped::BENCHER_API_TOKEN is not set; bench-comparison ran but did not upload."
-          else
-            echo "Bencher token present; proceeding with upload."
-          fi
-
-      - name: Track scheduled benchmarks with Bencher
-        if: github.event_name == 'schedule' && env.BENCHER_API_TOKEN != ''
-        run: |
-          bencher run \
-            --project lockfreequeues \
-            --token '${{ secrets.BENCHER_API_TOKEN }}' \
-            --branch devel \
-            --testbed ubuntu-latest \
-            --threshold-measure throughput_ops_ms \
-            --threshold-test t_test \
-            --threshold-max-sample-size 64 \
-            --threshold-lower-boundary 0.99 \
-            --thresholds-reset \
-            --adapter json \
-            --file merged.json \
-            --github-actions '${{ secrets.GITHUB_TOKEN }}' \
-            --err
-
-      - name: Track devel-push benchmarks with Bencher
-        if: github.event_name == 'push' && env.BENCHER_API_TOKEN != ''
-        run: |
-          bencher run \
-            --project lockfreequeues \
-            --token '${{ secrets.BENCHER_API_TOKEN }}' \
-            --branch devel \
-            --testbed ubuntu-latest \
-            --adapter json \
-            --file merged.json \
-            --github-actions '${{ secrets.GITHUB_TOKEN }}'
-
-      - name: Track manual benchmarks with Bencher
-        if: github.event_name == 'workflow_dispatch' && env.BENCHER_API_TOKEN != ''
-        run: |
-          bencher run \
-            --project lockfreequeues \
-            --token '${{ secrets.BENCHER_API_TOKEN }}' \
-            --branch "${GITHUB_REF##*/}" \
-            --testbed ubuntu-latest \
-            --adapter json \
-            --file merged.json

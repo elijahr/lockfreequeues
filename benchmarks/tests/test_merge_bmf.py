@@ -192,9 +192,9 @@ class MergeBmfTests(unittest.TestCase):
     # PR 2 Task 2.9: 5-input disjoint-slug union test. Validates that
     # the upload-job pipeline the topology split assumes — sibling BMF
     # fragments arriving via `actions/download-artifact` and going
-    # through merge_bmf.py before the single `bencher run` upload —
-    # produces a single merged output whose slug set is the disjoint
-    # union of the inputs. The 5-input shape pre-dates both the v5.0.0
+    # through merge_bmf.py before the docs-snapshot publish — produces
+    # a single merged output whose slug set is the disjoint union of
+    # the inputs. The 5-input shape pre-dates both the v5.0.0
     # B3 mpmc-binary split (which fanned mpmc into mpmc_mpmc +
     # mpmc_spmc) and the unbounded-binary split (which
     # fanned unbounded into the four

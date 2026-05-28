@@ -1,7 +1,9 @@
 # Benchmark Suite
 
-Throughput and latency benchmarks for lockfreequeues, plus a cloud-based
-regression gate via [Bencher.dev](https://bencher.dev).
+Throughput and latency benchmarks for lockfreequeues. CI publishes the
+merged BMF (Bencher Metric Format) snapshot under
+`docs/assets/bench-results/latest.json`, which the docs charts read
+directly.
 
 ## Structure
 
@@ -54,7 +56,7 @@ regression gate via [Bencher.dev](https://bencher.dev).
   Built with `cargo build --release`; consumed by the Nim Crossbeam
   adapters via `importc`.
 - `merge_bmf.py` - Stateless union of per-binary BMF JSON fragments
-  into a single `merged.json` for `bencher run`. Exits 1 on
+  into a single `merged.json` consumed by the docs charts. Exits 1 on
   `(slug, measure)` collisions naming the colliding inputs.
 - `scripts/superset_check.py` - Slug-set deletion-safety guard. Exits
   1 with the missing slug list on stderr if a post-split BMF drops
@@ -103,48 +105,34 @@ python3 benchmarks/merge_bmf.py merged.json \
   (mean, lower=mean-stddev, upper=mean+stddev).
 - **Latency**: RTT nanoseconds with percentiles (p50, p95, p99).
 
-## Cloud benchmarking (Bencher.dev)
+## CI benchmarking
 
 `.github/workflows/bench.yml` runs the topology-split binaries on
-`ubuntu-latest` for every PR and every push to `main`/`devel` via a
+`ubuntu-22.04` for every PR and every push to `main`/`devel` via a
 GitHub Actions matrix (one matrix entry per binary, each with its own
-`timeout-minutes: 18` budget). the `bench_mpmc` slot
-into `bench_mpmc_bounded` + `bench_spmc_bounded`; fanned
-the `bench_unbounded` slot into four per-family binaries
-(`bench_unbounded_{spsc,spmc,mpsc,mpmc}`) so each family runs
-in parallel as an independent matrix entry. The workflow:
+`timeout-minutes: 18` budget). The `bench_mpmc` slot is split into
+`bench_mpmc_bounded` + `bench_spmc_bounded`; the `bench_unbounded`
+slot is fanned into four per-family binaries
+(`bench_unbounded_{spsc,spmc,mpsc,mpmc}`) so each family runs in
+parallel as an independent matrix entry. The workflow:
 
 1. Compiles each binary with its CI-tuned per-binary intdefines
    (e.g. `-d:BenchSpscMessageCount=1000000 -d:BenchSpscRuns=5
    -d:BenchSpscWarmup=2` for `bench_spsc`).
-2. Runs the binary with `--bmf-out=<binary>.json`, which writes
-   Bencher Metric Format JSON natively.
+2. Runs the binary with `--bmf-out=<binary>.json`, which writes BMF
+   (Bencher Metric Format) JSON natively.
 3. Uploads each per-binary JSON as a GitHub Actions artifact.
 4. The dependent `bench-upload` job downloads every artifact, unions
    them via `merge_bmf.py merged.json $(ls bmf-inputs/*.json)`, then
    runs `superset_check.py tests/fixtures/pre-split-slugs.json
-   merged.json` to enforce deletion-safety. A single `bencher run`
-   uploads `merged.json` to the `lockfreequeues` Bencher project.
-
-On pull requests, Bencher posts a comparison comment against the base
-branch using `--start-point-clone-thresholds` and `--start-point-reset`,
-so threshold breaches show up inline.
+   merged.json` to enforce deletion-safety. On `push: devel`
+   (and `pull_request` from same-repo branches) it snapshots
+   `merged.json` into `docs/assets/bench-results/latest.json`; the
+   docs charts (`docs/assets/bench-charts.js`) read that file
+   directly.
 
 The workflow also runs on `workflow_dispatch` for ad-hoc baseline
 pinning.
-
-### One-time setup (maintainer)
-
-The cloud workflow requires:
-
-1. A Bencher.dev project named `lockfreequeues`
-   (create at https://bencher.dev with that exact slug).
-2. A repository secret `BENCHER_API_TOKEN` containing a Bencher API
-   token with write access to the project.
-
-Until those exist the `bench` workflow will fail on the upload step;
-PR / push events still produce the `merged.json` artifact in the
-job log so local debugging is possible without the upload.
 
 ### BMF schema emitted
 
@@ -208,7 +196,7 @@ vendored C/C++ targets (`atomic_queue`, `liblfds`, `rigtorp_mpmc`,
 that ride alongside `crossbeam-queue` in the existing
 `bench-ffi-crossbeam` cdylib — bringing the comparison set to twelve
 upstream libraries / eighteen adapter variants so each topology has
-≥ 3 distinct libraries plotted on the same Bencher dashboard. All
+≥ 3 distinct libraries plotted in the merged BMF snapshot. All
 adapters are gated behind `-d:adapter_<library_slug>_available`;
 absent gates produce no symbol references and the production builds
 are unchanged.
@@ -270,8 +258,8 @@ Per-library obligations are tracked in
   boolean inputs to exercise the skip path manually.
 - **`bench-comparison.yml`** runs Crossbeam (the only adapter with a
   Rust toolchain dependency) on a nightly cron + `workflow_dispatch`
-  + targeted path pushes to `devel`. It produces a separate Bencher
-  Report dedicated to crossbeam slugs.
+  + targeted path pushes to `devel`. Its merged BMF artifact carries
+  the crossbeam slugs separately from `bench.yml`'s artifact.
 
 ### Version capture and pinning
 

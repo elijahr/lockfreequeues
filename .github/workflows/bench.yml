@@ -7,9 +7,9 @@ on:
   # Only fire on PRs that actually target an integration branch. Stacked
   # feature-to-feature PRs (`feat/foo` -> `feat/bar`) used to be in this
   # allowlist; they have been removed because cascade-rebases would
-  # otherwise burn Bencher quota uploading near-identical reports for
+  # otherwise burn CI time re-running near-identical bench matrices for
   # every intermediate stack PR. The topmost PR (base=devel) still gets
-  # PR-time bench treatment, gated further by the `bench` label below.
+  # PR-time bench treatment.
   pull_request:
     branches: [main, devel]
     paths-ignore:
@@ -69,10 +69,6 @@ concurrency:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  # Exposed at job env so step-level `if:` expressions can gate on
-  # presence via `env.BENCHER_API_TOKEN`. GitHub Actions does not allow
-  # `secrets.*` directly in `if:`, so the env-var indirection is required.
-  BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
   # Track 3 §2.6 + Track 4 §4.7 soft-skip overrides. Empty string when
   # the workflow_dispatch input is unset (the default), '1' when the
   # operator forces a skip. Step-level `if:` clauses gate on these.
@@ -151,17 +147,16 @@ jobs:
     # Actions job with an independent `timeout-minutes: 18` budget so a
     # hang in one binary cannot burn the entire workflow's clock — the
     # surviving binaries finish, the bench-upload job merges what
-    # arrived, and the operator gets partial Bencher coverage rather
-    # than no coverage. Per-binary `-d:` overrides are tuned to fit
-    # each variant's CI budget; see design 2.5 for the override table.
+    # arrived, and the docs charts get partial coverage rather than no
+    # coverage. Per-binary `-d:` overrides are tuned to fit each
+    # variant's CI budget; see design 2.5 for the override table.
     name: ${{ matrix.binary }} (ubuntu-22.04)
     # Pinned to ubuntu-22.04 for bench-result reproducibility (see the
     # bench-tests job above for the rationale).
     runs-on: ubuntu-22.04
     # Two combined gates:
-    #   1. PRs from forks cannot read BENCHER_API_TOKEN. Skip rather
-    #      than fail noisily; maintainer pushes / merges still record
-    #      the baseline.
+    #   1. Same-repo only — fork PRs are skipped to keep the bench
+    #      surface contained to maintainer pushes / merges.
     #   2. Loop-prevention layer 2 of 2 (design §5.X): the snapshot
     #      push step (Task 5.5.b) commits as `github-actions[bot]`.
     #      Even if paths-ignore is ever loosened, the bot-actor guard
@@ -710,23 +705,19 @@ jobs:
           if-no-files-found: ignore
 
   bench-upload:
-    # Merges per-binary BMF artifacts into a single JSON before a single
-    # `bencher run` invocation. Bencher creates a separate Report per
-    # invocation; multiple uploads would NOT co-locate measures on a
-    # single per-slug history (design 1 / Track 1 Task 1.4).
-    name: Merge BMF + Bencher upload (ubuntu-latest)
+    # Merges per-binary BMF artifacts into a single JSON and snapshots
+    # the result into docs/assets/bench-results/ so the docs charts
+    # always point at the most recent run.
+    name: Merge BMF + docs snapshot (ubuntu-latest)
     runs-on: ubuntu-latest
-    # Three combined gates:
+    # Two combined gates:
     #   1. `always()` — a single matrix-leg failure (e.g. one binary
-    #      timed out) must not skip the merge+upload; the operator
-    #      still gets partial Bencher coverage from the surviving
-    #      binaries (design's partial-coverage tolerance).
+    #      timed out) must not skip the merge+snapshot; the docs still
+    #      get partial coverage from the surviving binaries.
     #   2. Bot-actor guard (loop-prevention layer 3 of 3): the
     #      snapshot push step commits as `github-actions[bot]`. Skip
     #      the upload when the actor is the bot so a snapshot push
     #      cannot trigger another bench run.
-    #   3. Fork-PR token guard: PRs from forks cannot read
-    #      BENCHER_API_TOKEN; skip rather than fail noisily.
     if: |
       always() &&
       github.actor != 'github-actions[bot]' &&
@@ -837,139 +828,6 @@ jobs:
 
       - name: Show BMF JSON (debug)
         run: cat merged.json
-
-      - name: Install Bencher CLI
-        uses: bencherdev/bencher@main
-
-      - name: Bencher upload preflight
-        # Always runs. Surfaces a yellow PR-check warning whenever the
-        # downstream `bencher run` would be skipped, so the reason is
-        # obvious from the check summary rather than the bench silently
-        # appearing to "do nothing" with the data. Skip reasons:
-        #   1. BENCHER_API_TOKEN secret unset (any event)
-        #   2. PR event without the `bench` label (cost gate — Bencher
-        #      ingest charges per metric, so PR comparisons are opt-in
-        #      via label rather than firing on every cascade-rebase push)
-        # Push to main/devel and workflow_dispatch never need the label.
-        run: |
-          if [ -z "$BENCHER_API_TOKEN" ]; then
-            echo "::warning title=Bencher upload skipped::BENCHER_API_TOKEN secret is not set on this repo. The bench ran successfully and produced merged.json (visible in the 'Show BMF JSON (debug)' step), but no data is being uploaded to Bencher.dev. Set up the project at bencher.dev with slug 'lockfreequeues' and add BENCHER_API_TOKEN as a repo secret to enable upload."
-            exit 0
-          fi
-          if [ "${{ github.event_name }}" = "pull_request" ] \
-             && ! ${{ contains(github.event.pull_request.labels.*.name, 'bench') }}; then
-            echo "::warning title=Bencher upload skipped::This is a pull_request event but the PR does not carry the 'bench' label. PR-time Bencher uploads are opt-in to control metric-ingest costs. Add the 'bench' label to the PR and re-run this workflow if you want a Bencher comparison report on this revision."
-            exit 0
-          fi
-          echo "Bencher upload preconditions met; proceeding."
-
-      # PR runs: compare against base branch and post a comment.
-      # Gated on the `bench` PR label so cascade-rebases of stacked PRs
-      # do not burn Bencher quota; add the label deliberately when you
-      # want a comparison report.
-      - name: Track PR benchmarks with Bencher
-        if: |
-          github.event_name == 'pull_request'
-          && env.BENCHER_API_TOKEN != ''
-          && contains(github.event.pull_request.labels.*.name, 'bench')
-        run: |
-          bencher run \
-            --project lockfreequeues \
-            --token '${{ secrets.BENCHER_API_TOKEN }}' \
-            --branch "$GITHUB_HEAD_REF" \
-            --start-point "$GITHUB_BASE_REF" \
-            --start-point-hash '${{ github.event.pull_request.base.sha }}' \
-            --start-point-clone-thresholds \
-            --start-point-reset \
-            --testbed ubuntu-latest \
-            --adapter json \
-            --file merged.json \
-            --github-actions '${{ secrets.GITHUB_TOKEN }}' \
-            --err
-
-      # Push to main/devel: record the baseline for that branch.
-      #
-      # Track 6 Task 6.3: per-measure thresholds. We gate on BOTH
-      #   - latency_p99_ns (upper boundary: regression = latency increase)
-      #   - throughput_ops_ms (lower boundary: regression = throughput drop)
-      # in a single `bencher run` invocation by repeating the
-      # `--threshold-measure / --threshold-test / --threshold-max-sample-size
-      # / --threshold-{upper,lower}-boundary` block per measure (Bencher CLI
-      # convention; design §3 PR 6). End with `--thresholds-reset` so only
-      # the explicitly-listed thresholds remain active going forward.
-      #
-      # NOTE on activation: per Track 6 Task 6.4, the latency threshold
-      # requires ≥ 10 prior runs accumulated in Bencher to calibrate the
-      # t-test baseline. Until that soak completes (post-merge), the
-      # threshold is effectively dormant — Bencher will not emit alerts on
-      # measures that have insufficient sample history. The configuration
-      # is in place so activation is purely a function of run count, not
-      # workflow edits.
-      #
-      # NOTE on previous measure name: the prior config used
-      # `--threshold-measure throughput`; the actual measure key emitted by
-      # the per-topology bench binaries is `throughput_ops_ms`, so the
-      # earlier threshold never matched any measure. Track 6 corrects this.
-      # split bench_unbounded into 4 per-family binaries
-      # (spsc/spmc/mpsc/mpmc); the throughput_ops_ms key is
-      # unchanged.
-      #
-      # NOTE on continue-on-error (v4.2.0): the Bencher CLI is currently
-      # rejecting the multi-measure threshold configuration with
-      # "Failed to validate the model for the throughput_ops_ms Measure
-      # Threshold: Invalid threshold model: Invalid model, no boundary
-      # provided" even though the invocation matches the documented
-      # bencher.dev pattern (see https://bencher.dev/docs/explanation/thresholds/
-      # "Two-Measure Example"). The failing step short-circuits the job
-      # before `Snapshot to docs assets` runs, leaving the chart on
-      # docs/benchmarks.md without fresh data. As a release-day band-aid
-      # we mark this step continue-on-error so the snapshot path keeps
-      # flowing; the threshold gating itself remains dormant until
-      # Task 6.4's 10-run soak completes anyway, so functionally nothing
-      # is lost in the short term.
-      #
-      # TODO(post-v4.2.0): diagnose the boundary-flag binding issue.
-      # Hypothesis: clap absorbs the trailing `--threshold-lower-boundary`
-      # into the first measure block (latency) instead of the second
-      # (throughput), so throughput's model has no boundary. Try giving
-      # each measure both boundaries explicitly, splitting into two
-      # `bencher run` invocations, or pinning the bencherdev/bencher
-      # action to a specific tag once Bencher confirms the bug/expected
-      # syntax.
-      - name: Track base branch benchmarks with Bencher
-        if: github.event_name == 'push' && env.BENCHER_API_TOKEN != ''
-        continue-on-error: true
-        run: |
-          bencher run \
-            --project lockfreequeues \
-            --token '${{ secrets.BENCHER_API_TOKEN }}' \
-            --branch "${GITHUB_REF##*/}" \
-            --testbed ubuntu-latest \
-            --threshold-measure latency_p99_ns \
-            --threshold-test t_test \
-            --threshold-max-sample-size 64 \
-            --threshold-upper-boundary 0.99 \
-            --threshold-measure throughput_ops_ms \
-            --threshold-test t_test \
-            --threshold-max-sample-size 64 \
-            --threshold-lower-boundary 0.99 \
-            --thresholds-reset \
-            --adapter json \
-            --file merged.json \
-            --github-actions '${{ secrets.GITHUB_TOKEN }}' \
-            --err
-
-      # workflow_dispatch: just upload, no comparison.
-      - name: Track manual benchmarks with Bencher
-        if: github.event_name == 'workflow_dispatch' && env.BENCHER_API_TOKEN != ''
-        run: |
-          bencher run \
-            --project lockfreequeues \
-            --token '${{ secrets.BENCHER_API_TOKEN }}' \
-            --branch "${GITHUB_REF##*/}" \
-            --testbed ubuntu-latest \
-            --adapter json \
-            --file merged.json
 
       # snapshot the merged BMF into the docs
       # assets tree so the chart on `docs/benchmarks.md` always points
@@ -1118,10 +976,7 @@ jobs:
       #
       # Loop-safety: same three layers as the regular snapshot
       # (paths-ignore + bot-actor guard + `[skip ci]` in the commit
-      # message). The fallback is positioned AFTER the cost-gate-
-      # guarded Bencher upload steps so a missing `bench` PR label
-      # still permits this gh-pages-side snapshot path; the fallback
-      # does not consume Bencher quota.
+      # message).
       #
       # `if:` scoping (IMP-5): only fires when `merge` outcome is
       # `failure` or `cancelled`. We deliberately do NOT fire on
