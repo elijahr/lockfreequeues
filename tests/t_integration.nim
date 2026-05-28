@@ -2,8 +2,8 @@
 ## `untyped` arguments so symbol resolution happens at the caller's
 ## context — no per-family legacy imports are needed here.
 ##
-## Step 3.3.7b dropped the vestigial `import lockfreequeues/spmc`;
-## the legacy modules are deleted in this commit.
+## The legacy `import lockfreequeues/spmc` was vestigial and has been
+## dropped alongside the deletion of the legacy modules.
 
 template testCapacity*(queue: untyped) =
   check(queue.capacity == 8)

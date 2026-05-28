@@ -2,13 +2,12 @@ import ./t_aligned_alloc
 import ./t_atomic_dsl
 import ./t_backoff
 import ./t_slot_seq_generation_rollover
-# v5.0.0 cascade (Track D3.2): legacy bounded test imports removed.
-# Per-family Mpsc/Spmc/Mpmc/Spsc coverage now lives in the
-# t_queue_bounded_* files below (Manager B / Task B2 verified pass-count
-# parity: mpsc 28/28, spmc 27/27, mpmc 28/28, spsc 21/21,
-# mpsc_threaded 2/2, spsc_threaded 2/2). Files
-# tests/t_{mpsc,spmc,mpmc,spsc}{,_threaded}.nim remain on disk
-# until Track F5 deletes them with their src/ counterparts.
+# v5.0.0: legacy bounded test imports removed. Per-family
+# Mpsc/Spmc/Mpmc/Spsc coverage now lives in the t_queue_bounded_*
+# files below, with verified pass-count parity (mpsc 28/28, spmc 27/27,
+# mpmc 28/28, spsc 21/21, mpsc_threaded 2/2, spsc_threaded 2/2). The
+# legacy tests/t_{mpsc,spmc,mpmc,spsc}{,_threaded}.nim files remain on
+# disk until they are deleted alongside their src/ counterparts.
 import ./t_queue_enums
 import ./t_queue_type_shell
 import ./t_queue_bounded_mpsc_smoke

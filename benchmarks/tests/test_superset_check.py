@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for benchmarks/scripts/superset_check.py.
 
-Covers the deletion-safety contract from PR 2 Task 2.7:
+Covers the deletion-safety contract:
 
   - exit 0 when post-split slug set is a superset of pre-split.
   - exit 1 when one or more pre-split slugs are missing from post; stderr

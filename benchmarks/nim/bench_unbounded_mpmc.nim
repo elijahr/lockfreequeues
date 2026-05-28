@@ -43,8 +43,7 @@ when defined(adapter_crossbeam_seg_queue_available):
 when defined(adapter_moodycamel_available):
   import ./adapters/moodycamel_adapter
 
-# v4.2.0 Stage 5.2 Tier 2 Rust comparison adapters: flume + kanal
-# unbounded channels. Both go through runThroughputHarness over the
+# Tier 2 Rust comparison adapters: flume + kanal unbounded channels. Both go through runThroughputHarness over the
 # {1,2,4} P x {1,2,4} C grid.
 when defined(adapter_flume_available):
   import ./adapters/flume_adapter

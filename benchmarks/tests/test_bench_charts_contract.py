@@ -154,8 +154,8 @@ SAMPLE_BMF: dict = {
 EXPECTED_BLOCKING_LIBRARIES = {"threading_channels", "nim_channel", "nim_channels"}
 
 # Value-anchored regex for `LIBRARY_COLORS` entries in bench-charts.js
-# (per Phase 3.2 CRIT-4: marker-range extraction is brittle under
-# reformatting, so we anchor on the `key: '#hex'` line shape itself).
+# (marker-range extraction is brittle under reformatting, so we anchor
+# on the `key: '#hex'` line shape itself).
 LIBRARY_COLOR_LINE_RE = re.compile(
     r"^\s*([a-z][a-z0-9_]*)\s*:\s*'(#[0-9a-f]{6})'",
     re.MULTILINE,
@@ -301,7 +301,7 @@ class ChartContractTests(unittest.TestCase):
         means the chart silently falls back to the index palette and
         emits a console.warn.
 
-        Uses a value-anchored regex per Phase 3.2 CRIT-4: matches the
+        Uses a value-anchored regex: matches the
         canonical `key: '#hex'` line shape directly, not the marker
         comment range. Robust against any future reformatter that
         might reflow `Object.freeze({...})`.
@@ -349,7 +349,7 @@ class ChartContractTests(unittest.TestCase):
         chart's dotted-line / `(blocking)` legend semantics no longer
         match documented semantics.
 
-        Uses a value-anchored regex per Phase 3.2 CRIT-4: matches
+        Uses a value-anchored regex: matches
         `BLOCKING_LIBRARIES = [ ... ]` directly, then extracts quoted
         string literals.
         """
@@ -419,8 +419,8 @@ class ChartContractTests(unittest.TestCase):
         each core topology so unbounded slugs in the fixture render.
 
         This test does NOT just pin the topology literals that appear
-        in the JS predicate — that strategy was identified by the
-        Phase 4.6.3 green-mirage audit as regex-extract-only: a
+        in the JS predicate — that strategy was identified as
+        regex-extract-only: a
         mutation flipping `||` to `&&` (silently dropping every spsc
         slug from the chart) would PASS such a test because both
         literals still appear in the source.

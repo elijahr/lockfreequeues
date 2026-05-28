@@ -1,6 +1,6 @@
 ## Compile-and-run smoke for the liblfds adapter (covers BSS + BMM).
 ##
-## Used by `bench.yml` (v4.2.0 Stage 5.3) as a sanity check that the
+## Used by `bench.yml` as a sanity check that the
 ## vendored C source tree builds cleanly into `liblfds711.a`, that the
 ## thin C shim links, and that the adapter's push/pop round-trip
 ## works under both the SPSC (`bss`) and MPMC (`bmm`) backends, before

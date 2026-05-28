@@ -262,7 +262,7 @@ proc runQMpscShape[N, P: static int; T](
   echo ""
   em.addMeasure(slug, "throughput_ops_ms", m, m - s, m + s)
 
-# ---------- PR 4 nim_channel dispatch (uses runThroughputHarness) ----------
+# ---------- nim_channel dispatch (uses runThroughputHarness) ----------
 #
 # system.Channel exposes uniform push/pop through the adapter, so it
 # fits the stock runThroughputHarness on the MPSC {1,2,4}p1c matrix

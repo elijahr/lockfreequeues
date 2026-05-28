@@ -1,13 +1,12 @@
 ## Tests for benchmarks/nim/bench_latency.nim — the latency bench binary.
 ##
-## Track 1 (PR 1) covers: per-binary intdefines (Task 1.1), --bmf-out
-## emission via runLatencyHarness (Task 1.2), and multi-measure-per-slug
-## merge with throughput (Task 1.5).
+## Coverage: per-binary intdefines, --bmf-out emission via
+## runLatencyHarness, and multi-measure-per-slug merge with throughput.
 ##
-## The bench binary is invoked as a subprocess in the integration tests
-## (Tasks 1.2 / 1.5); compile-time intdefine assertions (Task 1.1) live
-## in the binary itself behind a `BenchLatencyTestCompileTime` flag and
-## are exercised from a tiny dedicated build invocation here.
+## The bench binary is invoked as a subprocess in the integration tests;
+## compile-time intdefine assertions live in the binary itself behind a
+## `BenchLatencyTestCompileTime` flag and are exercised from a tiny
+## dedicated build invocation here.
 
 import std/[json, os, osproc, strutils, tempfiles]
 import unittest2
@@ -101,7 +100,7 @@ suite "bench_latency --bmf-out integration (Task 1.2)":
     check s.hasKey("latency_p50_ns")
     check s.hasKey("latency_p95_ns")
     check s.hasKey("latency_p99_ns")
-    # Track 6 Task 6.1: p999 and max measures emitted alongside p50/p95/p99.
+    # p999 and max measures emitted alongside p50/p95/p99.
     check s.hasKey("latency_p999_ns")
     check s.hasKey("latency_max_ns")
     check s["latency_p50_ns"]["value"].getFloat() > 0.0
@@ -112,9 +111,8 @@ suite "bench_latency --bmf-out integration (Task 1.2)":
     check output.contains("Spsc") or output.contains("spsc")
 
   test "all four bounded variants emit latency_p50_ns / latency_p99_ns / latency_p999_ns / latency_max_ns":
-    # Per impl plan Track 1 Acceptance Criteria: BMF JSON contains
-    # latency_p50_ns and latency_p99_ns for spsc / spmc / mpsc /
-    # mpmc on the 1p1c smoke shape.
+    # BMF JSON contains latency_p50_ns and latency_p99_ns for
+    # spsc / spmc / mpsc / mpmc on the 1p1c smoke shape.
     let dir = newTestWorkspace("t12_all4")
     defer: removeDir(dir)
     let bin = compileBenchLatency(@[
@@ -137,7 +135,7 @@ suite "bench_latency --bmf-out integration (Task 1.2)":
       check node.hasKey(slug)
       check node[slug].hasKey("latency_p50_ns")
       check node[slug].hasKey("latency_p99_ns")
-      # Track 6 Task 6.1: p999 + max alongside p50/p99 on every bounded variant.
+      # p999 + max alongside p50/p99 on every bounded variant.
       check node[slug].hasKey("latency_p999_ns")
       check node[slug].hasKey("latency_max_ns")
 
@@ -154,7 +152,7 @@ suite "bench_latency --bmf-out integration (Task 1.2)":
 
 # ---------- Task 1.5: multi-measure-per-slug merge ----------
 #
-# Validates the end-to-end shape that Track 1 ships: a single slug
+# Validates the end-to-end shape: a single slug
 # carries BOTH `throughput_ops_ms` (from bench_throughput's BMF
 # fragment) and `latency_p50_ns` / `latency_p99_ns` (from bench_latency)
 # AFTER `merge_bmf.py` unions the two fragments. Production CI does this
@@ -213,7 +211,7 @@ suite "bench_latency multi-measure-per-slug merge (Task 1.5)":
 
   test "merge_bmf.py exits 1 on collision when same measure key in both inputs":
     # Sanity: the per-slug union union semantics are NOT a free-for-all;
-    # ensure the collision guard from PR 0 Task 0.7 still fires when the
+    # ensure the merge_bmf collision guard still fires when the
     # latency fragment accidentally re-declares throughput_ops_ms on the
     # same slug. This guards against silent overwrites that would erase
     # one of the measures.

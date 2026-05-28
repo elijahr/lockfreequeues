@@ -12,7 +12,7 @@
 ## phantom-param tightening that silently widens lookup.
 ##
 ## Ported from nim-debra 0.8.0's `tests/should_fail/runner.nim`
-## (Phase 3.2.b.6) with a project-specific case table covering the
+## with a project-specific case table covering the
 ## 5 conditions enumerated in :
 ##   1. Consumer ST=stManual vs Queue ST=stEager (Strategy phantom).
 ##   2. ccCons=ccSingle queue rejects ccMulti DebraManager/handle.

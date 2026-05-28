@@ -1,9 +1,8 @@
-## TDD smoke test for v5.0.0 Track B1 — Queue rkNone bounded body.
+## TDD smoke test for v5.0.0 Queue rkNone bounded body.
 ##
 ## Exercises the mpsc-equivalent shape (`ccMulti × ccSingle`) only.
-## The full per-cardinality migration tests land in Track B2.
-##
-## Impl plan §B1 Step 1. (bounded body), §5 (initQueue), §6.1.
+## The full per-cardinality migration tests live in the
+## `t_queue_bounded_*` files alongside this one.
 
 import options
 import unittest2

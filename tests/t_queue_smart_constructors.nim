@@ -1,4 +1,4 @@
-## Smoke fixtures for the v5.0.0 Step 3.3.5b smart-constructor surface
+## Smoke fixtures for the v5.0.0 smart-constructor surface
 ## (4 bounded + 4 unbounded). Each smart-constructor is exercised with
 ## a single construct + push/pop round-trip; the deeper push/pop
 ## behaviour is already pinned by the sibling smoke gates

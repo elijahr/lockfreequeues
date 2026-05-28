@@ -30,7 +30,7 @@ import lockfreequeues/internal/pinscope_stub
 when defined(adapter_boost_lockfree_spsc_available):
   import ./adapters/boost_lockfree_spsc_adapter
 
-# v4.2.0 Stage 5.1 Tier 1 vendored comparison adapters (header-only C++).
+# Tier 1 vendored comparison adapters (header-only C++).
 # Both `atomic_queue` (max0x7ba) and `rigtorp::SPSCQueue` are bounded
 # rings; gated by per-library defines. atomic_queue runs at SPSC here
 # (it is general MPMC, but the SPSC slot exercises its 1p1c path).
@@ -40,12 +40,12 @@ when defined(adapter_atomic_queue_available):
 when defined(adapter_rigtorp_spsc_available):
   import ./adapters/rigtorp_spsc_adapter
 
-# v4.2.0 Stage 5.2 Tier 2 Rust comparison adapter: kanal exposes a
-# bounded MPMC channel that we exercise here at the 1p1c (SPSC) shape.
+# Tier 2 Rust comparison adapter: kanal exposes a bounded MPMC channel
+# that we exercise here at the 1p1c (SPSC) shape.
 when defined(adapter_kanal_available):
   import ./adapters/kanal_adapter
 
-# v4.2.0 Stage 5.3 Tier 3 vendored adapter: liblfds 7.1.1 (C library,
+# Tier 3 vendored adapter: liblfds 7.1.1 (C library,
 # license-verified public-domain + permissive grant). The adapter
 # routes the SPSC topology to the upstream `lfds711_queue_bss_*`
 # bounded single-producer / single-consumer queue.

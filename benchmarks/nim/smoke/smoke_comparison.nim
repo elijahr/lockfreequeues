@@ -1,9 +1,9 @@
 ## Compile-and-run smoke for the consolidated Rust comparison cdylib's
-## flume and kanal adapters (v4.2.0 Stage 5.2). Crossbeam keeps its own
-## smoke at `smoke_crossbeam.nim`; this smoke covers the new flume +
+## flume and kanal adapters. Crossbeam keeps its own
+## smoke at `smoke_crossbeam.nim`; this smoke covers the flume +
 ## kanal shims (bounded and unbounded variants for each).
 ##
-## Used by `bench.yml` (v4.2.0 Stage 5.2) as a sanity check that the
+## Used by `bench.yml` as a sanity check that the
 ## consolidated cdylib (`libbench_ffi_crossbeam`) is on the search
 ## path AND that the symbol prefixes (`flume_*`, `kanal_*`) actually
 ## resolve before the full bench binaries run with the same defines.

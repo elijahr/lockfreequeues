@@ -15,7 +15,7 @@
 ##     (see the §3.5.6 comment block above the `block:` scope in the
 ##     ccProd == ccMulti branch).
 ##
-## **Behaviour gap acknowledged**: pop is Step 3.3.4. These smoke
+## **Behaviour gap acknowledged**: pop lands in a follow-up. These smoke
 ## fixtures exercise push only; pop is invoked via the existing rkNone
 ## stubs would not work for rkEbr queues. We verify push-side
 ## observable state (`len`, `segmentCount`) instead of round-tripping

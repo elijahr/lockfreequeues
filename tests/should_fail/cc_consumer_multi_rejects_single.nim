@@ -2,10 +2,9 @@
 ## rejects a `ccSingle` DebraManager.
 ##
 ## `newUnboundedMpmcQueue` (`ccMulti × ccMulti`) borrow-overload
-## requires `DebraManager[MT, debra.ccMulti]` / §3.1
-## (Step 3.3.4.5 soundness fix: consumer-pin CC must be ccMulti for
-## ccCons == ccMulti). Passing a ccSingle-cardinality manager must
-## fail type-checking.
+## requires `DebraManager[MT, debra.ccMulti]` / §3.1 — the consumer-pin
+## CC must be ccMulti for `ccCons == ccMulti`. Passing a ccSingle-
+## cardinality manager must fail type-checking.
 
 import lockfreequeues/queue
 import lockfreequeues/strategy

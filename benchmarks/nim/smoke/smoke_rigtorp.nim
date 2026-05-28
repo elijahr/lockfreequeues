@@ -1,7 +1,7 @@
 ## Compile-and-run smoke for the rigtorp/SPSCQueue and rigtorp/MPMCQueue
 ## adapters (a single smoke covers both, mirroring `smoke_crossbeam.nim`).
 ##
-## Used by `bench.yml` (v4.2.0 Stage 5.1) as a sanity check that the
+## Used by `bench.yml` as a sanity check that the
 ## vendored single-header sources are present and the wrapper shims
 ## build cleanly with `nim cpp`, before the full bench binaries run
 ## with the same defines.

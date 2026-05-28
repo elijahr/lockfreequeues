@@ -1,8 +1,8 @@
 ## Adapter for the `kanal` Rust channel library
 ## (https://github.com/fereidani/kanal).
 ##
-## kanal is a Rust MPMC channel crate (MIT). v4.2.0 Stage 5.2 wires it
-## into the bench harness via the consolidated `libbench_ffi_crossbeam`
+## kanal is a Rust MPMC channel crate (MIT). It is wired into the
+## bench harness via the consolidated `libbench_ffi_crossbeam`
 ## cdylib alongside crossbeam and flume. The cdylib exports eight
 ## `extern "C"` fns under the `kanal_` prefix:
 ##

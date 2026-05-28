@@ -395,12 +395,12 @@ suite "bench_common adapters: lockfreequeues smoke (Task 0.8)":
     check r.popped == SmokeMessageCount
     check r.ok
 
-# ---------- Task 0.10 (legacy bench_throughput integration) ----------
+# ---------- legacy bench_throughput integration ----------
 #
-# PR 0 Task 0.10 originally compiled bench_throughput.nim against
-# `--bmf-out=` and asserted the emitted BMF carried the expected
-# `lockfreequeues_spsc/spsc/1p1c` slug. PR 2 Task 2.10 deleted
-# bench_throughput.nim in favor of five topology-split binaries, and
+# Earlier versions compiled bench_throughput.nim against `--bmf-out=`
+# and asserted the emitted BMF carried the expected
+# `lockfreequeues_spsc/spsc/1p1c` slug. bench_throughput.nim has since
+# been deleted in favor of topology-split binaries, and
 # tests/t_topology_split.nim now covers the equivalent BMF-emission
 # contract for each new binary (bench_spsc covers the spsc/spsc/1p1c
 # slug specifically). The bench_throughput-specific suite is removed

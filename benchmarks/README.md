@@ -188,8 +188,8 @@ Current slug set emitted across the topology-split binaries:
 
 ## Comparison libraries — third-party adapters
 
-PR 3 (Track 3) introduced the comparison MVP with five
-external-library adapters; PR 4 (Track 4) extended the set to seven
+Earlier releases introduced the comparison MVP with five
+external-library adapters; subsequent work extended the set to seven
 upstream libraries / nine adapter variants. v5.0.0 lands another four
 vendored C/C++ targets (`atomic_queue`, `liblfds`, `rigtorp_mpmc`,
 `rigtorp_spsc`) and two additional Rust crates (`flume`, `kanal`)

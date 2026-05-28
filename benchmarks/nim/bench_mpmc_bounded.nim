@@ -65,7 +65,7 @@ when defined(adapter_crossbeam_array_queue_available):
 when defined(adapter_threading_channels_available):
   import ./adapters/threading_channels_adapter
 
-# v4.2.0 Stage 5.1 Tier 1 vendored comparison adapters (header-only C++).
+# Tier 1 vendored comparison adapters (header-only C++).
 # atomic_queue is general MPMC (registered here at the {1,2,4} P x {1,2,4}
 # C grid); rigtorp_mpmc is Vyukov-style bounded MPMC.
 when defined(adapter_atomic_queue_available):
@@ -74,15 +74,14 @@ when defined(adapter_atomic_queue_available):
 when defined(adapter_rigtorp_mpmc_available):
   import ./adapters/rigtorp_mpmc_adapter
 
-# v4.2.0 Stage 5.2 Tier 2 Rust comparison adapters (flume + kanal,
-# bounded variants).
+# Tier 2 Rust comparison adapters (flume + kanal, bounded variants).
 when defined(adapter_flume_available):
   import ./adapters/flume_adapter
 
 when defined(adapter_kanal_available):
   import ./adapters/kanal_adapter
 
-# v4.2.0 Stage 5.3 Tier 3 vendored adapter: liblfds 7.1.1 (C library,
+# Tier 3 vendored adapter: liblfds 7.1.1 (C library,
 # license-verified). The adapter routes the MPMC topology to the
 # upstream `lfds711_queue_bmm_*` Vyukov-style bounded MPMC queue.
 when defined(adapter_liblfds_available):

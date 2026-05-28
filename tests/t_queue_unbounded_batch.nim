@@ -1,5 +1,5 @@
-## Smoke fixtures for the v5.0.0 Step 3.3.6.5 — rkEbr batch push/pop
-## wrappers across all 4 cardinality variants.
+## Smoke fixtures for the v5.0.0 rkEbr batch push/pop wrappers across
+## all 4 cardinality variants.
 ##
 ## Exercises (8 tests):
 ##   - `QueueProducer.push(items: openArray[T])` round-trip across the

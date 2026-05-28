@@ -189,7 +189,7 @@ class MergeBmfTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("BadSlug", result.stderr)
 
-    # PR 2 Task 2.9: 5-input disjoint-slug union test. Validates that
+    # 5-input disjoint-slug union test. Validates that
     # the upload-job pipeline the topology split assumes — sibling BMF
     # fragments arriving via `actions/download-artifact` and going
     # through merge_bmf.py before the docs-snapshot publish — produces
@@ -235,8 +235,7 @@ class MergeBmfTests(unittest.TestCase):
         # representative spsc 1p1c slug. Note the slug intentionally
         # collides with the bench_spsc slug above ON THE SLUG axis but
         # the *measure* keys are disjoint (latency_* vs throughput_*),
-        # which is the same shape the production pipeline ships
-        # (Track 1 Task 1.5).
+        # which is the same shape the production pipeline ships.
         write_json(latency, {
             "lockfreequeues_spsc/spsc/1p1c": {
                 "latency_p50_ns": {"value": 250.0},

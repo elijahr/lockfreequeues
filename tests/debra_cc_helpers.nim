@@ -1,10 +1,10 @@
 ## Test helpers for v5.0.0 unbounded spmc/mpmc tests.
 ##
-## The 3.3.6 migration target imports `lockfreequeues/queue` + nim-debra,
+## The unbounded spmc/mpmc target imports `lockfreequeues/queue` + nim-debra,
 ## both of which export a `PinScopeCardinality` enum with `ccSingle` /
 ## `ccMulti` members. v5.0.0 keeps the lockfreequeues stub in place until
-## Track E1 re-homes the canonical enum into nim-debra and deletes the
-## stub (`internal/pinscope_stub.nim`'s removal protocol §1-§3). Until then,
+## the canonical enum is re-homed into nim-debra and the stub
+## (`internal/pinscope_stub.nim`) is deleted. Until then,
 ## test files that need a ccMulti-typed `DebraManager` (spmc-equiv,
 ## mpmc-equiv) cannot import both `debra` and `lockfreequeues/queue`
 ## unqualified without colliding on `ccMulti`.

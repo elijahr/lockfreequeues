@@ -1530,6 +1530,7 @@ proc `=destroy`*[
     destructorTransition: QueueInit -> QueueDestroyed,
     transitionError:
       "Queue used after =destroy (lifecycle: QueueInit -> QueueDestroyed).",
+    raises: [],
 .} =
   ## Destructor. Walks `headSegment` → `next` → ... freeing each
   ## segment. For non-spsc cardinalities, additionally unbinds the

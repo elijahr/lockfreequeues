@@ -1,6 +1,6 @@
 ## Compile-and-run smoke for the atomic_queue (max0x7ba) adapter.
 ##
-## Used by `bench.yml` (v4.2.0 Stage 5.1) as a sanity check that the
+## Used by `bench.yml` as a sanity check that the
 ## vendored `atomic_queue.h` family is present and the
 ## `atomic_queue_wrapper.cpp` shim builds cleanly with `nim cpp`,
 ## before the full bench binaries run with the same define.
