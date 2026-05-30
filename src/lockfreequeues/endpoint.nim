@@ -44,6 +44,8 @@
 import ./internal/typestates_dsl
 import std/typedthreads
 
+import ./endpoint_types
+export endpoint_types
 import ./bqueue
 import ./queue
 import ./role_tags
@@ -66,45 +68,8 @@ type
     ## dispatch the debra-integrated backend overloads (Queue endpoints
     ## call `registerThread` / `unregisterThread`).
 
-  Unbound*[T; Tag; queueT] = object
-    queue*: ptr queueT
-    idx*: int
-
-  Bound*[T; Tag; queueT] = object
-    queue*: ptr queueT
-    idx*: int
-    when defined(debug):
-      attachedTid*: int
-    handleManager*: pointer
-      ## Opaque storage for the debra `ThreadHandle.manager` pointer.
-      ## Meaningful only for Queue endpoints (set by `onBind` for
-      ## `queueT: QueueType`); `nil` sentinel for BQueue endpoints. The
-      ## Queue-overload of `onClose` casts back to
-      ## `ptr DebraManager[MaxThreads, CC]` at the call site, where
-      ## those static params are recoverable from queueT.
-    handleIdx*: int
-      ## Opaque storage for the debra `ThreadHandle.idx`. Zero for
-      ## BQueue endpoints; valid slot index for Queue endpoints.
-
-  EndpointClosed*[T; Tag; queueT] = object
-    queue*: ptr queueT
-      ## Propagated from `Bound` so the Queue-overload `onClose` can use
-      ## `when compiles(c.queue.manager)` to probe SPSC-vs-debra body
-      ## split (`queue.nim:280-285`) at the concrete instantiation site.
-    handleManager*: pointer
-    handleIdx*: int
-
-  Closed*[T; Tag; queueT] = EndpointClosed[T, Tag, queueT]
-    ## Backwards-compatible alias for the user-facing API. The terminal
-    ## endpoint state was renamed `EndpointClosed` to avoid name collision
-    ## with debra's `EpochGuardContext.Closed` typestate state (visible
-    ## transitively via `import queue`). The typestate verifier matches
-    ## state types by unqualified name; an unqualified `Closed` would
-    ## resolve ambiguously to debra's state and reject the transition
-    ## declaration.
-
 typestate Endpoint[T, Tag, queueT]:
-  consumeOnTransition = true
+  consumeOnTransition = false
   strictTransitions = true
   states Unbound[T, Tag, queueT], Bound[T, Tag, queueT], EndpointClosed[T, Tag, queueT]
   transitions:

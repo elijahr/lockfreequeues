@@ -140,6 +140,30 @@ const cases = @[
     outcome: eoCompileFails,
     substring: "push",
   ),
+  Case(
+    name: "endpoint L2 (Task C9, tripwire a) — SPSC push on consumer-tag endpoint",
+    file: "tests/should_fail/endpoint_push_on_consumer_tag.nim",
+    outcome: eoCompileFails,
+    substring: "SpscConsumerTag",
+  ),
+  Case(
+    name: "endpoint L2 (Task C9, tripwire b) — SPSC pop on producer-tag endpoint",
+    file: "tests/should_fail/endpoint_pop_on_producer_tag.nim",
+    outcome: eoCompileFails,
+    substring: "SpscProducerTag",
+  ),
+  Case(
+    name: "endpoint L2 (Task C9, tripwire c) — forbids-region calling tagged push",
+    file: "tests/should_fail/endpoint_forbids_region.nim",
+    outcome: eoCompileFails,
+    substring: "forbids",
+  ),
+  Case(
+    name: "endpoint L2 (Task C9, tripwire d) — MPMC push on consumer-tag endpoint",
+    file: "tests/should_fail/endpoint_mpmc_push_on_consumer_tag.nim",
+    outcome: eoCompileFails,
+    substring: "MpmcConsumerTag",
+  ),
 ]
 
 proc runCase(c: Case): bool =

@@ -49,6 +49,13 @@ from debra import
 
 from debra import retireOnCAS, retireOnPublish
 
+import ./endpoint_types
+import ./role_tags
+from debra import pinScope, unpinned, advanceEvery, reclaimNow
+
+when defined(debug):
+  import std/typedthreads
+
 export exceptions
 
 # `stManual`, `stEager`, `ccSingle`, `ccMulti` travel with their enum
@@ -951,6 +958,330 @@ proc newUnboundedMpmcQueue*[
   ## Unbounded mpmc-equivalent (`ccMulti × ccMulti`) auto-create
   ## smart-constructor.
   newQueue(Queue[T, ccMulti, ccMulti, ST, S, MaxThreads])
+
+## ----------------------------------------------------------------------
+## Push / pop on Bound endpoints — Track C v5.0.0 re-typing.
+##
+## Re-types the pre-v5.0.0 QueueProducer/QueueConsumer push/pop bodies
+## onto `Bound[T, Tag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]]`
+## receivers. The Bound endpoint carries opaque handle storage
+## (`handleManager: pointer` + `handleIdx: int`); for the ccProd==ccMulti
+## paths that need `pinScope(unpinned(handle))` the typed
+## `ThreadHandle[MaxThreads, CC]` is reconstructed via cast at the call
+## site (`when compiles(self.queue.manager)` gate + manager-pointer
+## introspection — mirror of the onClose pattern in endpoint.nim).
+##
+## SPSC-absorbed and SPMC-equiv push paths are debra-free; they ignore
+## the handle storage entirely.
+## ----------------------------------------------------------------------
+
+proc push*[
+    T;
+    Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Bound[T, Tag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]], item: T
+) {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## Push a single item onto the unbounded queue (cardinality-dispatched).
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "Queue item is ref; recompile with -d:allowNonLockFreeQueueItems.".}
+  when defined(debug):
+    assert self.attachedTid == getThreadId(),
+      "push from wrong thread (must match bindToThread thread)"
+
+  when ccProd == ccSingle and ccCons == ccSingle:
+    # SPSC-absorbed — no pin, no committed flag, no debra.
+    var seg = self.queue.tailSegment.load(moRelaxed)
+    let tail = seg.tail.load(moRelaxed)
+    if tail >= S:
+      let newSeg = newSegment[T, ccProd, ccCons, S]()
+      seg.next.store(newSeg, moRelease)
+      self.queue.tailSegment.store(newSeg, moRelease)
+      seg = newSeg
+      discard self.queue.segments.fetchAdd(1, moRelaxed)
+    let pos = seg.tail.load(moRelaxed)
+    seg.data[pos] = item
+    seg.tail.store(pos + 1, moRelease)
+    discard self.queue.itemCount.fetchAdd(1, moRelaxed)
+  elif ccProd == ccSingle and ccCons == ccMulti:
+    # spmc-equiv — single producer, no pin.
+    var seg = self.queue.tailSegment.load(moRelaxed)
+    var tail = seg.tail.load(moRelaxed)
+    if tail >= S:
+      let newSeg = newSegment[T, ccProd, ccCons, S]()
+      seg.next.store(newSeg, moRelease)
+      self.queue.tailSegment.store(newSeg, moRelease)
+      seg = newSeg
+      tail = 0
+      discard self.queue.segments.fetchAdd(1, moRelaxed)
+    seg.data[tail] = item
+    seg.tail.store(tail + 1, moRelease)
+    discard self.queue.itemCount.fetchAdd(1, moRelaxed)
+  else:
+    # ccProd == ccMulti — mpsc/mpmc-equiv: pin claim required.
+    type MgrT = typeof(self.queue.manager[])
+    let mgr = cast[ptr MgrT](self.handleManager)
+    type Handle = ThreadHandle[MgrT.MaxThreads, MgrT.CC]
+    let h = Handle(idx: self.handleIdx, manager: mgr)
+    block:
+      var scope {.used.} = pinScope(unpinned(h))
+      var spins = InitialSpin
+      while true:
+        var seg = self.queue.tailSegment.load(moAcquire)
+        var tail = seg.tail.load(moAcquire)
+        if tail >= S:
+          let nextSeg = seg.next.load(moAcquire)
+          if nextSeg == nil:
+            let newSeg = newSegment[T, ccProd, ccCons, S]()
+            var expectedNext: ptr Segment[T, ccProd, ccCons, S] = nil
+            if seg.next.compareExchange(expectedNext, newSeg, moRelease, moRelaxed):
+              var expectedSeg = seg
+              discard self.queue.tailSegment.compareExchange(
+                expectedSeg, newSeg, moRelease, moRelaxed
+              )
+              discard self.queue.segments.fetchAdd(1, moRelaxed)
+              continue
+            else:
+              freeAligned(newSeg)
+              backoffOnRetry(spins)
+              continue
+          else:
+            var expectedSeg = seg
+            discard self.queue.tailSegment.compareExchange(
+              expectedSeg, nextSeg, moRelease, moRelaxed
+            )
+            continue
+        var expected = tail
+        if seg.tail.compareExchange(expected, tail + 1, moAcquire, moRelaxed):
+          seg.data[tail] = item
+          seg.committed[tail].store(true, moRelease)
+          discard self.queue.itemCount.fetchAdd(1, moRelaxed)
+          break
+
+proc push*[
+    T;
+    Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Bound[T, Tag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]],
+    items: openArray[T],
+) {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## Batch push (thin loop).
+  for item in items:
+    self.push(item)
+
+# --- SPSC / MPSC pop on Bound (ccCons == ccSingle: no pin) ----------------
+proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ccProd: static PinScopeCardinality, ST: static DeallocationStrategy, S, MaxThreads: static int](
+    self: var Bound[T, Tag, Queue[T, ccProd, ccSingle, ST, S, MaxThreads]]
+): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## Pop for `ccCons == ccSingle` (SPSC + MPSC). Single consumer thread,
+  ## no pin required. Body lifted from the pre-v5.0.0 direct-on-Queue
+  ## pop overloads (`queue.nim:1021` and `:1061`) with cardinality
+  ## dispatch consolidated via the existing `when` arms.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "Queue item is ref; recompile with -d:allowNonLockFreeQueueItems.".}
+  when defined(debug):
+    assert self.attachedTid == getThreadId(), "pop from wrong thread"
+
+  var seg = self.queue.headSegment.load(moAcquire)
+  when ccProd == ccSingle:
+    # SPSC-absorbed: head advances on the consumer side; no committed flag.
+    let head = seg.head
+    let tail = seg.tail.load(moAcquire)
+    if head >= tail:
+      let nextSeg = seg.next.load(moAcquire)
+      if nextSeg == nil:
+        return none(T)
+      self.queue.headSegment.store(nextSeg, moRelease)
+      discard self.queue.segments.fetchSub(1, moRelaxed)
+      return self.pop()
+    let v = seg.data[head]
+    seg.head = head + 1
+    discard self.queue.itemCount.fetchSub(1, moRelaxed)
+    return some(v)
+  else:
+    # MPSC: ccMulti producer × ccSingle consumer. The single consumer
+    # owns the head walk but still pins the epoch via debra so
+    # `retireOnPublish` knows a reader holds a segment. Single-consumer
+    # cardinality avoids consumer-vs-consumer CAS coordination; it does
+    # NOT avoid the epoch pin.
+    type MgrT = typeof(self.queue.manager[])
+    let mgr = cast[ptr MgrT](self.handleManager)
+    type Handle = ThreadHandle[MgrT.MaxThreads, MgrT.CC]
+    let h = Handle(idx: self.handleIdx, manager: mgr)
+    block:
+      var scope = pinScope(unpinned(h))
+      var spins = InitialSpin
+      let tail = seg.tail.load(moAcquire)
+      var head = seg.head
+      while true:
+        if head >= tail:
+          let nextSeg = seg.next.load(moAcquire)
+          if nextSeg == nil:
+            break
+          if self.queue[].retireOnPublish(
+            scope, self.queue.headSegment, seg, nextSeg,
+            segmentDestructor[T, ccMulti, ccSingle, S],
+          ):
+            when ST != stManual:
+              discard self.queue.segments.fetchSub(1, moRelaxed)
+            seg = nextSeg
+            head = seg.head
+          backoffOnRetry(spins)
+          continue
+        if not seg.committed[head].load(moAcquire):
+          break
+        result = some(seg.data[head])
+        seg.head = head + 1
+        discard self.queue.itemCount.fetchSub(1, moRelaxed)
+        break
+    when ST == stEager:
+      if h.advanceEvery(LockFreeQueuesAdvanceEvery):
+        discard reclaimNow(h)
+
+# --- SPMC pop on Bound (ccSingle producer × ccMulti consumer) ------------
+proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ST: static DeallocationStrategy, S, MaxThreads: static int](
+    self: var Bound[T, Tag, Queue[T, ccSingle, ccMulti, ST, S, MaxThreads]]
+): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## SPMC pop — retire-bearing site. Pin claim via reconstructed
+  ## ThreadHandle from opaque Bound storage.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "Queue item is ref; recompile with -d:allowNonLockFreeQueueItems.".}
+  when defined(debug):
+    assert self.attachedTid == getThreadId(), "pop from wrong thread"
+
+  type MgrT = typeof(self.queue.manager[])
+  let mgr = cast[ptr MgrT](self.handleManager)
+  type Handle = ThreadHandle[MgrT.MaxThreads, MgrT.CC]
+  let h = Handle(idx: self.handleIdx, manager: mgr)
+
+  block:
+    var scope = pinScope(unpinned(h))
+    var seg = self.queue.headSegment.load(moAcquire)
+    var spins = InitialSpin
+    while true:
+      let tail = seg.tail.load(moAcquire)
+      var prevIdx = seg.prevConsumerIdx.load(moAcquire)
+      let mySlot = prevIdx + 1
+      if mySlot >= tail:
+        let nextSeg = seg.next.load(moAcquire)
+        if nextSeg == nil:
+          break
+        if self.queue[].retireOnCAS(
+          scope,
+          self.queue.headSegment,
+          seg,
+          nextSeg,
+          segmentDestructor[T, ccSingle, ccMulti, S],
+        ):
+          when ST != stManual:
+            discard self.queue.segments.fetchSub(1, moRelaxed)
+          seg = nextSeg
+        else:
+          seg = self.queue.headSegment.load(moAcquire)
+        backoffOnRetry(spins)
+        continue
+
+      if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
+        result = some(seg.data[mySlot])
+        discard self.queue.itemCount.fetchSub(1, moRelaxed)
+        break
+
+  when ST == stEager:
+    if h.advanceEvery(LockFreeQueuesAdvanceEvery):
+      discard reclaimNow(h)
+
+# --- MPMC pop on Bound (ccMulti producer × ccMulti consumer) --------------
+proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ST: static DeallocationStrategy, S, MaxThreads: static int](
+    self: var Bound[T, Tag, Queue[T, ccMulti, ccMulti, ST, S, MaxThreads]]
+): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## MPMC pop — retire-bearing site.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "Queue item is ref; recompile with -d:allowNonLockFreeQueueItems.".}
+  when defined(debug):
+    assert self.attachedTid == getThreadId(), "pop from wrong thread"
+
+  type MgrT = typeof(self.queue.manager[])
+  let mgr = cast[ptr MgrT](self.handleManager)
+  type Handle = ThreadHandle[MgrT.MaxThreads, MgrT.CC]
+  let h = Handle(idx: self.handleIdx, manager: mgr)
+
+  block:
+    var scope = pinScope(unpinned(h))
+    var seg = self.queue.headSegment.load(moAcquire)
+    var spins = InitialSpin
+    while true:
+      let tail = seg.tail.load(moAcquire)
+      var prevIdx = seg.prevConsumerIdx.load(moAcquire)
+      let mySlot = prevIdx + 1
+      if mySlot >= tail:
+        if mySlot < S and seg.tail.load(moAcquire) > mySlot:
+          if not seg.committed[mySlot].load(moAcquire):
+            break
+          backoffOnRetry(spins)
+          continue
+        let nextSeg = seg.next.load(moAcquire)
+        if nextSeg == nil:
+          break
+        if self.queue[].retireOnCAS(
+          scope,
+          self.queue.headSegment,
+          seg,
+          nextSeg,
+          segmentDestructor[T, ccMulti, ccMulti, S],
+        ):
+          when ST != stManual:
+            discard self.queue.segments.fetchSub(1, moRelaxed)
+          seg = nextSeg
+        else:
+          seg = self.queue.headSegment.load(moAcquire)
+        backoffOnRetry(spins)
+        continue
+      if not seg.committed[mySlot].load(moAcquire):
+        break
+      if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
+        result = some(seg.data[mySlot])
+        discard self.queue.itemCount.fetchSub(1, moRelaxed)
+        break
+
+  when ST == stEager:
+    if h.advanceEvery(LockFreeQueuesAdvanceEvery):
+      discard reclaimNow(h)
+
+# --- Batch pop on Bound for ccCons == ccMulti ----------------------------
+proc pop*[
+    T;
+    Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag;
+    ccProd: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Bound[T, Tag, Queue[T, ccProd, ccMulti, ST, S, MaxThreads]], count: int
+): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  if unlikely(count <= 0):
+    return none(seq[T])
+  var items = newSeqOfCap[T](count)
+  for _ in 0 ..< count:
+    let v = self.pop()
+    if v.isNone:
+      break
+    items.add(v.get)
+  if items.len == 0:
+    none(seq[T])
+  else:
+    some(items)
 
 ## ----------------------------------------------------------------------
 ## Test-only introspection helpers for the unbounded Segment layout.

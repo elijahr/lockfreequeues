@@ -61,6 +61,12 @@ import ./typestates/mpmc_pop
 import ./typestates/spsc_push
 import ./typestates/spsc_pop
 
+import ./endpoint_types
+import ./role_tags
+
+when defined(debug):
+  import std/typedthreads
+
 export exceptions
 export PinScopeCardinality, NoSlice
 
@@ -771,6 +777,175 @@ proc `=destroy`*[
   ## pragma.
   discard
 
+
+## ----------------------------------------------------------------------
+## Push / pop on Bound endpoints — Track C v5.0.0 re-typing.
+##
+## The pre-v5.0.0 BQueueProducer/BQueueConsumer-receiver overloads were
+## deleted in C7; their bodies are restored here on
+## `Bound[T, Tag, BQueue[...]]` receivers with `{.tags: [Tag].}` effect
+## pragmas for static role discrimination. Bodies are byte-for-byte
+## identical to the pre-deletion implementations (`Tag` is a phantom
+## generic that drives effect-tag checking; the bodies themselves don't
+## use it).
+##
+## **Role guards.** Each overload restricts `Tag` to the appropriate
+## role tag (e.g., MPSC push requires `Tag: MpmcProducerTag |
+## SpscProducerTag`-style constraint; here we keep `Tag` open at this
+## layer and rely on the spawn-macro layer in C14+ to bind the correct
+## tag for each call site. Role distinctness compile-fail tests at
+## C9-tripwire scope assert this — see `tests/should_fail/`).
+## ----------------------------------------------------------------------
+
+# --- MPSC push (via Bound) -----------------------------------------------
+proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: static int](
+    self: var Bound[T, Tag, BQueue[T, ccMulti, ccSingle, N, P, 0]], item: T
+): bool {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## MPSC single-item push on a Bound producer endpoint.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "BQueue item is ref; recompile with -d:allowNonLockFreeQueueItems.".}
+  when defined(debug):
+    assert getThreadId() == self.attachedTid, "push from wrong thread"
+  var queueBase = cast[ptr MpscPushBase[N, P, T]](self.queue)
+  var op = mpsc_push.start[N]()
+  var spins = InitialSpin
+  while true:
+    var claim = op.tryClaim(queueBase[])
+    match claim:
+      MPSCPushFull(full):
+        return full.extractFalse()
+      MPSCPushSlotClaimed(slotClaimed):
+        return slotClaimed.complete(queueBase[], item)
+      MPSCPushStart(restart):
+        op = restart
+        backoffOnRetry(spins)
+        continue
+
+# --- MPMC push (via Bound) -----------------------------------------------
+proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P, C: static int](
+    self: var Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]], item: T
+): bool {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## MPMC single-item push on a Bound producer endpoint.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "BQueue item is ref; recompile with -d:allowNonLockFreeQueueItems.".}
+  when defined(debug):
+    assert getThreadId() == self.attachedTid, "push from wrong thread"
+  var queueBase = cast[ptr MpmcPushBase[N, P, C, T]](self.queue)
+  var op = mpmc_push.start[N]()
+  var spins = InitialSpin
+  while true:
+    var claim = op.tryClaim(queueBase[])
+    match claim:
+      MPMCPushFull(full):
+        return full.extractFalse()
+      MPMCPushSlotClaimed(slotClaimed):
+        return slotClaimed.complete(queueBase[], item)
+      MPMCPushStart(restart):
+        op = restart
+        backoffOnRetry(spins)
+        continue
+
+# --- SPMC pop (via Bound) ------------------------------------------------
+proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, C: static int](
+    self: var Bound[T, Tag, BQueue[T, ccSingle, ccMulti, N, 0, C]]
+): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## SPMC single-item pop on a Bound consumer endpoint.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "BQueue item is ref; recompile with -d:allowNonLockFreeQueueItems.".}
+  when defined(debug):
+    assert getThreadId() == self.attachedTid, "pop from wrong thread"
+  var queueBase = cast[ptr SpmcBase[N, C, T]](self.queue)
+  var op = spmc_pop.start[N]()
+  var spins = InitialSpin
+  while true:
+    var claim = op.tryClaim(queueBase[])
+    match claim:
+      SPMCPopEmpty(_):
+        return none(T)
+      SPMCPopSlotClaimed(slotClaimed):
+        return some(slotClaimed.complete(queueBase[]))
+      SPMCPopStart(restart):
+        op = restart
+        backoffOnRetry(spins)
+        continue
+
+# --- MPMC pop (via Bound) ------------------------------------------------
+proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, P, C: static int](
+    self: var Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]]
+): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## MPMC single-item pop on a Bound consumer endpoint.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "BQueue item is ref; recompile with -d:allowNonLockFreeQueueItems.".}
+  when defined(debug):
+    assert getThreadId() == self.attachedTid, "pop from wrong thread"
+  var queueBase = cast[ptr MpmcBase[N, P, C, T]](self.queue)
+  var op = mpmc_pop.start[N]()
+  var spins = InitialSpin
+  while true:
+    var claim = op.tryClaim(queueBase[])
+    match claim:
+      MPMCPopEmpty(_):
+        return none(T)
+      MPMCPopSlotClaimed(slotClaimed):
+        return some(slotClaimed.complete(queueBase[]))
+      MPMCPopStart(restart):
+        op = restart
+        backoffOnRetry(spins)
+        continue
+
+# --- Batch push / pop overloads on Bound ---------------------------------
+
+proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: static int](
+    self: var Bound[T, Tag, BQueue[T, ccMulti, ccSingle, N, P, 0]],
+    items: openArray[T],
+): int {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## MPSC batch push. Returns count successfully pushed.
+  for item in items:
+    if not self.push(item):
+      return
+    inc result
+
+proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P, C: static int](
+    self: var Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]],
+    items: openArray[T],
+): int {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## MPMC batch push.
+  for item in items:
+    if not self.push(item):
+      return
+    inc result
+
+proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, C: static int](
+    self: var Bound[T, Tag, BQueue[T, ccSingle, ccMulti, N, 0, C]], count: int
+): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## SPMC batch pop.
+  var collected: seq[T] = @[]
+  for _ in 0 ..< count:
+    let it = self.pop()
+    if it.isNone:
+      break
+    collected.add(it.get())
+  if collected.len == 0: none(seq[T]) else: some(collected)
+
+proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, P, C: static int](
+    self: var Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]], count: int
+): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## MPMC batch pop.
+  var collected: seq[T] = @[]
+  for _ in 0 ..< count:
+    let it = self.pop()
+    if it.isNone:
+      break
+    collected.add(it.get())
+  if collected.len == 0: none(seq[T]) else: some(collected)
 
 ## ----------------------------------------------------------------------
 ## Test-only introspection helpers.
