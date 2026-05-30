@@ -46,6 +46,9 @@ import std/typedthreads
 
 import ./bqueue
 import ./queue
+import ./role_tags
+import ./exceptions
+import debra/atomics
 from debra import
   registerThread, unregisterThread, DebraRegistrationError, DebraManager
 from debra/types import ThreadHandle
@@ -92,13 +95,13 @@ type
     handleIdx*: int
 
   Closed*[T; Tag; queueT] = EndpointClosed[T, Tag, queueT]
-    ## Backwards-compatible alias for the user-facing API. The
-    ## terminal endpoint state was renamed `EndpointClosed` to avoid
-    ## name collision with debra's `EpochGuardContext.Closed` typestate
-    ## state (visible transitively via `import queue`). The typestate
-    ## verifier matches state types by unqualified name; an
-    ## unqualified `Closed` would resolve ambiguously to debra's
-    ## state and reject the transition declaration.
+    ## Backwards-compatible alias for the user-facing API. The terminal
+    ## endpoint state was renamed `EndpointClosed` to avoid name collision
+    ## with debra's `EpochGuardContext.Closed` typestate state (visible
+    ## transitively via `import queue`). The typestate verifier matches
+    ## state types by unqualified name; an unqualified `Closed` would
+    ## resolve ambiguously to debra's state and reject the transition
+    ## declaration.
 
 typestate Endpoint[T, Tag, queueT]:
   consumeOnTransition = true
@@ -207,5 +210,97 @@ proc close*[T; Tag; queueT](
     handleIdx: consumed.handleIdx,
   )
   onClose[T, Tag, queueT](result)
+
+# ---------------------------------------------------------------------------
+# Endpoint factories (per-flavour). The factory lives in endpoint.nim rather
+# than in bqueue.nim / queue.nim to break the import cycle: endpoint.nim
+# imports `./bqueue` and `./queue` for the BQueueType/QueueType concepts;
+# putting factories the other direction would re-introduce the cycle.
+#
+# Each factory reserves a per-thread slot on the underlying queue (CAS over
+# the queue's producerThreadIds / consumerThreadIds table) and wraps the
+# slot index in an `Unbound` endpoint. The caller transitions via
+# `bindToThread()` before any `push`/`pop` (lifecycle FSM above).
+# ---------------------------------------------------------------------------
+
+proc getProducer*[
+    T;
+    ccCons: static PinScopeCardinality,
+    N, P, C: static int,
+](
+    self: var BQueue[T, ccMulti, ccCons, N, P, C], idx: int = -1
+): Unbound[T, AnyThreadTag, BQueue[T, ccMulti, ccCons, N, P, C]] {.
+    raises: [NoProducersAvailableError]
+.} =
+  ## Reserve a per-thread producer slot on a multi-producer `BQueue` and
+  ## return an `Unbound` endpoint owning that slot. The caller transitions
+  ## the endpoint to `Bound` via `bindToThread()` before any `push`.
+  ##
+  ## When `idx >= 0`, the caller pins a specific slot (testing). When
+  ## `idx == -1`, the calling thread's `getThreadId()` claims the first
+  ## free slot via CAS over `producerThreadIds`.
+  result.queue = addr(self)
+
+  if idx >= 0:
+    assert idx < P,
+      "getProducer(idx) out of range: idx must be < P (producer count)"
+    result.idx = idx
+    return
+
+  let threadId = getThreadId()
+
+  for i in 0 ..< P:
+    if self.producerThreadIds[i].load(moAcquire) == threadId:
+      result.idx = i
+      return
+
+  for i in 0 ..< P:
+    var expected = 0
+    if self.producerThreadIds[i].compareExchangeWeak(
+      expected, threadId, moRelease, moAcquire
+    ):
+      result.idx = i
+      return
+
+  raise newException(
+    NoProducersAvailableError,
+    "All producers have been assigned. " &
+      "Increase your producer count (P) or setMaxPoolSize(P).",
+  )
+
+proc getConsumer*[
+    T;
+    ccProd: static PinScopeCardinality,
+    N, P, C: static int,
+](
+    self: var BQueue[T, ccProd, ccMulti, N, P, C], idx: int = -1
+): Unbound[T, AnyThreadTag, BQueue[T, ccProd, ccMulti, N, P, C]] {.
+    raises: [NoConsumersAvailableError]
+.} =
+  ## Reserve a per-thread consumer slot on a multi-consumer `BQueue` and
+  ## return an `Unbound` endpoint. Symmetric to `getProducer`; the caller
+  ## must `bindToThread()` before any `pop`.
+  result.queue = addr(self)
+
+  if idx >= 0:
+    result.idx = idx
+    return
+
+  let threadId = getThreadId()
+
+  for i in 0 ..< C:
+    if self.consumerThreadIds[i].load(moAcquire) == threadId:
+      result.idx = i
+      return
+
+  for i in 0 ..< C:
+    var expected = 0
+    if self.consumerThreadIds[i].compareExchangeWeak(
+      expected, threadId, moRelease, moAcquire
+    ):
+      result.idx = i
+      return
+
+  raise newException(NoConsumersAvailableError, "All consumers assigned")
 
 verifyTypestates()
