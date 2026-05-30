@@ -1,29 +1,21 @@
-## Event Collector Example
+## Event Collector Example — v5.0.0 static-affinity endpoint API.
 ##
-## Demonstrates using an unbounded Mpsc (MPSC) queue for collecting events
-## from multiple sources into a single processing pipeline.
-##
-## Pattern: Multiple event sources → Single processor
-##
-## Key properties:
-## - Handles bursts: queue grows during traffic spikes
-## - Never drops: events are queued even during overload
-## - Memory reclamation: epoch-based cleanup when safe
-## - Lock-free producers: sources don't block each other
-##
-## Use cases:
-## - Log aggregation from multiple services
-## - Metrics collection from distributed sensors
-## - Network packet capture from multiple interfaces
-## - User activity tracking across browser tabs
+## Multi-producer event sources feed a single-consumer processor via an
+## unbounded MPSC queue. Each producer thread calls `getProducerHere()`
+## on its own thread (sugar for `getProducer().bindToThread()`,
+## debra-registers per-thread). The single consumer uses
+## `bindConsumer()` (the v5.0.0 replacement for `attachConsumer`).
 
 import os
 import options
 import random
 import std/monotimes
+import debra/atomics
 import times
 
 import lockfreequeues
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 from debra import DebraManager, initDebraManager
 
@@ -31,7 +23,7 @@ const
   SegmentSize = 64
   NumSources = 4
   DurationMs = 200
-  MaxThreads = NumSources + 4  # sources + main/consumer + slack
+  MaxThreads = NumSources + 4
 
 type
   EventKind = enum
@@ -46,22 +38,18 @@ type
     timestamp: int64
     value: int
 
+  QueueT =
+    Queue[Event, ccMulti, ccSingle, stEager, SegmentSize, MaxThreads]
+
   SourceContext = object
-    queue:
-      ptr Queue[Event, ccMulti, ccSingle, stEager, SegmentSize, MaxThreads]
+    queue: ptr QueueT
     sourceId: int
     startTime: MonoTime
 
   ProcessorContext = object
-    queue:
-      ptr Queue[Event, ccMulti, ccSingle, stEager, SegmentSize, MaxThreads]
+    queue: ptr QueueT
 
 var
-  # v5.0.0 registration model: no thread is registered at construction.
-  # Each producer thread calls `getProducerHere()` (sugar for
-  # `getProducer()` + `attach()`) and the single consumer thread calls
-  # `attachConsumer()` on its OWN thread before its first push/pop
-  # (thread-affine debra registration).
   manager = initDebraManager[MaxThreads]()
   queue = newUnboundedMpscQueue[Event, stEager, SegmentSize, MaxThreads](
     addr manager
@@ -71,146 +59,109 @@ var
   eventsConsumed: Atomic[int]
   maxQueueDepth: Atomic[int]
 
-
 proc eventSourceThread(ctx: ptr SourceContext) {.thread.} =
-  ## Simulates an event source generating events at variable rates.
-  ## Sources occasionally burst to simulate real traffic patterns.
   {.cast(gcsafe).}:
-    # Sugar: `getProducerHere()` combines `getProducer()` + `attach()`,
-    # registering THIS thread with debra before any push.
+    # v5.0.0: getProducerHere binds this thread's debra handle on entry.
     var producer = ctx.queue[].getProducerHere()
     var produced = 0
-
     while running.load(moAcquire):
-      # Simulate variable event rate with occasional bursts
-      let burstMode = rand(100) < 10  # 10% chance of burst
-      let eventCount = if burstMode: rand(10..20) else: rand(1..3)
-
-      for _ in 0..<eventCount:
+      let burstMode = rand(100) < 10
+      let eventCount =
+        if burstMode:
+          rand(10 .. 20)
+        else:
+          rand(1 .. 3)
+      for _ in 0 ..< eventCount:
         let event = Event(
           sourceId: ctx.sourceId,
           kind: EventKind(rand(ord(EventKind.high))),
           timestamp: (getMonoTime() - ctx.startTime).inMicroseconds,
-          value: rand(1000)
+          value: rand(1000),
         )
-
         producer.push(event)
         inc produced
-
-      # Variable delay between event batches
-      let delayMs = if burstMode: 1 else: rand(5..15)
+      let delayMs =
+        if burstMode:
+          1
+        else:
+          rand(5 .. 15)
       sleep(delayMs)
-
     eventsProduced[ctx.sourceId].store(produced, moRelease)
 
-
 proc processorThread(ctx: ptr ProcessorContext) {.thread.} =
-  ## Single processor consumes and processes all events.
-  ## Periodic memory reclamation is now driven internally by the queue's
-  ## `stEager` strategy (per-pop `advanceEvery` + `reclaimNow`).
   {.cast(gcsafe).}:
-    # CRITICAL thread-affinity fix: the single consumer must register its
-    # debra handle on the CONSUMING thread (here), not on the main thread,
-    # before the first pop. Registering elsewhere mis-routes the handle.
-    ctx.queue[].attachConsumer()
-
+    # v5.0.0: bindConsumer is the one-shot wrapper that replaces v4.x
+    # attachConsumer. Single-consumer cardinality registers exactly
+    # one debra handle on the consuming thread.
+    var consumer = ctx.queue[].bindConsumer()
     var consumed = 0
     var maxDepth = 0
     var eventCounts: array[EventKind, int]
-
     while running.load(moAcquire) or ctx.queue[].len() > 0:
-      let event = ctx.queue[].pop()
-
+      let event = consumer.pop()
       if event.isSome:
-        # Process the event
         inc eventCounts[event.get.kind]
         inc consumed
-
-        # Track queue depth
         let depth = ctx.queue[].len()
         if depth > maxDepth:
           maxDepth = depth
       else:
-        # No events, brief pause
         sleep(1)
-
     eventsConsumed.store(consumed, moRelease)
     maxQueueDepth.store(maxDepth, moRelease)
-
     echo ""
     echo "Event breakdown:"
     for kind in EventKind:
       echo "  ", kind, ": ", eventCounts[kind]
 
-
 when isMainModule:
   randomize()
-
-  echo "Event Collector Example"
-  echo "======================="
+  echo "Event Collector Example (v5.0.0 static-affinity API)"
+  echo "===================================================="
   echo "Segment size: ", SegmentSize
   echo "Event sources: ", NumSources
   echo "Duration: ", DurationMs, "ms"
   echo ""
-
   running.store(true, moRelease)
   eventsConsumed.store(0, moRelaxed)
   maxQueueDepth.store(0, moRelaxed)
-  for i in 0..<NumSources:
+  for i in 0 ..< NumSources:
     eventsProduced[i].store(0, moRelaxed)
-
   let startTime = getMonoTime()
-
-  # Start processor
   var procCtx = ProcessorContext(queue: addr queue)
   var processor: Thread[ptr ProcessorContext]
   createThread(processor, processorThread, addr procCtx)
-
-  # Start event sources
   var sourceContexts: array[NumSources, SourceContext]
-  for i in 0..<NumSources:
-    sourceContexts[i] = SourceContext(
-      queue: addr queue,
-      sourceId: i,
-      startTime: startTime,
-    )
-
+  for i in 0 ..< NumSources:
+    sourceContexts[i] =
+      SourceContext(queue: addr queue, sourceId: i, startTime: startTime)
   var sources: array[NumSources, Thread[ptr SourceContext]]
-  for i in 0..<NumSources:
+  for i in 0 ..< NumSources:
     createThread(sources[i], eventSourceThread, addr sourceContexts[i])
-
-  # Run for specified duration
   sleep(DurationMs)
   running.store(false, moRelease)
-
-  # Wait for completion
-  for i in 0..<NumSources:
+  for i in 0 ..< NumSources:
     joinThread(sources[i])
-  sleep(50)  # Let processor drain
+  sleep(50)
   joinThread(processor)
-
   let totalTime = (getMonoTime() - startTime).inMilliseconds
-
-  # Report results
   echo ""
   echo "Results:"
   var totalProduced = 0
-  for i in 0..<NumSources:
+  for i in 0 ..< NumSources:
     let produced = eventsProduced[i].load(moAcquire)
     echo "  Source ", i, ": ", produced, " events"
     totalProduced += produced
-
   let consumed = eventsConsumed.load(moAcquire)
   let maxDepth = maxQueueDepth.load(moAcquire)
-
   echo ""
   echo "Total produced: ", totalProduced
   echo "Total consumed: ", consumed
   echo "Max queue depth: ", maxDepth
   echo "Final segments: ", queue.segmentCount()
   echo "Total time: ", totalTime, "ms"
-  echo "Throughput: ", (consumed * 1000) div max(1, totalTime.int), " events/sec"
-
+  echo "Throughput: ",
+    (consumed * 1000) div max(1, totalTime.int), " events/sec"
   if totalProduced == consumed:
     echo ""
     echo "All events processed - no data loss!"

@@ -1119,30 +1119,24 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ccProd: stat
     let h = Handle(idx: self.handleIdx, manager: mgr)
     block:
       var scope = pinScope(unpinned(h))
-      var spins = InitialSpin
-      let tail = seg.tail.load(moAcquire)
-      var head = seg.head
       while true:
-        if head >= tail:
-          let nextSeg = seg.next.load(moAcquire)
-          if nextSeg == nil:
-            break
-          if self.queue[].retireOnPublish(
-            scope, self.queue.headSegment, seg, nextSeg,
-            segmentDestructor[T, ccMulti, ccSingle, S],
-          ):
-            when ST != stManual:
-              discard self.queue.segments.fetchSub(1, moRelaxed)
-            seg = nextSeg
-            head = seg.head
-          backoffOnRetry(spins)
-          continue
-        if not seg.committed[head].load(moAcquire):
+        let tail = seg.tail.load(moAcquire)
+        if seg.head < tail:
+          if seg.committed[seg.head].load(moAcquire):
+            result = some(seg.data[seg.head])
+            inc seg.head
+            discard self.queue.itemCount.fetchSub(1, moRelaxed)
           break
-        result = some(seg.data[head])
-        seg.head = head + 1
-        discard self.queue.itemCount.fetchSub(1, moRelaxed)
-        break
+        let nextSeg = seg.next.load(moAcquire)
+        if nextSeg == nil:
+          break
+        self.queue[].retireOnPublish(
+          scope, self.queue.headSegment, nextSeg,
+          segmentDestructor[T, ccMulti, ccSingle, S],
+        )
+        when ST != stManual:
+          discard self.queue.segments.fetchSub(1, moRelaxed)
+        seg = nextSeg
     when ST == stEager:
       if h.advanceEvery(LockFreeQueuesAdvanceEvery):
         discard reclaimNow(h)
