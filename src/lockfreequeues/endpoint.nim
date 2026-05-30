@@ -50,6 +50,7 @@ import ./bqueue
 import ./queue
 import ./role_tags
 import ./exceptions
+import std/typetraits
 import debra/atomics
 from debra import
   registerThread, unregisterThread, DebraRegistrationError, DebraManager
@@ -312,5 +313,25 @@ proc getConsumer*[
     result.idx = idx
   else:
     result.idx = -1
+
+## ----------------------------------------------------------------------
+## R3 mitigation (design §3.3.1, Nim Issue #19013 alias-analysis):
+## `Unbound` MUST be a thin `ptr` wrapper over the queue with no
+## ref/string/seq/closure subgraph. `system.supportsCopyMem` returns
+## `true` iff the type has no GC'd subgraph; static-assert that the
+## actual queue families pass.
+## ----------------------------------------------------------------------
+
+static:
+  doAssert supportsCopyMem(
+    Unbound[int, AnyThreadTag, BQueue[int, ccMulti, ccMulti, 64, 4, 4]]
+  ),
+    "Unbound[..., BQueue[...]] must not contain a ref subgraph; " &
+    "see design R3 + Nim Issue #19013"
+  doAssert supportsCopyMem(
+    Unbound[int, AnyThreadTag, Queue[int, ccMulti, ccSingle, stEager, 16, 4]]
+  ),
+    "Unbound[..., Queue[...]] must not contain a ref subgraph; " &
+    "see design R3 + Nim Issue #19013"
 
 verifyTypestates()
