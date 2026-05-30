@@ -799,7 +799,7 @@ proc `=destroy`*[
 
 # --- MPSC push (via Bound) -----------------------------------------------
 proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: static int](
-    self: var Bound[T, Tag, BQueue[T, ccMulti, ccSingle, N, P, 0]], item: T
+    self: Bound[T, Tag, BQueue[T, ccMulti, ccSingle, N, P, 0]], item: T
 ): bool {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
   ## MPSC single-item push on a Bound producer endpoint.
   when not defined(allowNonLockFreeQueueItems):
@@ -825,7 +825,7 @@ proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: stati
 
 # --- MPMC push (via Bound) -----------------------------------------------
 proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P, C: static int](
-    self: var Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]], item: T
+    self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]], item: T
 ): bool {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
   ## MPMC single-item push on a Bound producer endpoint.
   when not defined(allowNonLockFreeQueueItems):
@@ -851,7 +851,7 @@ proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P, C: st
 
 # --- SPMC pop (via Bound) ------------------------------------------------
 proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, C: static int](
-    self: var Bound[T, Tag, BQueue[T, ccSingle, ccMulti, N, 0, C]]
+    self: Bound[T, Tag, BQueue[T, ccSingle, ccMulti, N, 0, C]]
 ): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
   ## SPMC single-item pop on a Bound consumer endpoint.
   when not defined(allowNonLockFreeQueueItems):
@@ -877,7 +877,7 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, C: static
 
 # --- MPMC pop (via Bound) ------------------------------------------------
 proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, P, C: static int](
-    self: var Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]]
+    self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]]
 ): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
   ## MPMC single-item pop on a Bound consumer endpoint.
   when not defined(allowNonLockFreeQueueItems):
@@ -904,7 +904,7 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, P, C: sta
 # --- Batch push / pop overloads on Bound ---------------------------------
 
 proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: static int](
-    self: var Bound[T, Tag, BQueue[T, ccMulti, ccSingle, N, P, 0]],
+    self: Bound[T, Tag, BQueue[T, ccMulti, ccSingle, N, P, 0]],
     items: openArray[T],
 ): Option[HSlice[int, int]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
   ## MPSC batch push. Returns `none` if all items pushed; `some(slice)`
@@ -915,7 +915,7 @@ proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: stati
   return none(HSlice[int, int])
 
 proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P, C: static int](
-    self: var Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]],
+    self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]],
     items: openArray[T],
 ): Option[HSlice[int, int]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
   ## MPMC batch push. Same semantics as MPSC variant.
@@ -925,7 +925,7 @@ proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P, C: st
   return none(HSlice[int, int])
 
 proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, C: static int](
-    self: var Bound[T, Tag, BQueue[T, ccSingle, ccMulti, N, 0, C]], count: int
+    self: Bound[T, Tag, BQueue[T, ccSingle, ccMulti, N, 0, C]], count: int
 ): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
   ## SPMC batch pop.
   var collected: seq[T] = @[]
@@ -937,7 +937,7 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, C: static
   if collected.len == 0: none(seq[T]) else: some(collected)
 
 proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, P, C: static int](
-    self: var Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]], count: int
+    self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]], count: int
 ): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
   ## MPMC batch pop.
   var collected: seq[T] = @[]

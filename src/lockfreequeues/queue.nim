@@ -687,63 +687,15 @@ proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
     discard self.segments.fetchSub(1, moRelaxed)
     freeAligned(oldSeg)
 
-# --- mpsc-equiv pop (ccMulti × ccSingle, direct on Queue, retireOnPublish) -
-proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
-    self: var Queue[T, ccMulti, ccSingle, ST, S, MaxThreads]
-): Option[T] =
-  ## mpsc-equiv pop — §3.5.1 retire-bearing site.
-  ##
-  ## Debug precondition: the consumer thread must have registered its
-  ## debra handle via `attachConsumer()` (or supplied it through the
-  ## handle-carrying borrow constructor) before the first `pop`. The
-  ## assert is compiled out under `-d:release` / `--assertions:off`, so
-  ## it adds no hot-path cost in release builds.
-  assert self.consumerAttached,
-    "mpsc Queue.pop called before attachConsumer(): the consumer " &
-    "thread must register its debra handle on its own thread first"
-  when defined(debug):
-    assert self.attachedTid == currentThreadId(),
-      "mpsc Queue.pop: attachConsumer() was called on a different " &
-      "thread than this pop(); the operating thread must be the thread " &
-      "that registered the debra handle (thread-affinity contract)"
-  when not defined(allowNonLockFreeQueueItems):
-    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
-      when T is ref:
-        {.
-          error:
-            "Queue item type '" & $T & "' is a ref type. " &
-            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
-            "mutate the refcount on the same object multiple threads can " &
-            "read or write, which is a race regardless of whether the " &
-            "refcount itself is atomic. Use a lock-free type (int, " &
-            "pointer, ptr T, etc.) or compile with " &
-            "-d:allowNonLockFreeQueueItems to explicitly allow it."
-        .}
-
-  block:
-    var scope = pinScope(unpinned(self.handle))
-    var seg = self.headSegment.load(moAcquire)
-    while true:
-      let tail = seg.tail.load(moAcquire)
-      if seg.head < tail:
-        if seg.committed[seg.head].load(moAcquire):
-          result = some(seg.data[seg.head])
-          inc seg.head
-          discard self.itemCount.fetchSub(1, moRelaxed)
-        break
-      let nextSeg = seg.next.load(moAcquire)
-      if nextSeg == nil:
-        break
-      self.retireOnPublish(
-        scope, self.headSegment, nextSeg, segmentDestructor[T, ccMulti, ccSingle, S]
-      )
-      when ST != stManual:
-        discard self.segments.fetchSub(1, moRelaxed)
-      seg = nextSeg
-
-  when ST == stEager:
-    if self.handle.advanceEvery(LockFreeQueuesAdvanceEvery):
-      discard reclaimNow(self.handle)
+# --- mpsc-equiv pop: REMOVED in v5.0.0 ----------------------------------
+# The pre-v5.0.0 direct-on-Queue MPSC pop required `attachConsumer()`
+# ceremony + carried `self.handle` / `self.consumerAttached` fields on
+# Queue that were tied to the deleted QueueConsumer claim-state model.
+# v5.0.0 routes MPSC pop through `Bound[T, Tag, Queue[..., ccSingle, ...]]`
+# (see endpoint.nim's `getConsumer` factory + bqueue/queue's pop on
+# Bound). Users go through `q.bindConsumer()` (or
+# `q.getConsumer().bindToThread()`) to get a Bound endpoint, then call
+# pop on it.
 
 # --- batch pop (ccCons == ccSingle, direct on Queue) ----------------------
 proc pop*[
@@ -886,26 +838,18 @@ proc newUnboundedMpscQueue*[
     ST: static DeallocationStrategy = DefaultDeallocationStrategy,
     S, MaxThreads: static int,
 ](
-    manager: ptr DebraManager[MaxThreads, debra.ccSingle],
-    consumerHandle: ThreadHandle[MaxThreads, debra.ccSingle],
-): Queue[T, ccMulti, ccSingle, ST, S, MaxThreads] {.inline.} =
-  ## Unbounded mpsc-equivalent (`ccMulti × ccSingle`) borrow
-  ## smart-constructor.
-  newQueue(Queue[T, ccMulti, ccSingle, ST, S, MaxThreads], manager, consumerHandle)
-
-proc newUnboundedMpscQueue*[
-    T;
-    ST: static DeallocationStrategy = DefaultDeallocationStrategy,
-    S, MaxThreads: static int,
-](
     manager: ptr DebraManager[MaxThreads, debra.ccSingle]
 ): Queue[T, ccMulti, ccSingle, ST, S, MaxThreads] {.inline.} =
   ## Unbounded mpsc-equivalent (`ccMulti × ccSingle`) borrow
-  ## smart-constructor — manager-only form. The consumer's debra handle
-  ## is NOT registered here; the consumer thread registers itself via
-  ## `attachConsumer()` before its first `pop`. Use the
-  ## `(manager, consumerHandle)` overload (escape hatch) to register the
-  ## consumer thread yourself and supply the handle at construction.
+  ## smart-constructor — manager-only form. The consumer thread calls
+  ## `q.bindConsumer()` on its own thread to register and obtain its
+  ## `Bound` endpoint.
+  ##
+  ## The pre-v5.0.0 `(manager, consumerHandle)` borrow-with-handle
+  ## overload was removed: in v5.0.0 the consumer's debra handle is
+  ## owned by `Bound` (opaque storage), so pre-registering and passing
+  ## a handle at construction is no longer the right ceremony.
+  ## `bindConsumer` wraps registration + binding in one call.
   newQueue(Queue[T, ccMulti, ccSingle, ST, S, MaxThreads], manager)
 
 proc newUnboundedMpscQueue*[
@@ -982,7 +926,7 @@ proc push*[
     ST: static DeallocationStrategy,
     S, MaxThreads: static int,
 ](
-    self: var Bound[T, Tag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]], item: T
+    self: Bound[T, Tag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]], item: T
 ) {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
   ## Push a single item onto the unbounded queue (cardinality-dispatched).
   when not defined(allowNonLockFreeQueueItems):
@@ -1069,7 +1013,7 @@ proc push*[
     ST: static DeallocationStrategy,
     S, MaxThreads: static int,
 ](
-    self: var Bound[T, Tag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]],
+    self: Bound[T, Tag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]],
     items: openArray[T],
 ) {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
   ## Batch push (thin loop).
@@ -1078,7 +1022,7 @@ proc push*[
 
 # --- SPSC / MPSC pop on Bound (ccCons == ccSingle: no pin) ----------------
 proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ccProd: static PinScopeCardinality, ST: static DeallocationStrategy, S, MaxThreads: static int](
-    self: var Bound[T, Tag, Queue[T, ccProd, ccSingle, ST, S, MaxThreads]]
+    self: Bound[T, Tag, Queue[T, ccProd, ccSingle, ST, S, MaxThreads]]
 ): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
   ## Pop for `ccCons == ccSingle` (SPSC + MPSC). Single consumer thread,
   ## no pin required. Body lifted from the pre-v5.0.0 direct-on-Queue
@@ -1141,9 +1085,33 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ccProd: stat
       if h.advanceEvery(LockFreeQueuesAdvanceEvery):
         discard reclaimNow(h)
 
+# --- Batch pop on Bound for ccCons == ccSingle (SPSC + MPSC) -------------
+proc pop*[
+    T;
+    Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag;
+    ccProd: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: Bound[T, Tag, Queue[T, ccProd, ccSingle, ST, S, MaxThreads]], count: int
+): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## Batch pop for ccCons==ccSingle. Thin loop over single-item pop.
+  if unlikely(count <= 0):
+    return none(seq[T])
+  var items = newSeqOfCap[T](count)
+  for _ in 0 ..< count:
+    let v = self.pop()
+    if v.isNone:
+      break
+    items.add(v.get)
+  if items.len == 0:
+    none(seq[T])
+  else:
+    some(items)
+
 # --- SPMC pop on Bound (ccSingle producer × ccMulti consumer) ------------
 proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ST: static DeallocationStrategy, S, MaxThreads: static int](
-    self: var Bound[T, Tag, Queue[T, ccSingle, ccMulti, ST, S, MaxThreads]]
+    self: Bound[T, Tag, Queue[T, ccSingle, ccMulti, ST, S, MaxThreads]]
 ): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
   ## SPMC pop — retire-bearing site. Pin claim via reconstructed
   ## ThreadHandle from opaque Bound storage.
@@ -1197,7 +1165,7 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ST: static D
 
 # --- MPMC pop on Bound (ccMulti producer × ccMulti consumer) --------------
 proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ST: static DeallocationStrategy, S, MaxThreads: static int](
-    self: var Bound[T, Tag, Queue[T, ccMulti, ccMulti, ST, S, MaxThreads]]
+    self: Bound[T, Tag, Queue[T, ccMulti, ccMulti, ST, S, MaxThreads]]
 ): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
   ## MPMC pop — retire-bearing site.
   when not defined(allowNonLockFreeQueueItems):
@@ -1262,7 +1230,7 @@ proc pop*[
     ST: static DeallocationStrategy,
     S, MaxThreads: static int,
 ](
-    self: var Bound[T, Tag, Queue[T, ccProd, ccMulti, ST, S, MaxThreads]], count: int
+    self: Bound[T, Tag, Queue[T, ccProd, ccMulti, ST, S, MaxThreads]], count: int
 ): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
   if unlikely(count <= 0):
     return none(seq[T])

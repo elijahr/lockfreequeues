@@ -138,14 +138,16 @@ suite "Existing borrow-manager API still works":
     producer.push(123)
     check(consumer.pop() == some(123))
 
-  test "borrow: Mpsc with shared manager and explicit consumer handle":
+  test "borrow: Mpsc with shared manager":
     var manager = initDebraManager[4]()
-    let consumerHandle = registerThread(manager)
-    var queue = newUnboundedMpscQueue[int, stEager, 16, 4](
-        addr manager, consumerHandle)
-    # Escape hatch: the consumer handle was registered + supplied at
-    # construction (consumerAttached set true there). The producer still
-    # registers on its operating thread via attach().
+    var queue =
+      newUnboundedMpscQueue[int, stEager, 16, 4](addr manager)
+    # v5.0.0: consumer handle is owned by Bound (opaque storage);
+    # bindConsumer wraps registration + binding in one call on the
+    # calling thread. The pre-v5.0.0 (manager, consumerHandle) borrow
+    # constructor was removed — the ceremony was always splitting
+    # debra registration from binding for no good reason.
+    var lfqConsumer = queue.bindConsumer()
     var producer = queue.getProducerHere()
     producer.push(456)
     check(lfqConsumer.pop() == some(456))

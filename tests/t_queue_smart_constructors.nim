@@ -101,9 +101,8 @@ suite "unbounded smart-constructors — newUnboundedMpscQueue":
 
   test "borrow: construct + push + pop (manager owned externally)":
     var mgr = initDebraManager[4, debra.ccSingle]()
-    let consumerHandle = registerThread(mgr)
     block:
-      var q = newUnboundedMpscQueue[int, stEager, 8, 4](addr mgr, consumerHandle)
+      var q = newUnboundedMpscQueue[int, stEager, 8, 4](addr mgr)
       var p = q.getProducerHere()
       p.push(11)
       let r = lfqConsumer.pop()

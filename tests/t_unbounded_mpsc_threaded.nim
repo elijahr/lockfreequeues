@@ -74,6 +74,7 @@ suite "UnboundedMpsc threaded":
     # and the consumer thread each register on their own thread (via
     # attach() / attachConsumer()).
     var queue = newUnboundedMpscQueue[int, stEager, 8, MaxThreads]()
+    var lfqConsumer = queue.bindConsumer()
 
     var prodContexts: array[ProducerCount, ProducerContext[stEager, 8]]
     for i in 0 ..< ProducerCount:
@@ -108,6 +109,7 @@ suite "UnboundedMpsc threaded":
   test "normal segment size":
     # Auto-create: registration happens per-thread at attach time.
     var queue = newUnboundedMpscQueue[int, stEager, 64, MaxThreads]()
+    var lfqConsumer = queue.bindConsumer()
 
     var prodContexts: array[ProducerCount, ProducerContext[stEager, 64]]
     for i in 0 ..< ProducerCount:
@@ -152,7 +154,7 @@ suite "UnboundedMpsc threaded":
 
     # Pop all items
     for i in 1 .. 1000:
-      discard queue.pop()
+      discard lfqConsumer.pop()
 
     # Segments should NOT be freed with Manual (no reclaim called)
     check(queue.segmentCount() == peakSegments)
@@ -168,7 +170,7 @@ suite "UnboundedMpsc threaded":
 
     # Pop all items
     for i in 1 .. 1000:
-      discard queue.pop()
+      discard lfqConsumer.pop()
 
     # Segments SHOULD be freed with Eager
     check(queue.segmentCount() <= 3)

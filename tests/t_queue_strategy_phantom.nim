@@ -39,36 +39,36 @@ from debra import initDebraManager, registerThread
 suite "Strategy phantom — mpsc-equiv (ccMulti × ccSingle)":
   test "stManual: drained segments are retained (segmentCount stays at 3)":
     var manager = initDebraManager[4]()
-    let consumerHandle = registerThread(manager)
-    var q = newUnboundedMpscQueue[int, stManual, 4, 4](addr manager, consumerHandle)
+    var q = newUnboundedMpscQueue[int, stManual, 4, 4](addr manager)
+    var lfqConsumer = q.bindConsumer()
     var p = q.getProducerHere()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3
     for i in 0 ..< 9:
-      let r = q.pop()
+      let r = lfqConsumer.pop()
       check r.isSome
       check r.get == i
     # stManual: segments counter is NOT decremented at retire sites.
     check q.segmentCount() == 3
-    check q.pop().isNone
+    check lfqConsumer.pop().isNone
 
   test "stEager: drained segments are reclaimed (segmentCount decreases)":
     var manager = initDebraManager[4]()
-    let consumerHandle = registerThread(manager)
-    var q = newUnboundedMpscQueue[int, stEager, 4, 4](addr manager, consumerHandle)
+    var q = newUnboundedMpscQueue[int, stEager, 4, 4](addr manager)
+    var lfqConsumer = q.bindConsumer()
     var p = q.getProducerHere()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3
     for i in 0 ..< 9:
-      let r = q.pop()
+      let r = lfqConsumer.pop()
       check r.isSome
       check r.get == i
     # stEager: segments counter decremented after each retire; final
     # count must be strictly less than the 3 we pushed across.
     check q.segmentCount() < 3
-    check q.pop().isNone
+    check lfqConsumer.pop().isNone
 
 suite "Strategy phantom — spmc-equiv (ccSingle × ccMulti)":
   test "stManual: drained segments are retained (segmentCount stays at 3)":
