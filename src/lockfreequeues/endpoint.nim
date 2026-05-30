@@ -1,28 +1,45 @@
 ##
 ## Endpoint types for static thread-affinity. See design §3.3.1.
 ##
-## Spike C2.5 result: single-family import graph clean (outcome G).
+## **Lifecycle vs role — orthogonal layers.** `Endpoint` is the typestate
+## for endpoint LIFECYCLE only: `Unbound -> Bound -> Closed`. ROLE is
+## carried via the `Tag` generic parameter — one of `SpscProducerTag`,
+## `SpscConsumerTag`, `MpmcProducerTag`, `MpmcConsumerTag` (all in
+## `role_tags.nim`), or `AnyThreadTag` for the same-thread shortcut path
+## explicitly chosen by `getProducerHere` / `getConsumerHere` call sites.
+## `Tag` distinctness is enforced at compile time via the
+## `{.tags: [TagType, TypestateOp].}` effect pragma on `push`/`pop` procs
+## (Task C9) plus `{.forbids: [...].}` regions; the typestate FSM here
+## carries no role information.
 ##
-## C3 ships the base three typestates (`Unbound` / `Bound` / `Closed`)
-## as generic over `(T, Tag, queueT)` only. The plan template originally
+## Per design §3.1 four-layer architecture (typestate=lifecycle,
+## effect-tag=role). The plan template at §C4 sketched two parallel
+## typestates `ProducerEndpoint` + `ConsumerEndpoint` with identical
+## state sets; typestates 0.12.0 TA-004 forbids sharing state types
+## across typestates (see `queue.nim:80-83` for the same constraint).
+## Per pepper's MCLD call (2026-05-30): merge into a single `Endpoint`
+## typestate — role lives in `Tag`, lifecycle in `Endpoint`.
+##
+## **Spike C2.5 result**: single-family import graph clean (outcome G).
+##
+## **Queue specialisation deferral**: the plan template originally
 ## sketched a `when queueT is Queue:` branch carrying a debra
-## `ThreadHandle[queueT.MaxThreads]` field; Nim 2.2's eager generic
-## resolution rejects `is Queue` on a 6-static-param generic without
-## bound arguments. Per pepper's MCLD call (2026-05-30): the Queue
-## specialisation (`handle` field, registerThread/unregisterThread,
-## close transition) moves wholesale to Task C6, where the queue-
-## specific behaviour already lands. C3 deviates from the plan template
-## only in moving the `when`-branch to its natural home; the spirit
-## (compile-time Queue specialisation) is preserved at C6 via either a
-## distinct `QueueBound` variant, a queueT-constrained re-introduction
-## of the `when`-branch, or proc overloads — whichever reads cleanest at
-## the implementation site.
+## `ThreadHandle[queueT.MaxThreads]` field on `Bound`/`Closed`. Nim
+## 2.2's eager generic resolution rejects `is Queue` on the
+## 6-static-param generic without bound arguments. Per pepper's MCLD
+## call: the Queue specialisation (`handle` field,
+## `registerThread`/`unregisterThread`, `close` transition) moves
+## wholesale to Task C6 — either a distinct `QueueBound` variant, a
+## queueT-constrained re-introduction of the `when`-branch, or proc
+## overloads, whichever reads cleanest at the implementation site.
 ##
-## R10 fallback (per design §3.3.1): if the three-axis generic typestate
-## trips a nim-typestates corner case in Task C4, drop `queueT` from the
-## typestate axis and store it as a non-typestate field.
+## **R10 fallback** (per design §3.3.1): if the three-axis generic
+## typestate trips a further nim-typestates corner case, drop `queueT`
+## from the typestate axis and store it as a non-typestate field.
 
 {.experimental: "strictEffects".}
+
+import ./internal/typestates_dsl
 
 type
   Unbound*[T; Tag; queueT] = object
@@ -36,3 +53,13 @@ type
       attachedTid*: int
 
   Closed*[T; Tag; queueT] = object
+
+typestate Endpoint[T, Tag, queueT]:
+  consumeOnTransition = true
+  strictTransitions = true
+  states Unbound[T, Tag, queueT], Bound[T, Tag, queueT], Closed[T, Tag, queueT]
+  transitions:
+    Unbound[T, Tag, queueT] -> Bound[T, Tag, queueT]
+    Bound[T, Tag, queueT] -> Closed[T, Tag, queueT]
+
+verifyTypestates()
