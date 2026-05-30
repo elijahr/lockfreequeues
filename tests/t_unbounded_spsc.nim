@@ -12,6 +12,8 @@ import unittest2
 import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 const MT = 4
   ## Type-uniform MaxThreads phantom for the spsc-absorbed branch.
@@ -23,14 +25,14 @@ suite "UnboundedSpsc":
 
   test "push single item":
     var queue = newUnboundedSpscQueue[int, stEager, 16, MT]()
-    var p = queue.getProducer()
+    var p = queue.getProducerHere()
 
     p.push(42)
     check(queue.len == 1)
 
   test "push multiple items":
     var queue = newUnboundedSpscQueue[int, stEager, 16, MT]()
-    var p = queue.getProducer()
+    var p = queue.getProducerHere()
 
     for i in 1 .. 10:
       p.push(i)
@@ -38,7 +40,7 @@ suite "UnboundedSpsc":
 
   test "pop single item":
     var queue = newUnboundedSpscQueue[int, stEager, 16, MT]()
-    var p = queue.getProducer()
+    var p = queue.getProducerHere()
 
     p.push(42)
     let item = queue.pop()
@@ -54,7 +56,7 @@ suite "UnboundedSpsc":
 
   test "FIFO order preserved":
     var queue = newUnboundedSpscQueue[int, stEager, 16, MT]()
-    var p = queue.getProducer()
+    var p = queue.getProducerHere()
 
     for i in 1 .. 5:
       p.push(i)
@@ -66,7 +68,7 @@ suite "UnboundedSpsc":
 
   test "grows beyond single segment":
     var queue = newUnboundedSpscQueue[int, stEager, 4, MT]() # Small segment
-    var p = queue.getProducer()
+    var p = queue.getProducerHere()
 
     # Push more than segment capacity
     for i in 1 .. 10:
@@ -83,7 +85,7 @@ suite "UnboundedSpsc":
 
   test "segment reclamation on pop":
     var queue = newUnboundedSpscQueue[int, stEager, 4, MT]()
-    var p = queue.getProducer()
+    var p = queue.getProducerHere()
 
     # Fill and drain multiple segments
     for round in 1 .. 3:
@@ -97,7 +99,7 @@ suite "UnboundedSpsc":
 
   test "len tracks items correctly":
     var queue = newUnboundedSpscQueue[int, stEager, 8, MT]()
-    var p = queue.getProducer()
+    var p = queue.getProducerHere()
 
     check(queue.len == 0)
 
@@ -117,7 +119,7 @@ suite "UnboundedSpsc":
 
   test "batch push":
     var queue = newUnboundedSpscQueue[int, stEager, 8, MT]()
-    var p = queue.getProducer()
+    var p = queue.getProducerHere()
 
     p.push(@[1, 2, 3, 4, 5])
     check(queue.len == 5)
@@ -127,7 +129,7 @@ suite "UnboundedSpsc":
 
   test "batch pop":
     var queue = newUnboundedSpscQueue[int, stEager, 8, MT]()
-    var p = queue.getProducer()
+    var p = queue.getProducerHere()
 
     for i in 1 .. 10:
       p.push(i)
@@ -139,7 +141,7 @@ suite "UnboundedSpsc":
 
   test "batch pop more than available":
     var queue = newUnboundedSpscQueue[int, stEager, 8, MT]()
-    var p = queue.getProducer()
+    var p = queue.getProducerHere()
 
     p.push(@[1, 2, 3])
 

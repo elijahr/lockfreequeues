@@ -22,6 +22,8 @@ import lockfreequeues/bqueue
 import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 suite "BQueue type shell — positive instantiations":
 

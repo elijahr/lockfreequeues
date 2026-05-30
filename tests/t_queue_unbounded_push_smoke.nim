@@ -29,18 +29,20 @@ import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 suite "rkEbr push smoke — spsc-equiv (ccSingle × ccSingle)":
   test "single item push increments len":
     var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
-    var p = q.getProducer()
+    var p = q.getProducerHere()
     p.push(42)
     check q.len() == 1
     check q.segmentCount() == 1
 
   test "fills first segment without growth":
     var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
-    var p = q.getProducer()
+    var p = q.getProducerHere()
     for i in 0 ..< 8:
       p.push(i)
     check q.len() == 8
@@ -48,7 +50,7 @@ suite "rkEbr push smoke — spsc-equiv (ccSingle × ccSingle)":
 
   test "crosses segment boundary on item SEGSIZE+1":
     var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
-    var p = q.getProducer()
+    var p = q.getProducerHere()
     for i in 0 ..< 9: # SEGSIZE=8 → item 9 forces growth.
       p.push(i)
     check q.len() == 9
@@ -57,14 +59,14 @@ suite "rkEbr push smoke — spsc-equiv (ccSingle × ccSingle)":
 suite "rkEbr push smoke — spmc-equiv (ccSingle × ccMulti)":
   test "single item push increments len":
     var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, 8, 4])
-    var p = q.getProducer()
+    var p = q.getProducerHere()
     p.push(42)
     check q.len() == 1
     check q.segmentCount() == 1
 
   test "crosses segment boundary":
     var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, 8, 4])
-    var p = q.getProducer()
+    var p = q.getProducerHere()
     for i in 0 ..< 17: # crosses 2 boundaries (8 → 16 → 17)
       p.push(i)
     check q.len() == 17
@@ -75,8 +77,7 @@ suite "rkEbr push smoke — mpsc-equiv (ccMulti × ccSingle)":
   ## (§3.5.6 Pin-Claim Ordering).
   test "single producer pushes items, pin/unpin cycle clean":
     var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 8, 4])
-    var p = q.getProducer()
-    p.attach()
+    var p = q.getProducerHere()
     for i in 0 ..< 5:
       p.push(i)
     check q.len() == 5
@@ -84,8 +85,7 @@ suite "rkEbr push smoke — mpsc-equiv (ccMulti × ccSingle)":
 
   test "single producer crosses segment boundary":
     var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 8, 4])
-    var p = q.getProducer()
-    p.attach()
+    var p = q.getProducerHere()
     for i in 0 ..< 17:
       p.push(i)
     check q.len() == 17
@@ -96,8 +96,7 @@ suite "rkEbr push smoke — mpmc-equiv (ccMulti × ccMulti)":
   ## (§3.5.6 Pin-Claim Ordering).
   test "single producer pushes items, pin/unpin cycle clean":
     var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, 8, 4])
-    var p = q.getProducer()
-    p.attach()
+    var p = q.getProducerHere()
     for i in 0 ..< 5:
       p.push(i)
     check q.len() == 5
@@ -105,8 +104,7 @@ suite "rkEbr push smoke — mpmc-equiv (ccMulti × ccMulti)":
 
   test "single producer crosses segment boundary":
     var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, 8, 4])
-    var p = q.getProducer()
-    p.attach()
+    var p = q.getProducerHere()
     for i in 0 ..< 17:
       p.push(i)
     check q.len() == 17

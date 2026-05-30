@@ -18,6 +18,8 @@ import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 import ./t_integration
 import ./t_sic
 import ./t_sip

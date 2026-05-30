@@ -30,6 +30,8 @@ import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 import debra as debra_mod
 from debra import initDebraManager, registerThread
@@ -39,8 +41,7 @@ suite "Strategy phantom — mpsc-equiv (ccMulti × ccSingle)":
     var manager = initDebraManager[4]()
     let consumerHandle = registerThread(manager)
     var q = newUnboundedMpscQueue[int, stManual, 4, 4](addr manager, consumerHandle)
-    var p = q.getProducer()
-    p.attach()
+    var p = q.getProducerHere()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3
@@ -56,8 +57,7 @@ suite "Strategy phantom — mpsc-equiv (ccMulti × ccSingle)":
     var manager = initDebraManager[4]()
     let consumerHandle = registerThread(manager)
     var q = newUnboundedMpscQueue[int, stEager, 4, 4](addr manager, consumerHandle)
-    var p = q.getProducer()
-    p.attach()
+    var p = q.getProducerHere()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3
@@ -74,9 +74,8 @@ suite "Strategy phantom — spmc-equiv (ccSingle × ccMulti)":
   test "stManual: drained segments are retained (segmentCount stays at 3)":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var q = newUnboundedSpmcQueue[int, stManual, 4, 4](addr manager)
-    var p = q.getProducer()
-    var c = q.getConsumer()
-    c.attach()
+    var p = q.getProducerHere()
+    var c = q.getConsumerHere()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3
@@ -90,9 +89,8 @@ suite "Strategy phantom — spmc-equiv (ccSingle × ccMulti)":
   test "stEager: drained segments are reclaimed (segmentCount decreases)":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var q = newUnboundedSpmcQueue[int, stEager, 4, 4](addr manager)
-    var p = q.getProducer()
-    var c = q.getConsumer()
-    c.attach()
+    var p = q.getProducerHere()
+    var c = q.getConsumerHere()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3
@@ -107,10 +105,8 @@ suite "Strategy phantom — mpmc-equiv (ccMulti × ccMulti)":
   test "stManual: drained segments are retained (segmentCount stays at 3)":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var q = newUnboundedMpmcQueue[int, stManual, 4, 4](addr manager)
-    var p = q.getProducer()
-    p.attach()
-    var c = q.getConsumer()
-    c.attach()
+    var p = q.getProducerHere()
+    var c = q.getConsumerHere()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3
@@ -124,10 +120,8 @@ suite "Strategy phantom — mpmc-equiv (ccMulti × ccMulti)":
   test "stEager: drained segments are reclaimed (segmentCount decreases)":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var q = newUnboundedMpmcQueue[int, stEager, 4, 4](addr manager)
-    var p = q.getProducer()
-    p.attach()
-    var c = q.getConsumer()
-    c.attach()
+    var p = q.getProducerHere()
+    var c = q.getConsumerHere()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3

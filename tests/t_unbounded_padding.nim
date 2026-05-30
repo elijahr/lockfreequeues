@@ -24,6 +24,8 @@ import lockfreequeues/queue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 # nim-debra surface for the unbounded smart-constructor manager. Selective
 # `from ... import` matches the queue.nim convention and keeps

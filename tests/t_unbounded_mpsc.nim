@@ -5,6 +5,8 @@ import unittest2
 
 import debra
 import lockfreequeues
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 suite "UnboundedMpsc":
   test "newUnboundedMpscQueue creates valid instance":
@@ -17,16 +19,14 @@ suite "UnboundedMpsc":
     var manager = initDebraManager[4]()
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMpscQueue[int, stEager, 16, 4](addr manager, consumerHandle)
-    var producer = queue.getProducer()
-    producer.attach()
+    var producer = queue.getProducerHere()
     check(producer.idx >= 0)
 
   test "producer push single item":
     var manager = initDebraManager[4]()
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMpscQueue[int, stEager, 16, 4](addr manager, consumerHandle)
-    var producer = queue.getProducer()
-    producer.attach()
+    var producer = queue.getProducerHere()
 
     producer.push(42)
     check(queue.len == 1)
@@ -35,8 +35,7 @@ suite "UnboundedMpsc":
     var manager = initDebraManager[4]()
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMpscQueue[int, stEager, 16, 4](addr manager, consumerHandle)
-    var producer = queue.getProducer()
-    producer.attach()
+    var producer = queue.getProducerHere()
 
     for i in 1 .. 10:
       producer.push(i)
@@ -46,8 +45,7 @@ suite "UnboundedMpsc":
     var manager = initDebraManager[4]()
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMpscQueue[int, stEager, 16, 4](addr manager, consumerHandle)
-    var producer = queue.getProducer()
-    producer.attach()
+    var producer = queue.getProducerHere()
 
     producer.push(42)
     let item = queue.pop()
@@ -67,8 +65,7 @@ suite "UnboundedMpsc":
     var manager = initDebraManager[4]()
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMpscQueue[int, stEager, 16, 4](addr manager, consumerHandle)
-    var producer = queue.getProducer()
-    producer.attach()
+    var producer = queue.getProducerHere()
 
     for i in 1 .. 5:
       producer.push(i)
@@ -83,10 +80,8 @@ suite "UnboundedMpsc":
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMpscQueue[int, stEager, 16, 4](addr manager, consumerHandle)
 
-    var producer1 = queue.getProducer()
-    producer1.attach()
-    var producer2 = queue.getProducer()
-    producer2.attach()
+    var producer1 = queue.getProducerHere()
+    var producer2 = queue.getProducerHere()
 
     # Each producer pushes
     for i in 1 .. 5:
@@ -108,8 +103,7 @@ suite "UnboundedMpsc":
     var manager = initDebraManager[4]()
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMpscQueue[int, stEager, 4, 4](addr manager, consumerHandle)
-    var producer = queue.getProducer()
-    producer.attach()
+    var producer = queue.getProducerHere()
 
     for i in 1 .. 10:
       producer.push(i)
@@ -125,8 +119,7 @@ suite "UnboundedMpsc":
     var manager = initDebraManager[4]()
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMpscQueue[int, stEager, 8, 4](addr manager, consumerHandle)
-    var producer = queue.getProducer()
-    producer.attach()
+    var producer = queue.getProducerHere()
 
     check(queue.len == 0)
 
@@ -148,8 +141,7 @@ suite "UnboundedMpsc":
     var manager = initDebraManager[4]()
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMpscQueue[int, stEager, 8, 4](addr manager, consumerHandle)
-    var producer = queue.getProducer()
-    producer.attach()
+    var producer = queue.getProducerHere()
 
     producer.push(@[1, 2, 3, 4, 5])
     check(queue.len == 5)
@@ -161,8 +153,7 @@ suite "UnboundedMpsc":
     var manager = initDebraManager[4]()
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMpscQueue[int, stEager, 8, 4](addr manager, consumerHandle)
-    var producer = queue.getProducer()
-    producer.attach()
+    var producer = queue.getProducerHere()
 
     for i in 1 .. 10:
       producer.push(i)
@@ -176,8 +167,7 @@ suite "UnboundedMpsc":
     var manager = initDebraManager[4]()
     let consumerHandle = registerThread(manager)
     var queue = newUnboundedMpscQueue[int, stEager, 8, 4](addr manager, consumerHandle)
-    var producer = queue.getProducer()
-    producer.attach()
+    var producer = queue.getProducerHere()
 
     producer.push(@[1, 2, 3])
 

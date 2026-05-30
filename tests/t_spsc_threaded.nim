@@ -4,6 +4,8 @@ import options
 import unittest2
 
 import lockfreequeues
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 const ItemCount = 10000
 

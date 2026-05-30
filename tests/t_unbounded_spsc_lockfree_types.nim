@@ -12,7 +12,7 @@ import ../src/lockfreequeues/internal/pinscope_stub
 suite "UnboundedSpsc lock-free types":
   test "int is lock-free":
     var queue = newUnboundedSpscQueue[int, stEager, 64, 4]()
-    var p = queue.getProducer()
+    var p = queue.getProducerHere()
     p.push(42)
     let item = queue.pop()
     check item.isSome
@@ -23,7 +23,7 @@ suite "UnboundedSpsc lock-free types":
       value: int
 
     var queue = newUnboundedSpscQueue[ptr NodeObj, stEager, 64, 4]()
-    var p = queue.getProducer()
+    var p = queue.getProducerHere()
 
     let node = cast[ptr NodeObj](alloc0(sizeof(NodeObj)))
     node.value = 99
@@ -37,7 +37,7 @@ suite "UnboundedSpsc lock-free types":
 
   test "uint64 is lock-free":
     var queue = newUnboundedSpscQueue[uint64, stEager, 64, 4]()
-    var p = queue.getProducer()
+    var p = queue.getProducerHere()
     p.push(0xDEADBEEF'u64)
     let item = queue.pop()
     check item.isSome

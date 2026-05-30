@@ -26,13 +26,15 @@ import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 # --- push(openArray) round-trip — all 4 cardinality variants -------------
 
 suite "rkEbr batch push (openArray) — spsc-equiv (ccSingle × ccSingle)":
   test "openArray push then drain via single-item pop preserves FIFO":
     var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
-    var p = q.getProducer()
+    var p = q.getProducerHere()
     let items = [10, 20, 30, 40, 50]
     p.push(items)
     check q.len() == items.len
@@ -45,9 +47,8 @@ suite "rkEbr batch push (openArray) — spsc-equiv (ccSingle × ccSingle)":
 suite "rkEbr batch push (openArray) — spmc-equiv (ccSingle × ccMulti)":
   test "openArray push then drain via single-item pop preserves FIFO":
     var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, 8, 4])
-    var p = q.getProducer()
-    var c = q.getConsumer()
-    c.attach()
+    var p = q.getProducerHere()
+    var c = q.getConsumerHere()
     let items = [11, 21, 31, 41, 51]
     p.push(items)
     check q.len() == items.len
@@ -61,8 +62,7 @@ suite "rkEbr batch push (openArray) — mpsc-equiv (ccMulti × ccSingle)":
   test "openArray push then drain via single-item pop preserves FIFO":
     var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 8, 4])
     q.attachConsumer()
-    var p = q.getProducer()
-    p.attach()
+    var p = q.getProducerHere()
     let items = [12, 22, 32, 42, 52]
     p.push(items)
     check q.len() == items.len
@@ -75,10 +75,8 @@ suite "rkEbr batch push (openArray) — mpsc-equiv (ccMulti × ccSingle)":
 suite "rkEbr batch push (openArray) — mpmc-equiv (ccMulti × ccMulti)":
   test "openArray push then drain via single-item pop preserves FIFO":
     var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, 8, 4])
-    var p = q.getProducer()
-    p.attach()
-    var c = q.getConsumer()
-    c.attach()
+    var p = q.getProducerHere()
+    var c = q.getConsumerHere()
     let items = [13, 23, 33, 43, 53]
     p.push(items)
     check q.len() == items.len
@@ -93,7 +91,7 @@ suite "rkEbr batch push (openArray) — mpmc-equiv (ccMulti × ccMulti)":
 suite "rkEbr batch pop (count) — spsc-equiv (ccSingle × ccSingle)":
   test "push then pop(count) returns some(seq) with correct elements":
     var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
-    var p = q.getProducer()
+    var p = q.getProducerHere()
     let items = [100, 101, 102, 103, 104]
     p.push(items)
     let r = q.pop(items.len)
@@ -106,7 +104,7 @@ suite "rkEbr batch pop (count) — spsc-equiv (ccSingle × ccSingle)":
 
   test "pop(0) returns none":
     var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
-    var p = q.getProducer()
+    var p = q.getProducerHere()
     p.push(7)
     check q.pop(0).isNone
     # Item is still there.
@@ -115,7 +113,7 @@ suite "rkEbr batch pop (count) — spsc-equiv (ccSingle × ccSingle)":
 
   test "pop(count > available) returns some(seq) of up-to-available":
     var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
-    var p = q.getProducer()
+    var p = q.getProducerHere()
     p.push([1, 2, 3])
     let r = q.pop(10)
     check r.isSome
@@ -128,8 +126,7 @@ suite "rkEbr batch pop (count) — mpsc-equiv (ccMulti × ccSingle)":
   test "push then pop(count) returns some(seq) with correct elements":
     var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 8, 4])
     q.attachConsumer()
-    var p = q.getProducer()
-    p.attach()
+    var p = q.getProducerHere()
     let items = [200, 201, 202, 203, 204]
     p.push(items)
     let r = q.pop(items.len)
@@ -143,9 +140,8 @@ suite "rkEbr batch pop (count) — mpsc-equiv (ccMulti × ccSingle)":
 suite "rkEbr batch pop (count) — spmc-equiv (ccSingle × ccMulti)":
   test "push then pop(count) via QueueConsumer returns some(seq)":
     var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, 8, 4])
-    var p = q.getProducer()
-    var c = q.getConsumer()
-    c.attach()
+    var p = q.getProducerHere()
+    var c = q.getConsumerHere()
     let items = [300, 301, 302, 303, 304]
     p.push(items)
     let r = c.pop(items.len)
@@ -163,10 +159,8 @@ suite "rkEbr batch pop (count) — spmc-equiv (ccSingle × ccMulti)":
 suite "rkEbr batch pop (count) — mpmc-equiv (ccMulti × ccMulti)":
   test "push then pop(count) via QueueConsumer returns some(seq)":
     var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, 8, 4])
-    var p = q.getProducer()
-    p.attach()
-    var c = q.getConsumer()
-    c.attach()
+    var p = q.getProducerHere()
+    var c = q.getConsumerHere()
     let items = [400, 401, 402, 403, 404]
     p.push(items)
     let r = c.pop(items.len)

@@ -7,6 +7,8 @@ import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 const
   ItemCount = 10000
@@ -30,9 +32,8 @@ proc producer[ST: static DeallocationStrategy, S: static int](
     ctx: ptr ProducerContext[ST, S]
 ) {.thread.} =
   {.cast(gcsafe).}:
-    var p = ctx.queue[].getProducer()
+    var p = ctx.queue[].getProducerHere()
     # Register this producer's debra handle on its own thread.
-    p.attach()
     let base = ctx.producerIdx * ItemsPerProducer
     for i in 1 .. ItemsPerProducer:
       p.push(base + i)
@@ -145,8 +146,7 @@ suite "UnboundedMpsc threaded":
     queue.attachConsumer()
 
     # Push items to create segments
-    var p = queue.getProducer()
-    p.attach()
+    var p = queue.getProducerHere()
     for i in 1 .. 1000:
       p.push(i)
     let peakSegments = queue.segmentCount()
@@ -164,8 +164,7 @@ suite "UnboundedMpsc threaded":
     queue.attachConsumer()
 
     # Push items to create segments
-    var p = queue.getProducer()
-    p.attach()
+    var p = queue.getProducerHere()
     for i in 1 .. 1000:
       p.push(i)
 

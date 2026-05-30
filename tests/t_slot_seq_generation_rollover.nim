@@ -37,6 +37,8 @@ import lockfreequeues/typestates/spmc_push
 import lockfreequeues/typestates/spmc_pop
 import lockfreequeues/typestates/mpsc_push
 import lockfreequeues/typestates/mpsc_pop
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 
 # ---------------------------------------------------------------------------

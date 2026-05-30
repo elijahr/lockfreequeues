@@ -6,7 +6,7 @@ template testSucPopOne*(queue: untyped) =
   ## Test popping one item via Consumer.
   discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
-  let res = queue.getConsumer(0).pop()
+  var res = queue.getConsumerHere(0).pop()
   check(res.isSome)
   check(res.get == 1)
 
@@ -18,7 +18,7 @@ template testSucPopAll*(queue: untyped) =
 
   var items = newSeq[int]()
   for i in 1 .. 8:
-    let res = queue.getConsumer(0).pop()
+    var res = queue.getConsumerHere(0).pop()
     check(res.isSome)
     items.add(res.get)
 
@@ -28,7 +28,7 @@ template testSucPopAll*(queue: untyped) =
 
 template testSucPopEmpty*(queue: untyped) =
   ## Test popping from empty queue.
-  check(queue.getConsumer(0).pop().isNone)
+  check(queue.getConsumerHere(0).pop().isNone)
 
   # Cell payload data is undefined where seq does not mark it published
   # (Vyukov canonical protocol). After reset, head=tail=0 with no published
@@ -40,9 +40,9 @@ template testSucPopTooMany*(queue: untyped) =
   discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
   for i in 1 .. 8:
-    discard queue.getConsumer(0).pop()
+    discard queue.getConsumerHere(0).pop()
 
-  check(queue.getConsumer(0).pop().isNone)
+  check(queue.getConsumerHere(0).pop().isNone)
 
   queue.checkState(head = 8'u64, tail = 8'u64, data = (@[1, 2, 3, 4, 5, 6, 7, 8]))
 
@@ -51,13 +51,13 @@ template testSucPopWrap*(queue: untyped) =
   discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
   for i in 1 .. 4:
-    discard queue.getConsumer(0).pop()
+    discard queue.getConsumerHere(0).pop()
 
   discard queue.push(@[9, 10, 11, 12])
 
   var items = newSeq[int]()
   for i in 1 .. 8:
-    let res = queue.getConsumer(0).pop()
+    var res = queue.getConsumerHere(0).pop()
     check(res.isSome)
     items.add(res.get)
 
@@ -69,7 +69,7 @@ template testSucPopCountOne*(queue: untyped) =
   ## Test batch pop of one item at a time.
   check(queue.push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
   for i in 1 .. 8:
-    let popped = queue.getConsumer(0).pop(1)
+    var popped = queue.getConsumerHere(0).pop(1)
     check(popped.isSome)
     check(popped.get() == @[i])
   queue.checkState(head = 8'u64, tail = 8'u64, data = (@[1, 2, 3, 4, 5, 6, 7, 8]))
@@ -77,14 +77,14 @@ template testSucPopCountOne*(queue: untyped) =
 template testSucPopCountAll*(queue: untyped) =
   ## Test batch pop of all items.
   discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
-  let popped = queue.getConsumer(0).pop(8)
+  var popped = queue.getConsumerHere(0).pop(8)
   check(popped.isSome)
   check(popped.get() == @[1, 2, 3, 4, 5, 6, 7, 8])
   queue.checkState(head = 8'u64, tail = 8'u64, data = (@[1, 2, 3, 4, 5, 6, 7, 8]))
 
 template testSucPopCountEmpty*(queue: untyped) =
   ## Test batch pop from empty queue.
-  let popped = queue.getConsumer(0).pop(1)
+  var popped = queue.getConsumerHere(0).pop(1)
   check(popped.isNone)
   # Cell payload data is undefined where seq does not mark it published
   # (Vyukov canonical protocol). After reset, head=tail=0 with no published
@@ -97,7 +97,7 @@ template testSucPopCountTooMany*(queue: untyped) =
 
   queue.checkState(head = 0'u64, tail = 8'u64, data = (@[1, 2, 3, 4, 5, 6, 7, 8]))
 
-  let popped = queue.getConsumer(0).pop(10)
+  var popped = queue.getConsumerHere(0).pop(10)
   check(popped.isSome)
   check(popped.get() == @[1, 2, 3, 4, 5, 6, 7, 8])
 
@@ -107,11 +107,11 @@ template testSucPopCountWrap*(queue: untyped) =
   ## Test batch pop with wraparound.
   discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
-  discard queue.getConsumer(0).pop(4)
+  discard queue.getConsumerHere(0).pop(4)
 
   discard queue.push(@[9, 10, 11, 12])
 
-  let popped = queue.getConsumer(1).pop(8)
+  var popped = queue.getConsumerHere(1).pop(8)
   check(popped.isSome)
   check(popped.get() == @[5, 6, 7, 8, 9, 10, 11, 12])
 
@@ -131,5 +131,5 @@ template testSucGetConsumerReusesAssigned*(queue: untyped) =
 
 template testSucGetConsumerExplicitIndex*(queue: untyped) =
   ## Test explicit consumer index assignment.
-  let consumer = queue.getConsumer(2)
+  var consumer = queue.getConsumerHere(2)
   check(consumer.idx == 2)

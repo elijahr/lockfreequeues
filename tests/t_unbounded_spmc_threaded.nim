@@ -7,6 +7,8 @@ import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 from debra import DebraManager, registerThread
 import ./debra_cc_helpers
@@ -32,7 +34,7 @@ proc producer[ST: static DeallocationStrategy, S: static int](
     ctx: ptr ProducerContext[ST, S]
 ) {.thread.} =
   {.cast(gcsafe).}:
-    var p = ctx.queue[].getProducer()
+    var p = ctx.queue[].getProducerHere()
     for i in 1 .. ItemCount:
       p.push(i)
     ctx.producerDone[].store(true, moRelease)
@@ -41,9 +43,8 @@ proc consumer[ST: static DeallocationStrategy, S: static int](
     ctx: ptr ConsumerContext[ST, S]
 ) {.thread.} =
   {.cast(gcsafe).}:
-    var c = ctx.queue[].getConsumer()
+    var c = ctx.queue[].getConsumerHere()
     # Register this consumer's debra handle on its own thread.
-    c.attach()
     while true:
       let item = c.pop()
       if item.isSome:
@@ -135,14 +136,13 @@ suite "UnboundedSpmc threaded":
     var queue = newUnboundedSpmcQueue[int, stManual, 8, MaxThreads](addr manager)
 
     # Push items to create segments
-    var p = queue.getProducer()
+    var p = queue.getProducerHere()
     for i in 1 .. 1000:
       p.push(i)
     let peakSegments = queue.segmentCount()
 
     # Pop all items
-    var c = queue.getConsumer()
-    c.attach()
+    var c = queue.getConsumerHere()
     for i in 1 .. 1000:
       discard c.pop()
 
@@ -154,13 +154,12 @@ suite "UnboundedSpmc threaded":
     var queue = newUnboundedSpmcQueue[int, stEager, 8, MaxThreads](addr manager)
 
     # Push items to create segments
-    var p = queue.getProducer()
+    var p = queue.getProducerHere()
     for i in 1 .. 1000:
       p.push(i)
 
     # Pop all items
-    var c = queue.getConsumer()
-    c.attach()
+    var c = queue.getConsumerHere()
     for i in 1 .. 1000:
       discard c.pop()
 

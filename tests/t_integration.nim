@@ -12,11 +12,11 @@ template testHeadAndTailReset*(queue: untyped) =
   # SPSC: Virtual space is 2*(N+1) = 18 for N=8, so valid values are 0..17
   # MPSC/SPMC/MPMC: Virtual space is 2*N = 16 for N=8, so valid values are 0..15
   # This test uses 17 which is only valid for SPSC (N+1 slot design)
-  when not compiles(queue.getProducer(0)) and not compiles(queue.getConsumer(0)):
+  when not compiles(queue.getProducerHere(0)) and not compiles(queue.getConsumerHere(0)):
     # Set head/tail to 17 to test wrap from 17 -> 0 (SPSC/SPMC only)
     queue.head.sequential(17)
     queue.tail.sequential(17)
-    when (not compiles(queue.getProducer(0)) and compiles(queue.getConsumer(0))):
+    when (not compiles(queue.getProducerHere(0)) and compiles(queue.getConsumerHere(0))):
       queue.reservedHead.sequential(17)
     # N+1=9 slots
     queue.checkState(head = 17, tail = 17, storage = repeat(0, 9))
@@ -33,8 +33,8 @@ template testHeadAndTailReset*(queue: untyped) =
     )
 
     let res =
-      when (not compiles(queue.getProducer(0)) and compiles(queue.getConsumer(0))):
-        queue.getConsumer(0).pop(1)
+      when (not compiles(queue.getProducerHere(0)) and compiles(queue.getConsumerHere(0))):
+        queue.getConsumerHere(0).pop(1)
       else:
         queue.pop(1)
 
@@ -46,14 +46,14 @@ template testHeadAndTailReset*(queue: untyped) =
     )
 
 template testWraps*(queue: untyped) =
-  when compiles(queue.getProducer(0)):
-    check(queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
+  when compiles(queue.getProducerHere(0)):
+    check(queue.getProducerHere(0).push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
   else:
     check(queue.push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
 
   var popRes =
-    when compiles(queue.getConsumer(0)):
-      queue.getConsumer(0).pop(4)
+    when compiles(queue.getConsumerHere(0)):
+      queue.getConsumerHere(0).pop(4)
     else:
       queue.pop(4)
 
@@ -61,17 +61,17 @@ template testWraps*(queue: untyped) =
   check(popRes.get == @[1, 2, 3, 4])
 
   let pushRes =
-    when compiles(queue.getProducer(0)):
-      queue.getProducer(0).push(@[9, 10, 11, 12])
+    when compiles(queue.getProducerHere(0)):
+      queue.getProducerHere(0).push(@[9, 10, 11, 12])
     else:
       queue.push(@[9, 10, 11, 12])
 
   check(pushRes.isNone)
 
   # With mod (N+1) indexing: items 9,10,11,12 go to slots 8,0,1,2
-  when compiles(queue.getProducer(0)):
+  when compiles(queue.getProducerHere(0)):
     queue.checkState(head = 4'u64, tail = 12'u64)
-  elif not compiles(queue.getProducer(0)) and compiles(queue.getConsumer(0)):
+  elif not compiles(queue.getProducerHere(0)) and compiles(queue.getConsumerHere(0)):
     queue.checkState(
       head = 4'u64,
       tail = 12'u64,
@@ -87,31 +87,31 @@ template testWraps*(queue: untyped) =
     )
 
   popRes =
-    when compiles(queue.getConsumer(0)):
-      queue.getConsumer(0).pop(4)
+    when compiles(queue.getConsumerHere(0)):
+      queue.getConsumerHere(0).pop(4)
     else:
       queue.pop(4)
   check(popRes.isSome)
   check(popRes.get == @[5, 6, 7, 8])
 
-  when compiles(queue.getProducer(0)):
+  when compiles(queue.getProducerHere(0)):
     queue.checkState(head = 8'u64, tail = 12'u64)
-  elif not compiles(queue.getProducer(0)) and compiles(queue.getConsumer(0)):
+  elif not compiles(queue.getProducerHere(0)) and compiles(queue.getConsumerHere(0)):
     queue.checkState(head = 8'u64, tail = 12'u64, data = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]))
   else:
     queue.checkState(head = 8, tail = 12, storage = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]))
 
   popRes =
-    when compiles(queue.getConsumer(0)):
-      queue.getConsumer(1).pop(4)
+    when compiles(queue.getConsumerHere(0)):
+      queue.getConsumerHere(1).pop(4)
     else:
       queue.pop(4)
   check(popRes.isSome)
   check(popRes.get == @[9, 10, 11, 12])
 
-  when compiles(queue.getProducer(0)):
+  when compiles(queue.getProducerHere(0)):
     queue.checkState(head = 12'u64, tail = 12'u64)
-  elif not compiles(queue.getProducer(0)) and compiles(queue.getConsumer(0)):
+  elif not compiles(queue.getProducerHere(0)) and compiles(queue.getConsumerHere(0)):
     queue.checkState(head = 12'u64, tail = 12'u64, data = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]))
   else:
     queue.checkState(head = 12, tail = 12, storage = (@[10, 11, 12, 4, 5, 6, 7, 8, 9]))

@@ -7,6 +7,8 @@ when not compileOption("threads"):
 import std/options
 import unittest2
 import lockfreequeues
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 import debra/atomics
 import debra/atomics/dsl
 

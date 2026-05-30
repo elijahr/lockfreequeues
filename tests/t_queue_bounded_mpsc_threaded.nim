@@ -22,6 +22,8 @@ import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 const
   ItemCount = 10000
@@ -36,7 +38,7 @@ type TestContext[N: static int] = object
   producerIdx: int
 
 proc producer[N: static int](ctx: ptr TestContext[N]) {.thread.} =
-  var p = ctx.queue[].getProducer()
+  var p = ctx.queue[].getProducerHere()
   let base = ctx.producerIdx * ItemsPerProducer
   for i in 1 .. ItemsPerProducer:
     while not p.push(base + i):
