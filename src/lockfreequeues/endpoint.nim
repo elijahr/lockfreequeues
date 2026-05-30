@@ -12,26 +12,28 @@
 ## (Task C9) plus `{.forbids: [...].}` regions; the typestate FSM here
 ## carries no role information.
 ##
-## Per design §3.1 four-layer architecture (typestate=lifecycle,
-## effect-tag=role). The plan template at §C4 sketched two parallel
-## typestates `ProducerEndpoint` + `ConsumerEndpoint` with identical
-## state sets; typestates 0.12.0 TA-004 forbids sharing state types
-## across typestates (see `queue.nim:80-83` for the same constraint).
-## Per pepper's MCLD call (2026-05-30): merge into a single `Endpoint`
-## typestate — role lives in `Tag`, lifecycle in `Endpoint`.
+## **Backend specialisation via type-class overloads (M1', C6 spike).**
+## The plan template originally gated `handle: ThreadHandle[...]` field
+## and `registerThread`/`unregisterThread` calls via
+## `when queueT is Queue:`. Nim 2.2's eager generic resolution rejects
+## `is Queue` on the 6-static-param `Queue[T, ccProd, ccCons, ST, S, MaxThreads]`
+## without bound arguments. Per pepper's MCLD call (2026-05-30) + the C6
+## 30-min spike: use `concept BQueueType` / `QueueType` type-class match
+## on overloaded helper procs. The handle storage lives unconditionally
+## on `Bound` and `Closed` (opaque `manager: pointer` + `handleIdx: int`),
+## with the Queue overloads casting back to `ThreadHandle[MaxThreads, CC]`
+## at the call site where queueT is concrete. The 16-byte cost on
+## BQueue endpoints is the M1' tradeoff for keeping the typestate axis
+## at 3 generic params and the API uniform.
+##
+## **Single Endpoint typestate (C4).** The plan template at §C4 sketched
+## two parallel typestates `ProducerEndpoint` + `ConsumerEndpoint` with
+## identical state sets; typestates 0.12.0 TA-004 forbids sharing state
+## types across typestates (see `queue.nim:80-83`). Per pepper's MCLD:
+## merge into a single `Endpoint` typestate — role lives in `Tag`,
+## lifecycle in `Endpoint`.
 ##
 ## **Spike C2.5 result**: single-family import graph clean (outcome G).
-##
-## **Queue specialisation deferral**: the plan template originally
-## sketched a `when queueT is Queue:` branch carrying a debra
-## `ThreadHandle[queueT.MaxThreads]` field on `Bound`/`Closed`. Nim
-## 2.2's eager generic resolution rejects `is Queue` on the
-## 6-static-param generic without bound arguments. Per pepper's MCLD
-## call: the Queue specialisation (`handle` field,
-## `registerThread`/`unregisterThread`, `close` transition) moves
-## wholesale to Task C6 — either a distinct `QueueBound` variant, a
-## queueT-constrained re-introduction of the `when`-branch, or proc
-## overloads, whichever reads cleanest at the implementation site.
 ##
 ## **R10 fallback** (per design §3.3.1): if the three-axis generic
 ## typestate trips a further nim-typestates corner case, drop `queueT`
@@ -42,7 +44,25 @@
 import ./internal/typestates_dsl
 import std/typedthreads
 
+import ./bqueue
+import ./queue
+from debra import
+  registerThread, unregisterThread, DebraRegistrationError, DebraManager
+from debra/types import ThreadHandle
+
 type
+  BQueueType* = concept x
+    x is BQueue
+    ## Type class matching any `BQueue[...]` instantiation. Used to
+    ## dispatch the no-op backend overloads (BQueue endpoints carry no
+    ## debra registration).
+
+  QueueType* = concept x
+    x is Queue
+    ## Type class matching any `Queue[...]` instantiation. Used to
+    ## dispatch the debra-integrated backend overloads (Queue endpoints
+    ## call `registerThread` / `unregisterThread`).
+
   Unbound*[T; Tag; queueT] = object
     queue*: ptr queueT
     idx*: int
@@ -52,34 +72,140 @@ type
     idx*: int
     when defined(debug):
       attachedTid*: int
+    handleManager*: pointer
+      ## Opaque storage for the debra `ThreadHandle.manager` pointer.
+      ## Meaningful only for Queue endpoints (set by `onBind` for
+      ## `queueT: QueueType`); `nil` sentinel for BQueue endpoints. The
+      ## Queue-overload of `onClose` casts back to
+      ## `ptr DebraManager[MaxThreads, CC]` at the call site, where
+      ## those static params are recoverable from queueT.
+    handleIdx*: int
+      ## Opaque storage for the debra `ThreadHandle.idx`. Zero for
+      ## BQueue endpoints; valid slot index for Queue endpoints.
 
-  Closed*[T; Tag; queueT] = object
+  EndpointClosed*[T; Tag; queueT] = object
+    queue*: ptr queueT
+      ## Propagated from `Bound` so the Queue-overload `onClose` can use
+      ## `when compiles(c.queue.manager)` to probe SPSC-vs-debra body
+      ## split (`queue.nim:280-285`) at the concrete instantiation site.
+    handleManager*: pointer
+    handleIdx*: int
+
+  Closed*[T; Tag; queueT] = EndpointClosed[T, Tag, queueT]
+    ## Backwards-compatible alias for the user-facing API. The
+    ## terminal endpoint state was renamed `EndpointClosed` to avoid
+    ## name collision with debra's `EpochGuardContext.Closed` typestate
+    ## state (visible transitively via `import queue`). The typestate
+    ## verifier matches state types by unqualified name; an
+    ## unqualified `Closed` would resolve ambiguously to debra's
+    ## state and reject the transition declaration.
 
 typestate Endpoint[T, Tag, queueT]:
   consumeOnTransition = true
   strictTransitions = true
-  states Unbound[T, Tag, queueT], Bound[T, Tag, queueT], Closed[T, Tag, queueT]
+  states Unbound[T, Tag, queueT], Bound[T, Tag, queueT], EndpointClosed[T, Tag, queueT]
   transitions:
     Unbound[T, Tag, queueT] -> Bound[T, Tag, queueT]
-    Bound[T, Tag, queueT] -> Closed[T, Tag, queueT]
+    Bound[T, Tag, queueT] -> EndpointClosed[T, Tag, queueT]
+
+# ---------------------------------------------------------------------------
+# Backend specialisation helpers — dispatched by concept match on queueT.
+# ---------------------------------------------------------------------------
+
+proc onBind[T; Tag; queueT: BQueueType](
+    b: var Bound[T, Tag, queueT]
+) {.gcsafe, raises: [].} =
+  ## BQueue endpoints carry no debra registration. No-op.
+  discard b
+
+proc onBind[T; Tag; queueT: QueueType](
+    b: var Bound[T, Tag, queueT]
+) {.gcsafe, raises: [].} =
+  ## Queue endpoints register the calling thread with the queue's debra
+  ## manager. `queueT` is a concrete `Queue[T, ccProd, ccCons, ST, S, MaxThreads]`
+  ## at this overload's call site. The SPSC-absorbed Queue branch
+  ## (`ccProd == ccSingle and ccCons == ccSingle`) is debra-free per
+  ## `queue.nim:280-285`; the `when compiles(b.queue.manager)` feature
+  ## test gates the `registerThread` call to the debra-integrated
+  ## cardinalities only.
+  ##
+  ## `DebraRegistrationError` from a saturated registry is converted to
+  ## a `Defect` here — typestates 0.12.0 requires `{.transition.}` procs
+  ## to have empty `raises:`. The user contract is "do not bind more
+  ## threads than the queue's `MaxThreads`"; a saturated registry is
+  ## misuse, not a recoverable runtime error.
+  when compiles(b.queue.manager):
+    try:
+      let h = registerThread(b.queue.manager[])
+      b.handleManager = cast[pointer](h.manager)
+      b.handleIdx = h.idx
+    except DebraRegistrationError as e:
+      raiseAssert "endpoint.bindToThread: " & e.msg
+  else:
+    discard b
+
+proc onClose[T; Tag; queueT: BQueueType](
+    c: var EndpointClosed[T, Tag, queueT]
+) {.gcsafe, raises: [].} =
+  ## BQueue endpoints carry no debra registration. No-op.
+  discard c
+
+proc onClose[T; Tag; queueT: QueueType](
+    c: var EndpointClosed[T, Tag, queueT]
+) {.gcsafe, raises: [].} =
+  ## Queue endpoints unregister the thread from the queue's debra
+  ## manager. The opaque handle storage is cast back to the typed
+  ## `ThreadHandle` at this overload's call site. SPSC-absorbed Queue
+  ## variants (`queue.nim:280-285`) are debra-free; the
+  ## `when compiles(c.queue.manager)` feature test probes the queue's
+  ## body split at the concrete instantiation site and short-circuits
+  ## for those.
+  when compiles(c.queue.manager):
+    if c.handleManager == nil:
+      return
+    type MgrT = typeof(c.queue.manager[])
+    let mgr = cast[ptr MgrT](c.handleManager)
+    type Handle = ThreadHandle[MgrT.MaxThreads, MgrT.CC]
+    let h = Handle(idx: c.handleIdx, manager: mgr)
+    unregisterThread(mgr[], h)
+  else:
+    discard c
+
+# ---------------------------------------------------------------------------
+# Lifecycle transitions.
+# ---------------------------------------------------------------------------
 
 proc bindToThread*[T; Tag; queueT](
     u: sink Unbound[T, Tag, queueT]
-): Bound[T, Tag, queueT] {.transition, tags: [Tag, TypestateOp], gcsafe, raises: [].} =
+): Bound[T, Tag, queueT] {.transition, tags: [Tag, TypestateOp, RootEffect], gcsafe, raises: [].} =
   ## Bind the endpoint to the calling thread. See design §3.3.2.
   ##
   ## The sugar pragma `{.transition(tag: ...).}` was withdrawn 2026-05-28
   ## (Nim parser rejects `nkObjConstr` pragma form + semantic conflation of
   ## value-typestate with proc-effect). The explicit composed form above is
   ## the only available shape.
-  ##
-  ## Queue specialisation (debra `registerThread` call wired through
-  ## `queueT.manager`) lands in Task C6 — either as a distinct overload, an
-  ## overload set, or a `when queueT is …` branch evaluated in C6's
-  ## queueT-constrained scope.
   let consumed = move(u)
-  result = Bound[T, Tag, queueT](queue: consumed.queue, idx: consumed.idx)
+  result = Bound[T, Tag, queueT](
+    queue: consumed.queue, idx: consumed.idx, handleManager: nil, handleIdx: 0
+  )
   when defined(debug):
     result.attachedTid = getThreadId()
+  onBind[T, Tag, queueT](result)
+
+proc close*[T; Tag; queueT](
+    b: sink Bound[T, Tag, queueT]
+): EndpointClosed[T, Tag, queueT] {.transition, tags: [Tag, TypestateOp, RootEffect], gcsafe, raises: [].} =
+  ## Release the endpoint. Queue endpoints call `unregisterThread`;
+  ## BQueue endpoints are a no-op. See design §3.3.2.
+  when defined(debug):
+    assert getThreadId() == b.attachedTid,
+      "close from wrong thread (must match bindToThread thread)"
+  let consumed = move(b)
+  result = EndpointClosed[T, Tag, queueT](
+    queue: consumed.queue,
+    handleManager: consumed.handleManager,
+    handleIdx: consumed.handleIdx,
+  )
+  onClose[T, Tag, queueT](result)
 
 verifyTypestates()
