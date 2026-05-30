@@ -1284,6 +1284,51 @@ proc pop*[
     some(items)
 
 ## ----------------------------------------------------------------------
+## Same-thread shortcut: getProducerHere / getConsumerHere /
+## bindConsumer (one-shot wrappers per design §3.3.5 + §6.2).
+## ----------------------------------------------------------------------
+
+template getProducerHere*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
+): Bound[T, AnyThreadTag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]] =
+  ## Sugar: `getProducer() + bindToThread()` in one call.
+  var u = self.getProducer()
+  u.bindToThread()
+
+template getConsumerHere*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
+): Bound[T, AnyThreadTag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]] =
+  ## Symmetric to `getProducerHere` for the consumer side.
+  var u = self.getConsumer()
+  u.bindToThread()
+
+proc bindConsumer*[
+    T;
+    ccProd: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Queue[T, ccProd, ccSingle, ST, S, MaxThreads]
+): Bound[T, AnyThreadTag, Queue[T, ccProd, ccSingle, ST, S, MaxThreads]] {.
+    raises: []
+.} =
+  ## One-shot bind for the SC consumer of an MPSC-style Queue.
+  ## Equivalent to `self.getConsumer().bindToThread()`. Per design §6.2.
+  ## Replaces the deleted v4.x `attachConsumer`.
+  var u = self.getConsumer()
+  u.bindToThread()
+
+## ----------------------------------------------------------------------
 ## Test-only introspection helpers for the unbounded Segment layout.
 ## ----------------------------------------------------------------------
 
