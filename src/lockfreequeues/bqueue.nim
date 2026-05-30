@@ -906,22 +906,23 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, P, C: sta
 proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: static int](
     self: var Bound[T, Tag, BQueue[T, ccMulti, ccSingle, N, P, 0]],
     items: openArray[T],
-): int {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
-  ## MPSC batch push. Returns count successfully pushed.
-  for item in items:
-    if not self.push(item):
-      return
-    inc result
+): Option[HSlice[int, int]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## MPSC batch push. Returns `none` if all items pushed; `some(slice)`
+  ## of unpushed indices otherwise.
+  for i in 0 ..< items.len:
+    if not self.push(items[i]):
+      return some(i .. items.high)
+  return none(HSlice[int, int])
 
 proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P, C: static int](
     self: var Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]],
     items: openArray[T],
-): int {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
-  ## MPMC batch push.
-  for item in items:
-    if not self.push(item):
-      return
-    inc result
+): Option[HSlice[int, int]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## MPMC batch push. Same semantics as MPSC variant.
+  for i in 0 ..< items.len:
+    if not self.push(items[i]):
+      return some(i .. items.high)
+  return none(HSlice[int, int])
 
 proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, C: static int](
     self: var Bound[T, Tag, BQueue[T, ccSingle, ccMulti, N, 0, C]], count: int

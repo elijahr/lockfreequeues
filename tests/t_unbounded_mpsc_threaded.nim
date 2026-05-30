@@ -44,10 +44,10 @@ proc consumer[ST: static DeallocationStrategy, S: static int](
 ) {.thread.} =
   {.cast(gcsafe).}:
     # Register the single-consumer debra handle on the popping thread.
-    ctx.queue[].attachConsumer()
+    var lfqConsumer = ctx.queue[].bindConsumer()
     var consumed = 0
     while consumed < ItemCount:
-      let item = ctx.queue[].pop()
+      let item = lfqConsumer.pop()
       if item.isSome:
         let val = item.get - 1 # Items are 1-indexed
         if ctx.received[val].exchange(true, moRelaxed):
@@ -143,8 +143,7 @@ suite "UnboundedMpsc threaded":
     # Single-threaded: the main thread is both producer and consumer, so
     # it attaches both handles here.
     var queue = newUnboundedMpscQueue[int, stManual, 8, MaxThreads]()
-    queue.attachConsumer()
-
+    var lfqConsumer = queue.bindConsumer()
     # Push items to create segments
     var p = queue.getProducerHere()
     for i in 1 .. 1000:
@@ -161,8 +160,7 @@ suite "UnboundedMpsc threaded":
   test "segment retirement (Eager)":
     # Single-threaded: the main thread is both producer and consumer.
     var queue = newUnboundedMpscQueue[int, stEager, 8, MaxThreads]()
-    queue.attachConsumer()
-
+    var lfqConsumer = queue.bindConsumer()
     # Push items to create segments
     var p = queue.getProducerHere()
     for i in 1 .. 1000:

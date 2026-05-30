@@ -39,7 +39,7 @@ suite "bounded smart-constructors (RK = rkNone)":
     var q = newSpscQueue[int, 8]()
     check q.capacity == 8
     check q.push(42)
-    let r = q.pop()
+    let r = lfqConsumer.pop()
     check r.isSome
     check r.get == 42
 
@@ -48,7 +48,7 @@ suite "bounded smart-constructors (RK = rkNone)":
     check q.capacity == 16
     var p = q.getProducerHere(0)
     check p.push(7)
-    let r = q.pop()
+    let r = lfqConsumer.pop()
     check r.isSome
     check r.get == 7
 
@@ -80,24 +80,24 @@ suite "unbounded smart-constructors — newUnboundedSpscQueue":
     var p = q.getProducerHere()
     p.push(10)
     p.push(20)
-    let r1 = q.pop()
-    let r2 = q.pop()
+    let r1 = lfqConsumer.pop()
+    let r2 = lfqConsumer.pop()
     check r1.isSome and r1.get == 10
     check r2.isSome and r2.get == 20
-    check q.pop().isNone
+    check lfqConsumer.pop().isNone
 
 suite "unbounded smart-constructors — newUnboundedMpscQueue":
   test "auto-create: construct + push + pop":
     var q = newUnboundedMpscQueue[int, stEager, 8, 4]()
-    q.attachConsumer()
+    var lfqConsumer = q.bindConsumer()
     var p = q.getProducerHere()
     p.push(1)
     p.push(2)
-    let r1 = q.pop()
-    let r2 = q.pop()
+    let r1 = lfqConsumer.pop()
+    let r2 = lfqConsumer.pop()
     check r1.isSome and r1.get == 1
     check r2.isSome and r2.get == 2
-    check q.pop().isNone
+    check lfqConsumer.pop().isNone
 
   test "borrow: construct + push + pop (manager owned externally)":
     var mgr = initDebraManager[4, debra.ccSingle]()
@@ -106,9 +106,9 @@ suite "unbounded smart-constructors — newUnboundedMpscQueue":
       var q = newUnboundedMpscQueue[int, stEager, 8, 4](addr mgr, consumerHandle)
       var p = q.getProducerHere()
       p.push(11)
-      let r = q.pop()
+      let r = lfqConsumer.pop()
       check r.isSome and r.get == 11
-      check q.pop().isNone
+      check lfqConsumer.pop().isNone
     # q goes out of scope here; `=destroy` runs `unbindClient` but leaves
     # `mgr` intact (ownsManager = false). `mgr` is dropped by Nim's
     # default destructor at suite-test scope exit.
@@ -171,10 +171,10 @@ suite "smart-constructor =destroy soundness":
   test "newUnboundedMpscQueue auto-create destructor runs cleanly":
     block:
       var q = newUnboundedMpscQueue[int, stEager, 8, 4]()
-      q.attachConsumer()
+      var lfqConsumer = q.bindConsumer()
       var p = q.getProducerHere()
       p.push(1)
-      discard q.pop()
+      discard lfqConsumer.pop()
     check true # reached only if =destroy did not assert/crash
 
   test "newUnboundedSpmcQueue auto-create destructor runs cleanly":

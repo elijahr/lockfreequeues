@@ -2,7 +2,9 @@
 
 template testSicPopOne*(queue: untyped) =
   when compiles(queue.getProducerHere(0)):
-    discard queue.getProducerHere(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+    discard (block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(@[1, 2, 3, 4, 5, 6, 7, 8]))
   else:
     discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
@@ -18,7 +20,9 @@ template testSicPopOne*(queue: untyped) =
 
 template testSicPopAll*(queue: untyped) =
   when compiles(queue.getProducerHere(0)):
-    discard queue.getProducerHere(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+    discard (block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(@[1, 2, 3, 4, 5, 6, 7, 8]))
   else:
     discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
@@ -45,7 +49,9 @@ template testSicPopEmpty*(queue: untyped) =
 
 template testSicPopTooMany*(queue: untyped) =
   when compiles(queue.getProducerHere(0)):
-    discard queue.getProducerHere(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+    discard (block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(@[1, 2, 3, 4, 5, 6, 7, 8]))
   else:
     discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
@@ -61,7 +67,9 @@ template testSicPopTooMany*(queue: untyped) =
 
 template testSicPopWrap*(queue: untyped) =
   when compiles(queue.getProducerHere(0)):
-    discard queue.getProducerHere(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+    discard (block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(@[1, 2, 3, 4, 5, 6, 7, 8]))
   else:
     discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
@@ -69,7 +77,9 @@ template testSicPopWrap*(queue: untyped) =
     discard queue.pop()
 
   when compiles(queue.getProducerHere(0)):
-    discard queue.getProducerHere(1).push(@[9, 10, 11, 12])
+    discard (block:
+      var lfqT = queue.getProducerHere(1)
+      lfqT.push(@[9, 10, 11, 12]))
   else:
     discard queue.push(@[9, 10, 11, 12])
 
@@ -91,7 +101,9 @@ template testSicPopWrap*(queue: untyped) =
 
 template testSicPopCountOne*(queue: untyped) =
   when compiles(queue.getProducerHere(0)):
-    discard queue.getProducerHere(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+    discard (block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(@[1, 2, 3, 4, 5, 6, 7, 8]))
   else:
     discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
   for i in 1 .. 8:
@@ -106,7 +118,9 @@ template testSicPopCountOne*(queue: untyped) =
 
 template testSicPopCountAll*(queue: untyped) =
   when compiles(queue.getProducerHere(0)):
-    discard queue.getProducerHere(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+    discard (block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(@[1, 2, 3, 4, 5, 6, 7, 8]))
   else:
     discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
   let popped = queue.pop(8)
@@ -127,7 +141,9 @@ template testSicPopCountEmpty*(queue: untyped) =
 
 template testSicPopCountTooMany*(queue: untyped) =
   when compiles(queue.getProducerHere(0)):
-    discard queue.getProducerHere(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+    discard (block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(@[1, 2, 3, 4, 5, 6, 7, 8]))
   else:
     discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
@@ -142,14 +158,18 @@ template testSicPopCountTooMany*(queue: untyped) =
 
 template testSicPopCountWrap*(queue: untyped) =
   when compiles(queue.getProducerHere(0)):
-    discard queue.getProducerHere(0).push(@[1, 2, 3, 4, 5, 6, 7, 8])
+    discard (block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(@[1, 2, 3, 4, 5, 6, 7, 8]))
   else:
     discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
 
   discard queue.pop(4)
 
   when compiles(queue.getProducerHere(0)):
-    discard queue.getProducerHere(1).push(@[9, 10, 11, 12])
+    discard (block:
+      var lfqT = queue.getProducerHere(1)
+      lfqT.push(@[9, 10, 11, 12]))
   else:
     discard queue.push(@[9, 10, 11, 12])
 

@@ -93,22 +93,22 @@ suite "Unbounded auto-create (Mpsc)":
     block:
       var queue = newUnboundedMpscQueue[int, stEager, 16, 4]()
       # Single-threaded: this thread is both producer and consumer.
-      queue.attachConsumer()
+      var lfqConsumer = queue.bindConsumer()
       var producer = queue.getProducerHere()
       producer.push(7)
-      check(queue.pop() == some(7))
-      check(queue.pop() == none(int))
+      check(lfqConsumer.pop() == some(7))
+      check(lfqConsumer.pop() == none(int))
 
   test "auto-register getProducer returns usable handle":
     var queue = newUnboundedMpscQueue[int, stEager, 16, 4]()
-    queue.attachConsumer()
+    var lfqConsumer = queue.bindConsumer()
     var producer = queue.getProducerHere()
     check(producer.idx == 0)
     for i in 1 .. 3:
       producer.push(i)
     var got: seq[int]
     while true:
-      let item = queue.pop()
+      let item = lfqConsumer.pop()
       if item.isNone:
         break
       got.add(item.get)
@@ -148,4 +148,4 @@ suite "Existing borrow-manager API still works":
     # registers on its operating thread via attach().
     var producer = queue.getProducerHere()
     producer.push(456)
-    check(queue.pop() == some(456))
+    check(lfqConsumer.pop() == some(456))

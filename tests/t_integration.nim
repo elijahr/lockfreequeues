@@ -34,7 +34,9 @@ template testHeadAndTailReset*(queue: untyped) =
 
     let res =
       when (not compiles(queue.getProducerHere(0)) and compiles(queue.getConsumerHere(0))):
-        queue.getConsumerHere(0).pop(1)
+        (block:
+      var lfqT = queue.getConsumerHere(0)
+      lfqT.pop(1))
       else:
         queue.pop(1)
 
@@ -47,13 +49,17 @@ template testHeadAndTailReset*(queue: untyped) =
 
 template testWraps*(queue: untyped) =
   when compiles(queue.getProducerHere(0)):
-    check(queue.getProducerHere(0).push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
+    check((block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(@[1, 2, 3, 4, 5, 6, 7, 8])).isNone)
   else:
     check(queue.push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
 
   var popRes =
     when compiles(queue.getConsumerHere(0)):
-      queue.getConsumerHere(0).pop(4)
+      (block:
+      var lfqT = queue.getConsumerHere(0)
+      lfqT.pop(4))
     else:
       queue.pop(4)
 
@@ -62,7 +68,9 @@ template testWraps*(queue: untyped) =
 
   let pushRes =
     when compiles(queue.getProducerHere(0)):
-      queue.getProducerHere(0).push(@[9, 10, 11, 12])
+      (block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(@[9, 10, 11, 12]))
     else:
       queue.push(@[9, 10, 11, 12])
 
@@ -88,7 +96,9 @@ template testWraps*(queue: untyped) =
 
   popRes =
     when compiles(queue.getConsumerHere(0)):
-      queue.getConsumerHere(0).pop(4)
+      (block:
+      var lfqT = queue.getConsumerHere(0)
+      lfqT.pop(4))
     else:
       queue.pop(4)
   check(popRes.isSome)
@@ -103,7 +113,9 @@ template testWraps*(queue: untyped) =
 
   popRes =
     when compiles(queue.getConsumerHere(0)):
-      queue.getConsumerHere(1).pop(4)
+      (block:
+      var lfqT = queue.getConsumerHere(1)
+      lfqT.pop(4))
     else:
       queue.pop(4)
   check(popRes.isSome)

@@ -54,60 +54,96 @@ template testMupGetProducerThrowsNoProducersAvailable*(queue: untyped) =
     discard queue.getProducer()
 
 template testMupPush*(queue: untyped) =
-  check(queue.getProducerHere(0).push(1) == true)
-  check(queue.getProducerHere(0).push(2) == true)
+  check((block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(1)) == true)
+  check((block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(2)) == true)
   queue.checkState(head = 0'u64, tail = 2'u64)
 
-  check(queue.getProducerHere(1).push(3) == true)
-  check(queue.getProducerHere(1).push(4) == true)
+  check((block:
+      var lfqT = queue.getProducerHere(1)
+      lfqT.push(3)) == true)
+  check((block:
+      var lfqT = queue.getProducerHere(1)
+      lfqT.push(4)) == true)
 
   queue.checkState(head = 0'u64, tail = 4'u64)
 
-  check(queue.getProducerHere(2).push(5) == true)
-  check(queue.getProducerHere(2).push(6) == true)
+  check((block:
+      var lfqT = queue.getProducerHere(2)
+      lfqT.push(5)) == true)
+  check((block:
+      var lfqT = queue.getProducerHere(2)
+      lfqT.push(6)) == true)
 
   queue.checkState(head = 0'u64, tail = 6'u64)
 
-  check(queue.getProducerHere(3).push(7) == true)
-  check(queue.getProducerHere(3).push(8) == true)
+  check((block:
+      var lfqT = queue.getProducerHere(3)
+      lfqT.push(7)) == true)
+  check((block:
+      var lfqT = queue.getProducerHere(3)
+      lfqT.push(8)) == true)
 
   queue.checkState(head = 0'u64, tail = 8'u64)
 
 template testMupPushOverflow*(queue: untyped) =
   for i in 1 .. 8:
-    discard queue.getProducerHere(0).push(i)
-  check(queue.getProducerHere(0).push(9) == false)
+    discard (block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(i))
+  check((block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(9)) == false)
   queue.checkState(head = 0'u64, tail = 8'u64)
 
 template testMupPushWrap*(queue: untyped) =
   for i in 1 .. 4:
-    discard queue.getProducerHere(0).push(i)
+    discard (block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(i))
   for i in 0 .. 1:
     when compiles(queue.getConsumerHere(0)):
-      discard queue.getConsumerHere(i).pop()
+      discard (block:
+      var lfqT = queue.getConsumerHere(i)
+      lfqT.pop())
     else:
       discard queue.pop()
   for i in 5 .. 10:
-    check(queue.getProducerHere(0).push(i) == true)
+    check((block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(i)) == true)
   queue.checkState(head = 2'u64, tail = 10'u64)
 
 template testMupPushSeq*(queue: untyped) =
-  check(queue.getProducerHere(0).push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
+  check((block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(@[1, 2, 3, 4, 5, 6, 7, 8])).isNone)
   queue.checkState(head = 0'u64, tail = 8'u64)
 
 template testMupPushSeqOverflow*(queue: untyped) =
-  var res = queue.getProducerHere(0).push(@[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
+  var res = (block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(@[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]))
   check(res.isSome)
   check(res.get == 8 .. 15)
   queue.checkState(head = 0'u64, tail = 8'u64)
 
 template testMupPushSeqWrap*(queue: untyped) =
-  discard queue.getProducerHere(0).push(@[1, 2, 3, 4])
+  discard (block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(@[1, 2, 3, 4]))
   for i in 0 .. 1:
     when compiles(queue.getConsumerHere(0)):
-      discard queue.getConsumerHere(i).pop()
+      discard (block:
+      var lfqT = queue.getConsumerHere(i)
+      lfqT.pop())
     else:
       discard queue.pop()
-  var res = queue.getProducerHere(0).push(@[5, 6, 7, 8, 9, 10])
+  var res = (block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(@[5, 6, 7, 8, 9, 10]))
   check(res.isNone)
   queue.checkState(head = 2'u64, tail = 10'u64)
