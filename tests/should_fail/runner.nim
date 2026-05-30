@@ -164,6 +164,12 @@ const cases = @[
     outcome: eoCompileFails,
     substring: "MpmcConsumerTag",
   ),
+  Case(
+    name: "spawn C14.5 — defineProducerWorker inside proc body must compile-fail (module-scope guard)",
+    file: "tests/should_fail/spawn_nested_scope.nim",
+    outcome: eoCompileFails,
+    substring: "top level",
+  ),
 ]
 
 proc runCase(c: Case): bool =

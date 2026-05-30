@@ -67,6 +67,13 @@ macro defineProducerWorker*(workerName, queueType, body: untyped): untyped =
       var u = arg
       var `producerSym` {.inject.} = u.bindToThread()
       `body`
+    # Compile-time module-scope guard: `export` is rejected by Nim outside
+    # top-level scope (`Error: 'export' is only allowed at top level`).
+    # The emitted thread proc is silently downgraded to a closure in
+    # nested scope (Nim 2.2.10 codegen issue) causing runtime segfault
+    # at createThread; the export-as-scope-probe trips a clear compile-
+    # time error before that misuse can ship.
+    export `workerName`
 
 macro defineConsumerWorker*(workerName, queueType, body: untyped): untyped =
   ## Symmetric: declare a consumer worker. `consumer` is injected as
@@ -83,6 +90,7 @@ macro defineConsumerWorker*(workerName, queueType, body: untyped): untyped =
       var u = arg
       var `consumerSym` {.inject.} = u.bindToThread()
       `body`
+    export `workerName`
 
 proc spawnDefinedProducerImpl*[ArgT](
     workerProc: proc(arg: ArgT) {.thread, nimcall, gcsafe.}, tagged: ArgT
