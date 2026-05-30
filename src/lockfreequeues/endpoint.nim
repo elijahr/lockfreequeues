@@ -303,4 +303,49 @@ proc getConsumer*[
 
   raise newException(NoConsumersAvailableError, "All consumers assigned")
 
+proc getProducer*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
+): Unbound[T, AnyThreadTag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]] {.
+    raises: []
+.} =
+  ## Queue-flavour producer factory. For `ccProd == ccMulti` the
+  ## endpoint reserves a producer index against the queue's
+  ## `producerCount` atomic; debra registration happens later at
+  ## `bindToThread()` via the QueueType overload of `onBind`. For
+  ## `ccProd == ccSingle` (SPSC / SPMC) the endpoint carries no
+  ## meaningful index (set to `-1`) and `bindToThread()` is a no-op
+  ## (debra-free SPSC absorbed body has no manager — gated by
+  ## `when compiles(b.queue.manager)`).
+  result.queue = addr(self)
+  when ccProd == ccMulti:
+    let idx = self.producerCount.fetchAdd(1, moAcquire)
+    result.idx = idx
+  else:
+    result.idx = -1
+
+proc getConsumer*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
+): Unbound[T, AnyThreadTag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]] {.
+    raises: []
+.} =
+  ## Queue-flavour consumer factory. Symmetric to `getProducer`; for
+  ## `ccCons == ccMulti` reserves a slot via `consumerCount`; for
+  ## `ccCons == ccSingle` the endpoint carries no meaningful index.
+  result.queue = addr(self)
+  when ccCons == ccMulti:
+    let idx = self.consumerCount.fetchAdd(1, moAcquire)
+    result.idx = idx
+  else:
+    result.idx = -1
+
 verifyTypestates()
