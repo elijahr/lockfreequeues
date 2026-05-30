@@ -134,6 +134,12 @@ const cases = @[
     outcome: eoCompileFails,
     substring: "notATransition",
   ),
+  Case(
+    name: "endpoint L1 (Task C5) — push on Unbound endpoint is a lifecycle violation",
+    file: "tests/should_fail/endpoint_push_on_unbound.nim",
+    outcome: eoCompileFails,
+    substring: "push",
+  ),
 ]
 
 proc runCase(c: Case): bool =

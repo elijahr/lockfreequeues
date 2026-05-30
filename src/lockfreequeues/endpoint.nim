@@ -40,6 +40,7 @@
 {.experimental: "strictEffects".}
 
 import ./internal/typestates_dsl
+import std/typedthreads
 
 type
   Unbound*[T; Tag; queueT] = object
@@ -61,5 +62,24 @@ typestate Endpoint[T, Tag, queueT]:
   transitions:
     Unbound[T, Tag, queueT] -> Bound[T, Tag, queueT]
     Bound[T, Tag, queueT] -> Closed[T, Tag, queueT]
+
+proc bindToThread*[T; Tag; queueT](
+    u: sink Unbound[T, Tag, queueT]
+): Bound[T, Tag, queueT] {.transition, tags: [Tag, TypestateOp], gcsafe, raises: [].} =
+  ## Bind the endpoint to the calling thread. See design §3.3.2.
+  ##
+  ## The sugar pragma `{.transition(tag: ...).}` was withdrawn 2026-05-28
+  ## (Nim parser rejects `nkObjConstr` pragma form + semantic conflation of
+  ## value-typestate with proc-effect). The explicit composed form above is
+  ## the only available shape.
+  ##
+  ## Queue specialisation (debra `registerThread` call wired through
+  ## `queueT.manager`) lands in Task C6 — either as a distinct overload, an
+  ## overload set, or a `when queueT is …` branch evaluated in C6's
+  ## queueT-constrained scope.
+  let consumed = move(u)
+  result = Bound[T, Tag, queueT](queue: consumed.queue, idx: consumed.idx)
+  when defined(debug):
+    result.attachedTid = getThreadId()
 
 verifyTypestates()
