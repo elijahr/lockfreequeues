@@ -729,8 +729,8 @@ proc pop*[
     S, MaxThreads: static int,
 ](self: var Queue[T, ccProd, ccMulti, ST, S, MaxThreads]): Option[T] {.error:
     "Direct pop on a multi-consumer Queue is not allowed. " &
-    "Use Queue.getConsumer().pop() to obtain a per-thread " &
-    "QueueConsumer and pop through it.".} =
+    "Use q.getConsumerHere().pop() (same-thread sugar) or q.bindConsumer().pop() (one-shot SC consumer) to obtain a per-thread " &
+    "Bound[T, Tag, Queue[...]] and pop through it.".} =
   discard
 
 # --- ccMulti-consumer compile-time gate on bare Queue batch pop ----------
@@ -743,8 +743,8 @@ proc pop*[
     self: var Queue[T, ccProd, ccMulti, ST, S, MaxThreads], count: int
 ): Option[seq[T]] {.error:
     "Direct batch pop on a multi-consumer Queue is not allowed. " &
-    "Use Queue.getConsumer().pop(count) to obtain a per-thread " &
-    "QueueConsumer and batch-pop through it.".} =
+    "Use q.getConsumerHere().pop(count) (same-thread sugar) or q.bindConsumer().pop(count) (one-shot SC consumer) to obtain a per-thread " &
+    "Bound[T, Tag, Queue[...]] and batch-pop through it.".} =
   discard
 
 ## ----------------------------------------------------------------------

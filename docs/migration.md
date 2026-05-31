@@ -1,5 +1,15 @@
 # Migration guide
 
+!!! warning "v5.0.0 — Static Thread-Affinity Endpoint API"
+
+    v5.0.0 is a hard-break release. The v4.x `Bound[T, Tag, BQueue[...]]` endpoint /
+    `Bound[T, Tag, Queue[...]]` endpoint / `attach()` / `bindConsumer()` API is REMOVED;
+    replaced by the `Unbound → Bound → Closed` endpoint lifecycle.
+    See [`docs/migrations/v5.0.0.md`](../migrations/v5.0.0.md) for the
+    full migration guide + v4.x → v5.0.0 cookbook + breaking-change
+    checklist.
+
+
 Concise upgrade notes for adopters moving forward across major versions.
 Each section lists removed/renamed symbols, behavioural changes, and the
 minimum code change to compile against the new version.
@@ -293,16 +303,16 @@ var q = newUnboundedMpscQueue[int, stEager, 16, 4](addr mgr, h)
 
 Most code does not need to register the consumer handle up front. The
 auto-create form lets the single consumer register itself with
-`attachConsumer()` before its first pop, and each producer thread attaches
+`bindConsumer()` before its first pop, and each producer thread attaches
 its own view:
 
 ```nim
 import lockfreequeues
 
 var q = newUnboundedMpscQueue[int, stEager, 16, 4]()
-q.attachConsumer()             # on the consumer thread, before pop
+var c = q.bindConsumer()  # v5.0.0: replaces v4.x attachConsumer()             # on the consumer thread, before pop
 var p = q.getProducer()
-p.attach()                     # on each producer thread, before push
+discard p.bindToThread()  # v5.0.0: replaces v4.x attach()                     # on each producer thread, before push
 p.push(42)
 let v = q.pop()
 ```

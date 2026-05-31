@@ -1,5 +1,15 @@
 # Memory Management
 
+!!! warning "v5.0.0 — Static Thread-Affinity Endpoint API"
+
+    v5.0.0 is a hard-break release. The v4.x `Bound[T, Tag, BQueue[...]]` endpoint /
+    `Bound[T, Tag, Queue[...]]` endpoint / `attach()` / `bindConsumer()` API is REMOVED;
+    replaced by the `Unbound → Bound → Closed` endpoint lifecycle.
+    See [`docs/migrations/v5.0.0.md`](../migrations/v5.0.0.md) for the
+    full migration guide + v4.x → v5.0.0 cookbook + breaking-change
+    checklist.
+
+
 > Current as of v5.0.0; reflects the shipped live-EBR attach model.
 
 How `lockfreequeues` interacts with the memory model, what guarantees the
@@ -268,11 +278,11 @@ or on demand (`stManual` strategy).
 The v5.0.0 registration model is thread-affine: no thread is registered
 at construction. Each multi-cardinality view registers the *calling*
 thread with the queue's `DebraManager` on its first use, via `attach()`.
-The single consumer of an unbounded MPSC queue uses `attachConsumer()` on
+The single consumer of an unbounded MPSC queue uses `bindConsumer()` on
 its own consuming thread instead. Registration MUST happen on the thread
 that will subsequently `push()` / `pop()` through the view. Two failure
 modes are distinct: if the manager's `MaxThreads` slots are exhausted,
-`attach()` / `attachConsumer()` raise `DebraRegistrationError`. Cross-thread
+`attach()` / `bindConsumer()` raise `DebraRegistrationError`. Cross-thread
 misuse — registering on one thread and operating from another — fires a
 debug-only assert in debug builds and silently corrupts reclamation in
 release builds, so size `MaxThreads` correctly and keep each view's
@@ -288,12 +298,12 @@ var queue = newUnboundedMpmcQueue[int, stEager, 64, 8]()
 
 # On the producer thread:
 var producer = queue.getProducer()
-producer.attach()       # register THIS thread before the first push
+discard producer.bindToThread()  # v5.0.0: replaces v4.x attach()       # register THIS thread before the first push
 producer.push(42)
 
 # On the consumer thread:
 var consumer = queue.getConsumer()
-consumer.attach()       # register THIS thread before the first pop
+discard consumer.bindToThread()  # v5.0.0: replaces v4.x attach()       # register THIS thread before the first pop
 let item = consumer.pop()
 ```
 
@@ -317,11 +327,11 @@ import lockfreequeues
 var queue = newUnboundedMpscQueue[int, stEager, 64, 8]()
 
 # Single consumer registers on its own thread:
-queue.attachConsumer()
+var c = queue.bindConsumer()  # v5.0.0: replaces v4.x attachConsumer()
 
 # Each producer thread attaches its own view:
 var producer = queue.getProducer()
-producer.attach()
+discard producer.bindToThread()  # v5.0.0: replaces v4.x attach()
 producer.push(7)
 let item = queue.pop()
 ```
@@ -354,7 +364,7 @@ from debra import DebraManager, initDebraManager
 var manager = initDebraManager[8, debra.ccMulti]()
 var queue = newUnboundedMpmcQueue[int, stEager, 64, 8](addr manager)
 var producer = queue.getProducer()
-producer.attach()
+discard producer.bindToThread()  # v5.0.0: replaces v4.x attach()
 producer.push(1)
 ```
 

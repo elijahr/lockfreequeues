@@ -54,11 +54,12 @@ proc producerFunc() {.thread.} =
     rand(100),
   ]
 
-  # v5.0.0: batch push returns the count of successfully pushed items.
-  let pushed = producer.push(items)
-  if pushed < items.len:
-    echo "[producer ", producer.idx, "] pushed ", pushed, "/", items.len,
-      " items; remainder: ", items[pushed ..< items.len]
+  # v5.0.0: batch push returns Option[HSlice[int, int]] — none if all
+  # items pushed, some(slice) for unpushed indices.
+  let remainder = producer.push(items)
+  if remainder.isSome:
+    echo "[producer ", producer.idx, "] pushed items ",
+      items[0 ..< remainder.get.a], "; unpushed: ", items[remainder.get]
   else:
     echo "[producer ", producer.idx, "] pushed all items: ", items
 

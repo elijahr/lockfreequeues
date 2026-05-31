@@ -1,5 +1,15 @@
 # BQueue
 
+!!! warning "v5.0.0 — Static Thread-Affinity Endpoint API"
+
+    v5.0.0 is a hard-break release. The v4.x `Bound[T, Tag, BQueue[...]]` endpoint /
+    `Bound[T, Tag, Queue[...]]` endpoint / `attach()` / `bindConsumer()` API is REMOVED;
+    replaced by the `Unbound → Bound → Closed` endpoint lifecycle.
+    See [`docs/migrations/v5.0.0.md`](../migrations/v5.0.0.md) for the
+    full migration guide + v4.x → v5.0.0 cookbook + breaking-change
+    checklist.
+
+
 `BQueue[T, ccProd, ccCons, N, P, C]` is the unified bounded, lock-free
 queue. A single generic type covers all four producer/consumer
 cardinality combinations — SPSC, MPSC, SPMC, and MPMC — selected at
@@ -66,10 +76,10 @@ let a = spsc.pop()                 # some(42)
 # MPMC: capacity 64, up to 4 producers and 4 consumers.
 var mpmc = newBQueue[int, ccMulti, ccMulti, 64, 4, 4]()
 var producer = mpmc.getProducer()
-producer.attach()                  # claim the view on this thread
+discard producer.bindToThread()  # v5.0.0: replaces v4.x attach()                  # claim the view on this thread
 discard producer.push(99)
 var consumer = mpmc.getConsumer()
-consumer.attach()
+discard consumer.bindToThread()  # v5.0.0: replaces v4.x attach()
 let b = consumer.pop()             # some(99)
 
 # MPMC: when the calling thread is also the operating thread,
@@ -99,7 +109,7 @@ Calling `push` directly on a multi-producer `BQueue` (or `pop` on a
 multi-consumer `BQueue`) is a **compile-time error** — a `{.error.}`
 overload directs the caller to `BQueue.getProducer().push(item)` /
 `BQueue.getConsumer().pop()`. The diagnostic names only the
-user-visible `BQueueProducer` / `BQueueConsumer` aliases.
+user-visible `Bound[T, Tag, BQueue[...]]` endpoint / `Bound[T, Tag, BQueue[...]]` endpoint aliases.
 
 When all `P` producer slots are taken, `getProducer()` raises
 `NoProducersAvailableError`; when all `C` consumer slots are taken,
@@ -115,7 +125,7 @@ thread that does the push/pop.
 ## Typestate Notes
 
 `BQueue` carries a Lifecycle typestate (`BQueueInit -> BQueueDestroyed`)
-driven by `=destroy`; the per-thread `BQueueProducer` / `BQueueConsumer`
+driven by `=destroy`; the per-thread `Bound[T, Tag, BQueue[...]]` endpoint / `Bound[T, Tag, BQueue[...]]` endpoint
 views carry a Claim-state typestate (`Unclaimed -> BothClaimed`). All
 push/pop/attach/detach operations are state-preserving and emit no
 static transition; only the destructor moves a value to its terminal

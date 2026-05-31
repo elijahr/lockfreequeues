@@ -494,8 +494,8 @@ proc push*[
     N, P, C: static int,
 ](self: var BQueue[T, ccMulti, ccCons, N, P, C], item: T): bool {.error:
     "Direct push on a multi-producer BQueue is not allowed. " &
-    "Use BQueue.getProducer().push(item) to obtain a per-thread " &
-    "BQueueProducer and push through it.".} =
+    "Use q.getProducerHere(idx).push(item) (same-thread sugar) or q.getProducer(idx).bindToThread().push(item) (cross-thread) to obtain a per-thread " &
+    "Bound[T, Tag, BQueue[...]] and push through it.".} =
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
       when T is ref:
@@ -585,8 +585,8 @@ proc pop*[
     N, P, C: static int,
 ](self: var BQueue[T, ccProd, ccMulti, N, P, C]): Option[T] {.error:
     "Direct pop on a multi-consumer BQueue is not allowed. " &
-    "Use BQueue.getConsumer().pop() to obtain a per-thread " &
-    "BQueueConsumer and pop through it.".} =
+    "Use q.getConsumerHere(idx).pop() (same-thread sugar) or q.getConsumer(idx).bindToThread().pop() (cross-thread) to obtain a per-thread " &
+    "Bound[T, Tag, BQueue[...]] and pop through it.".} =
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
       when T is ref:
@@ -664,8 +664,8 @@ proc push*[
     self: var BQueue[T, ccMulti, ccCons, N, P, C], items: openArray[T]
 ): Option[HSlice[int, int]] {.error:
     "Direct batch push on a multi-producer BQueue is not allowed. " &
-    "Use BQueue.getProducer().push(items) to obtain a per-thread " &
-    "BQueueProducer and batch-push through it.".} =
+    "Use q.getProducerHere(idx).push(items) (same-thread sugar) or q.getProducer(idx).bindToThread().push(items) (cross-thread) to obtain a per-thread " &
+    "Bound[T, Tag, BQueue[...]] and batch-push through it.".} =
   discard
 
 # --- SPSC batch pop (direct on BQueue) -----------------------------------
@@ -724,8 +724,8 @@ proc pop*[
     self: var BQueue[T, ccProd, ccMulti, N, P, C], count: int
 ): Option[seq[T]] {.error:
     "Direct batch pop on a multi-consumer BQueue is not allowed. " &
-    "Use BQueue.getConsumer().pop(count) to obtain a per-thread " &
-    "BQueueConsumer and batch-pop through it.".} =
+    "Use q.getConsumerHere(idx).pop(count) (same-thread sugar) or q.getConsumer(idx).bindToThread().pop(count) (cross-thread) to obtain a per-thread " &
+    "Bound[T, Tag, BQueue[...]] and batch-pop through it.".} =
   discard
 
 

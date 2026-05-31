@@ -33,9 +33,13 @@ proc producerFunc() {.thread, gcsafe.} =
   echo "[producer ", producer.idx, "] pushed item: ", item, "? ",
     producer.push(item)
   let items = @[rand(100), rand(100), rand(100), rand(100)]
-  let pushed = producer.push(items) # batch push returns count pushed
-  echo "[producer ", producer.idx, "] pushed ", pushed, "/", items.len,
-    " items: ", items[0 ..< pushed]
+  let remainder = producer.push(items)
+    # v5.0.0: returns Option[HSlice[int,int]] (unpushed-slice).
+  if remainder.isSome:
+    echo "[producer ", producer.idx, "] pushed ",
+      items[0 ..< remainder.get.a], "; unpushed: ", items[remainder.get]
+  else:
+    echo "[producer ", producer.idx, "] pushed all: ", items
 
 var threads: array[33, Thread[void]]
 threads[0].createThread(consumerFunc)

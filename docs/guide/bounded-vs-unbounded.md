@@ -1,5 +1,15 @@
 # Bounded vs Unbounded
 
+!!! warning "v5.0.0 — Static Thread-Affinity Endpoint API"
+
+    v5.0.0 is a hard-break release. The v4.x `Bound[T, Tag, BQueue[...]]` endpoint /
+    `Bound[T, Tag, Queue[...]]` endpoint / `attach()` / `bindConsumer()` API is REMOVED;
+    replaced by the `Unbound → Bound → Closed` endpoint lifecycle.
+    See [`docs/migrations/v5.0.0.md`](../migrations/v5.0.0.md) for the
+    full migration guide + v4.x → v5.0.0 cookbook + breaking-change
+    checklist.
+
+
 A decision guide for picking between the bounded ring-buffer queue
 (`BQueue`, constructed via `newSpscQueue` / `newSpmcQueue` /
 `newMpscQueue` / `newMpmcQueue`) and the unbounded segment-linked
@@ -90,7 +100,7 @@ var queue = newUnboundedMpscQueue[int, stEager, 64, 8]()
 var producer = queue.getProducer()
 # Multi-cardinality unbounded views register with the queue's epoch
 # manager on first use. Call attach() on the thread that will push.
-producer.attach()
+discard producer.bindToThread()  # v5.0.0: replaces v4.x attach()
 producer.push(42)  # Always succeeds (until allocator fails).
 ```
 
@@ -124,7 +134,7 @@ multi-cardinality unbounded shapes hand retired segments to DEBRA, which
 defers the actual `free` until every active thread has crossed an epoch
 boundary. The mechanism is invisible at the API level once threads have
 registered: each multi-cardinality view calls `attach()` (or
-`attachConsumer()` for the unbounded MPSC consumer) on its operating
+`bindConsumer()` for the unbounded MPSC consumer) on its operating
 thread before its first op, and reclamation then happens in the
 background.
 
