@@ -1,5 +1,15 @@
 # Queue
 
+!!! warning "v5.0.0 — Static Thread-Affinity Endpoint API"
+
+    v5.0.0 is a hard-break release. The v4.x `Bound[T, Tag, BQueue[...]]` endpoint /
+    `Bound[T, Tag, Queue[...]]` endpoint / `attach()` / `bindConsumer()` API is REMOVED;
+    replaced by the `Unbound → Bound → Closed` endpoint lifecycle.
+    See [`docs/migrations/v5.0.0.md`](../migrations/v5.0.0.md) for the
+    full migration guide + v4.x → v5.0.0 cookbook + breaking-change
+    checklist.
+
+
 `Queue[T, ccProd, ccCons, ST, S, MaxThreads]` is the unified unbounded,
 lock-free queue. A single generic type covers all four
 producer/consumer cardinality combinations — SPSC, MPSC, SPMC, and
@@ -92,11 +102,11 @@ let a = spsc.pop()                 # some(42)
 # MPMC: each operating thread attaches before its first push/pop.
 var mpmc = newQueue(Queue[int, ccMulti, ccMulti, stEager, 64, 8])
 var producer = mpmc.getProducer()
-producer.attach()                  # registers this thread (may raise
+discard producer.bindToThread()  # v5.0.0: replaces v4.x attach()                  # registers this thread (may raise
                                    #   DebraRegistrationError)
 producer.push(99)
 var consumer = mpmc.getConsumer()
-consumer.attach()
+discard consumer.bindToThread()  # v5.0.0: replaces v4.x attach()
 let b = consumer.pop()             # some(99)
 
 # MPMC: when the calling thread is also the operating thread,
@@ -113,15 +123,15 @@ let c = consumer2.pop()            # some(99)
 
 ## Calling Convention by Cardinality
 
-`Queue` always pushes through a `QueueProducer` view — even for
+`Queue` always pushes through a `Bound[T, Tag, Queue[...]]` endpoint view — even for
 `ccProd == ccSingle`. The view is obtained from `queue.getProducer()`,
-and the single-producer arm doesn't require `.attach()`. Pop is
+and the single-producer arm doesn't require `.bindToThread()`. Pop is
 asymmetric: `ccCons == ccSingle` arms expose a bare `queue.pop()`,
-while `ccCons == ccMulti` requires a `QueueConsumer` view from
-`getConsumer()` and per-thread `.attach()`. Direct `push` on a
+while `ccCons == ccMulti` requires a `Bound[T, Tag, Queue[...]]` endpoint view from
+`getConsumer()` and per-thread `.bindToThread()`. Direct `push` on a
 `Queue` or direct `pop` on a multi-consumer `Queue` is a
 **compile-time error** whose diagnostic names only the user-visible
-`QueueProducer` / `QueueConsumer` aliases.
+`Bound[T, Tag, Queue[...]]` endpoint / `Bound[T, Tag, Queue[...]]` endpoint aliases.
 
 For the common same-thread case (the calling thread is also the
 thread that will push/pop through the returned view),
@@ -135,7 +145,7 @@ correct thread.
 ## Typestate Notes
 
 `Queue` carries a Lifecycle typestate (`QueueInit -> QueueDestroyed`)
-driven by `=destroy`; the `QueueProducer` / `QueueConsumer` views carry
+driven by `=destroy`; the `Bound[T, Tag, Queue[...]]` endpoint / `Bound[T, Tag, Queue[...]]` endpoint views carry
 a Claim-state typestate (`QCUnclaimed -> QCBothClaimed`). All
 push/pop/attach/detach operations are state-preserving; only the
 destructor moves a value to its terminal state. Use-after-destroy is a

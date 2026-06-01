@@ -25,6 +25,8 @@ import strutils
 import times
 
 import lockfreequeues
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 import ./debra_cc_helpers
 

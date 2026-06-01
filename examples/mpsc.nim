@@ -1,71 +1,48 @@
-## Example usage of the unified `BQueue` generic in MPSC (multi-producer,
-## single-consumer) bounded cardinality.
+## Example: MPSC (multi-producer, single-consumer) `BQueue` with the
+## v5.0.0 static-affinity endpoint API.
 ##
-## v5.0.0 cascade migration: the legacy `Mpsc[N, P, T]` family was
-## collapsed into `BQueue[T, ccMulti, ccSingle, N, P, 0]` (the bounded
-## 6-param shape — capacity `N`, `P` producer views, single consumer
-## arm). The constructor short form below uses the
-## `newMpscQueue[T, N, P]()` smart-constructor. Producers are
-## obtained via `q.getProducer()` (one per thread) and push through
-## the returned `BQueueProducer`.
+## Producers obtain a per-thread endpoint via `q.getProducerHere()`
+## (sugar for `getProducer().bindToThread()`); the result is a
+## `Bound[T, AnyThreadTag, BQueue[…]]` on which `push` is callable
+## with role-tag-checked effects. The single consumer uses
+## `q.bindConsumer()` for the symmetric one-shot wrapper (MPSC has
+## ccCons=ccSingle, so there is exactly one consumer endpoint).
+##
+## See `docs/migrations/v5.0.0.md` for the full API guide.
 
 import options
 import random
 
 import lockfreequeues
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
-var
-  # Queue that can hold 8 ints at a time,
-  # with 32 producer workers
-  q = newMpscQueue[int, 8, 32]()
+var q = initBQueue[int, ccMulti, ccSingle, 8, 32, 0]()
 
-
-proc consumerFunc() {.thread.} =
-  for i in 0..32:
-    # Try to pop a single item from the queue; pop() returns Option[int]
-    let item = q.pop()
-
+proc consumerFunc() {.thread, gcsafe.} =
+  for i in 0 .. 32:
+    let item = q.pop() # bare-BQueue pop still exists for SC consumer.
     echo "[consumer] popped item: ", item
-
-    # Try to pop four items from the queue; pop(int) returns Option[seq[int]]
     let items = q.pop(4)
-
     echo "[consumer] popped items: ", items
 
-
-proc producerFunc() {.thread.} =
-  # Get a unique producer for this thread
+proc producerFunc() {.thread, gcsafe.} =
+  # Get a per-thread Bound producer endpoint.
   var producer = q.getProducerHere()
-
   let item = rand(100)
-
-  # Try to push a single item; push will return false when queue is full
-  echo "[producer ", producer.idx, "] pushed item: ", item, "? ", producer.push(item)
-
-  let items = @[
-    rand(100),
-    rand(100),
-    rand(100),
-    rand(100),
-  ]
-
-  # Try to push the items. If not all items could be pushed,
-  # the remainder is returned as an Option[HSlice[int, int]] suitable for
-  # slicing the sequence.
+  echo "[producer ", producer.idx, "] pushed item: ", item, "? ",
+    producer.push(item)
+  let items = @[rand(100), rand(100), rand(100), rand(100)]
   let remainder = producer.push(items)
-
+    # v5.0.0: returns Option[HSlice[int,int]] (unpushed-slice).
   if remainder.isSome:
-    echo "[producer ", producer.idx, "] pushed items: ", items[
-        0..<remainder.get.a], ", unpushed items: ", items[remainder.get]
+    echo "[producer ", producer.idx, "] pushed ",
+      items[0 ..< remainder.get.a], "; unpushed: ", items[remainder.get]
   else:
-    echo "[producer ", producer.idx, "] pushed all items: ", items
-
+    echo "[producer ", producer.idx, "] pushed all: ", items
 
 var threads: array[33, Thread[void]]
-
 threads[0].createThread(consumerFunc)
-
-for p in 1..32:
+for p in 1 .. 32:
   threads[p].createThread(producerFunc)
-
 joinThreads(threads)

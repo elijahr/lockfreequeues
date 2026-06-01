@@ -24,6 +24,8 @@ import std/monotimes
 import times
 
 import lockfreequeues
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 const
   QueueCapacity = 128
@@ -67,7 +69,7 @@ proc simulateWork(task: Task) =
 
 proc workerThread(idx: int) {.thread.} =
   ## Worker consumes tasks from the queue until shutdown.
-  let consumer = q.getConsumer(idx)
+  var consumer = q.getConsumerHere(idx)
   var completed = 0
   var latencySum: int64 = 0
 

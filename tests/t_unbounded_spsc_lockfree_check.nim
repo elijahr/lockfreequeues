@@ -14,7 +14,7 @@ type Node = ref object
   value: int
 
 var queue = newUnboundedSpscQueue[Node, stEager, 64, 4]()
-var p = queue.getProducer()
+var p = queue.getProducerHere()
 
 # This should error on arc/orc
 var n: Node = nil

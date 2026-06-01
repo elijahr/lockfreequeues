@@ -61,6 +61,12 @@ import ./typestates/mpmc_pop
 import ./typestates/spsc_push
 import ./typestates/spsc_pop
 
+import ./endpoint_types
+import ./role_tags
+
+when defined(debug):
+  import std/typedthreads
+
 export exceptions
 export PinScopeCardinality, NoSlice
 
@@ -143,118 +149,6 @@ typestate BQueueLifecycle[
     BQueueInit[T, ccProd, ccCons, N, P, C] ->
       BQueueDestroyed[T, ccProd, ccCons, N, P, C]
 
-## ----------------------------------------------------------------------
-## Middle-axis Claim-state typestate.
-##
-## Tracks claim status on per-thread BQueueProducer / BQueueConsumer
-## view objects. The design is:
-##
-## - **Single user-facing object type** per view (no Multi/Single split).
-##   `BQueueProducer[T, ccProd, ccCons, N, P, C]` is one type; its
-##   `claimed` field exists only under `when ccProd == ccMulti:` (and
-##   symmetrically for BQueueConsumer / ccCons).
-## - **Uniform attachment**: every BQueueProducer / BQueueConsumer
-##   instantiation attaches to ClaimStateTs at initial state
-##   `Unclaimed`. The ccSingle path has the typestate statically
-##   attached but no `attach` / `detach` overloads, so it is functionally
-##   dormant (no transitions ever fire; the destructor drives terminal
-##   transition uniformly).
-## - **ccMulti-only `attach` / `detach`** methods are declared with
-##   `BQueueProducer[T, ccMulti, ccCons, N, P, C]` (or the consumer
-##   analogue) in the param signature. The compiler statically excludes
-##   ccSingle from the overload set, so calling `attach` on a ccSingle
-##   producer produces a clean "type mismatch" diagnostic without any
-##   `*Multi` / `*Single` leakage.
-## - **State-preserving discipline**: `attach` and `detach` mutate the
-##   runtime `claimed` flag without emitting a typestate transition;
-##   , same-module methods that omit
-##   `{.transition.}` are accepted as state-preserving.
-##
-## typestates v0.9.3 does
-## NOT statically catch a `.push()` (or `.detach()`) on a value that
-## has already passed through `=destroy`. The CFG analyzer enforces
-## "reaches terminal by end of scope," not "no method calls on a value
-## already in terminal state." See CHANGELOG v5.0.0 for the known
-## limitation and the recovery path (typestates v0.10+ post-terminal
-## CFG mode OR design pivot). Critical sites use a runtime
-## `doAssert(not destroyed, ...)` guard per pinned_scope.nim:128-131
-## where the failure mode warrants instrumentation; BQueue avoids
-## blanket instrumentation to keep hot-path push/pop allocation-free
-## and branch-free.
-## ----------------------------------------------------------------------
-
-type
-  BQueueClaimCtx*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      N, P, C: static int,
-  ] = object of RootObj
-    ## Phantom context type for the BQueueProducer / BQueueConsumer
-    ## Claim-state typestate.
-
-  Unclaimed*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      N, P, C: static int,
-  ] = distinct BQueueClaimCtx[T, ccProd, ccCons, N, P, C]
-    ## Initial Claim-state. Every freshly constructed view starts here.
-
-  ProducerClaimed*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      N, P, C: static int,
-  ] = distinct BQueueClaimCtx[T, ccProd, ccCons, N, P, C]
-    ## Producer-side claim state. Reachable in principle from Unclaimed
-    ## via `attach()` on a BQueueProducer; user-visible state-stability
-    ## is preserved because the typestate verifier sees the destructor
-    ## as the only transition.
-
-  ConsumerClaimed*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      N, P, C: static int,
-  ] = distinct BQueueClaimCtx[T, ccProd, ccCons, N, P, C]
-    ## Consumer-side claim state (parallel to ProducerClaimed).
-
-  BothClaimed*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      N, P, C: static int,
-  ] = distinct BQueueClaimCtx[T, ccProd, ccCons, N, P, C]
-    ## Terminal Claim-state. Driven by the destructor's
-    ## `destructorTransition` on the view types below.
-
-typestate BQueueClaimState[
-    T,
-    ccProd: static PinScopeCardinality,
-    ccCons: static PinScopeCardinality,
-    N: static int,
-    P: static int,
-    C: static int,
-]:
-  inheritsFromRootObj = true
-  consumeOnTransition = false
-  strictTransitions = false
-  states:
-    Unclaimed[T, ccProd, ccCons, N, P, C]
-    ProducerClaimed[T, ccProd, ccCons, N, P, C]
-    ConsumerClaimed[T, ccProd, ccCons, N, P, C]
-    BothClaimed[T, ccProd, ccCons, N, P, C]
-  initial:
-    Unclaimed[T, ccProd, ccCons, N, P, C]
-  terminal:
-    BothClaimed[T, ccProd, ccCons, N, P, C]
-  transitions:
-    Unclaimed[T, ccProd, ccCons, N, P, C] ->
-      ProducerClaimed[T, ccProd, ccCons, N, P, C]
-    Unclaimed[T, ccProd, ccCons, N, P, C] ->
-      ConsumerClaimed[T, ccProd, ccCons, N, P, C]
-    Unclaimed[T, ccProd, ccCons, N, P, C] ->
-      BothClaimed[T, ccProd, ccCons, N, P, C]
-    ProducerClaimed[T, ccProd, ccCons, N, P, C] ->
-      BothClaimed[T, ccProd, ccCons, N, P, C]
-    ConsumerClaimed[T, ccProd, ccCons, N, P, C] ->
-      BothClaimed[T, ccProd, ccCons, N, P, C]
 
 type
   BQueue*[
@@ -401,55 +295,6 @@ static:
   doAssert offsetOf(BQueue[int, ccMulti, ccMulti, 8, 4, 4], cells) ==
     offsetOf(MpmcBase[8, 4, 4, int], cells)
 
-## ----------------------------------------------------------------------
-## View types — distinct from QueueProducer / QueueConsumer.
-##
-## Views are not shared between BQueue and Queue — they each get
-## their own view type. View types only carry meaningful
-## state on the multi-cardinality side; the single-cardinality variant
-## exists for type uniformity (a `BQueueProducer` for `ccProd==ccSingle`
-## is never instantiated through the public API — direct
-## `BQueue.push` is the canonical path).
-## ----------------------------------------------------------------------
-
-type
-  BQueueProducer*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      N, P, C: static int,
-  ] {.BQueueClaimState: Unclaimed.} = object
-    ## Per-thread producer handle for a `BQueue`. Retrieved via
-    ## `BQueue.getProducer()` when `ccProd == ccMulti`. Defined for
-    ## every (ccProd, ccCons) shape for type uniformity.
-    ##
-    ## Claim-state typestate : every view begins in
-    ## `Unclaimed`; the `claimed` runtime flag (ccMulti only) tracks
-    ## the attach/detach cycle without emitting a static typestate
-    ## transition. It gives ccSingle callers a clean
-    ## type-mismatch diagnostic when they reach for `attach`/`detach`.
-    idx*: int
-    queue*: ptr BQueue[T, ccProd, ccCons, N, P, C]
-    when ccProd == ccMulti:
-      # Runtime claim flag — only meaningful for multi-producer views.
-      # Mutated by `attach()` / `detach()` (ccMulti-only methods); the
-      # typestate verifier sees those as state-preserving (no
-      # `{.transition.}` pragma).
-      claimed*: bool
-
-  BQueueConsumer*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      N, P, C: static int,
-  ] {.BQueueClaimState: Unclaimed.} = object
-    ## Per-thread consumer handle for a `BQueue`. Retrieved via
-    ## `BQueue.getConsumer()` when `ccCons == ccMulti`. Defined for
-    ## every (ccProd, ccCons) shape for type uniformity.
-    ##
-    ## Claim-state typestate : see BQueueProducer.
-    idx*: int
-    queue*: ptr BQueue[T, ccProd, ccCons, N, P, C]
-    when ccCons == ccMulti:
-      claimed*: bool
 
 ## ----------------------------------------------------------------------
 ## Constructor / accessors — bounded subset.
@@ -575,162 +420,6 @@ proc consumerCount*[
 ## L557-632 with the bounded-only `RK == rkNone` arm extracted.
 ## ----------------------------------------------------------------------
 
-proc getProducer*[
-    T;
-    ccCons: static PinScopeCardinality,
-    N, P, C: static int,
-](
-    self: var BQueue[T, ccMulti, ccCons, N, P, C], idx: int = -1
-): BQueueProducer[T, ccMulti, ccCons, N, P, C] {.
-    raises: [NoProducersAvailableError]
-.} =
-  ## Assigns and returns a `BQueueProducer` for the current thread.
-  ## When `idx >= 0`, the caller pins a specific producer slot
-  ## (testing). When `idx == -1`, the thread's `getThreadId()` is
-  ## stored into the first free slot via a CAS over `producerThreadIds`.
-  result.queue = addr(self)
-
-  if idx >= 0:
-    assert idx < P,
-      "getProducer(idx) out of range: idx must be < P (producer count)"
-    result.idx = idx
-    return
-
-  let threadId = getThreadId()
-
-  for i in 0 ..< P:
-    if self.producerThreadIds[i].load(moAcquire) == threadId:
-      result.idx = i
-      return
-
-  for i in 0 ..< P:
-    var expected = 0
-    if self.producerThreadIds[i].compareExchangeWeak(
-      expected, threadId, moRelease, moAcquire
-    ):
-      result.idx = i
-      return
-
-  raise newException(
-    NoProducersAvailableError,
-    "All producers have been assigned. " &
-      "Increase your producer count (P) or setMaxPoolSize(P).",
-  )
-
-proc getConsumer*[
-    T;
-    ccProd: static PinScopeCardinality,
-    N, P, C: static int,
-](
-    self: var BQueue[T, ccProd, ccMulti, N, P, C], idx: int = -1
-): BQueueConsumer[T, ccProd, ccMulti, N, P, C] {.
-    raises: [NoConsumersAvailableError]
-.} =
-  ## Assigns and returns a `BQueueConsumer` for the current thread.
-  result.queue = addr(self)
-
-  if idx >= 0:
-    result.idx = idx
-    return
-
-  let threadId = getThreadId()
-
-  for i in 0 ..< C:
-    if self.consumerThreadIds[i].load(moAcquire) == threadId:
-      result.idx = i
-      return
-
-  for i in 0 ..< C:
-    var expected = 0
-    if self.consumerThreadIds[i].compareExchangeWeak(
-      expected, threadId, moRelease, moAcquire
-    ):
-      result.idx = i
-      return
-
-  raise newException(NoConsumersAvailableError, "All consumers assigned")
-
-template getProducerHere*[
-    T;
-    ccCons: static PinScopeCardinality,
-    N, P, C: static int,
-](
-    self: var BQueue[T, ccMulti, ccCons, N, P, C], idx: int = -1
-): BQueueProducer[T, ccMulti, ccCons, N, P, C] =
-  ## Sugar: `getProducer()` + `attach()` in one call.
-  ##
-  ## Use when the calling thread is also the operating thread (the
-  ## thread that will subsequently `push()` through the returned view).
-  ## This is the common same-thread MP/MC case for bounded queues
-  ## (e.g., bench harnesses where the spawning thread is also the
-  ## producer).
-  ##
-  ## For the producer-to-worker handoff pattern (a parent thread
-  ## obtains the view and hands it off to a worker thread that does
-  ## the pushing), use `getProducer()` + `attach()` separately so the
-  ## claim lands on the worker thread. See `getProducer` and `attach`
-  ## for the thread-affinity contract.
-  ##
-  ## BQueue is a bounded ring with sequence-counter publication (no
-  ## segments, no debra integration); the `attach()` here only marks
-  ## the view's runtime `claimed` flag.
-  ##
-  ## Raises `NoProducersAvailableError` from the underlying
-  ## `getProducer()` when the queue's `P` producer-registry capacity
-  ## is exhausted.
-  var view = self.getProducer(idx)
-  view.attach()
-  view
-
-template getConsumerHere*[
-    T;
-    ccProd: static PinScopeCardinality,
-    N, P, C: static int,
-](
-    self: var BQueue[T, ccProd, ccMulti, N, P, C], idx: int = -1
-): BQueueConsumer[T, ccProd, ccMulti, N, P, C] =
-  ## Sugar: `getConsumer()` + `attach()` in one call.
-  ##
-  ## Use when the calling thread is also the operating thread (the
-  ## thread that will subsequently `pop()` through the returned view).
-  ## This is the common same-thread MP/MC case for bounded queues.
-  ##
-  ## For the consumer-to-worker handoff pattern (a parent thread
-  ## obtains the view and hands it off to a worker thread that does
-  ## the popping), use `getConsumer()` + `attach()` separately so the
-  ## claim lands on the worker thread. See `getConsumer` and `attach`
-  ## for the thread-affinity contract.
-  ##
-  ## BQueue is a bounded ring with sequence-counter publication (no
-  ## segments, no debra integration); the `attach()` here only marks
-  ## the view's runtime `claimed` flag.
-  ##
-  ## Raises `NoConsumersAvailableError` from the underlying
-  ## `getConsumer()` when the queue's `C` consumer-registry capacity
-  ## is exhausted.
-  var view = self.getConsumer(idx)
-  view.attach()
-  view
-
-## ----------------------------------------------------------------------
-## push / pop — cardinality-dispatched Vyukov / Spsc logic.
-##
-## Single-item push:
-##   - SPSC: BQueue.push(item)        -> spsc_push
-##   - MPSC: producer.push(item)      -> mpsc_push
-##   - SPMC: BQueue.push(item)        -> spmc_push
-##   - MPMC: producer.push(item)      -> mpmc_push
-##
-## Single-item pop:
-##   - SPSC: BQueue.pop()             -> spsc_pop
-##   - MPSC: BQueue.pop()             -> mpsc_pop
-##   - SPMC: consumer.pop()           -> spmc_pop
-##   - MPMC: consumer.pop()           -> mpmc_pop
-##
-## Each path is byte-for-byte identical with the legacy bodies in
-## queue.nim L654-1032 — only the receiver type differs (BQueue vs the
-## unified Queue's rkNone arm).
-## ----------------------------------------------------------------------
 
 # --- SPSC push (direct on BQueue) ----------------------------------------
 proc push*[T; N: static int](
@@ -798,80 +487,6 @@ proc push*[T; N, C: static int](
         backoffOnRetry(spins)
         continue
 
-# --- MPSC push (via BQueueProducer) --------------------------------------
-proc push*[T; N, P: static int](
-    self: BQueueProducer[T, ccMulti, ccSingle, N, P, 0], item: T
-): bool =
-  ## MPSC single-item push (lock-free; uses the MPSC typestate verbs).
-  when not defined(allowNonLockFreeQueueItems):
-    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
-      when T is ref:
-        {.
-          error:
-            "BQueue item type '" & $T & "' is a ref type. " &
-            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
-            "mutate the refcount on the same object multiple threads can " &
-            "read or write, which is a race regardless of whether the " &
-            "refcount itself is atomic. Use a lock-free type (int, " &
-            "pointer, ptr T, etc.) or compile with " &
-            "-d:allowNonLockFreeQueueItems to explicitly allow it."
-        .}
-
-  var queueBase = cast[ptr MpscPushBase[N, P, T]](self.queue)
-
-  var op = mpsc_push.start[N]()
-  var spins = InitialSpin
-  while true:
-    var claim = op.tryClaim(queueBase[])
-    match claim:
-      MPSCPushFull(full):
-        return full.extractFalse()
-      MPSCPushSlotClaimed(slotClaimed):
-        return slotClaimed.complete(queueBase[], item)
-      MPSCPushStart(restart):
-        op = restart
-        backoffOnRetry(spins)
-        continue
-
-# --- MPMC push (via BQueueProducer) --------------------------------------
-proc push*[T; N, P, C: static int](
-    self: BQueueProducer[T, ccMulti, ccMulti, N, P, C], item: T
-): bool =
-  ## MPMC single-item push (lock-free; uses the MPMC typestate verbs).
-  when not defined(allowNonLockFreeQueueItems):
-    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
-      when T is ref:
-        {.
-          error:
-            "BQueue item type '" & $T & "' is a ref type. " &
-            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
-            "mutate the refcount on the same object multiple threads can " &
-            "read or write, which is a race regardless of whether the " &
-            "refcount itself is atomic. Use a lock-free type (int, " &
-            "pointer, ptr T, etc.) or compile with " &
-            "-d:allowNonLockFreeQueueItems to explicitly allow it."
-        .}
-
-  var queueBase = cast[ptr MpmcPushBase[N, P, C, T]](self.queue)
-
-  var op = mpmc_push.start[N]()
-  var spins = InitialSpin
-  while true:
-    var claim = op.tryClaim(queueBase[])
-    match claim:
-      MPMCPushFull(full):
-        return full.extractFalse()
-      MPMCPushSlotClaimed(slotClaimed):
-        return slotClaimed.complete(queueBase[], item)
-      MPMCPushStart(restart):
-        op = restart
-        backoffOnRetry(spins)
-        continue
-
-# --- ccMulti-producer compile-time gate on bare BQueue.push --------------
-# Compile-time `{.error.}` overload. The error string references the
-# user-visible alias name `BQueueProducer` (no `*Multi`/`*Single`
-# backing-type leakage in diagnostic strings). Catches the cardinality-
 # illegal call at compile time instead of at the first call site.
 proc push*[
     T;
@@ -879,8 +494,8 @@ proc push*[
     N, P, C: static int,
 ](self: var BQueue[T, ccMulti, ccCons, N, P, C], item: T): bool {.error:
     "Direct push on a multi-producer BQueue is not allowed. " &
-    "Use BQueue.getProducer().push(item) to obtain a per-thread " &
-    "BQueueProducer and push through it.".} =
+    "Use q.getProducerHere(idx).push(item) (same-thread sugar) or q.getProducer(idx).bindToThread().push(item) (cross-thread) to obtain a per-thread " &
+    "Bound[T, Tag, BQueue[...]] and push through it.".} =
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
       when T is ref:
@@ -962,78 +577,7 @@ proc pop*[T; N, P: static int](
         backoffOnRetry(spins)
         continue
 
-# --- SPMC pop (via BQueueConsumer) ---------------------------------------
-proc pop*[T; N, C: static int](
-    self: BQueueConsumer[T, ccSingle, ccMulti, N, 0, C]
-): Option[T] =
-  ## SPMC single-item pop.
-  when not defined(allowNonLockFreeQueueItems):
-    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
-      when T is ref:
-        {.
-          error:
-            "BQueue item type '" & $T & "' is a ref type. " &
-            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
-            "mutate the refcount on the same object multiple threads can " &
-            "read or write, which is a race regardless of whether the " &
-            "refcount itself is atomic. Use a lock-free type (int, " &
-            "pointer, ptr T, etc.) or compile with " &
-            "-d:allowNonLockFreeQueueItems to explicitly allow it."
-        .}
 
-  var queueBase = cast[ptr SpmcBase[N, C, T]](self.queue)
-
-  var op = spmc_pop.start[N]()
-  var spins = InitialSpin
-  while true:
-    var claim = op.tryClaim(queueBase[])
-    match claim:
-      SPMCPopEmpty(_):
-        return none(T)
-      SPMCPopSlotClaimed(slotClaimed):
-        return some(slotClaimed.complete(queueBase[]))
-      SPMCPopStart(restart):
-        op = restart
-        backoffOnRetry(spins)
-        continue
-
-# --- MPMC pop (via BQueueConsumer) ---------------------------------------
-proc pop*[T; N, P, C: static int](
-    self: BQueueConsumer[T, ccMulti, ccMulti, N, P, C]
-): Option[T] =
-  ## MPMC single-item pop.
-  when not defined(allowNonLockFreeQueueItems):
-    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
-      when T is ref:
-        {.
-          error:
-            "BQueue item type '" & $T & "' is a ref type. " &
-            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
-            "mutate the refcount on the same object multiple threads can " &
-            "read or write, which is a race regardless of whether the " &
-            "refcount itself is atomic. Use a lock-free type (int, " &
-            "pointer, ptr T, etc.) or compile with " &
-            "-d:allowNonLockFreeQueueItems to explicitly allow it."
-        .}
-
-  var queueBase = cast[ptr MpmcBase[N, P, C, T]](self.queue)
-
-  var op = mpmc_pop.start[N]()
-  var spins = InitialSpin
-  while true:
-    var claim = op.tryClaim(queueBase[])
-    match claim:
-      MPMCPopEmpty(_):
-        return none(T)
-      MPMCPopSlotClaimed(slotClaimed):
-        return some(slotClaimed.complete(queueBase[]))
-      MPMCPopStart(restart):
-        op = restart
-        backoffOnRetry(spins)
-        continue
-
-# --- ccMulti-consumer compile-time gate on bare BQueue.pop ---------------
-# compile-time `{.error.}` overload. References user-visible
 # alias name `BQueueConsumer`.
 proc pop*[
     T;
@@ -1041,8 +585,8 @@ proc pop*[
     N, P, C: static int,
 ](self: var BQueue[T, ccProd, ccMulti, N, P, C]): Option[T] {.error:
     "Direct pop on a multi-consumer BQueue is not allowed. " &
-    "Use BQueue.getConsumer().pop() to obtain a per-thread " &
-    "BQueueConsumer and pop through it.".} =
+    "Use q.getConsumerHere(idx).pop() (same-thread sugar) or q.getConsumer(idx).bindToThread().pop() (cross-thread) to obtain a per-thread " &
+    "Bound[T, Tag, BQueue[...]] and pop through it.".} =
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
       when T is ref:
@@ -1111,34 +655,6 @@ proc push*[T; N, C: static int](
       return some(i .. items.len - 1)
   NoSlice
 
-# --- MPSC batch push (via BQueueProducer) --------------------------------
-proc push*[T; N, P: static int](
-    self: BQueueProducer[T, ccMulti, ccSingle, N, P, 0],
-    items: openArray[T],
-): Option[HSlice[int, int]] =
-  ## MPSC batch push (loop of single-item pushes).
-  if unlikely(items.len == 0):
-    return NoSlice
-  for i in 0 ..< items.len:
-    if not self.push(items[i]):
-      return some(i .. items.len - 1)
-  NoSlice
-
-# --- MPMC batch push (via BQueueProducer) --------------------------------
-proc push*[T; N, P, C: static int](
-    self: BQueueProducer[T, ccMulti, ccMulti, N, P, C],
-    items: openArray[T],
-): Option[HSlice[int, int]] =
-  ## MPMC batch push (loop of single-item pushes).
-  if unlikely(items.len == 0):
-    return NoSlice
-  for i in 0 ..< items.len:
-    if not self.push(items[i]):
-      return some(i .. items.len - 1)
-  NoSlice
-
-# --- ccMulti-producer compile-time gate on bare BQueue.push openArray ----
-# compile-time `{.error.}` overload. References user-visible
 # alias name `BQueueProducer`.
 proc push*[
     T;
@@ -1148,8 +664,8 @@ proc push*[
     self: var BQueue[T, ccMulti, ccCons, N, P, C], items: openArray[T]
 ): Option[HSlice[int, int]] {.error:
     "Direct batch push on a multi-producer BQueue is not allowed. " &
-    "Use BQueue.getProducer().push(items) to obtain a per-thread " &
-    "BQueueProducer and batch-push through it.".} =
+    "Use q.getProducerHere(idx).push(items) (same-thread sugar) or q.getProducer(idx).bindToThread().push(items) (cross-thread) to obtain a per-thread " &
+    "Bound[T, Tag, BQueue[...]] and batch-push through it.".} =
   discard
 
 # --- SPSC batch pop (direct on BQueue) -----------------------------------
@@ -1198,44 +714,7 @@ proc pop*[T; N, P: static int](
   else:
     some(items)
 
-# --- SPMC batch pop (via BQueueConsumer) ---------------------------------
-proc pop*[T; N, C: static int](
-    self: BQueueConsumer[T, ccSingle, ccMulti, N, 0, C], count: int
-): Option[seq[T]] =
-  ## SPMC batch pop (loop of single-item pops).
-  if unlikely(count <= 0):
-    return none(seq[T])
-  var items = newSeqOfCap[T](count)
-  for _ in 0 ..< count:
-    let v = self.pop()
-    if v.isNone:
-      break
-    items.add(v.get)
-  if items.len == 0:
-    none(seq[T])
-  else:
-    some(items)
 
-# --- MPMC batch pop (via BQueueConsumer) ---------------------------------
-proc pop*[T; N, P, C: static int](
-    self: BQueueConsumer[T, ccMulti, ccMulti, N, P, C], count: int
-): Option[seq[T]] =
-  ## MPMC batch pop (loop of single-item pops).
-  if unlikely(count <= 0):
-    return none(seq[T])
-  var items = newSeqOfCap[T](count)
-  for _ in 0 ..< count:
-    let v = self.pop()
-    if v.isNone:
-      break
-    items.add(v.get)
-  if items.len == 0:
-    none(seq[T])
-  else:
-    some(items)
-
-# --- ccMulti-consumer compile-time gate on bare BQueue.pop count ---------
-# compile-time `{.error.}` overload. References user-visible
 # alias name `BQueueConsumer`.
 proc pop*[
     T;
@@ -1245,58 +724,10 @@ proc pop*[
     self: var BQueue[T, ccProd, ccMulti, N, P, C], count: int
 ): Option[seq[T]] {.error:
     "Direct batch pop on a multi-consumer BQueue is not allowed. " &
-    "Use BQueue.getConsumer().pop(count) to obtain a per-thread " &
-    "BQueueConsumer and batch-pop through it.".} =
+    "Use q.getConsumerHere(idx).pop(count) (same-thread sugar) or q.getConsumer(idx).bindToThread().pop(count) (cross-thread) to obtain a per-thread " &
+    "Bound[T, Tag, BQueue[...]] and batch-pop through it.".} =
   discard
 
-## ----------------------------------------------------------------------
-## Claim-state attach / detach.
-##
-## `attach` / `detach` are declared
-## with `BQueueProducer[T, ccMulti, ...]` (or the consumer analogue) in
-## the param signature. The compiler statically excludes ccSingle from
-## the overload set, so ccSingle callers receive a clean type-mismatch
-## diagnostic that NEVER references a `*Multi` / `*Single` backing
-## type — there is no such backing type to name.
-##
-## These methods declare NO `{.transition.}` pragma. They live in the
-## same module as the BQueueClaimState
-## typestate declaration, so the verifier accepts them as
-## state-preserving operations that mutate runtime fields
-## (`view.claimed`) without changing the static typestate. The terminal
-## Claim-state transition (Unclaimed -> BothClaimed) is driven
-## exclusively by the view's `=destroy` destructor below.
-## ----------------------------------------------------------------------
-
-proc attach*[T; ccCons: static PinScopeCardinality, N, P, C: static int](
-    self: var BQueueProducer[T, ccMulti, ccCons, N, P, C]
-) {.raises: [].} =
-  ## Mark a multi-producer BQueueProducer view as claimed by the
-  ## current thread. State-preserving in the typestate sense (mutates
-  ## the runtime `claimed` flag without emitting a static transition).
-  ##
-  ## ccSingle callers hit the absent-overload diagnostic: there is no
-  ## `attach` overload for `BQueueProducer[T, ccSingle, ...]`.
-  self.claimed = true
-
-proc detach*[T; ccCons: static PinScopeCardinality, N, P, C: static int](
-    self: var BQueueProducer[T, ccMulti, ccCons, N, P, C]
-) {.raises: [].} =
-  ## Release a multi-producer BQueueProducer view's claim. Mirror of
-  ## `attach` — runtime-only, no static transition.
-  self.claimed = false
-
-proc attach*[T; ccProd: static PinScopeCardinality, N, P, C: static int](
-    self: var BQueueConsumer[T, ccProd, ccMulti, N, P, C]
-) {.raises: [].} =
-  ## Mark a multi-consumer BQueueConsumer view as claimed.
-  self.claimed = true
-
-proc detach*[T; ccProd: static PinScopeCardinality, N, P, C: static int](
-    self: var BQueueConsumer[T, ccProd, ccMulti, N, P, C]
-) {.raises: [].} =
-  ## Release a multi-consumer BQueueConsumer view's claim.
-  self.claimed = false
 
 ## ----------------------------------------------------------------------
 ## Destructors driving Lifecycle / Claim-state terminal transitions
@@ -1346,41 +777,210 @@ proc `=destroy`*[
   ## pragma.
   discard
 
-proc `=destroy`*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    N, P, C: static int,
-](self: var BQueueProducer[T, ccProd, ccCons, N, P, C]) {.
-    destructorTransition: Unclaimed -> BothClaimed,
-    transitionError:
-      "BQueueProducer used after =destroy (claim-state: Unclaimed -> BothClaimed).",
-    raises: [],
-.} =
-  ## BQueueProducer destructor — drives the Claim-state terminal
-  ## transition. View carries no heap state; runtime cleanup is a
-  ## no-op.
-  discard
 
-proc `=destroy`*[
+## ----------------------------------------------------------------------
+## Push / pop on Bound endpoints — Track C v5.0.0 re-typing.
+##
+## The pre-v5.0.0 BQueueProducer/BQueueConsumer-receiver overloads were
+## deleted in C7; their bodies are restored here on
+## `Bound[T, Tag, BQueue[...]]` receivers with `{.tags: [Tag].}` effect
+## pragmas for static role discrimination. Bodies are byte-for-byte
+## identical to the pre-deletion implementations (`Tag` is a phantom
+## generic that drives effect-tag checking; the bodies themselves don't
+## use it).
+##
+## **Role guards.** Each overload restricts `Tag` to the appropriate
+## role tag (e.g., MPSC push requires `Tag: MpmcProducerTag |
+## SpscProducerTag`-style constraint; here we keep `Tag` open at this
+## layer and rely on the spawn-macro layer in C14+ to bind the correct
+## tag for each call site. Role distinctness compile-fail tests at
+## C9-tripwire scope assert this — see `tests/should_fail/`).
+## ----------------------------------------------------------------------
+
+# --- MPSC push (via Bound) -----------------------------------------------
+proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: static int](
+    self: Bound[T, Tag, BQueue[T, ccMulti, ccSingle, N, P, 0]], item: T
+): bool {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## MPSC single-item push on a Bound producer endpoint.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "BQueue item is ref; recompile with -d:allowNonLockFreeQueueItems.".}
+  when defined(debug):
+    assert getThreadId() == self.attachedTid, "push from wrong thread"
+  var queueBase = cast[ptr MpscPushBase[N, P, T]](self.queue)
+  var op = mpsc_push.start[N]()
+  var spins = InitialSpin
+  while true:
+    var claim = op.tryClaim(queueBase[])
+    match claim:
+      MPSCPushFull(full):
+        return full.extractFalse()
+      MPSCPushSlotClaimed(slotClaimed):
+        return slotClaimed.complete(queueBase[], item)
+      MPSCPushStart(restart):
+        op = restart
+        backoffOnRetry(spins)
+        continue
+
+# --- MPMC push (via Bound) -----------------------------------------------
+proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P, C: static int](
+    self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]], item: T
+): bool {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## MPMC single-item push on a Bound producer endpoint.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "BQueue item is ref; recompile with -d:allowNonLockFreeQueueItems.".}
+  when defined(debug):
+    assert getThreadId() == self.attachedTid, "push from wrong thread"
+  var queueBase = cast[ptr MpmcPushBase[N, P, C, T]](self.queue)
+  var op = mpmc_push.start[N]()
+  var spins = InitialSpin
+  while true:
+    var claim = op.tryClaim(queueBase[])
+    match claim:
+      MPMCPushFull(full):
+        return full.extractFalse()
+      MPMCPushSlotClaimed(slotClaimed):
+        return slotClaimed.complete(queueBase[], item)
+      MPMCPushStart(restart):
+        op = restart
+        backoffOnRetry(spins)
+        continue
+
+# --- SPMC pop (via Bound) ------------------------------------------------
+proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, C: static int](
+    self: Bound[T, Tag, BQueue[T, ccSingle, ccMulti, N, 0, C]]
+): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## SPMC single-item pop on a Bound consumer endpoint.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "BQueue item is ref; recompile with -d:allowNonLockFreeQueueItems.".}
+  when defined(debug):
+    assert getThreadId() == self.attachedTid, "pop from wrong thread"
+  var queueBase = cast[ptr SpmcBase[N, C, T]](self.queue)
+  var op = spmc_pop.start[N]()
+  var spins = InitialSpin
+  while true:
+    var claim = op.tryClaim(queueBase[])
+    match claim:
+      SPMCPopEmpty(_):
+        return none(T)
+      SPMCPopSlotClaimed(slotClaimed):
+        return some(slotClaimed.complete(queueBase[]))
+      SPMCPopStart(restart):
+        op = restart
+        backoffOnRetry(spins)
+        continue
+
+# --- MPMC pop (via Bound) ------------------------------------------------
+proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, P, C: static int](
+    self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]]
+): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## MPMC single-item pop on a Bound consumer endpoint.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "BQueue item is ref; recompile with -d:allowNonLockFreeQueueItems.".}
+  when defined(debug):
+    assert getThreadId() == self.attachedTid, "pop from wrong thread"
+  var queueBase = cast[ptr MpmcBase[N, P, C, T]](self.queue)
+  var op = mpmc_pop.start[N]()
+  var spins = InitialSpin
+  while true:
+    var claim = op.tryClaim(queueBase[])
+    match claim:
+      MPMCPopEmpty(_):
+        return none(T)
+      MPMCPopSlotClaimed(slotClaimed):
+        return some(slotClaimed.complete(queueBase[]))
+      MPMCPopStart(restart):
+        op = restart
+        backoffOnRetry(spins)
+        continue
+
+# --- Batch push / pop overloads on Bound ---------------------------------
+
+proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: static int](
+    self: Bound[T, Tag, BQueue[T, ccMulti, ccSingle, N, P, 0]],
+    items: openArray[T],
+): Option[HSlice[int, int]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## MPSC batch push. Returns `none` if all items pushed; `some(slice)`
+  ## of unpushed indices otherwise.
+  for i in 0 ..< items.len:
+    if not self.push(items[i]):
+      return some(i .. items.high)
+  return none(HSlice[int, int])
+
+proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P, C: static int](
+    self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]],
+    items: openArray[T],
+): Option[HSlice[int, int]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## MPMC batch push. Same semantics as MPSC variant.
+  for i in 0 ..< items.len:
+    if not self.push(items[i]):
+      return some(i .. items.high)
+  return none(HSlice[int, int])
+
+proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, C: static int](
+    self: Bound[T, Tag, BQueue[T, ccSingle, ccMulti, N, 0, C]], count: int
+): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## SPMC batch pop.
+  var collected: seq[T] = @[]
+  for _ in 0 ..< count:
+    let it = self.pop()
+    if it.isNone:
+      break
+    collected.add(it.get())
+  if collected.len == 0: none(seq[T]) else: some(collected)
+
+proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, P, C: static int](
+    self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]], count: int
+): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## MPMC batch pop.
+  var collected: seq[T] = @[]
+  for _ in 0 ..< count:
+    let it = self.pop()
+    if it.isNone:
+      break
+    collected.add(it.get())
+  if collected.len == 0: none(seq[T]) else: some(collected)
+
+## ----------------------------------------------------------------------
+## Same-thread shortcut: getProducerHere / getConsumerHere.
+##
+## Sugar templates that compose `getProducer().bindToThread()` for the
+## common same-thread case. Return `Bound[AnyThreadTag]` per design
+## §3.3.5 — explicitly opts out of per-spawn role discrimination;
+## runtime `getThreadId()` backstop catches misuse under `-d:debug`.
+## ----------------------------------------------------------------------
+
+template getProducerHere*[
     T;
-    ccProd, ccCons: static PinScopeCardinality,
+    ccCons: static PinScopeCardinality,
     N, P, C: static int,
-](self: var BQueueConsumer[T, ccProd, ccCons, N, P, C]) {.
-    destructorTransition: Unclaimed -> BothClaimed,
-    transitionError:
-      "BQueueConsumer used after =destroy (claim-state: Unclaimed -> BothClaimed).",
-    raises: [],
-.} =
-  ## BQueueConsumer destructor — drives the Claim-state terminal
-  ## transition.
-  discard
+](
+    self: var BQueue[T, ccMulti, ccCons, N, P, C], idx: int = -1
+): Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccCons, N, P, C]] =
+  ## Sugar: `getProducer(idx) + bindToThread()` in one call.
+  var u = self.getProducer(idx)
+  u.bindToThread()
+
+template getConsumerHere*[
+    T;
+    ccProd: static PinScopeCardinality,
+    N, P, C: static int,
+](
+    self: var BQueue[T, ccProd, ccMulti, N, P, C], idx: int = -1
+): Bound[T, AnyThreadTag, BQueue[T, ccProd, ccMulti, N, P, C]] =
+  ## Symmetric to `getProducerHere` for the consumer side.
+  var u = self.getConsumer(idx)
+  u.bindToThread()
 
 ## ----------------------------------------------------------------------
 ## Test-only introspection helpers.
-##
-## Mirrors the bounded subset of queue.nim's `when defined(testing):`
-## block. The unbounded-only helpers (Segment introspection) stay in
-## queue.nim.
 ## ----------------------------------------------------------------------
 
 when defined(testing):

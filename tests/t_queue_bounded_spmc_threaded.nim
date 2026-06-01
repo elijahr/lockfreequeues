@@ -23,6 +23,8 @@ import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 const
   ItemCount = 10000
@@ -42,7 +44,7 @@ proc producer[N: static int](ctx: ptr TestContext[N]) {.thread.} =
   ctx.producerDone[].store(true, moRelease)
 
 proc consumer[N: static int](ctx: ptr TestContext[N]) {.thread.} =
-  var c = ctx.queue[].getConsumer()
+  var c = ctx.queue[].getConsumerHere()
   while true:
     let item = c.pop()
     if item.isSome:

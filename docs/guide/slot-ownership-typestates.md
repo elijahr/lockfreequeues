@@ -1,5 +1,15 @@
 # Slot Ownership Typestates
 
+!!! warning "v5.0.0 — Static Thread-Affinity Endpoint API"
+
+    v5.0.0 is a hard-break release. The v4.x `Bound[T, Tag, BQueue[...]]` endpoint /
+    `Bound[T, Tag, Queue[...]]` endpoint / `attach()` / `bindConsumer()` API is REMOVED;
+    replaced by the `Unbound → Bound → Closed` endpoint lifecycle.
+    See [`docs/migrations/v5.0.0.md`](../migrations/v5.0.0.md) for the
+    full migration guide + v4.x → v5.0.0 cookbook + breaking-change
+    checklist.
+
+
 ## Overview
 
 Slot ownership typestates track slot ownership through the type system, so the most common slot-misuse footguns (use-after-commit, double-commit, commit without write) are caught by the compile-time CFG verifier. Some combinations (notably cardinality-axis cross-products) still rely on runtime invariants — see the source comments in `bqueue.nim` for the precise envelope.
@@ -186,7 +196,7 @@ push context carries the pinned thread handle and epoch alongside the
 slot-ownership token, so the type system enforces all of these at once:
 
 - **Must be pinned to push** — the context only exists after the calling
-  thread has registered (via `attach()` / `attachConsumer()`) and pinned
+  thread has registered (via `attach()` / `bindConsumer()`) and pinned
   an epoch.
 - **Must claim a slot to write** — `writeItem` requires the
   slot-claimed token produced by a successful CAS.

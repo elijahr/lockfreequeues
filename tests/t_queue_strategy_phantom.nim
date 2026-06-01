@@ -30,6 +30,8 @@ import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 import debra as debra_mod
 from debra import initDebraManager, registerThread
@@ -37,46 +39,43 @@ from debra import initDebraManager, registerThread
 suite "Strategy phantom — mpsc-equiv (ccMulti × ccSingle)":
   test "stManual: drained segments are retained (segmentCount stays at 3)":
     var manager = initDebraManager[4]()
-    let consumerHandle = registerThread(manager)
-    var q = newUnboundedMpscQueue[int, stManual, 4, 4](addr manager, consumerHandle)
-    var p = q.getProducer()
-    p.attach()
+    var q = newUnboundedMpscQueue[int, stManual, 4, 4](addr manager)
+    var lfqConsumer = q.bindConsumer()
+    var p = q.getProducerHere()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3
     for i in 0 ..< 9:
-      let r = q.pop()
+      let r = lfqConsumer.pop()
       check r.isSome
       check r.get == i
     # stManual: segments counter is NOT decremented at retire sites.
     check q.segmentCount() == 3
-    check q.pop().isNone
+    check lfqConsumer.pop().isNone
 
   test "stEager: drained segments are reclaimed (segmentCount decreases)":
     var manager = initDebraManager[4]()
-    let consumerHandle = registerThread(manager)
-    var q = newUnboundedMpscQueue[int, stEager, 4, 4](addr manager, consumerHandle)
-    var p = q.getProducer()
-    p.attach()
+    var q = newUnboundedMpscQueue[int, stEager, 4, 4](addr manager)
+    var lfqConsumer = q.bindConsumer()
+    var p = q.getProducerHere()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3
     for i in 0 ..< 9:
-      let r = q.pop()
+      let r = lfqConsumer.pop()
       check r.isSome
       check r.get == i
     # stEager: segments counter decremented after each retire; final
     # count must be strictly less than the 3 we pushed across.
     check q.segmentCount() < 3
-    check q.pop().isNone
+    check lfqConsumer.pop().isNone
 
 suite "Strategy phantom — spmc-equiv (ccSingle × ccMulti)":
   test "stManual: drained segments are retained (segmentCount stays at 3)":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var q = newUnboundedSpmcQueue[int, stManual, 4, 4](addr manager)
-    var p = q.getProducer()
-    var c = q.getConsumer()
-    c.attach()
+    var p = q.getProducerHere()
+    var c = q.getConsumerHere()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3
@@ -90,9 +89,8 @@ suite "Strategy phantom — spmc-equiv (ccSingle × ccMulti)":
   test "stEager: drained segments are reclaimed (segmentCount decreases)":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var q = newUnboundedSpmcQueue[int, stEager, 4, 4](addr manager)
-    var p = q.getProducer()
-    var c = q.getConsumer()
-    c.attach()
+    var p = q.getProducerHere()
+    var c = q.getConsumerHere()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3
@@ -107,10 +105,8 @@ suite "Strategy phantom — mpmc-equiv (ccMulti × ccMulti)":
   test "stManual: drained segments are retained (segmentCount stays at 3)":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var q = newUnboundedMpmcQueue[int, stManual, 4, 4](addr manager)
-    var p = q.getProducer()
-    p.attach()
-    var c = q.getConsumer()
-    c.attach()
+    var p = q.getProducerHere()
+    var c = q.getConsumerHere()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3
@@ -124,10 +120,8 @@ suite "Strategy phantom — mpmc-equiv (ccMulti × ccMulti)":
   test "stEager: drained segments are reclaimed (segmentCount decreases)":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var q = newUnboundedMpmcQueue[int, stEager, 4, 4](addr manager)
-    var p = q.getProducer()
-    p.attach()
-    var c = q.getConsumer()
-    c.attach()
+    var p = q.getProducerHere()
+    var c = q.getConsumerHere()
     for i in 0 ..< 9:
       p.push(i)
     check q.segmentCount() == 3

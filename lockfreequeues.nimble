@@ -9,10 +9,10 @@ srcDir         = "src"
 entryPoints    = @["tests/test.nim"]
 
 # Dependencies
-requires "nim >= 2.2.0"
+requires "nim >= 2.2.10"
 requires "unittest2"
-requires "typestates >= 0.10.0"
-requires "debra >= 0.8.0"
+requires "typestates >= 0.12.0"
+requires "debra >= 0.9.0"
 
 # Tasks
 task should_fail, "Verifies compile-fail negative controls":

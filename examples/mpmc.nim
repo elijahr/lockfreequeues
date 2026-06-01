@@ -14,6 +14,8 @@ import options
 import random
 
 import lockfreequeues
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 var
   # Queue that can hold 8 ints at a time,
@@ -52,14 +54,12 @@ proc producerFunc() {.thread.} =
     rand(100),
   ]
 
-  # Try to push the items. If not all items could be pushed,
-  # the remainder is returned as an Option[HSlice[int, int]] suitable for
-  # slicing the sequence.
+  # v5.0.0: batch push returns Option[HSlice[int, int]] — none if all
+  # items pushed, some(slice) for unpushed indices.
   let remainder = producer.push(items)
-
   if remainder.isSome:
-    echo "[producer ", producer.idx, "] pushed items: ", items[
-        0..<remainder.get.a], ", unpushed items: ", items[remainder.get]
+    echo "[producer ", producer.idx, "] pushed items ",
+      items[0 ..< remainder.get.a], "; unpushed: ", items[remainder.get]
   else:
     echo "[producer ", producer.idx, "] pushed all items: ", items
 

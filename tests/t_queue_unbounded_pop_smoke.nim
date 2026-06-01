@@ -32,6 +32,8 @@ import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 suite "rkEbr pop smoke — spsc-equiv (ccSingle × ccSingle)":
   ## §3.0.3: UnboundedSpsc is the canonical SPSC unbounded type;
@@ -40,43 +42,43 @@ suite "rkEbr pop smoke — spsc-equiv (ccSingle × ccSingle)":
 
   test "push then pop returns same value":
     var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
-    var p = q.getProducer()
+    var p = q.getProducerHere()
     p.push(42)
-    let r = q.pop()
+    let r = lfqConsumer.pop()
     check r.isSome
     check r.get == 42
     check q.len() == 0
 
   test "drains in FIFO order":
     var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
-    var p = q.getProducer()
+    var p = q.getProducerHere()
     for i in 0 ..< 5:
       p.push(i)
     for i in 0 ..< 5:
-      let r = q.pop()
+      let r = lfqConsumer.pop()
       check r.isSome
       check r.get == i
-    check q.pop().isNone
+    check lfqConsumer.pop().isNone
 
   test "multi-segment drain (1 → 0 segments via multiple advances)":
     var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 4, 4])
-    var p = q.getProducer()
+    var p = q.getProducerHere()
     for i in 0 ..< 9: # 3 segments (sizes 4 + 4 + 1)
       p.push(i)
     check q.segmentCount() == 3
     for i in 0 ..< 9:
-      let r = q.pop()
+      let r = lfqConsumer.pop()
       check r.isSome
       check r.get == i
     # After draining we may sit at 1 segment (last in-use) or
     # transient state — accept ≥1 ≤3 (spsc free-on-advance reduces
     # segments as it advances).
     check q.segmentCount() >= 1
-    check q.pop().isNone
+    check lfqConsumer.pop().isNone
 
   test "pop on empty queue returns none":
     var q = newQueue(Queue[int, ccSingle, ccSingle, stEager, 8, 4])
-    check q.pop().isNone
+    check lfqConsumer.pop().isNone
 
 suite "rkEbr pop smoke — mpsc-equiv (ccMulti × ccSingle)":
   ## §3.5.1 retire-bearing site (retireOnPublish, single consumer =
@@ -85,34 +87,32 @@ suite "rkEbr pop smoke — mpsc-equiv (ccMulti × ccSingle)":
 
   test "single-consumer pop returns FIFO order":
     var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 8, 4])
-    q.attachConsumer()
-    var p = q.getProducer()
-    p.attach()
+    var lfqConsumer = q.bindConsumer()
+    var p = q.getProducerHere()
     for i in 0 ..< 5:
       p.push(i)
     for i in 0 ..< 5:
-      let r = q.pop()
+      let r = lfqConsumer.pop()
       check r.isSome
       check r.get == i
-    check q.pop().isNone
+    check lfqConsumer.pop().isNone
 
   test "boundary-crossing pop drains across segments":
     var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 4, 4])
-    q.attachConsumer()
-    var p = q.getProducer()
-    p.attach()
+    var lfqConsumer = q.bindConsumer()
+    var p = q.getProducerHere()
     for i in 0 ..< 10: # crosses 2 boundaries (4 → 8 → 10)
       p.push(i)
     for i in 0 ..< 10:
-      let r = q.pop()
+      let r = lfqConsumer.pop()
       check r.isSome
       check r.get == i
-    check q.pop().isNone
+    check lfqConsumer.pop().isNone
 
   test "pop on empty queue returns none":
     var q = newQueue(Queue[int, ccMulti, ccSingle, stEager, 8, 4])
-    q.attachConsumer()
-    check q.pop().isNone
+    var lfqConsumer = q.bindConsumer()
+    check lfqConsumer.pop().isNone
 
 suite "rkEbr pop smoke — spmc-equiv (ccSingle × ccMulti)":
   ## §3.5.3 retire-bearing site (retireOnCAS, weak compareExchange).
@@ -121,9 +121,8 @@ suite "rkEbr pop smoke — spmc-equiv (ccSingle × ccMulti)":
 
   test "single-consumer pop returns FIFO order":
     var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, 8, 4])
-    var p = q.getProducer()
-    var c = q.getConsumer()
-    c.attach()
+    var p = q.getProducerHere()
+    var c = q.getConsumerHere()
     for i in 0 ..< 5:
       p.push(i)
     for i in 0 ..< 5:
@@ -134,9 +133,8 @@ suite "rkEbr pop smoke — spmc-equiv (ccSingle × ccMulti)":
 
   test "boundary-crossing pop drains across segments":
     var q = newQueue(Queue[int, ccSingle, ccMulti, stEager, 4, 4])
-    var p = q.getProducer()
-    var c = q.getConsumer()
-    c.attach()
+    var p = q.getProducerHere()
+    var c = q.getConsumerHere()
     for i in 0 ..< 10:
       p.push(i)
     for i in 0 ..< 10:
@@ -156,10 +154,8 @@ suite "rkEbr pop smoke — mpmc-equiv (ccMulti × ccMulti)":
 
   test "single-consumer pop returns FIFO order":
     var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, 8, 4])
-    var p = q.getProducer()
-    p.attach()
-    var c = q.getConsumer()
-    c.attach()
+    var p = q.getProducerHere()
+    var c = q.getConsumerHere()
     for i in 0 ..< 5:
       p.push(i)
     for i in 0 ..< 5:
@@ -170,10 +166,8 @@ suite "rkEbr pop smoke — mpmc-equiv (ccMulti × ccMulti)":
 
   test "boundary-crossing pop drains across segments":
     var q = newQueue(Queue[int, ccMulti, ccMulti, stEager, 4, 4])
-    var p = q.getProducer()
-    p.attach()
-    var c = q.getConsumer()
-    c.attach()
+    var p = q.getProducerHere()
+    var c = q.getConsumerHere()
     for i in 0 ..< 10:
       p.push(i)
     for i in 0 ..< 10:

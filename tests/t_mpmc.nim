@@ -5,6 +5,8 @@ import sequtils
 import unittest2
 
 import lockfreequeues
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 import ./t_integration
 import ./t_muc
 import ./t_mup
@@ -122,26 +124,36 @@ suite "Mpmc integration":
     testHeadAndTailReset(queue)
 
   test "wraps":
-    check(queue.getProducer(0).push(@[1, 2, 3, 4, 5, 6, 7, 8]).isNone)
+    check((block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(@[1, 2, 3, 4, 5, 6, 7, 8])).isNone)
 
-    var popRes = queue.getConsumer(0).pop(4)
+    var popRes = (block:
+      var lfqT = queue.getConsumerHere(0)
+      lfqT.pop(4))
 
     check(popRes.isSome)
     check(popRes.get == @[1, 2, 3, 4])
 
-    let pushRes = queue.getProducer(0).push(@[9, 10, 11, 12])
+    var pushRes = (block:
+      var lfqT = queue.getProducerHere(0)
+      lfqT.push(@[9, 10, 11, 12]))
 
     check(pushRes.isNone)
 
     queue.checkState(head = 4'u64, tail = 12'u64, data = (@[9, 10, 11, 12, 5, 6, 7, 8]))
 
-    popRes = queue.getConsumer(0).pop(4)
+    popRes = (block:
+      var lfqT = queue.getConsumerHere(0)
+      lfqT.pop(4))
     check(popRes.isSome)
     check(popRes.get == @[5, 6, 7, 8])
 
     queue.checkState(head = 8'u64, tail = 12'u64, data = (@[9, 10, 11, 12, 5, 6, 7, 8]))
 
-    popRes = queue.getConsumer(1).pop(4)
+    popRes = (block:
+      var lfqT = queue.getConsumerHere(1)
+      lfqT.pop(4))
     check(popRes.isSome)
     check(popRes.get == @[9, 10, 11, 12])
 

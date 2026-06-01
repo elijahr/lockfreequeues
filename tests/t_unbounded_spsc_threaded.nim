@@ -10,6 +10,8 @@ import unittest2
 import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 const
   ItemCount = 10000
@@ -27,7 +29,7 @@ type
     producerDone: ptr Atomic[bool]
 
 proc producer[S: static int](ctx: ptr TestContext[S]) {.thread.} =
-  var p = ctx.queue[].getProducer()
+  var p = ctx.queue[].getProducerHere()
   for i in 1 .. ItemCount:
     p.push(i)
   ctx.producerDone[].store(true, moRelease)
@@ -101,7 +103,7 @@ suite "UnboundedSpsc threaded":
     # Spsc deallocates segments inline (no strategy). After draining
     # the queue, segment count should be small (only the active tail segment).
     var queue = newUnboundedSpscQueue[int, stEager, 8, MT]()
-    var p = queue.getProducer()
+    var p = queue.getProducerHere()
 
     # Push items to create segments
     for i in 1 .. 1000:

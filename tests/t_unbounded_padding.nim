@@ -24,6 +24,8 @@ import lockfreequeues/queue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 # nim-debra surface for the unbounded smart-constructor manager. Selective
 # `from ... import` matches the queue.nim convention and keeps
@@ -90,9 +92,7 @@ suite "Unbounded queue Segment cache-line padding":
 
   test "freshly-allocated Segment base is CacheLineBytes-aligned (mpsc)":
     var manager = initDebraManager[4]()
-    let consumerHandle = registerThread(manager)
-    var q = newUnboundedMpscQueue[uint64, stEager, 64, 4](
-        addr manager, consumerHandle)
+    var q = newUnboundedMpscQueue[uint64, stEager, 64, 4](addr manager)
     let segPtr = headSegmentForTest(q)
     check segPtr != nil
     check (cast[uint](segPtr) mod Cl.uint) == 0

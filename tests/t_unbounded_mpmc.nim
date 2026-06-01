@@ -5,6 +5,8 @@ import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 import debra as debra_mod
 from debra import DebraManager, initDebraManager, registerThread
@@ -18,22 +20,19 @@ suite "UnboundedMpmc":
   test "getProducer returns valid producer":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMpmcQueue[int, stEager, 16, 4](addr manager)
-    var producer = queue.getProducer()
-    producer.attach()
+    var producer = queue.getProducerHere()
     check(producer.idx >= 0)
 
   test "getConsumer returns valid consumer":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMpmcQueue[int, stEager, 16, 4](addr manager)
-    var consumer = queue.getConsumer()
-    consumer.attach()
+    var consumer = queue.getConsumerHere()
     check(consumer.idx >= 0)
 
   test "producer push single item":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMpmcQueue[int, stEager, 16, 4](addr manager)
-    var producer = queue.getProducer()
-    producer.attach()
+    var producer = queue.getProducerHere()
 
     producer.push(42)
     check(queue.len == 1)
@@ -41,10 +40,8 @@ suite "UnboundedMpmc":
   test "consumer pop single item":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMpmcQueue[int, stEager, 16, 4](addr manager)
-    var producer = queue.getProducer()
-    producer.attach()
-    var consumer = queue.getConsumer()
-    consumer.attach()
+    var producer = queue.getProducerHere()
+    var consumer = queue.getConsumerHere()
 
     producer.push(42)
     let item = consumer.pop()
@@ -55,8 +52,7 @@ suite "UnboundedMpmc":
   test "pop from empty returns none":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMpmcQueue[int, stEager, 16, 4](addr manager)
-    var consumer = queue.getConsumer()
-    consumer.attach()
+    var consumer = queue.getConsumerHere()
 
     let item = consumer.pop()
     check(item.isNone)
@@ -64,10 +60,8 @@ suite "UnboundedMpmc":
   test "FIFO order preserved with single producer and consumer":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMpmcQueue[int, stEager, 16, 4](addr manager)
-    var producer = queue.getProducer()
-    producer.attach()
-    var consumer = queue.getConsumer()
-    consumer.attach()
+    var producer = queue.getProducerHere()
+    var consumer = queue.getConsumerHere()
 
     for i in 1 .. 5:
       producer.push(i)
@@ -81,12 +75,9 @@ suite "UnboundedMpmc":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMpmcQueue[int, stEager, 16, 4](addr manager)
 
-    var producer1 = queue.getProducer()
-    producer1.attach()
-    var producer2 = queue.getProducer()
-    producer2.attach()
-    var consumer = queue.getConsumer()
-    consumer.attach()
+    var producer1 = queue.getProducerHere()
+    var producer2 = queue.getProducerHere()
+    var consumer = queue.getConsumerHere()
 
     for i in 1 .. 5:
       producer1.push(i)
@@ -105,16 +96,13 @@ suite "UnboundedMpmc":
   test "multiple consumers can pop":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMpmcQueue[int, stEager, 16, 4](addr manager)
-    var producer = queue.getProducer()
-    producer.attach()
+    var producer = queue.getProducerHere()
 
     for i in 1 .. 10:
       producer.push(i)
 
-    var consumer1 = queue.getConsumer()
-    consumer1.attach()
-    var consumer2 = queue.getConsumer()
-    consumer2.attach()
+    var consumer1 = queue.getConsumerHere()
+    var consumer2 = queue.getConsumerHere()
 
     var count1, count2 = 0
     var total = 0
@@ -135,10 +123,8 @@ suite "UnboundedMpmc":
   test "grows beyond single segment":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMpmcQueue[int, stEager, 4, 4](addr manager)
-    var producer = queue.getProducer()
-    producer.attach()
-    var consumer = queue.getConsumer()
-    consumer.attach()
+    var producer = queue.getProducerHere()
+    var consumer = queue.getConsumerHere()
 
     for i in 1 .. 10:
       producer.push(i)
@@ -153,10 +139,8 @@ suite "UnboundedMpmc":
   test "len tracks items correctly":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMpmcQueue[int, stEager, 8, 4](addr manager)
-    var producer = queue.getProducer()
-    producer.attach()
-    var consumer = queue.getConsumer()
-    consumer.attach()
+    var producer = queue.getProducerHere()
+    var consumer = queue.getConsumerHere()
 
     check(queue.len == 0)
 
@@ -177,10 +161,8 @@ suite "UnboundedMpmc":
   test "batch push":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMpmcQueue[int, stEager, 8, 4](addr manager)
-    var producer = queue.getProducer()
-    producer.attach()
-    var consumer = queue.getConsumer()
-    consumer.attach()
+    var producer = queue.getProducerHere()
+    var consumer = queue.getConsumerHere()
 
     producer.push(@[1, 2, 3, 4, 5])
     check(queue.len == 5)
@@ -191,10 +173,8 @@ suite "UnboundedMpmc":
   test "batch pop":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMpmcQueue[int, stEager, 8, 4](addr manager)
-    var producer = queue.getProducer()
-    producer.attach()
-    var consumer = queue.getConsumer()
-    consumer.attach()
+    var producer = queue.getProducerHere()
+    var consumer = queue.getConsumerHere()
 
     for i in 1 .. 10:
       producer.push(i)
@@ -207,10 +187,8 @@ suite "UnboundedMpmc":
   test "batch pop more than available":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMpmcQueue[int, stEager, 8, 4](addr manager)
-    var producer = queue.getProducer()
-    producer.attach()
-    var consumer = queue.getConsumer()
-    consumer.attach()
+    var producer = queue.getProducerHere()
+    var consumer = queue.getConsumerHere()
 
     producer.push(@[1, 2, 3])
 
@@ -222,8 +200,7 @@ suite "UnboundedMpmc":
   test "batch pop from empty":
     var manager = initDebraManager[4, debra_mod.ccMulti]()
     var queue = newUnboundedMpmcQueue[int, stEager, 8, 4](addr manager)
-    var consumer = queue.getConsumer()
-    consumer.attach()
+    var consumer = queue.getConsumerHere()
 
     let items = consumer.pop(5)
     check(items.isNone)

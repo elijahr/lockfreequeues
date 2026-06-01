@@ -6,6 +6,8 @@ import unittest2
 
 import lockfreequeues
 import lockfreequeues/exceptions
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 import ./t_integration
 import ./t_suc
 
@@ -111,7 +113,9 @@ suite "push(Spmc[N, C, T], T)":
     for i in 1 .. 8:
       discard queue.push(i)
     for i in 1 .. 4:
-      discard queue.getConsumer(0).pop()
+      discard (block:
+      var lfqT = queue.getConsumerHere(0)
+      lfqT.pop())
     for i in 9 .. 12:
       check(queue.push(i) == true)
     queue.checkState(head = 4'u64, tail = 12'u64, data = (@[9, 10, 11, 12, 5, 6, 7, 8]))
@@ -135,7 +139,9 @@ suite "push(Spmc[N, C, T], seq[T])":
   test "wrap":
     discard queue.push(@[1, 2, 3, 4, 5, 6, 7, 8])
     for i in 1 .. 4:
-      discard queue.getConsumer(0).pop()
+      discard (block:
+      var lfqT = queue.getConsumerHere(0)
+      lfqT.pop())
     check(queue.push(@[9, 10, 11, 12]).isNone)
     queue.checkState(head = 4'u64, tail = 12'u64, data = (@[9, 10, 11, 12, 5, 6, 7, 8]))
 

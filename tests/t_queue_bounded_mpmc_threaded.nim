@@ -23,6 +23,8 @@ import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 const
   ItemCount = 10000
@@ -44,7 +46,7 @@ type
     totalConsumed: ptr Atomic[int]
 
 proc producer[N: static int](ctx: ptr ProducerContext[N]) {.thread.} =
-  var p = ctx.queue[].getProducer()
+  var p = ctx.queue[].getProducerHere()
   let base = ctx.producerIdx * ItemsPerProducer
   for i in 1 .. ItemsPerProducer:
     while not p.push(base + i):
@@ -52,7 +54,7 @@ proc producer[N: static int](ctx: ptr ProducerContext[N]) {.thread.} =
   discard ctx.producersDone[].fetchAdd(1, moRelease)
 
 proc consumer[N: static int](ctx: ptr ConsumerContext[N]) {.thread.} =
-  var c = ctx.queue[].getConsumer()
+  var c = ctx.queue[].getConsumerHere()
   while true:
     let item = c.pop()
     if item.isSome:

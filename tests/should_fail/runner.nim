@@ -134,6 +134,42 @@ const cases = @[
     outcome: eoCompileFails,
     substring: "notATransition",
   ),
+  Case(
+    name: "endpoint L1 (Task C5) — push on Unbound endpoint is a lifecycle violation",
+    file: "tests/should_fail/endpoint_push_on_unbound.nim",
+    outcome: eoCompileFails,
+    substring: "push",
+  ),
+  Case(
+    name: "endpoint L2 (Task C9, tripwire a) — SPSC push on consumer-tag endpoint",
+    file: "tests/should_fail/endpoint_push_on_consumer_tag.nim",
+    outcome: eoCompileFails,
+    substring: "SpscConsumerTag",
+  ),
+  Case(
+    name: "endpoint L2 (Task C9, tripwire b) — SPSC pop on producer-tag endpoint",
+    file: "tests/should_fail/endpoint_pop_on_producer_tag.nim",
+    outcome: eoCompileFails,
+    substring: "SpscProducerTag",
+  ),
+  Case(
+    name: "endpoint L2 (Task C9, tripwire c) — forbids-region calling tagged push",
+    file: "tests/should_fail/endpoint_forbids_region.nim",
+    outcome: eoCompileFails,
+    substring: "forbids",
+  ),
+  Case(
+    name: "endpoint L2 (Task C9, tripwire d) — MPMC push on consumer-tag endpoint",
+    file: "tests/should_fail/endpoint_mpmc_push_on_consumer_tag.nim",
+    outcome: eoCompileFails,
+    substring: "MpmcConsumerTag",
+  ),
+  Case(
+    name: "spawn C14.5 — defineProducerWorker inside proc body must compile-fail (module-scope guard)",
+    file: "tests/should_fail/spawn_nested_scope.nim",
+    outcome: eoCompileFails,
+    substring: "top level",
+  ),
 ]
 
 proc runCase(c: Case): bool =

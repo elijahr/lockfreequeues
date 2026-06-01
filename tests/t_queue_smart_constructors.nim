@@ -25,6 +25,8 @@ import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 # nim-debra surface for the manager-borrow smart-constructor tests.
 # Selective `from ... import` matches the queue.nim convention and
@@ -37,16 +39,16 @@ suite "bounded smart-constructors (RK = rkNone)":
     var q = newSpscQueue[int, 8]()
     check q.capacity == 8
     check q.push(42)
-    let r = q.pop()
+    let r = lfqConsumer.pop()
     check r.isSome
     check r.get == 42
 
   test "newMpscQueue: construct + push (via producer) + pop":
     var q = newMpscQueue[int, 16, 4]()
     check q.capacity == 16
-    var p = q.getProducer(0)
+    var p = q.getProducerHere(0)
     check p.push(7)
-    let r = q.pop()
+    let r = lfqConsumer.pop()
     check r.isSome
     check r.get == 7
 
@@ -54,7 +56,7 @@ suite "bounded smart-constructors (RK = rkNone)":
     var q = newSpmcQueue[int, 16, 4]()
     check q.capacity == 16
     check q.push(99)
-    var c = q.getConsumer(0)
+    var c = q.getConsumerHere(0)
     let r = c.pop()
     check r.isSome
     check r.get == 99
@@ -62,9 +64,9 @@ suite "bounded smart-constructors (RK = rkNone)":
   test "newMpmcQueue: construct + push (producer) + pop (consumer)":
     var q = newMpmcQueue[int, 16, 4, 4]()
     check q.capacity == 16
-    var p = q.getProducer(0)
+    var p = q.getProducerHere(0)
     check p.push(123)
-    var c = q.getConsumer(0)
+    var c = q.getConsumerHere(0)
     let r = c.pop()
     check r.isSome
     check r.get == 123
@@ -75,40 +77,37 @@ suite "unbounded smart-constructors — newUnboundedSpscQueue":
   ## spsc has no debra integration).
   test "auto-create: construct + push + pop":
     var q = newUnboundedSpscQueue[int, stEager, 8, 4]()
-    var p = q.getProducer()
+    var p = q.getProducerHere()
     p.push(10)
     p.push(20)
-    let r1 = q.pop()
-    let r2 = q.pop()
+    let r1 = lfqConsumer.pop()
+    let r2 = lfqConsumer.pop()
     check r1.isSome and r1.get == 10
     check r2.isSome and r2.get == 20
-    check q.pop().isNone
+    check lfqConsumer.pop().isNone
 
 suite "unbounded smart-constructors — newUnboundedMpscQueue":
   test "auto-create: construct + push + pop":
     var q = newUnboundedMpscQueue[int, stEager, 8, 4]()
-    q.attachConsumer()
-    var p = q.getProducer()
-    p.attach()
+    var lfqConsumer = q.bindConsumer()
+    var p = q.getProducerHere()
     p.push(1)
     p.push(2)
-    let r1 = q.pop()
-    let r2 = q.pop()
+    let r1 = lfqConsumer.pop()
+    let r2 = lfqConsumer.pop()
     check r1.isSome and r1.get == 1
     check r2.isSome and r2.get == 2
-    check q.pop().isNone
+    check lfqConsumer.pop().isNone
 
   test "borrow: construct + push + pop (manager owned externally)":
     var mgr = initDebraManager[4, debra.ccSingle]()
-    let consumerHandle = registerThread(mgr)
     block:
-      var q = newUnboundedMpscQueue[int, stEager, 8, 4](addr mgr, consumerHandle)
-      var p = q.getProducer()
-      p.attach()
+      var q = newUnboundedMpscQueue[int, stEager, 8, 4](addr mgr)
+      var p = q.getProducerHere()
       p.push(11)
-      let r = q.pop()
+      let r = lfqConsumer.pop()
       check r.isSome and r.get == 11
-      check q.pop().isNone
+      check lfqConsumer.pop().isNone
     # q goes out of scope here; `=destroy` runs `unbindClient` but leaves
     # `mgr` intact (ownsManager = false). `mgr` is dropped by Nim's
     # default destructor at suite-test scope exit.
@@ -116,11 +115,10 @@ suite "unbounded smart-constructors — newUnboundedMpscQueue":
 suite "unbounded smart-constructors — newUnboundedSpmcQueue":
   test "auto-create: construct + push + pop":
     var q = newUnboundedSpmcQueue[int, stEager, 8, 4]()
-    var p = q.getProducer()
+    var p = q.getProducerHere()
     p.push(3)
     p.push(4)
-    var c = q.getConsumer()
-    c.attach()
+    var c = q.getConsumerHere()
     let r1 = c.pop()
     let r2 = c.pop()
     check r1.isSome and r1.get == 3
@@ -131,10 +129,9 @@ suite "unbounded smart-constructors — newUnboundedSpmcQueue":
     var mgr = initDebraManager[4, debra.ccMulti]()
     block:
       var q = newUnboundedSpmcQueue[int, stEager, 8, 4](addr mgr)
-      var p = q.getProducer()
+      var p = q.getProducerHere()
       p.push(22)
-      var c = q.getConsumer()
-      c.attach()
+      var c = q.getConsumerHere()
       let r = c.pop()
       check r.isSome and r.get == 22
       check c.pop().isNone
@@ -142,12 +139,10 @@ suite "unbounded smart-constructors — newUnboundedSpmcQueue":
 suite "unbounded smart-constructors — newUnboundedMpmcQueue":
   test "auto-create: construct + push + pop":
     var q = newUnboundedMpmcQueue[int, stEager, 8, 4]()
-    var p = q.getProducer()
-    p.attach()
+    var p = q.getProducerHere()
     p.push(5)
     p.push(6)
-    var c = q.getConsumer()
-    c.attach()
+    var c = q.getConsumerHere()
     let r1 = c.pop()
     let r2 = c.pop()
     check r1.isSome and r1.get == 5
@@ -158,11 +153,9 @@ suite "unbounded smart-constructors — newUnboundedMpmcQueue":
     var mgr = initDebraManager[4, debra.ccMulti]()
     block:
       var q = newUnboundedMpmcQueue[int, stEager, 8, 4](addr mgr)
-      var p = q.getProducer()
-      p.attach()
+      var p = q.getProducerHere()
       p.push(33)
-      var c = q.getConsumer()
-      c.attach()
+      var c = q.getConsumerHere()
       let r = c.pop()
       check r.isSome and r.get == 33
       check c.pop().isNone
@@ -177,30 +170,26 @@ suite "smart-constructor =destroy soundness":
   test "newUnboundedMpscQueue auto-create destructor runs cleanly":
     block:
       var q = newUnboundedMpscQueue[int, stEager, 8, 4]()
-      q.attachConsumer()
-      var p = q.getProducer()
-      p.attach()
+      var lfqConsumer = q.bindConsumer()
+      var p = q.getProducerHere()
       p.push(1)
-      discard q.pop()
+      discard lfqConsumer.pop()
     check true # reached only if =destroy did not assert/crash
 
   test "newUnboundedSpmcQueue auto-create destructor runs cleanly":
     block:
       var q = newUnboundedSpmcQueue[int, stEager, 8, 4]()
-      var p = q.getProducer()
+      var p = q.getProducerHere()
       p.push(1)
-      var c = q.getConsumer()
-      c.attach()
+      var c = q.getConsumerHere()
       discard c.pop()
     check true
 
   test "newUnboundedMpmcQueue auto-create destructor runs cleanly":
     block:
       var q = newUnboundedMpmcQueue[int, stEager, 8, 4]()
-      var p = q.getProducer()
-      p.attach()
+      var p = q.getProducerHere()
       p.push(1)
-      var c = q.getConsumer()
-      c.attach()
+      var c = q.getConsumerHere()
       discard c.pop()
     check true

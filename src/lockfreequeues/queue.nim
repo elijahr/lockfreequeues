@@ -49,6 +49,13 @@ from debra import
 
 from debra import retireOnCAS, retireOnPublish
 
+import ./endpoint_types
+import ./role_tags
+from debra import pinScope, unpinned, advanceEvery, reclaimNow
+
+when defined(debug):
+  import std/typedthreads
+
 export exceptions
 
 # `stManual`, `stEager`, `ccSingle`, `ccMulti` travel with their enum
@@ -138,90 +145,6 @@ typestate QueueLifecycle[
   transitions:
     QueueInit[T, ccProd, ccCons, ST, S, MaxThreads] ->
       QueueDestroyed[T, ccProd, ccCons, ST, S, MaxThreads]
-
-## ----------------------------------------------------------------------
-## Middle-axis Claim-state typestate.
-##
-## Tracks `QueueClaimUnclaimed -> QueueClaimBothClaimed` on the
-## QueueProducer / QueueConsumer view types. Parallel to the BQueue
-## Claim-state in `bqueue.nim`. The state-type names carry a `QC`
-## prefix (`QCUnclaimed` / `QCProducerClaimed` / ...) to disambiguate
-## from BQueue's state types, which live in this build's same import
-## graph via the `lockfreequeues` aggregator.
-##
-## Single object type per view, uniform attachment, ccMulti-only
-## attach/detach methods. ccSingle callers hit a clean type-mismatch
-## diagnostic with no `*Multi` / `*Single` leakage.
-## ----------------------------------------------------------------------
-
-type
-  QueueClaimCtx*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      ST: static DeallocationStrategy,
-      S, MaxThreads: static int,
-  ] = object of RootObj
-    ## Phantom context for the QueueProducer / QueueConsumer Claim-state.
-
-  QCUnclaimed*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      ST: static DeallocationStrategy,
-      S, MaxThreads: static int,
-  ] = distinct QueueClaimCtx[T, ccProd, ccCons, ST, S, MaxThreads]
-
-  QCProducerClaimed*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      ST: static DeallocationStrategy,
-      S, MaxThreads: static int,
-  ] = distinct QueueClaimCtx[T, ccProd, ccCons, ST, S, MaxThreads]
-
-  QCConsumerClaimed*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      ST: static DeallocationStrategy,
-      S, MaxThreads: static int,
-  ] = distinct QueueClaimCtx[T, ccProd, ccCons, ST, S, MaxThreads]
-
-  QCBothClaimed*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      ST: static DeallocationStrategy,
-      S, MaxThreads: static int,
-  ] = distinct QueueClaimCtx[T, ccProd, ccCons, ST, S, MaxThreads]
-
-typestate QueueClaimState[
-    T,
-    ccProd: static PinScopeCardinality,
-    ccCons: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S: static int,
-    MaxThreads: static int,
-]:
-  inheritsFromRootObj = true
-  consumeOnTransition = false
-  strictTransitions = false
-  states:
-    QCUnclaimed[T, ccProd, ccCons, ST, S, MaxThreads]
-    QCProducerClaimed[T, ccProd, ccCons, ST, S, MaxThreads]
-    QCConsumerClaimed[T, ccProd, ccCons, ST, S, MaxThreads]
-    QCBothClaimed[T, ccProd, ccCons, ST, S, MaxThreads]
-  initial:
-    QCUnclaimed[T, ccProd, ccCons, ST, S, MaxThreads]
-  terminal:
-    QCBothClaimed[T, ccProd, ccCons, ST, S, MaxThreads]
-  transitions:
-    QCUnclaimed[T, ccProd, ccCons, ST, S, MaxThreads] ->
-      QCProducerClaimed[T, ccProd, ccCons, ST, S, MaxThreads]
-    QCUnclaimed[T, ccProd, ccCons, ST, S, MaxThreads] ->
-      QCConsumerClaimed[T, ccProd, ccCons, ST, S, MaxThreads]
-    QCUnclaimed[T, ccProd, ccCons, ST, S, MaxThreads] ->
-      QCBothClaimed[T, ccProd, ccCons, ST, S, MaxThreads]
-    QCProducerClaimed[T, ccProd, ccCons, ST, S, MaxThreads] ->
-      QCBothClaimed[T, ccProd, ccCons, ST, S, MaxThreads]
-    QCConsumerClaimed[T, ccProd, ccCons, ST, S, MaxThreads] ->
-      QCBothClaimed[T, ccProd, ccCons, ST, S, MaxThreads]
 
 type
   Segment*[T; ccProd, ccCons: static PinScopeCardinality, S: static int] = object
@@ -347,67 +270,6 @@ proc validateQueueParams*[
   assertQueueParams[T, ccProd, ccCons, ST, S, MaxThreads]()
   discard
 
-type
-  QueueProducer*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      ST: static DeallocationStrategy,
-      S, MaxThreads: static int,
-  ] {.QueueClaimState: QCUnclaimed.} = object
-    ## Per-thread producer handle for an unbounded `Queue`. Retrieved
-    ## via `Queue.getProducer()`. Defined for every (ccProd, ccCons)
-    ## shape for type uniformity.
-    ##
-    ## For `ccProd == ccMulti` the producer carries a
-    ## `ThreadHandle[MaxThreads, ...]` for the pin/unpin cycle in
-    ## `push`. For `ccProd == ccSingle` the producer carries no
-    ## handle (spsc/spmc-equiv have no pin requirement on push).
-    ##
-    ## Claim-state typestate : every view begins in
-    ## `QCUnclaimed`. The optional `claimed` runtime flag (ccMulti
-    ## only) tracks attach/detach state-preservingly (no static
-    ## typestate transition). See `bqueue.nim` for the symmetric
-    ## BQueueProducer pattern.
-    idx*: int
-    queue*: ptr Queue[T, ccProd, ccCons, ST, S, MaxThreads]
-    when ccProd == ccMulti:
-      # Producer.handle CC follows the manager.
-      when ccCons == ccMulti:
-        handle*: ThreadHandle[MaxThreads, debra.ccMulti]
-      else:
-        handle*: ThreadHandle[MaxThreads, debra.ccSingle]
-      claimed*: bool
-      when defined(debug):
-        # Debug-only thread-affinity stamp. Records the thread that ran
-        # `attach()` (which registered the debra handle via debra's
-        # `currentThreadId()`). `push()` asserts the operating thread
-        # matches. `when defined(debug):` so release builds carry NO
-        # field — zero layout change, zero hot-path cost.
-        attachedTid*: ThreadId
-
-  QueueConsumer*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      ST: static DeallocationStrategy,
-      S, MaxThreads: static int,
-  ] {.QueueClaimState: QCUnclaimed.} = object
-    ## Per-thread consumer handle for an unbounded `Queue`. Retrieved
-    ## via `Queue.getConsumer()`. Defined for every (ccProd, ccCons)
-    ## shape for type uniformity; only meaningful when
-    ## `ccCons == ccMulti` (single-consumer cardinalities pop directly
-    ## through `Queue.pop`).
-    idx*: int
-    queue*: ptr Queue[T, ccProd, ccCons, ST, S, MaxThreads]
-    when ccCons == ccMulti:
-      handle*: ThreadHandle[MaxThreads, debra.ccMulti]
-      claimed*: bool
-      when defined(debug):
-        # Debug-only thread-affinity stamp. Records the thread that ran
-        # `attach()` (which registered the debra handle via debra's
-        # `currentThreadId()`). `pop()` asserts the operating thread
-        # matches. `when defined(debug):` so release builds carry NO
-        # field — zero layout change, zero hot-path cost.
-        attachedTid*: ThreadId
 
 ## ----------------------------------------------------------------------
 ## Unbounded-queue body — absorbed spsc
@@ -739,120 +601,6 @@ proc newQueue*[
         reset(mgr[])
         freeAligned(mgr)
 
-proc getProducer*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S, MaxThreads: static int,
-](
-    self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
-): QueueProducer[T, ccProd, ccCons, ST, S, MaxThreads] =
-  ## Returns a `QueueProducer` view bound to this queue. For
-  ## `ccProd == ccMulti` the view is created **unregistered**: the
-  ## calling thread reserves a producer index but does NOT register
-  ## against the queue's `DebraManager` here. Registration is
-  ## thread-affine and happens at `attach()`-time, on the thread that
-  ## will actually `push`. `attach()` therefore MUST be called on the
-  ## thread that will subsequently `push()` through the returned view;
-  ## registering on one thread and pushing from another mis-routes the
-  ## debra handle. See `attach`.
-  result.queue = addr(self)
-  when ccProd == ccMulti:
-    let idx = self.producerCount.fetchAdd(1, moAcquire)
-    result.idx = idx
-  else:
-    result.idx = -1
-
-proc getConsumer*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S, MaxThreads: static int,
-](
-    self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
-): QueueConsumer[T, ccProd, ccCons, ST, S, MaxThreads] =
-  ## Returns a `QueueConsumer` view bound to this queue. For
-  ## `ccCons == ccMulti` the view is created **unregistered**: the
-  ## calling thread reserves a consumer index but does NOT register
-  ## against the queue's `DebraManager` here. Registration is
-  ## thread-affine and happens at `attach()`-time, on the thread that
-  ## will actually `pop`. `attach()` therefore MUST be called on the
-  ## thread that will subsequently `pop()` through the returned view;
-  ## registering on one thread and popping from another mis-routes the
-  ## debra handle. See `attach`.
-  result.queue = addr(self)
-  when ccCons == ccMulti:
-    let idx = self.consumerCount.fetchAdd(1, moAcquire)
-    result.idx = idx
-  else:
-    result.idx = -1
-
-template getProducerHere*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S, MaxThreads: static int,
-](
-    self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
-): QueueProducer[T, ccProd, ccCons, ST, S, MaxThreads] =
-  ## Sugar: `getProducer()` + `attach()` in one call.
-  ##
-  ## Use when the calling thread is also the operating thread (the
-  ## thread that will subsequently `push()` through the returned view).
-  ## This is the common SPSC case and the same-thread MP/MC case
-  ## (e.g., bench harnesses where the spawning thread is also the
-  ## producer).
-  ##
-  ## For the producer-to-worker handoff pattern (a parent thread
-  ## obtains the view and hands it off to a worker thread that does
-  ## the pushing), use `getProducer()` + `attach()` separately so the
-  ## debra registration lands on the worker thread. See `getProducer`
-  ## and `attach` for the thread-affinity contract.
-  ##
-  ## For `ccProd == ccSingle` (SPSC / SPMC producer side) `attach()`
-  ## is a no-op (debra-free), so this template is purely syntactic
-  ## sugar for those shapes.
-  ##
-  ## Raises `DebraRegistrationError` from the underlying `attach()`
-  ## when `ccProd == ccMulti` and the manager's `MaxThreads` registry
-  ## capacity is exhausted.
-  var view = self.getProducer()
-  when ccProd == ccMulti:
-    view.attach()
-  view
-
-template getConsumerHere*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S, MaxThreads: static int,
-](
-    self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
-): QueueConsumer[T, ccProd, ccCons, ST, S, MaxThreads] =
-  ## Sugar: `getConsumer()` + `attach()` in one call.
-  ##
-  ## Use when the calling thread is also the operating thread (the
-  ## thread that will subsequently `pop()` through the returned view).
-  ## This is the common SPSC case and the same-thread MP/MC case.
-  ##
-  ## For the consumer-to-worker handoff pattern (a parent thread
-  ## obtains the view and hands it off to a worker thread that does
-  ## the popping), use `getConsumer()` + `attach()` separately so the
-  ## debra registration lands on the worker thread. See `getConsumer`
-  ## and `attach` for the thread-affinity contract.
-  ##
-  ## For `ccCons == ccSingle` (SPSC / MPSC consumer side) `attach()`
-  ## is a no-op (debra-free), so this template is purely syntactic
-  ## sugar for those shapes.
-  ##
-  ## Raises `DebraRegistrationError` from the underlying `attach()`
-  ## when `ccCons == ccMulti` and the manager's `MaxThreads` registry
-  ## capacity is exhausted.
-  var view = self.getConsumer()
-  when ccCons == ccMulti:
-    view.attach()
-  view
-
 ## ----------------------------------------------------------------------
 ## len / segmentCount accessors.
 ## ----------------------------------------------------------------------
@@ -889,124 +637,6 @@ proc segmentCount*[
 ##     growth on full.
 ## ----------------------------------------------------------------------
 
-proc push*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S, MaxThreads: static int,
-](
-    self: var QueueProducer[T, ccProd, ccCons, ST, S, MaxThreads],
-    item: T,
-) {.raises: [].} =
-  ## Push a single item onto the unbounded queue (cardinality-dispatched).
-  when not defined(allowNonLockFreeQueueItems):
-    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
-      when T is ref:
-        {.
-          error:
-            "Queue item type '" & $T & "' is a ref type. " &
-            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
-            "mutate the refcount on the same object multiple threads can " &
-            "read or write, which is a race regardless of whether the " &
-            "refcount itself is atomic. Use a lock-free type (int, " &
-            "pointer, ptr T, etc.) or compile with " &
-            "-d:allowNonLockFreeQueueItems to explicitly allow it."
-        .}
-
-  when ccProd == ccSingle and ccCons == ccSingle:
-    # Spsc-absorbed — no pin, no committed flag, no debra.
-    # Lifted verbatim from `unbounded_spsc.nim:83-115`.
-    var seg = self.queue.tailSegment.load(moRelaxed)
-    let tail = seg.tail.load(moRelaxed)
-    if tail >= S:
-      let newSeg = newSegment[T, ccProd, ccCons, S]()
-      seg.next.store(newSeg, moRelease)
-      self.queue.tailSegment.store(newSeg, moRelease)
-      seg = newSeg
-      discard self.queue.segments.fetchAdd(1, moRelaxed)
-    let pos = seg.tail.load(moRelaxed)
-    seg.data[pos] = item
-    seg.tail.store(pos + 1, moRelease)
-    discard self.queue.itemCount.fetchAdd(1, moRelaxed)
-  elif ccProd == ccSingle and ccCons == ccMulti:
-    # spmc-equiv — no pin (single producer).
-    var seg = self.queue.tailSegment.load(moRelaxed)
-    var tail = seg.tail.load(moRelaxed)
-    if tail >= S:
-      let newSeg = newSegment[T, ccProd, ccCons, S]()
-      seg.next.store(newSeg, moRelease)
-      self.queue.tailSegment.store(newSeg, moRelease)
-      seg = newSeg
-      tail = 0
-      discard self.queue.segments.fetchAdd(1, moRelaxed)
-    seg.data[tail] = item
-    seg.tail.store(tail + 1, moRelease)
-    discard self.queue.itemCount.fetchAdd(1, moRelaxed)
-  else:
-    # ccProd == ccMulti — mpsc-equiv + mpmc-equiv share the push
-    # body shape (the cardinality difference is on the consumer side).
-    # Debug precondition: the producer view must have been claimed via
-    # `attach()` on this thread (which registers the debra handle), so
-    # the handle pinned below routes to the calling thread's slot.
-    # Mirrors the mpsc-equiv `pop` assert form (bare `assert`,
-    # compiled out under `-d:release` / `--assertions:off`).
-    assert self.claimed,
-      "producer view: call attach() on this thread before push()"
-    when defined(debug):
-      assert self.attachedTid == currentThreadId(),
-        "producer view: attach() was called on a different thread than " &
-        "this push(); the operating thread must be the thread that " &
-        "registered the debra handle (thread-affinity contract)"
-    # §3.5.6 Pin-Claim Ordering: `pinScope` MUST be acquired BEFORE
-    # the first `tailSegment.load(...)`.
-    block:
-      var scope {.used.} = pinScope(unpinned(self.handle))
-      var spins = InitialSpin
-      while true:
-        var seg = self.queue.tailSegment.load(moAcquire)
-        var tail = seg.tail.load(moAcquire)
-        if tail >= S:
-          let nextSeg = seg.next.load(moAcquire)
-          if nextSeg == nil:
-            let newSeg = newSegment[T, ccProd, ccCons, S]()
-            var expectedNext: ptr Segment[T, ccProd, ccCons, S] = nil
-            if seg.next.compareExchange(expectedNext, newSeg, moRelease, moRelaxed):
-              var expectedSeg = seg
-              discard self.queue.tailSegment.compareExchange(
-                expectedSeg, newSeg, moRelease, moRelaxed
-              )
-              discard self.queue.segments.fetchAdd(1, moRelaxed)
-              continue
-            else:
-              freeAligned(newSeg)
-              backoffOnRetry(spins)
-              continue
-          else:
-            var expectedSeg = seg
-            discard self.queue.tailSegment.compareExchange(
-              expectedSeg, nextSeg, moRelease, moRelaxed
-            )
-            continue
-        var expected = tail
-        if seg.tail.compareExchange(expected, tail + 1, moAcquire, moRelaxed):
-          seg.data[tail] = item
-          seg.committed[tail].store(true, moRelease)
-          discard self.queue.itemCount.fetchAdd(1, moRelaxed)
-          break
-
-# Batch push for all 4 cardinality combos — thin loop.
-proc push*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S, MaxThreads: static int,
-](
-    self: var QueueProducer[T, ccProd, ccCons, ST, S, MaxThreads],
-    items: openArray[T],
-) {.raises: [].} =
-  ## Batch push for unbounded `Queue`. Thin loop over single-item push.
-  for item in items:
-    self.push(item)
 
 ## ----------------------------------------------------------------------
 ## Pop body — single-item.
@@ -1057,63 +687,15 @@ proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
     discard self.segments.fetchSub(1, moRelaxed)
     freeAligned(oldSeg)
 
-# --- mpsc-equiv pop (ccMulti × ccSingle, direct on Queue, retireOnPublish) -
-proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
-    self: var Queue[T, ccMulti, ccSingle, ST, S, MaxThreads]
-): Option[T] =
-  ## mpsc-equiv pop — §3.5.1 retire-bearing site.
-  ##
-  ## Debug precondition: the consumer thread must have registered its
-  ## debra handle via `attachConsumer()` (or supplied it through the
-  ## handle-carrying borrow constructor) before the first `pop`. The
-  ## assert is compiled out under `-d:release` / `--assertions:off`, so
-  ## it adds no hot-path cost in release builds.
-  assert self.consumerAttached,
-    "mpsc Queue.pop called before attachConsumer(): the consumer " &
-    "thread must register its debra handle on its own thread first"
-  when defined(debug):
-    assert self.attachedTid == currentThreadId(),
-      "mpsc Queue.pop: attachConsumer() was called on a different " &
-      "thread than this pop(); the operating thread must be the thread " &
-      "that registered the debra handle (thread-affinity contract)"
-  when not defined(allowNonLockFreeQueueItems):
-    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
-      when T is ref:
-        {.
-          error:
-            "Queue item type '" & $T & "' is a ref type. " &
-            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
-            "mutate the refcount on the same object multiple threads can " &
-            "read or write, which is a race regardless of whether the " &
-            "refcount itself is atomic. Use a lock-free type (int, " &
-            "pointer, ptr T, etc.) or compile with " &
-            "-d:allowNonLockFreeQueueItems to explicitly allow it."
-        .}
-
-  block:
-    var scope = pinScope(unpinned(self.handle))
-    var seg = self.headSegment.load(moAcquire)
-    while true:
-      let tail = seg.tail.load(moAcquire)
-      if seg.head < tail:
-        if seg.committed[seg.head].load(moAcquire):
-          result = some(seg.data[seg.head])
-          inc seg.head
-          discard self.itemCount.fetchSub(1, moRelaxed)
-        break
-      let nextSeg = seg.next.load(moAcquire)
-      if nextSeg == nil:
-        break
-      self.retireOnPublish(
-        scope, self.headSegment, nextSeg, segmentDestructor[T, ccMulti, ccSingle, S]
-      )
-      when ST != stManual:
-        discard self.segments.fetchSub(1, moRelaxed)
-      seg = nextSeg
-
-  when ST == stEager:
-    if self.handle.advanceEvery(LockFreeQueuesAdvanceEvery):
-      discard reclaimNow(self.handle)
+# --- mpsc-equiv pop: REMOVED in v5.0.0 ----------------------------------
+# The pre-v5.0.0 direct-on-Queue MPSC pop required `attachConsumer()`
+# ceremony + carried `self.handle` / `self.consumerAttached` fields on
+# Queue that were tied to the deleted QueueConsumer claim-state model.
+# v5.0.0 routes MPSC pop through `Bound[T, Tag, Queue[..., ccSingle, ...]]`
+# (see endpoint.nim's `getConsumer` factory + bqueue/queue's pop on
+# Bound). Users go through `q.bindConsumer()` (or
+# `q.getConsumer().bindToThread()`) to get a Bound endpoint, then call
+# pop on it.
 
 # --- batch pop (ccCons == ccSingle, direct on Queue) ----------------------
 proc pop*[
@@ -1139,173 +721,6 @@ proc pop*[
     some(items)
 
 # --- spmc-equiv pop (ccSingle × ccMulti, via QueueConsumer, retireOnCAS) -
-proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
-    self: var QueueConsumer[T, ccSingle, ccMulti, ST, S, MaxThreads]
-): Option[T] =
-  ## spmc-equiv pop — §3.5.3 retire-bearing site.
-  ##
-  ## Debug precondition: the consumer view must have been claimed via
-  ## `attach()` on this thread (which registers the debra handle), so the
-  ## handle pinned below routes to the calling thread's slot. Mirrors the
-  ## mpsc-equiv `pop` assert form (bare `assert`, compiled out under
-  ## `-d:release` / `--assertions:off`).
-  assert self.claimed,
-    "consumer view: call attach() on this thread before pop()"
-  when defined(debug):
-    assert self.attachedTid == currentThreadId(),
-      "spmc consumer view: attach() was called on a different thread " &
-      "than this pop(); the operating thread must be the thread that " &
-      "registered the debra handle (thread-affinity contract)"
-  when not defined(allowNonLockFreeQueueItems):
-    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
-      when T is ref:
-        {.
-          error:
-            "Queue item type '" & $T & "' is a ref type. " &
-            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
-            "mutate the refcount on the same object multiple threads can " &
-            "read or write, which is a race regardless of whether the " &
-            "refcount itself is atomic. Use a lock-free type (int, " &
-            "pointer, ptr T, etc.) or compile with " &
-            "-d:allowNonLockFreeQueueItems to explicitly allow it."
-        .}
-
-  block:
-    var scope = pinScope(unpinned(self.handle))
-    var seg = self.queue.headSegment.load(moAcquire)
-    var spins = InitialSpin
-    while true:
-      let tail = seg.tail.load(moAcquire)
-      var prevIdx = seg.prevConsumerIdx.load(moAcquire)
-      let mySlot = prevIdx + 1
-      if mySlot >= tail:
-        let nextSeg = seg.next.load(moAcquire)
-        if nextSeg == nil:
-          break
-        if self.queue[].retireOnCAS(
-          scope,
-          self.queue.headSegment,
-          seg,
-          nextSeg,
-          segmentDestructor[T, ccSingle, ccMulti, S],
-        ):
-          when ST != stManual:
-            discard self.queue.segments.fetchSub(1, moRelaxed)
-          seg = nextSeg
-        else:
-          seg = self.queue.headSegment.load(moAcquire)
-        backoffOnRetry(spins)
-        continue
-
-      if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
-        result = some(seg.data[mySlot])
-        discard self.queue.itemCount.fetchSub(1, moRelaxed)
-        break
-
-  when ST == stEager:
-    if self.handle.advanceEvery(LockFreeQueuesAdvanceEvery):
-      discard reclaimNow(self.handle)
-
-# --- mpmc-equiv pop (ccMulti × ccMulti, via QueueConsumer, retireOnCAS) -
-proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
-    self: var QueueConsumer[T, ccMulti, ccMulti, ST, S, MaxThreads]
-): Option[T] =
-  ## mpmc-equiv pop — §3.5.2 retire-bearing site.
-  ##
-  ## Debug precondition: the consumer view must have been claimed via
-  ## `attach()` on this thread (which registers the debra handle), so the
-  ## handle pinned below routes to the calling thread's slot. Mirrors the
-  ## mpsc-equiv `pop` assert form (bare `assert`, compiled out under
-  ## `-d:release` / `--assertions:off`).
-  assert self.claimed,
-    "consumer view: call attach() on this thread before pop()"
-  when defined(debug):
-    assert self.attachedTid == currentThreadId(),
-      "mpmc consumer view: attach() was called on a different thread " &
-      "than this pop(); the operating thread must be the thread that " &
-      "registered the debra handle (thread-affinity contract)"
-  when not defined(allowNonLockFreeQueueItems):
-    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
-      when T is ref:
-        {.
-          error:
-            "Queue item type '" & $T & "' is a ref type. " &
-            "Slots are stored in a shared array; `=copy`/`=sink` hooks " &
-            "mutate the refcount on the same object multiple threads can " &
-            "read or write, which is a race regardless of whether the " &
-            "refcount itself is atomic. Use a lock-free type (int, " &
-            "pointer, ptr T, etc.) or compile with " &
-            "-d:allowNonLockFreeQueueItems to explicitly allow it."
-        .}
-
-  block:
-    var scope = pinScope(unpinned(self.handle))
-    var seg = self.queue.headSegment.load(moAcquire)
-    var spins = InitialSpin
-    while true:
-      let tail = seg.tail.load(moAcquire)
-      var prevIdx = seg.prevConsumerIdx.load(moAcquire)
-      let mySlot = prevIdx + 1
-      if mySlot >= tail:
-        if mySlot < S and seg.tail.load(moAcquire) > mySlot:
-          if not seg.committed[mySlot].load(moAcquire):
-            break
-          backoffOnRetry(spins)
-          continue
-        let nextSeg = seg.next.load(moAcquire)
-        if nextSeg == nil:
-          break
-        if self.queue[].retireOnCAS(
-          scope,
-          self.queue.headSegment,
-          seg,
-          nextSeg,
-          segmentDestructor[T, ccMulti, ccMulti, S],
-        ):
-          when ST != stManual:
-            discard self.queue.segments.fetchSub(1, moRelaxed)
-          seg = nextSeg
-        else:
-          seg = self.queue.headSegment.load(moAcquire)
-        backoffOnRetry(spins)
-        continue
-      if not seg.committed[mySlot].load(moAcquire):
-        break # Producer still writing
-      if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
-        result = some(seg.data[mySlot])
-        discard self.queue.itemCount.fetchSub(1, moRelaxed)
-        break
-
-  when ST == stEager:
-    if self.handle.advanceEvery(LockFreeQueuesAdvanceEvery):
-      discard reclaimNow(self.handle)
-
-# --- batch pop (ccCons == ccMulti, via QueueConsumer) --------------------
-proc pop*[
-    T;
-    ccProd: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S, MaxThreads: static int,
-](
-    self: var QueueConsumer[T, ccProd, ccMulti, ST, S, MaxThreads],
-    count: int,
-): Option[seq[T]] =
-  ## Batch pop for ccCons == ccMulti. Thin loop over single-item pop.
-  if unlikely(count <= 0):
-    return none(seq[T])
-  var items = newSeqOfCap[T](count)
-  for _ in 0 ..< count:
-    let v = self.pop()
-    if v.isNone:
-      break
-    items.add(v.get)
-  if items.len == 0:
-    none(seq[T])
-  else:
-    some(items)
-
-# --- ccMulti-consumer compile-time gate on bare Queue.pop ----------------
-# compile-time `{.error.}` overload. References user-visible
 # alias name `QueueConsumer`.
 proc pop*[
     T;
@@ -1314,8 +729,8 @@ proc pop*[
     S, MaxThreads: static int,
 ](self: var Queue[T, ccProd, ccMulti, ST, S, MaxThreads]): Option[T] {.error:
     "Direct pop on a multi-consumer Queue is not allowed. " &
-    "Use Queue.getConsumer().pop() to obtain a per-thread " &
-    "QueueConsumer and pop through it.".} =
+    "Use q.getConsumerHere().pop() (same-thread sugar) or q.bindConsumer().pop() (one-shot SC consumer) to obtain a per-thread " &
+    "Bound[T, Tag, Queue[...]] and pop through it.".} =
   discard
 
 # --- ccMulti-consumer compile-time gate on bare Queue batch pop ----------
@@ -1328,173 +743,11 @@ proc pop*[
     self: var Queue[T, ccProd, ccMulti, ST, S, MaxThreads], count: int
 ): Option[seq[T]] {.error:
     "Direct batch pop on a multi-consumer Queue is not allowed. " &
-    "Use Queue.getConsumer().pop(count) to obtain a per-thread " &
-    "QueueConsumer and batch-pop through it.".} =
+    "Use q.getConsumerHere().pop(count) (same-thread sugar) or q.bindConsumer().pop(count) (one-shot SC consumer) to obtain a per-thread " &
+    "Bound[T, Tag, Queue[...]] and batch-pop through it.".} =
   discard
 
 ## ----------------------------------------------------------------------
-## Claim-state attach / detach for QueueProducer / QueueConsumer.
-##
-## Signatures bind ccMulti only; ccSingle callers receive a clean
-## type-mismatch diagnostic with no `*Multi` / `*Single` backing-type
-## leakage. State-preserving — no `{.transition.}` pragma; same-module
-## discipline satisfied since QueueClaimState is declared in this file.
-## ----------------------------------------------------------------------
-
-proc attach*[
-    T;
-    ccCons: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S, MaxThreads: static int,
-](
-    self: var QueueProducer[T, ccMulti, ccCons, ST, S, MaxThreads]
-) {.raises: [DebraRegistrationError].} =
-  ## Claim a multi-producer QueueProducer view on the calling thread.
-  ##
-  ## Registers the calling thread against the queue's `DebraManager`
-  ## (thread-affine) and stores the resulting `ThreadHandle` on the
-  ## view, then marks it claimed. Guarded by `claimed` so a repeated
-  ## attach on the same view does not burn a second registry slot.
-  ## Runtime-only (no static typestate transition).
-  ##
-  ## **Thread-affinity contract:** MUST be called on the thread that
-  ## will subsequently `push()` through this view. Registering on one
-  ## thread and pushing from another mis-routes the debra handle (the
-  ## handle carries the registering thread's slot index; debra applies
-  ## it verbatim with no cross-thread check — see PART A / debra
-  ## `guard.pin`).
-  ##
-  ## **Slot accounting:** each `attach()` consumes one `MaxThreads`
-  ## registration slot for the lifetime of the owned `DebraManager`
-  ## (debra 0.8.0 has no per-thread unregister). `detach()` does NOT
-  ## free the slot. Size `MaxThreads` for the total number of DISTINCT
-  ## threads that will ever operate this queue, not the peak concurrent
-  ## count. Repeated `detach()` / re-`attach()` on the same thread burns
-  ## a slot each time.
-  ##
-  ## Raises `DebraRegistrationError` when the manager's `MaxThreads`
-  ## registry capacity is exhausted (the error is surfaced, never
-  ## swallowed).
-  if not self.claimed:
-    self.handle = registerThread(self.queue.manager[])
-    self.claimed = true
-    when defined(debug):
-      self.attachedTid = currentThreadId()
-
-proc detach*[
-    T;
-    ccCons: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S, MaxThreads: static int,
-](
-    self: var QueueProducer[T, ccMulti, ccCons, ST, S, MaxThreads]
-) {.raises: [].} =
-  ## Release a multi-producer QueueProducer view's claim.
-  ##
-  ## Only clears the claim flag; it does NOT unregister the debra handle
-  ## (debra 0.8.0 has no per-thread unregister, so the `MaxThreads` slot
-  ## stays consumed). `detach()` is idempotent; calling it on an
-  ## already-detached view is a no-op.
-  self.claimed = false
-
-proc attach*[
-    T;
-    ccProd: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S, MaxThreads: static int,
-](
-    self: var QueueConsumer[T, ccProd, ccMulti, ST, S, MaxThreads]
-) {.raises: [DebraRegistrationError].} =
-  ## Claim a multi-consumer QueueConsumer view on the calling thread.
-  ##
-  ## Registers the calling thread against the queue's `DebraManager`
-  ## (thread-affine) and stores the resulting `ThreadHandle` on the
-  ## view, then marks it claimed. Guarded by `claimed` so a repeated
-  ## attach on the same view does not burn a second registry slot.
-  ## Runtime-only (no static typestate transition).
-  ##
-  ## **Thread-affinity contract:** MUST be called on the thread that
-  ## will subsequently `pop()` through this view. Registering on one
-  ## thread and popping from another mis-routes the debra handle.
-  ##
-  ## **Slot accounting:** each `attach()` consumes one `MaxThreads`
-  ## registration slot for the lifetime of the owned `DebraManager`
-  ## (debra 0.8.0 has no per-thread unregister). `detach()` does NOT
-  ## free the slot. Size `MaxThreads` for the total number of DISTINCT
-  ## threads that will ever operate this queue, not the peak concurrent
-  ## count. Repeated `detach()` / re-`attach()` on the same thread burns
-  ## a slot each time.
-  ##
-  ## Raises `DebraRegistrationError` when the manager's `MaxThreads`
-  ## registry capacity is exhausted.
-  if not self.claimed:
-    self.handle = registerThread(self.queue.manager[])
-    self.claimed = true
-    when defined(debug):
-      self.attachedTid = currentThreadId()
-
-proc detach*[
-    T;
-    ccProd: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S, MaxThreads: static int,
-](
-    self: var QueueConsumer[T, ccProd, ccMulti, ST, S, MaxThreads]
-) {.raises: [].} =
-  ## Release a multi-consumer QueueConsumer view's claim.
-  ##
-  ## Only clears the claim flag; it does NOT unregister the debra handle
-  ## (debra 0.8.0 has no per-thread unregister, so the `MaxThreads` slot
-  ## stays consumed). `detach()` is idempotent; calling it on an
-  ## already-detached view is a no-op.
-  self.claimed = false
-
-## ----------------------------------------------------------------------
-## mpsc-equiv (ccMulti × ccSingle) consumer attach.
-##
-## The single consumer pops directly through `Queue.pop` (no view), so
-## it has no `attach()`. Instead it registers its debra handle once, on
-## its own thread, via `attachConsumer` before its first `pop`. This is
-## the thread-affinity fix for the auto-create constructor, which no
-## longer registers the consumer handle at construction time.
-## ----------------------------------------------------------------------
-
-proc attachConsumer*[
-    T;
-    ST: static DeallocationStrategy,
-    S, MaxThreads: static int,
-](
-    self: var Queue[T, ccMulti, ccSingle, ST, S, MaxThreads]
-) {.raises: [DebraRegistrationError].} =
-  ## Register the calling thread as the mpsc-equiv single consumer.
-  ##
-  ## **Thread-affinity contract:** MUST be called on the thread that
-  ## will subsequently `pop`, before the first `pop`. Registering on one
-  ## thread and popping from another mis-routes the debra handle (the
-  ## handle carries the registering thread's slot index; debra applies
-  ## it verbatim with no cross-thread check). Registers against the
-  ## queue's `DebraManager` (thread-affine) and stores the resulting
-  ## `ThreadHandle` on the queue, then records `consumerAttached = true`
-  ## (asserted at the top of `pop` in debug builds). Idempotent: a
-  ## repeat call is guarded so it does not burn a second registry slot.
-  ##
-  ## **Slot accounting:** this registration consumes one `MaxThreads`
-  ## registration slot for the lifetime of the owned `DebraManager`
-  ## (debra 0.8.0 has no per-thread unregister). There is no
-  ## consumer-side `detach()` to release it. Size `MaxThreads` for the
-  ## total number of DISTINCT threads that will ever operate this queue,
-  ## not the peak concurrent count.
-  ##
-  ## Raises `DebraRegistrationError` when `MaxThreads` is exhausted.
-  ## Callers using the handle-carrying borrow `newQueue` overload
-  ## (escape hatch) register the handle themselves and must NOT call
-  ## `attachConsumer`.
-  if not self.consumerAttached:
-    self.handle = registerThread(self.manager[])
-    self.consumerAttached = true
-    when defined(debug):
-      self.attachedTid = currentThreadId()
-
 ## ----------------------------------------------------------------------
 ## Destructors driving Lifecycle / Claim-state terminal transitions
 ##. Mirror BQueue's pattern.
@@ -1563,36 +816,6 @@ proc `=destroy`*[
         reset(self.manager[])
         freeAligned(self.manager)
 
-proc `=destroy`*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S, MaxThreads: static int,
-](self: var QueueProducer[T, ccProd, ccCons, ST, S, MaxThreads]) {.
-    destructorTransition: QCUnclaimed -> QCBothClaimed,
-    transitionError:
-      "QueueProducer used after =destroy (claim-state: QCUnclaimed -> QCBothClaimed).",
-    raises: [],
-.} =
-  ## QueueProducer destructor — drives the Claim-state terminal
-  ## transition. View carries no owned heap state; the underlying
-  ## ThreadHandle is borrow-only (released via the parent Queue).
-  discard
-
-proc `=destroy`*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S, MaxThreads: static int,
-](self: var QueueConsumer[T, ccProd, ccCons, ST, S, MaxThreads]) {.
-    destructorTransition: QCUnclaimed -> QCBothClaimed,
-    transitionError:
-      "QueueConsumer used after =destroy (claim-state: QCUnclaimed -> QCBothClaimed).",
-    raises: [],
-.} =
-  ## QueueConsumer destructor — drives the Claim-state terminal
-  ## transition.
-  discard
 
 ## ----------------------------------------------------------------------
 ## Family-named unbounded smart constructors — kept as thin wrappers.
@@ -1615,26 +838,18 @@ proc newUnboundedMpscQueue*[
     ST: static DeallocationStrategy = DefaultDeallocationStrategy,
     S, MaxThreads: static int,
 ](
-    manager: ptr DebraManager[MaxThreads, debra.ccSingle],
-    consumerHandle: ThreadHandle[MaxThreads, debra.ccSingle],
-): Queue[T, ccMulti, ccSingle, ST, S, MaxThreads] {.inline.} =
-  ## Unbounded mpsc-equivalent (`ccMulti × ccSingle`) borrow
-  ## smart-constructor.
-  newQueue(Queue[T, ccMulti, ccSingle, ST, S, MaxThreads], manager, consumerHandle)
-
-proc newUnboundedMpscQueue*[
-    T;
-    ST: static DeallocationStrategy = DefaultDeallocationStrategy,
-    S, MaxThreads: static int,
-](
     manager: ptr DebraManager[MaxThreads, debra.ccSingle]
 ): Queue[T, ccMulti, ccSingle, ST, S, MaxThreads] {.inline.} =
   ## Unbounded mpsc-equivalent (`ccMulti × ccSingle`) borrow
-  ## smart-constructor — manager-only form. The consumer's debra handle
-  ## is NOT registered here; the consumer thread registers itself via
-  ## `attachConsumer()` before its first `pop`. Use the
-  ## `(manager, consumerHandle)` overload (escape hatch) to register the
-  ## consumer thread yourself and supply the handle at construction.
+  ## smart-constructor — manager-only form. The consumer thread calls
+  ## `q.bindConsumer()` on its own thread to register and obtain its
+  ## `Bound` endpoint.
+  ##
+  ## The pre-v5.0.0 `(manager, consumerHandle)` borrow-with-handle
+  ## overload was removed: in v5.0.0 the consumer's debra handle is
+  ## owned by `Bound` (opaque storage), so pre-registering and passing
+  ## a handle at construction is no longer the right ceremony.
+  ## `bindConsumer` wraps registration + binding in one call.
   newQueue(Queue[T, ccMulti, ccSingle, ST, S, MaxThreads], manager)
 
 proc newUnboundedMpscQueue*[
@@ -1687,6 +902,393 @@ proc newUnboundedMpmcQueue*[
   ## Unbounded mpmc-equivalent (`ccMulti × ccMulti`) auto-create
   ## smart-constructor.
   newQueue(Queue[T, ccMulti, ccMulti, ST, S, MaxThreads])
+
+## ----------------------------------------------------------------------
+## Push / pop on Bound endpoints — Track C v5.0.0 re-typing.
+##
+## Re-types the pre-v5.0.0 QueueProducer/QueueConsumer push/pop bodies
+## onto `Bound[T, Tag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]]`
+## receivers. The Bound endpoint carries opaque handle storage
+## (`handleManager: pointer` + `handleIdx: int`); for the ccProd==ccMulti
+## paths that need `pinScope(unpinned(handle))` the typed
+## `ThreadHandle[MaxThreads, CC]` is reconstructed via cast at the call
+## site (`when compiles(self.queue.manager)` gate + manager-pointer
+## introspection — mirror of the onClose pattern in endpoint.nim).
+##
+## SPSC-absorbed and SPMC-equiv push paths are debra-free; they ignore
+## the handle storage entirely.
+## ----------------------------------------------------------------------
+
+proc push*[
+    T;
+    Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: Bound[T, Tag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]], item: T
+) {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## Push a single item onto the unbounded queue (cardinality-dispatched).
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "Queue item is ref; recompile with -d:allowNonLockFreeQueueItems.".}
+  when defined(debug):
+    assert self.attachedTid == getThreadId(),
+      "push from wrong thread (must match bindToThread thread)"
+
+  when ccProd == ccSingle and ccCons == ccSingle:
+    # SPSC-absorbed — no pin, no committed flag, no debra.
+    var seg = self.queue.tailSegment.load(moRelaxed)
+    let tail = seg.tail.load(moRelaxed)
+    if tail >= S:
+      let newSeg = newSegment[T, ccProd, ccCons, S]()
+      seg.next.store(newSeg, moRelease)
+      self.queue.tailSegment.store(newSeg, moRelease)
+      seg = newSeg
+      discard self.queue.segments.fetchAdd(1, moRelaxed)
+    let pos = seg.tail.load(moRelaxed)
+    seg.data[pos] = item
+    seg.tail.store(pos + 1, moRelease)
+    discard self.queue.itemCount.fetchAdd(1, moRelaxed)
+  elif ccProd == ccSingle and ccCons == ccMulti:
+    # spmc-equiv — single producer, no pin.
+    var seg = self.queue.tailSegment.load(moRelaxed)
+    var tail = seg.tail.load(moRelaxed)
+    if tail >= S:
+      let newSeg = newSegment[T, ccProd, ccCons, S]()
+      seg.next.store(newSeg, moRelease)
+      self.queue.tailSegment.store(newSeg, moRelease)
+      seg = newSeg
+      tail = 0
+      discard self.queue.segments.fetchAdd(1, moRelaxed)
+    seg.data[tail] = item
+    seg.tail.store(tail + 1, moRelease)
+    discard self.queue.itemCount.fetchAdd(1, moRelaxed)
+  else:
+    # ccProd == ccMulti — mpsc/mpmc-equiv: pin claim required.
+    type MgrT = typeof(self.queue.manager[])
+    let mgr = cast[ptr MgrT](self.handleManager)
+    type Handle = ThreadHandle[MgrT.MaxThreads, MgrT.CC]
+    let h = Handle(idx: self.handleIdx, manager: mgr)
+    block:
+      var scope {.used.} = pinScope(unpinned(h))
+      var spins = InitialSpin
+      while true:
+        var seg = self.queue.tailSegment.load(moAcquire)
+        var tail = seg.tail.load(moAcquire)
+        if tail >= S:
+          let nextSeg = seg.next.load(moAcquire)
+          if nextSeg == nil:
+            let newSeg = newSegment[T, ccProd, ccCons, S]()
+            var expectedNext: ptr Segment[T, ccProd, ccCons, S] = nil
+            if seg.next.compareExchange(expectedNext, newSeg, moRelease, moRelaxed):
+              var expectedSeg = seg
+              discard self.queue.tailSegment.compareExchange(
+                expectedSeg, newSeg, moRelease, moRelaxed
+              )
+              discard self.queue.segments.fetchAdd(1, moRelaxed)
+              continue
+            else:
+              freeAligned(newSeg)
+              backoffOnRetry(spins)
+              continue
+          else:
+            var expectedSeg = seg
+            discard self.queue.tailSegment.compareExchange(
+              expectedSeg, nextSeg, moRelease, moRelaxed
+            )
+            continue
+        var expected = tail
+        if seg.tail.compareExchange(expected, tail + 1, moAcquire, moRelaxed):
+          seg.data[tail] = item
+          seg.committed[tail].store(true, moRelease)
+          discard self.queue.itemCount.fetchAdd(1, moRelaxed)
+          break
+
+proc push*[
+    T;
+    Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: Bound[T, Tag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]],
+    items: openArray[T],
+) {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## Batch push (thin loop).
+  for item in items:
+    self.push(item)
+
+# --- SPSC / MPSC pop on Bound (ccCons == ccSingle: no pin) ----------------
+proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ccProd: static PinScopeCardinality, ST: static DeallocationStrategy, S, MaxThreads: static int](
+    self: Bound[T, Tag, Queue[T, ccProd, ccSingle, ST, S, MaxThreads]]
+): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## Pop for `ccCons == ccSingle` (SPSC + MPSC). Single consumer thread,
+  ## no pin required. Body lifted from the pre-v5.0.0 direct-on-Queue
+  ## pop overloads (`queue.nim:1021` and `:1061`) with cardinality
+  ## dispatch consolidated via the existing `when` arms.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "Queue item is ref; recompile with -d:allowNonLockFreeQueueItems.".}
+  when defined(debug):
+    assert self.attachedTid == getThreadId(), "pop from wrong thread"
+
+  var seg = self.queue.headSegment.load(moAcquire)
+  when ccProd == ccSingle:
+    # SPSC-absorbed: head advances on the consumer side; no committed flag.
+    let head = seg.head
+    let tail = seg.tail.load(moAcquire)
+    if head >= tail:
+      let nextSeg = seg.next.load(moAcquire)
+      if nextSeg == nil:
+        return none(T)
+      self.queue.headSegment.store(nextSeg, moRelease)
+      discard self.queue.segments.fetchSub(1, moRelaxed)
+      return self.pop()
+    let v = seg.data[head]
+    seg.head = head + 1
+    discard self.queue.itemCount.fetchSub(1, moRelaxed)
+    return some(v)
+  else:
+    # MPSC: ccMulti producer × ccSingle consumer. The single consumer
+    # owns the head walk but still pins the epoch via debra so
+    # `retireOnPublish` knows a reader holds a segment. Single-consumer
+    # cardinality avoids consumer-vs-consumer CAS coordination; it does
+    # NOT avoid the epoch pin.
+    type MgrT = typeof(self.queue.manager[])
+    let mgr = cast[ptr MgrT](self.handleManager)
+    type Handle = ThreadHandle[MgrT.MaxThreads, MgrT.CC]
+    let h = Handle(idx: self.handleIdx, manager: mgr)
+    block:
+      var scope = pinScope(unpinned(h))
+      while true:
+        let tail = seg.tail.load(moAcquire)
+        if seg.head < tail:
+          if seg.committed[seg.head].load(moAcquire):
+            result = some(seg.data[seg.head])
+            inc seg.head
+            discard self.queue.itemCount.fetchSub(1, moRelaxed)
+          break
+        let nextSeg = seg.next.load(moAcquire)
+        if nextSeg == nil:
+          break
+        self.queue[].retireOnPublish(
+          scope, self.queue.headSegment, nextSeg,
+          segmentDestructor[T, ccMulti, ccSingle, S],
+        )
+        when ST != stManual:
+          discard self.queue.segments.fetchSub(1, moRelaxed)
+        seg = nextSeg
+    when ST == stEager:
+      if h.advanceEvery(LockFreeQueuesAdvanceEvery):
+        discard reclaimNow(h)
+
+# --- Batch pop on Bound for ccCons == ccSingle (SPSC + MPSC) -------------
+proc pop*[
+    T;
+    Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag;
+    ccProd: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: Bound[T, Tag, Queue[T, ccProd, ccSingle, ST, S, MaxThreads]], count: int
+): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## Batch pop for ccCons==ccSingle. Thin loop over single-item pop.
+  if unlikely(count <= 0):
+    return none(seq[T])
+  var items = newSeqOfCap[T](count)
+  for _ in 0 ..< count:
+    let v = self.pop()
+    if v.isNone:
+      break
+    items.add(v.get)
+  if items.len == 0:
+    none(seq[T])
+  else:
+    some(items)
+
+# --- SPMC pop on Bound (ccSingle producer × ccMulti consumer) ------------
+proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ST: static DeallocationStrategy, S, MaxThreads: static int](
+    self: Bound[T, Tag, Queue[T, ccSingle, ccMulti, ST, S, MaxThreads]]
+): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## SPMC pop — retire-bearing site. Pin claim via reconstructed
+  ## ThreadHandle from opaque Bound storage.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "Queue item is ref; recompile with -d:allowNonLockFreeQueueItems.".}
+  when defined(debug):
+    assert self.attachedTid == getThreadId(), "pop from wrong thread"
+
+  type MgrT = typeof(self.queue.manager[])
+  let mgr = cast[ptr MgrT](self.handleManager)
+  type Handle = ThreadHandle[MgrT.MaxThreads, MgrT.CC]
+  let h = Handle(idx: self.handleIdx, manager: mgr)
+
+  block:
+    var scope = pinScope(unpinned(h))
+    var seg = self.queue.headSegment.load(moAcquire)
+    var spins = InitialSpin
+    while true:
+      let tail = seg.tail.load(moAcquire)
+      var prevIdx = seg.prevConsumerIdx.load(moAcquire)
+      let mySlot = prevIdx + 1
+      if mySlot >= tail:
+        let nextSeg = seg.next.load(moAcquire)
+        if nextSeg == nil:
+          break
+        if self.queue[].retireOnCAS(
+          scope,
+          self.queue.headSegment,
+          seg,
+          nextSeg,
+          segmentDestructor[T, ccSingle, ccMulti, S],
+        ):
+          when ST != stManual:
+            discard self.queue.segments.fetchSub(1, moRelaxed)
+          seg = nextSeg
+        else:
+          seg = self.queue.headSegment.load(moAcquire)
+        backoffOnRetry(spins)
+        continue
+
+      if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
+        result = some(seg.data[mySlot])
+        discard self.queue.itemCount.fetchSub(1, moRelaxed)
+        break
+
+  when ST == stEager:
+    if h.advanceEvery(LockFreeQueuesAdvanceEvery):
+      discard reclaimNow(h)
+
+# --- MPMC pop on Bound (ccMulti producer × ccMulti consumer) --------------
+proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ST: static DeallocationStrategy, S, MaxThreads: static int](
+    self: Bound[T, Tag, Queue[T, ccMulti, ccMulti, ST, S, MaxThreads]]
+): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  ## MPMC pop — retire-bearing site.
+  when not defined(allowNonLockFreeQueueItems):
+    when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
+      when T is ref:
+        {.error: "Queue item is ref; recompile with -d:allowNonLockFreeQueueItems.".}
+  when defined(debug):
+    assert self.attachedTid == getThreadId(), "pop from wrong thread"
+
+  type MgrT = typeof(self.queue.manager[])
+  let mgr = cast[ptr MgrT](self.handleManager)
+  type Handle = ThreadHandle[MgrT.MaxThreads, MgrT.CC]
+  let h = Handle(idx: self.handleIdx, manager: mgr)
+
+  block:
+    var scope = pinScope(unpinned(h))
+    var seg = self.queue.headSegment.load(moAcquire)
+    var spins = InitialSpin
+    while true:
+      let tail = seg.tail.load(moAcquire)
+      var prevIdx = seg.prevConsumerIdx.load(moAcquire)
+      let mySlot = prevIdx + 1
+      if mySlot >= tail:
+        if mySlot < S and seg.tail.load(moAcquire) > mySlot:
+          if not seg.committed[mySlot].load(moAcquire):
+            break
+          backoffOnRetry(spins)
+          continue
+        let nextSeg = seg.next.load(moAcquire)
+        if nextSeg == nil:
+          break
+        if self.queue[].retireOnCAS(
+          scope,
+          self.queue.headSegment,
+          seg,
+          nextSeg,
+          segmentDestructor[T, ccMulti, ccMulti, S],
+        ):
+          when ST != stManual:
+            discard self.queue.segments.fetchSub(1, moRelaxed)
+          seg = nextSeg
+        else:
+          seg = self.queue.headSegment.load(moAcquire)
+        backoffOnRetry(spins)
+        continue
+      if not seg.committed[mySlot].load(moAcquire):
+        break
+      if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
+        result = some(seg.data[mySlot])
+        discard self.queue.itemCount.fetchSub(1, moRelaxed)
+        break
+
+  when ST == stEager:
+    if h.advanceEvery(LockFreeQueuesAdvanceEvery):
+      discard reclaimNow(h)
+
+# --- Batch pop on Bound for ccCons == ccMulti ----------------------------
+proc pop*[
+    T;
+    Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag;
+    ccProd: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: Bound[T, Tag, Queue[T, ccProd, ccMulti, ST, S, MaxThreads]], count: int
+): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+  if unlikely(count <= 0):
+    return none(seq[T])
+  var items = newSeqOfCap[T](count)
+  for _ in 0 ..< count:
+    let v = self.pop()
+    if v.isNone:
+      break
+    items.add(v.get)
+  if items.len == 0:
+    none(seq[T])
+  else:
+    some(items)
+
+## ----------------------------------------------------------------------
+## Same-thread shortcut: getProducerHere / getConsumerHere /
+## bindConsumer (one-shot wrappers per design §3.3.5 + §6.2).
+## ----------------------------------------------------------------------
+
+template getProducerHere*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
+): Bound[T, AnyThreadTag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]] =
+  ## Sugar: `getProducer() + bindToThread()` in one call.
+  var u = self.getProducer()
+  u.bindToThread()
+
+template getConsumerHere*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
+): Bound[T, AnyThreadTag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]] =
+  ## Symmetric to `getProducerHere` for the consumer side.
+  var u = self.getConsumer()
+  u.bindToThread()
+
+proc bindConsumer*[
+    T;
+    ccProd: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Queue[T, ccProd, ccSingle, ST, S, MaxThreads]
+): Bound[T, AnyThreadTag, Queue[T, ccProd, ccSingle, ST, S, MaxThreads]] {.
+    raises: []
+.} =
+  ## One-shot bind for the SC consumer of an MPSC-style Queue.
+  ## Equivalent to `self.getConsumer().bindToThread()`. Per design §6.2.
+  ## Replaces the deleted v4.x `attachConsumer`.
+  var u = self.getConsumer()
+  u.bindToThread()
 
 ## ----------------------------------------------------------------------
 ## Test-only introspection helpers for the unbounded Segment layout.

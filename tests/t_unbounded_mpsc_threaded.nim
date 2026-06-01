@@ -7,6 +7,8 @@ import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 const
   ItemCount = 10000
@@ -30,9 +32,8 @@ proc producer[ST: static DeallocationStrategy, S: static int](
     ctx: ptr ProducerContext[ST, S]
 ) {.thread.} =
   {.cast(gcsafe).}:
-    var p = ctx.queue[].getProducer()
+    var p = ctx.queue[].getProducerHere()
     # Register this producer's debra handle on its own thread.
-    p.attach()
     let base = ctx.producerIdx * ItemsPerProducer
     for i in 1 .. ItemsPerProducer:
       p.push(base + i)
@@ -43,10 +44,10 @@ proc consumer[ST: static DeallocationStrategy, S: static int](
 ) {.thread.} =
   {.cast(gcsafe).}:
     # Register the single-consumer debra handle on the popping thread.
-    ctx.queue[].attachConsumer()
+    var lfqConsumer = ctx.queue[].bindConsumer()
     var consumed = 0
     while consumed < ItemCount:
-      let item = ctx.queue[].pop()
+      let item = lfqConsumer.pop()
       if item.isSome:
         let val = item.get - 1 # Items are 1-indexed
         if ctx.received[val].exchange(true, moRelaxed):
@@ -73,6 +74,7 @@ suite "UnboundedMpsc threaded":
     # and the consumer thread each register on their own thread (via
     # attach() / attachConsumer()).
     var queue = newUnboundedMpscQueue[int, stEager, 8, MaxThreads]()
+    var lfqConsumer = queue.bindConsumer()
 
     var prodContexts: array[ProducerCount, ProducerContext[stEager, 8]]
     for i in 0 ..< ProducerCount:
@@ -107,6 +109,7 @@ suite "UnboundedMpsc threaded":
   test "normal segment size":
     # Auto-create: registration happens per-thread at attach time.
     var queue = newUnboundedMpscQueue[int, stEager, 64, MaxThreads]()
+    var lfqConsumer = queue.bindConsumer()
 
     var prodContexts: array[ProducerCount, ProducerContext[stEager, 64]]
     for i in 0 ..< ProducerCount:
@@ -142,18 +145,16 @@ suite "UnboundedMpsc threaded":
     # Single-threaded: the main thread is both producer and consumer, so
     # it attaches both handles here.
     var queue = newUnboundedMpscQueue[int, stManual, 8, MaxThreads]()
-    queue.attachConsumer()
-
+    var lfqConsumer = queue.bindConsumer()
     # Push items to create segments
-    var p = queue.getProducer()
-    p.attach()
+    var p = queue.getProducerHere()
     for i in 1 .. 1000:
       p.push(i)
     let peakSegments = queue.segmentCount()
 
     # Pop all items
     for i in 1 .. 1000:
-      discard queue.pop()
+      discard lfqConsumer.pop()
 
     # Segments should NOT be freed with Manual (no reclaim called)
     check(queue.segmentCount() == peakSegments)
@@ -161,17 +162,15 @@ suite "UnboundedMpsc threaded":
   test "segment retirement (Eager)":
     # Single-threaded: the main thread is both producer and consumer.
     var queue = newUnboundedMpscQueue[int, stEager, 8, MaxThreads]()
-    queue.attachConsumer()
-
+    var lfqConsumer = queue.bindConsumer()
     # Push items to create segments
-    var p = queue.getProducer()
-    p.attach()
+    var p = queue.getProducerHere()
     for i in 1 .. 1000:
       p.push(i)
 
     # Pop all items
     for i in 1 .. 1000:
-      discard queue.pop()
+      discard lfqConsumer.pop()
 
     # Segments SHOULD be freed with Eager
     check(queue.segmentCount() <= 3)

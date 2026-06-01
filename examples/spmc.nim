@@ -16,6 +16,8 @@ import os
 import options
 
 import lockfreequeues
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 
 const
@@ -30,7 +32,7 @@ var
 
 
 proc consumerThread(idx: int) {.thread.} =
-  let consumer = q.getConsumer(idx)
+  var consumer = q.getConsumerHere(idx)
   var count = 0
 
   while not done.load(moAcquire):
