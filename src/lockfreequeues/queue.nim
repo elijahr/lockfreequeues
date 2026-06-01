@@ -927,7 +927,7 @@ proc push*[
     S, MaxThreads: static int,
 ](
     self: Bound[T, Tag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]], item: T
-) {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+) {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## Push a single item onto the unbounded queue (cardinality-dispatched).
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
@@ -1015,7 +1015,7 @@ proc push*[
 ](
     self: Bound[T, Tag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]],
     items: openArray[T],
-) {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+) {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## Batch push (thin loop).
   for item in items:
     self.push(item)
@@ -1023,7 +1023,7 @@ proc push*[
 # --- SPSC / MPSC pop on Bound (ccCons == ccSingle: no pin) ----------------
 proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ccProd: static PinScopeCardinality, ST: static DeallocationStrategy, S, MaxThreads: static int](
     self: Bound[T, Tag, Queue[T, ccProd, ccSingle, ST, S, MaxThreads]]
-): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## Pop for `ccCons == ccSingle` (SPSC + MPSC). Single consumer thread,
   ## no pin required. Body lifted from the pre-v5.0.0 direct-on-Queue
   ## pop overloads (`queue.nim:1021` and `:1061`) with cardinality
@@ -1094,7 +1094,7 @@ proc pop*[
     S, MaxThreads: static int,
 ](
     self: Bound[T, Tag, Queue[T, ccProd, ccSingle, ST, S, MaxThreads]], count: int
-): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## Batch pop for ccCons==ccSingle. Thin loop over single-item pop.
   if unlikely(count <= 0):
     return none(seq[T])
@@ -1112,7 +1112,7 @@ proc pop*[
 # --- SPMC pop on Bound (ccSingle producer × ccMulti consumer) ------------
 proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ST: static DeallocationStrategy, S, MaxThreads: static int](
     self: Bound[T, Tag, Queue[T, ccSingle, ccMulti, ST, S, MaxThreads]]
-): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## SPMC pop — retire-bearing site. Pin claim via reconstructed
   ## ThreadHandle from opaque Bound storage.
   when not defined(allowNonLockFreeQueueItems):
@@ -1166,7 +1166,7 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ST: static D
 # --- MPMC pop on Bound (ccMulti producer × ccMulti consumer) --------------
 proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ST: static DeallocationStrategy, S, MaxThreads: static int](
     self: Bound[T, Tag, Queue[T, ccMulti, ccMulti, ST, S, MaxThreads]]
-): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## MPMC pop — retire-bearing site.
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
@@ -1231,7 +1231,7 @@ proc pop*[
     S, MaxThreads: static int,
 ](
     self: Bound[T, Tag, Queue[T, ccProd, ccMulti, ST, S, MaxThreads]], count: int
-): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   if unlikely(count <= 0):
     return none(seq[T])
   var items = newSeqOfCap[T](count)

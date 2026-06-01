@@ -83,13 +83,13 @@ typestate Endpoint[T, Tag, queueT]:
 
 proc onBind[T; Tag; queueT: BQueueType](
     b: var Bound[T, Tag, queueT]
-) {.gcsafe, raises: [].} =
+) {.gcsafe, raises: [], notATransition.} =
   ## BQueue endpoints carry no debra registration. No-op.
   discard b
 
 proc onBind[T; Tag; queueT: QueueType](
     b: var Bound[T, Tag, queueT]
-) {.gcsafe, raises: [].} =
+) {.gcsafe, raises: [], notATransition.} =
   ## Queue endpoints register the calling thread with the queue's debra
   ## manager. `queueT` is a concrete `Queue[T, ccProd, ccCons, ST, S, MaxThreads]`
   ## at this overload's call site. The SPSC-absorbed Queue branch
@@ -115,13 +115,13 @@ proc onBind[T; Tag; queueT: QueueType](
 
 proc onClose[T; Tag; queueT: BQueueType](
     c: var EndpointClosed[T, Tag, queueT]
-) {.gcsafe, raises: [].} =
+) {.gcsafe, raises: [], notATransition.} =
   ## BQueue endpoints carry no debra registration. No-op.
   discard c
 
 proc onClose[T; Tag; queueT: QueueType](
     c: var EndpointClosed[T, Tag, queueT]
-) {.gcsafe, raises: [].} =
+) {.gcsafe, raises: [], notATransition.} =
   ## Queue endpoints unregister the thread from the queue's debra
   ## manager. The opaque handle storage is cast back to the typed
   ## `ThreadHandle` at this overload's call site. SPSC-absorbed Queue

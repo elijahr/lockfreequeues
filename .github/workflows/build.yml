@@ -37,7 +37,7 @@ jobs:
           nim-version: 'stable'
 
       - name: Install typestates
-        run: nimble install -y "typestates@>= 0.10.0"
+        run: nimble install -y "typestates@>= 0.12.0"
 
       - name: Typestates verify
         run: typestates verify -W --format=github src/
@@ -123,14 +123,15 @@ jobs:
         # them locally to satisfy the resolver. Once nimble.directory has
         # picked up the new tags, this whole step can be replaced with a
         # plain `nimble install -d -y`.
-        # Pinned to v0.8.0 / v0.10.0 (matching nimble.lock) for
-        # deterministic CI; bump in lockstep with lockfreequeues.nimble's
-        # `requires` and nimble.lock on any sibling release.
+        # Pinned to v0.9.0 / v0.12.0 (matching nimble.lock for v5.0.0)
+        # for deterministic CI; bump in lockstep with
+        # lockfreequeues.nimble's `requires` and nimble.lock on any
+        # sibling release.
         run: |
           set -e
           cd ..
-          git clone --depth 1 --branch v0.8.0 https://github.com/elijahr/nim-debra.git
-          git clone --depth 1 --branch v0.10.0 https://github.com/elijahr/nim-typestates.git
+          git clone --depth 1 --branch v0.9.0 https://github.com/elijahr/nim-debra.git
+          git clone --depth 1 --branch v0.12.0 https://github.com/elijahr/nim-typestates.git
           (cd nim-typestates && nimble install -y)
           (cd nim-debra && nimble install -y)
 

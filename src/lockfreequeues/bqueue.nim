@@ -800,7 +800,7 @@ proc `=destroy`*[
 # --- MPSC push (via Bound) -----------------------------------------------
 proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: static int](
     self: Bound[T, Tag, BQueue[T, ccMulti, ccSingle, N, P, 0]], item: T
-): bool {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+): bool {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## MPSC single-item push on a Bound producer endpoint.
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
@@ -826,7 +826,7 @@ proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: stati
 # --- MPMC push (via Bound) -----------------------------------------------
 proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P, C: static int](
     self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]], item: T
-): bool {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+): bool {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## MPMC single-item push on a Bound producer endpoint.
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
@@ -852,7 +852,7 @@ proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P, C: st
 # --- SPMC pop (via Bound) ------------------------------------------------
 proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, C: static int](
     self: Bound[T, Tag, BQueue[T, ccSingle, ccMulti, N, 0, C]]
-): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## SPMC single-item pop on a Bound consumer endpoint.
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
@@ -878,7 +878,7 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, C: static
 # --- MPMC pop (via Bound) ------------------------------------------------
 proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, P, C: static int](
     self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]]
-): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## MPMC single-item pop on a Bound consumer endpoint.
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
@@ -906,7 +906,7 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, P, C: sta
 proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: static int](
     self: Bound[T, Tag, BQueue[T, ccMulti, ccSingle, N, P, 0]],
     items: openArray[T],
-): Option[HSlice[int, int]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+): Option[HSlice[int, int]] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## MPSC batch push. Returns `none` if all items pushed; `some(slice)`
   ## of unpushed indices otherwise.
   for i in 0 ..< items.len:
@@ -917,7 +917,7 @@ proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: stati
 proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P, C: static int](
     self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]],
     items: openArray[T],
-): Option[HSlice[int, int]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+): Option[HSlice[int, int]] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## MPMC batch push. Same semantics as MPSC variant.
   for i in 0 ..< items.len:
     if not self.push(items[i]):
@@ -926,7 +926,7 @@ proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P, C: st
 
 proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, C: static int](
     self: Bound[T, Tag, BQueue[T, ccSingle, ccMulti, N, 0, C]], count: int
-): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## SPMC batch pop.
   var collected: seq[T] = @[]
   for _ in 0 ..< count:
@@ -938,7 +938,7 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, C: static
 
 proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, P, C: static int](
     self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]], count: int
-): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [].} =
+): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## MPMC batch pop.
   var collected: seq[T] = @[]
   for _ in 0 ..< count:
