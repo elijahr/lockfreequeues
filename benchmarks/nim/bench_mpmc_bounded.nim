@@ -52,6 +52,8 @@ import lockfreequeues/backoff
 import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 # Comparison adapters, gated by per-library defines.
 when defined(adapter_boost_lockfree_queue_available):
@@ -114,9 +116,9 @@ type
   MpmcQueueT[N, P, C: static int; T] =
     BQueue[T, ccMulti, ccMulti, N, P, C]
   MpmcProducerT[N, P, C: static int; T] =
-    BQueueProducer[T, ccMulti, ccMulti, N, P, C]
+    Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccMulti, N, P, C]]
   MpmcConsumerT[N, P, C: static int; T] =
-    BQueueConsumer[T, ccMulti, ccMulti, N, P, C]
+    Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccMulti, N, P, C]]
 
   MpmcProducerCtx[N, P, C: static int; T] = object
     producer: MpmcProducerT[N, P, C, T]
@@ -160,7 +162,7 @@ proc runOneMpmcRun[N, P, C: static int; T](
   for i in 0 ..< P:
     let count = baseP + (if i < remP: 1 else: 0)
     producerCtxs[i] = MpmcProducerCtx[N, P, C, T](
-      producer: queue.getProducer(idx = i),
+      producer: queue.getProducerHere(idx = i),
       startIdx: nextStart,
       count: count,
     )
@@ -168,7 +170,7 @@ proc runOneMpmcRun[N, P, C: static int; T](
   for i in 0 ..< C:
     let count = baseC + (if i < remC: 1 else: 0)
     consumerCtxs[i] = MpmcConsumerCtx[N, P, C, T](
-      consumer: queue.getConsumer(idx = i),
+      consumer: queue.getConsumerHere(idx = i),
       count: count,
     )
   let startTime = getMonoTime()
@@ -218,12 +220,12 @@ proc runMpmcShape[N, P, C: static int; T](
 
 type
   QBoundedMpmcProducerCtx[N, P, C: static int; T] = object
-    producer: BQueueProducer[T, ccMulti, ccMulti, N, P, C]
+    producer: Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccMulti, N, P, C]]
     startIdx: int
     count: int
 
   QBoundedMpmcConsumerCtx[N, P, C: static int; T] = object
-    consumer: BQueueConsumer[T, ccMulti, ccMulti, N, P, C]
+    consumer: Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccMulti, N, P, C]]
     count: int
 
 proc qBoundedMpmcProducerThread[N, P, C: static int; T](
@@ -262,7 +264,7 @@ proc runOneQBoundedMpmcRun[N, P, C: static int; T](
   for i in 0 ..< P:
     let count = baseP + (if i < remP: 1 else: 0)
     producerCtxs[i] = QBoundedMpmcProducerCtx[N, P, C, T](
-      producer: queue.getProducer(idx = i),
+      producer: queue.getProducerHere(idx = i),
       startIdx: nextStart,
       count: count,
     )
@@ -270,7 +272,7 @@ proc runOneQBoundedMpmcRun[N, P, C: static int; T](
   for i in 0 ..< C:
     let count = baseC + (if i < remC: 1 else: 0)
     consumerCtxs[i] = QBoundedMpmcConsumerCtx[N, P, C, T](
-      consumer: queue.getConsumer(idx = i),
+      consumer: queue.getConsumerHere(idx = i),
       count: count,
     )
   let startTime = getMonoTime()

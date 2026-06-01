@@ -22,6 +22,8 @@ import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 from debra import DebraManager, initDebraManager
 
 const
@@ -70,7 +72,7 @@ proc uspmcProducerThread[S: static int; T; MaxT: static int](
     ctx: ptr USpmcProducerCtx[S, T, MaxT]
 ) {.thread.} =
   {.cast(gcsafe).}:
-    var p = ctx.queue[].getProducer()
+    var p = ctx.queue[].getProducerHere()
     for i in 0 ..< ctx.count:
       p.push(T(i))
       when defined(benchProgress):
@@ -81,9 +83,8 @@ proc uspmcConsumerThread[S: static int; T; MaxT: static int](
     ctx: ptr USpmcConsumerCtx[S, T, MaxT]
 ) {.thread.} =
   {.cast(gcsafe).}:
-    var consumer = ctx.queue[].getConsumer()
+    var consumer = ctx.queue[].getConsumerHere()
     # Register this consumer's debra handle on its own thread.
-    consumer.attach()
     var local = 0
     while local < ctx.count:
       let r = consumer.pop()

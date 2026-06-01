@@ -45,6 +45,8 @@ import lockfreequeues/backoff
 import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 const
   BenchMpmcRuns* {.intdefine.} = 33
@@ -77,7 +79,7 @@ type
   SpmcQueueT[N, C: static int; T] =
     BQueue[T, ccSingle, ccMulti, N, 0, C]
   SpmcConsumerT[N, C: static int; T] =
-    BQueueConsumer[T, ccSingle, ccMulti, N, 0, C]
+    Bound[T, AnyThreadTag, BQueue[T, ccSingle, ccMulti, N, 0, C]]
 
   SpmcProducerCtx[N, C: static int; T] = object
     queue: ptr SpmcQueueT[N, C, T]
@@ -120,7 +122,7 @@ proc runOneSpmcRun[N, C: static int; T](
   for i in 0 ..< C:
     let count = baseC + (if i < remC: 1 else: 0)
     consumerCtxs[i] = SpmcConsumerCtx[N, C, T](
-      consumer: queue.getConsumer(idx = i),
+      consumer: queue.getConsumerHere(idx = i),
       count: count,
     )
   let startTime = getMonoTime()
@@ -176,7 +178,7 @@ type
     count: int
 
   QBoundedSpmcConsumerCtx[N, C: static int; T] = object
-    consumer: BQueueConsumer[T, ccSingle, ccMulti, N, 0, C]
+    consumer: Bound[T, AnyThreadTag, BQueue[T, ccSingle, ccMulti, N, 0, C]]
     count: int
 
 proc qBoundedSpmcProducerThread[N, C: static int; T](
@@ -213,7 +215,7 @@ proc runOneQBoundedSpmcRun[N, C: static int; T](
   for i in 0 ..< C:
     let count = baseC + (if i < remC: 1 else: 0)
     consumerCtxs[i] = QBoundedSpmcConsumerCtx[N, C, T](
-      consumer: queue.getConsumer(idx = i),
+      consumer: queue.getConsumerHere(idx = i),
       count: count,
     )
   let startTime = getMonoTime()

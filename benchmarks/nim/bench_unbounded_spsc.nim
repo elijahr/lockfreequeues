@@ -28,6 +28,8 @@ import lockfreequeues/backoff
 import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 const
   UnboundedSpscRuns* {.intdefine.} = 3
@@ -70,7 +72,7 @@ when defined(benchProgress):
 proc uspscProducerThread[S: static int; T](
     ctx: ptr USpscProducerCtx[S, T]
 ) {.thread.} =
-  var producer = ctx.queue[].getProducer()
+  var producer = ctx.queue[].getProducerHere()
   for i in 0 ..< ctx.count:
     producer.push(T(i))
     when defined(benchProgress):
@@ -80,9 +82,10 @@ proc uspscProducerThread[S: static int; T](
 proc uspscConsumerThread[S: static int; T](
     ctx: ptr USpscConsumerCtx[S, T]
 ) {.thread.} =
+  var consumer = ctx.queue[].getConsumerHere()
   var local = 0
   while local < ctx.count:
-    let r = ctx.queue[].pop()
+    let r = consumer.pop()
     if r.isSome:
       inc local
       when defined(benchProgress):

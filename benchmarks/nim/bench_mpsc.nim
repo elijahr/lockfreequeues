@@ -29,6 +29,8 @@ import lockfreequeues/backoff
 import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 # Comparison adapter: Nim's stdlib system.Channel wired here under the
 # MPSC slot. Blocking-on-full producer; see the adapter file for the
@@ -71,7 +73,7 @@ type
   MpscQueueT[N, P: static int; T] =
     BQueue[T, ccMulti, ccSingle, N, P, 0]
   MpscProducerT[N, P: static int; T] =
-    BQueueProducer[T, ccMulti, ccSingle, N, P, 0]
+    Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccSingle, N, P, 0]]
 
   MpscProducerCtx[N, P: static int; T] = object
     producer: MpscProducerT[N, P, T]
@@ -118,7 +120,7 @@ proc runOneMpscRun[N, P: static int; T](
   for i in 0 ..< P:
     let count = baseP + (if i < remP: 1 else: 0)
     producerCtxs[i] = MpscProducerCtx[N, P, T](
-      producer: queue.getProducer(idx = i),
+      producer: queue.getProducerHere(idx = i),
       startIdx: nextStart,
       count: count,
     )
@@ -174,7 +176,7 @@ proc runMpscShape[N, P: static int; T](
 
 type
   QMpscProducerCtx[N, P: static int; T] = object
-    producer: BQueueProducer[T, ccMulti, ccSingle, N, P, 0]
+    producer: Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccSingle, N, P, 0]]
     startIdx: int
     count: int
 
@@ -216,7 +218,7 @@ proc runOneQMpscRun[N, P: static int; T](
   for i in 0 ..< P:
     let count = baseP + (if i < remP: 1 else: 0)
     producerCtxs[i] = QMpscProducerCtx[N, P, T](
-      producer: queue.getProducer(idx = i),
+      producer: queue.getProducerHere(idx = i),
       startIdx: nextStart,
       count: count,
     )

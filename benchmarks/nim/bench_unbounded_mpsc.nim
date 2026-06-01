@@ -23,6 +23,8 @@ import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 from debra import DebraManager, initDebraManager
 
 const
@@ -66,9 +68,8 @@ proc umpscProducerThread[S: static int; T; MaxT: static int](
     ctx: ptr UMpscProducerCtx2[S, T, MaxT]
 ) {.thread.} =
   {.cast(gcsafe).}:
-    var p = ctx.queue[].getProducer()
+    var p = ctx.queue[].getProducerHere()
     # Register this producer's debra handle on its own thread.
-    p.attach()
     when defined(benchProgress):
       var pushed = 0
     for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
@@ -95,9 +96,9 @@ proc runOneUMpscRun[S: static int; T; MaxT: static int; P: static int](
       startIdx: nextStart, count: count, id: i,
     )
     nextStart += count
-  # This (main) thread is the single consumer; register its debra handle
-  # here before popping.
-  queue[].attachConsumer()
+  # This (main) thread is the single consumer; bind its endpoint before
+  # popping (registers the debra handle as a side effect).
+  var consumer = queue[].bindConsumer()
   let startTime = getMonoTime()
   for i in 0 ..< P:
     createThread(
@@ -107,7 +108,7 @@ proc runOneUMpscRun[S: static int; T; MaxT: static int; P: static int](
     )
   var local = 0
   while local < messageCount:
-    let r = queue[].pop()
+    let r = consumer.pop()
     if r.isSome:
       inc local
       when defined(benchProgress):

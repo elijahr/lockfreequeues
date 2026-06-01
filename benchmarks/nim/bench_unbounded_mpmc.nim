@@ -29,6 +29,8 @@ import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 from debra import DebraManager, initDebraManager
 
 # Comparison adapters. Loony, Crossbeam SegQueue, MoodyCamel are
@@ -99,14 +101,13 @@ proc umpmcProducerThread[S: static int; T; MaxT: static int](
     ctx: ptr UMpmcProducerCtx[S, T, MaxT]
 ) {.thread.} =
   {.cast(gcsafe).}:
-    var producer = ctx.queue[].getProducer()
+    var producer = ctx.queue[].getProducerHere()
     # Register this producer's debra handle on its own thread.
     # No try/except around `attach()`: `MaxT == MaxThreads == 16` (see
     # the top-of-file constant) bounds the registration capacity above
     # the largest shape this binary exercises (`4p4c` + main + consumer
     # threads = 9 attach() calls), so `DebraRegistrationError` is
     # unreachable here by construction.
-    producer.attach()
     when defined(benchProgress):
       var pushed = 0
     for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
@@ -120,12 +121,11 @@ proc umpmcConsumerThread[S: static int; T; MaxT: static int](
     ctx: ptr UMpmcConsumerCtx[S, T, MaxT]
 ) {.thread.} =
   {.cast(gcsafe).}:
-    var consumer = ctx.queue[].getConsumer()
+    var consumer = ctx.queue[].getConsumerHere()
     # Register this consumer's debra handle on its own thread. Same
     # `MaxT == 16` rationale as the producer thread above: no
     # try/except is needed because debra registration exhaustion is
     # unreachable for the shapes this binary exercises.
-    consumer.attach()
     var local = 0
     while local < ctx.count:
       let r = consumer.pop()
