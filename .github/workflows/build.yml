@@ -36,8 +36,8 @@ jobs:
         with:
           nim-version: 'stable'
 
-      - name: Install typestates
-        run: nimble install -y "typestates@>= 0.12.0"
+      - name: Install dependencies from nimble registry
+        run: nimble install -dy
 
       - name: Typestates verify
         run: typestates verify -W --format=github src/
@@ -114,30 +114,14 @@ jobs:
           sudo apt-get update -q -y
           sudo apt-get -qq install -y clang
 
-      - name: Clone and install sibling deps (nim-debra, nim-typestates)
-        # config.nims uses --path:"../nim-debra/src" and --path:"../nim-typestates/src"
-        # for compiler-side resolution. Nimble's dep resolver runs BEFORE
-        # the compiler though, and `nimble test` will refuse to launch if
-        # `requires "debra >= 0.8.0"` is unsatisfiable from nimble's
-        # package store. So fetch matching tags and `nimble install`
-        # them locally to satisfy the resolver. Once nimble.directory has
-        # picked up the new tags, this whole step can be replaced with a
-        # plain `nimble install -d -y`.
-        # Pinned to v0.9.0 / v0.12.0 (matching nimble.lock for v5.0.0)
-        # for deterministic CI; bump in lockstep with
-        # lockfreequeues.nimble's `requires` and nimble.lock on any
-        # sibling release.
-        run: |
-          set -e
-          cd ..
-          git clone --depth 1 --branch v0.9.0 https://github.com/elijahr/nim-debra.git
-          git clone --depth 1 --branch v0.12.0 https://github.com/elijahr/nim-typestates.git
-          (cd nim-typestates && nimble install -y)
-          (cd nim-debra && nimble install -y)
-
-      - name: Vendor unittest2 (nim.cfg expects deps/unittest2)
-        # deps/ is gitignored. nim.cfg has --path:"deps/unittest2".
-        run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
+      - name: Install dependencies from nimble registry
+        # Uses lockfreequeues.nimble `requires` lines (typestates >= 0.12.0,
+        # debra >= 0.9.0, unittest2, nim >= 2.2.10) plus the pinned SHAs in
+        # nimble.lock for deterministic resolution. `nimble install -dy`
+        # fetches every dep without building the package itself; the
+        # subsequent step's `nimble test` invokes the package's test task
+        # and the deps are resolved from nimble's pkgs2 store.
+        run: nimble install -dy
 
       - name: Run tests
         run: |
