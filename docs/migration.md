@@ -5,7 +5,7 @@
     v5.0.0 is a hard-break release. The v4.x `Bound[T, Tag, BQueue[...]]` endpoint /
     `Bound[T, Tag, Queue[...]]` endpoint / `attach()` / `bindConsumer()` API is REMOVED;
     replaced by the `Unbound → Bound → Closed` endpoint lifecycle.
-    See [`docs/migrations/v5.0.0.md`](../migrations/v5.0.0.md) for the
+    See [`docs/migrations/v5.0.0.md`](migrations/v5.0.0.md) for the
     full migration guide + v4.x → v5.0.0 cookbook + breaking-change
     checklist.
 
