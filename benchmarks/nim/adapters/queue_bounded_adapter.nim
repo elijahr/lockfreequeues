@@ -23,6 +23,8 @@ import options
 import lockfreequeues/bqueue as q_mod
 import lockfreequeues/strategy
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 import ../bench_common
 
 type
@@ -35,9 +37,9 @@ type
     ## with the pre-B.2.5 adapter shape.
     queue*: ptr BQueue[T, ccProd, ccCons, N, P, C]
     when ccProd == ccMulti:
-      producer: BQueueProducer[T, ccProd, ccCons, N, P, C]
+      producer: Bound[T, AnyThreadTag, BQueue[T, ccProd, ccCons, N, P, C]]
     when ccCons == ccMulti:
-      consumer: BQueueConsumer[T, ccProd, ccCons, N, P, C]
+      consumer: Bound[T, AnyThreadTag, BQueue[T, ccProd, ccCons, N, P, C]]
 
 proc getProducer*[
     ccProd, ccCons: static PinScopeCardinality;
@@ -45,8 +47,8 @@ proc getProducer*[
     N, P, C: static int;
     T](
     a: var QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T], idx: int
-): BQueueProducer[T, ccProd, ccCons, N, P, C] =
-  a.queue[].getProducer(idx = idx)
+): Bound[T, AnyThreadTag, BQueue[T, ccProd, ccCons, N, P, C]] =
+  a.queue[].getProducerHere(idx = idx)
 
 proc getConsumer*[
     ccProd, ccCons: static PinScopeCardinality;
@@ -54,8 +56,8 @@ proc getConsumer*[
     N, P, C: static int;
     T](
     a: var QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T], idx: int
-): BQueueConsumer[T, ccProd, ccCons, N, P, C] =
-  a.queue[].getConsumer(idx = idx)
+): Bound[T, AnyThreadTag, BQueue[T, ccProd, ccCons, N, P, C]] =
+  a.queue[].getConsumerHere(idx = idx)
 
 proc makeQueueBoundedAdapter*[
     ccProd, ccCons: static PinScopeCardinality;
@@ -73,9 +75,9 @@ proc makeQueueBoundedAdapter*[
   wasMoved(result.queue[])
   result.queue[] = q_mod.newBQueue[T, ccProd, ccCons, N, P, C]()
   when ccProd == ccMulti:
-    result.producer = result.queue[].getProducer(idx = 0)
+    result.producer = result.queue[].getProducerHere(idx = 0)
   when ccCons == ccMulti:
-    result.consumer = result.queue[].getConsumer(idx = 0)
+    result.consumer = result.queue[].getConsumerHere(idx = 0)
 
 proc cleanup*[
     ccProd, ccCons: static PinScopeCardinality;

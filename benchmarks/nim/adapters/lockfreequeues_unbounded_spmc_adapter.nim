@@ -5,7 +5,7 @@
 ## Queue[T, ccSingle, ccMulti, ST, S, MaxThreads]
 ## requires a `DebraManager[MaxThreads, ccMulti]` for epoch-based
 ## segment reclamation; consumers register against the manager via
-## `queue.getConsumer()` ON THEIR OWN THREAD (the unified
+## `queue.getConsumerHere()` ON THEIR OWN THREAD (the unified
 ## `getConsumer` auto-registers the calling thread and stores the
 ## resulting `ThreadHandle` on the returned `QueueConsumer` view).
 ##
@@ -13,12 +13,12 @@
 ## consumer-0 view (`getConsumer` called on the init thread) for the
 ## smoke / 1p1c shape. Multi-consumer shapes (1p2c, 1p4c) register
 ## additional consumer views per-thread inside the bench harness via
-## `adapter.queue[].getConsumer()`.
+## `adapter.queue[].getConsumerHere()`.
 ##
 ## The legacy `UnboundedSpmc[S, T, MT]` type has been removed. The
 ## smart-constructor `newUnboundedSpmcQueue` returns the unified Queue
 ## value; the legacy "consumer0Handle + queue.getConsumer(handle)"
-## plumbing collapses into a single `queue.getConsumer()` call on the
+## plumbing collapses into a single `queue.getConsumerHere()` call on the
 ## init thread.
 
 # Fine-grained imports (not the umbrella) so the `ccSingle` /
@@ -31,6 +31,8 @@ import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 from debra import DebraManager, initDebraManager, DebraRegistrationError
 import options
 import ../bench_common
@@ -43,10 +45,10 @@ type
     Queue[T, ccSingle, ccMulti, stEager, S, MaxThreads]
   UnboundedSpmcAdapterProducer[S: static int, T;
                                  MaxThreads: static int] =
-    QueueProducer[T, ccSingle, ccMulti, stEager, S, MaxThreads]
+    Bound[T, AnyThreadTag, Queue[T, ccSingle, ccMulti, stEager, S, MaxThreads]]
   UnboundedSpmcAdapterConsumer[S: static int, T;
                                  MaxThreads: static int] =
-    QueueConsumer[T, ccSingle, ccMulti, stEager, S, MaxThreads]
+    Bound[T, AnyThreadTag, Queue[T, ccSingle, ccMulti, stEager, S, MaxThreads]]
 
   LockfreequeuesUnboundedSpmcAdapter*[S: static int, T;
                                         MaxThreads: static int] = object
@@ -115,12 +117,11 @@ proc makeLockfreequeuesUnboundedSpmcAdapter*[S: static int, T;
     # its debra handle here via attach() on the (init == operating)
     # thread. The single producer (ccSingle) needs no registration.
     # Multi-consumer shapes obtain their own per-thread views via
-    # `queue[].getConsumer()` and call `attach()` on their own threads.
+    # `queue[].getConsumerHere()` and call `attach()` on their own threads.
     # `attach()` can raise `DebraRegistrationError` if the manager is
     # full (MaxThreads exhausted).
-    result.producer0 = result.queue[].getProducer()
-    result.consumer0 = result.queue[].getConsumer()
-    result.consumer0.attach()
+    result.producer0 = result.queue[].getProducerHere()
+    result.consumer0 = result.queue[].getConsumerHere()
     queueInitOk = true
   finally:
     if not queueInitOk:

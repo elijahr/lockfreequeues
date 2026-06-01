@@ -13,6 +13,8 @@
 
 import options
 import lockfreequeues
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 import ../bench_common
 
 const topologiesSupported* = {tMpsc}
@@ -21,7 +23,7 @@ type
   MpscQueue*[N, P: static int, T] =
     BQueue[T, ccMulti, ccSingle, N, P, 0]
   MpscProducerView*[N, P: static int, T] =
-    BQueueProducer[T, ccMulti, ccSingle, N, P, 0]
+    Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccSingle, N, P, 0]]
 
   LockfreequeuesMpscAdapter*[N, P: static int, T] = object
     queue*: ptr MpscQueue[N, P, T]
@@ -40,7 +42,7 @@ proc getProducer*[N, P: static int, T](
   ## Multi-producer benchmark shapes (`<P>p1c` for P > 1) MUST call
   ## this on each producer thread with a unique `idx in 0 ..< P`;
   ## sharing a single `Producer` across threads is unsafe.
-  a.queue[].getProducer(idx = idx)
+  a.queue[].getProducerHere(idx = idx)
 
 proc makeLockfreequeuesMpscAdapter*[N, P: static int, T](
     capacity: int = N
@@ -48,7 +50,7 @@ proc makeLockfreequeuesMpscAdapter*[N, P: static int, T](
   ## Allocate and initialize a Mpsc-equiv Queue[N, P, T]. The pre-built
   ## `producer` slot lets the smoke / 1p1c shape drive push from the
   ## calling thread; multi-producer shapes register additional producers
-  ## per-thread via `queue.getProducer(idx = i)`.
+  ## per-thread via `queue.getProducerHere(idx = i)`.
   doAssert capacity == N, "capacity must equal static N"
   result.queue = create(MpscQueue[N, P, T])
   # wasMoved before the deref-assign: `create`'s zero-fill is not tracked by
@@ -56,7 +58,7 @@ proc makeLockfreequeuesMpscAdapter*[N, P: static int, T](
   # `=destroy` on uninitialized storage. Mark the slot moved-from first.
   wasMoved(result.queue[])
   result.queue[] = newBQueue[T, ccMulti, ccSingle, N, P, 0]()
-  result.producer = result.queue[].getProducer(idx = 0)
+  result.producer = result.queue[].getProducerHere(idx = 0)
 
 proc cleanup*[N, P: static int, T](
     a: var LockfreequeuesMpscAdapter[N, P, T]

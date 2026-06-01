@@ -22,6 +22,8 @@
 
 import options
 import lockfreequeues
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 import ../bench_common
 
 const topologiesSupported* = {tMpmc}
@@ -32,7 +34,7 @@ type
   SpmcQueue*[N, C: static int, T] =
     BQueue[T, ccSingle, ccMulti, N, 0, C]
   SpmcConsumerView*[N, C: static int, T] =
-    BQueueConsumer[T, ccSingle, ccMulti, N, 0, C]
+    Bound[T, AnyThreadTag, BQueue[T, ccSingle, ccMulti, N, 0, C]]
 
   LockfreequeuesSpmcAdapter*[N, C: static int, T] = object
     queue*: ptr SpmcQueue[N, C, T]
@@ -51,7 +53,7 @@ proc getConsumer*[N, C: static int, T](
   ## Multi-consumer benchmark shapes (`1p<C>c` for C > 1) MUST call
   ## this on each consumer thread with a unique `idx in 0 ..< C`;
   ## sharing a single `Consumer` across threads is unsafe.
-  a.queue[].getConsumer(idx = idx)
+  a.queue[].getConsumerHere(idx = idx)
 
 proc makeLockfreequeuesSpmcAdapter*[N, C: static int, T](
     capacity: int = N
@@ -69,7 +71,7 @@ proc makeLockfreequeuesSpmcAdapter*[N, C: static int, T](
   result.queue[] = newBQueue[T, ccSingle, ccMulti, N, 0, C]()
   # Pre-allocate consumer 0; bench code that drives multiple consumers
   # registers its own per-thread Consumer via getConsumer(idx = i).
-  result.consumer = result.queue[].getConsumer(idx = 0)
+  result.consumer = result.queue[].getConsumerHere(idx = 0)
 
 proc cleanup*[N, C: static int, T](
     a: var LockfreequeuesSpmcAdapter[N, C, T]

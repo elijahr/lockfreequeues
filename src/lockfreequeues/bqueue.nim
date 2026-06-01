@@ -948,36 +948,11 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, P, C: sta
     collected.add(it.get())
   if collected.len == 0: none(seq[T]) else: some(collected)
 
-## ----------------------------------------------------------------------
-## Same-thread shortcut: getProducerHere / getConsumerHere.
-##
-## Sugar templates that compose `getProducer().bindToThread()` for the
-## common same-thread case. Return `Bound[AnyThreadTag]` per design
-## §3.3.5 — explicitly opts out of per-spawn role discrimination;
-## runtime `getThreadId()` backstop catches misuse under `-d:debug`.
-## ----------------------------------------------------------------------
-
-template getProducerHere*[
-    T;
-    ccCons: static PinScopeCardinality,
-    N, P, C: static int,
-](
-    self: var BQueue[T, ccMulti, ccCons, N, P, C], idx: int = -1
-): Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccCons, N, P, C]] =
-  ## Sugar: `getProducer(idx) + bindToThread()` in one call.
-  var u = self.getProducer(idx)
-  u.bindToThread()
-
-template getConsumerHere*[
-    T;
-    ccProd: static PinScopeCardinality,
-    N, P, C: static int,
-](
-    self: var BQueue[T, ccProd, ccMulti, N, P, C], idx: int = -1
-): Bound[T, AnyThreadTag, BQueue[T, ccProd, ccMulti, N, P, C]] =
-  ## Symmetric to `getProducerHere` for the consumer side.
-  var u = self.getConsumer(idx)
-  u.bindToThread()
+## Same-thread shortcut helpers (`getProducerHere` / `getConsumerHere`)
+## live in `endpoint.nim` next to `getProducer` / `getConsumer` so the
+## template binds against the endpoint module's factories rather than
+## any locally-shadowing factory at the expansion site (e.g. bench
+## adapters with their own consumer-view factory).
 
 ## ----------------------------------------------------------------------
 ## Test-only introspection helpers.

@@ -3,8 +3,8 @@
 ## Topology: `mpmc_unbounded`. The unified Queue[T, ccMulti, ccMulti, ST,
 ## rkEbr, ...] requires a `DebraManager[MT, ccMulti]`; producers AND
 ## consumers register against the manager on their own thread and obtain
-## a `QueueProducer` / `QueueConsumer` view via `queue.getProducer()` /
-## `queue.getConsumer()` (the unified API auto-registers the calling
+## a `QueueProducer` / `QueueConsumer` view via `queue.getProducerHere()` /
+## `queue.getConsumerHere()` (the unified API auto-registers the calling
 ## thread and stores the resulting handle on the view).
 ##
 ## This adapter owns the queue + manager + a pre-registered
@@ -26,6 +26,8 @@ import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 from debra import DebraManager, initDebraManager, DebraRegistrationError
 import options
 import ../bench_common
@@ -38,10 +40,10 @@ type
     Queue[T, ccMulti, ccMulti, stEager, S, MaxThreads]
   UnboundedMpmcAdapterProducer[S: static int, T;
                                  MaxThreads: static int] =
-    QueueProducer[T, ccMulti, ccMulti, stEager, S, MaxThreads]
+    Bound[T, AnyThreadTag, Queue[T, ccMulti, ccMulti, stEager, S, MaxThreads]]
   UnboundedMpmcAdapterConsumer[S: static int, T;
                                  MaxThreads: static int] =
-    QueueConsumer[T, ccMulti, ccMulti, stEager, S, MaxThreads]
+    Bound[T, AnyThreadTag, Queue[T, ccMulti, ccMulti, stEager, S, MaxThreads]]
 
   LockfreequeuesUnboundedMpmcAdapter*[S: static int, T;
                                         MaxThreads: static int] = object
@@ -109,14 +111,12 @@ proc makeLockfreequeuesUnboundedMpmcAdapter*[S: static int, T;
     # init thread IS the operating thread. getProducer/getConsumer no
     # longer register; both views register their debra handles here via
     # attach() on the (init == operating) thread. Multi-thread shapes
-    # obtain their own per-thread views via `queue[].getProducer()` /
-    # `queue[].getConsumer()` and call `attach()` on their own threads.
+    # obtain their own per-thread views via `queue[].getProducerHere()` /
+    # `queue[].getConsumerHere()` and call `attach()` on their own threads.
     # `attach()` can raise `DebraRegistrationError` if the manager is
     # full (MaxThreads exhausted).
-    result.producer0 = result.queue[].getProducer()
-    result.producer0.attach()
-    result.consumer0 = result.queue[].getConsumer()
-    result.consumer0.attach()
+    result.producer0 = result.queue[].getProducerHere()
+    result.consumer0 = result.queue[].getConsumerHere()
     queueInitOk = true
   finally:
     if not queueInitOk:

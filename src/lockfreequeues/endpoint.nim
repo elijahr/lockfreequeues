@@ -315,6 +315,77 @@ proc getConsumer*[
     result.idx = -1
 
 ## ----------------------------------------------------------------------
+## Same-thread shortcut helpers + bindConsumer one-shot wrapper.
+##
+## These templates/procs live here (next to getProducer/getConsumer)
+## so they bind against THIS module's factories rather than any
+## locally-shadowing factory the user's expansion site might have
+## declared (e.g. bench-adapter modules define their own `getConsumer`
+## returning adapter-local view types).
+## ----------------------------------------------------------------------
+
+template getProducerHere*[
+    T;
+    ccCons: static PinScopeCardinality,
+    N, P, C: static int,
+](
+    self: var BQueue[T, ccMulti, ccCons, N, P, C], idx: int = -1
+): Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccCons, N, P, C]] =
+  ## BQueue producer same-thread shortcut.
+  var u = self.getProducer(idx)
+  u.bindToThread()
+
+template getConsumerHere*[
+    T;
+    ccProd: static PinScopeCardinality,
+    N, P, C: static int,
+](
+    self: var BQueue[T, ccProd, ccMulti, N, P, C], idx: int = -1
+): Bound[T, AnyThreadTag, BQueue[T, ccProd, ccMulti, N, P, C]] =
+  ## BQueue consumer same-thread shortcut.
+  var u = self.getConsumer(idx)
+  u.bindToThread()
+
+template getProducerHere*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
+): Bound[T, AnyThreadTag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]] =
+  ## Queue producer same-thread shortcut.
+  var u = self.getProducer()
+  u.bindToThread()
+
+template getConsumerHere*[
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
+): Bound[T, AnyThreadTag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]] =
+  ## Queue consumer same-thread shortcut.
+  var u = self.getConsumer()
+  u.bindToThread()
+
+proc bindConsumer*[
+    T;
+    ccProd: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
+    self: var Queue[T, ccProd, ccSingle, ST, S, MaxThreads]
+): Bound[T, AnyThreadTag, Queue[T, ccProd, ccSingle, ST, S, MaxThreads]] {.
+    raises: []
+.} =
+  ## One-shot bind for the SC consumer of an MPSC-style Queue.
+  ## Replaces the deleted v4.x `attachConsumer`.
+  var u = self.getConsumer()
+  u.bindToThread()
+
+## ----------------------------------------------------------------------
 ## R3 mitigation (design §3.3.1, Nim Issue #19013 alias-analysis):
 ## `Unbound` MUST be a thin `ptr` wrapper over the queue with no
 ## ref/string/seq/closure subgraph. `system.supportsCopyMem` returns

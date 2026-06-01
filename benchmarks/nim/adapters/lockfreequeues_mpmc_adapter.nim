@@ -16,6 +16,8 @@
 
 import options
 import lockfreequeues
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 import ../bench_common
 
 const topologiesSupported*: set[Topology] = {tMpmc}
@@ -24,9 +26,9 @@ type
   MpmcAdapterQueue[N: static int, T] =
     BQueue[T, ccMulti, ccMulti, N, 1, 1]
   MpmcAdapterProducer[N: static int, T] =
-    BQueueProducer[T, ccMulti, ccMulti, N, 1, 1]
+    Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccMulti, N, 1, 1]]
   MpmcAdapterConsumer[N: static int, T] =
-    BQueueConsumer[T, ccMulti, ccMulti, N, 1, 1]
+    Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccMulti, N, 1, 1]]
 
   MpmcAdapter*[N: static int, T] = object
     queue: ptr MpmcAdapterQueue[N, T]
@@ -46,8 +48,8 @@ proc initMpmcAdapter*[N: static int, T](): MpmcAdapter[N, T] =
   # returned object is safe to call from any thread for the bench's 1P/1C
   # smoke shape (only one producer/consumer slot exists, and the underlying
   # Vyukov per-slot CAS protocol is fully concurrent-safe).
-  result.producer = result.queue[].getProducer(idx = 0)
-  result.consumer = result.queue[].getConsumer(idx = 0)
+  result.producer = result.queue[].getProducerHere(idx = 0)
+  result.consumer = result.queue[].getConsumerHere(idx = 0)
 
 proc deinitMpmcAdapter*[N: static int, T](a: var MpmcAdapter[N, T]) =
   # Reset the cached producer/consumer views BEFORE deallocating the queue

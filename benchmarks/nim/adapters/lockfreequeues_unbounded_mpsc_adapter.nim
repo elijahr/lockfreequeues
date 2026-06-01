@@ -12,7 +12,7 @@
 ##    keeps the manager parameterized as `DebraManager[MT, ccSingle]`.
 ##
 ## 2. Producers register against the manager on their own thread and
-##    obtain a `QueueProducer` view via `queue.getProducer()` (the
+##    obtain a `QueueProducer` view via `queue.getProducerHere()` (the
 ##    unified API auto-registers the calling thread). That object holds
 ##    a per-thread `ThreadHandle` and CANNOT be created on the main
 ##    thread and shipped to a worker — handles are per-thread by
@@ -44,6 +44,8 @@ import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/reclamation
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 from debra import DebraManager, initDebraManager
 from ../bench_common import Topology, tMpscUnbounded
 
@@ -60,7 +62,7 @@ type
     ## registered at init time (registration is thread-affine). The
     ## consumer thread registers itself via `adapter.queue[].
     ## attachConsumer()` before its first `pop`; producer threads obtain
-    ## a QueueProducer view via `adapter.queue[].getProducer()` and call
+    ## a QueueProducer view via `adapter.queue[].getProducerHere()` and call
     ## `.attach()` on their own thread. This keeps the handles bound to
     ## the threads that actually operate, not the constructing thread.
     queue*: ptr UnboundedMpscAdapterQueue[S, T, MaxThreads]

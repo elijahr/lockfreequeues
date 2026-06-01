@@ -26,6 +26,8 @@ import options
 import lockfreequeues/queue
 import lockfreequeues/strategy
 import lockfreequeues/internal/pinscope_stub
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 import ../bench_common
 
 const topologiesSupported* = {tSpscUnbounded}
@@ -39,7 +41,7 @@ type
   UnboundedSpscAdapterQueue[S: static int, T] =
     Queue[T, ccSingle, ccSingle, stEager, S, SpscMaxThreads]
   UnboundedSpscAdapterProducer[S: static int, T] =
-    QueueProducer[T, ccSingle, ccSingle, stEager, S, SpscMaxThreads]
+    Bound[T, AnyThreadTag, Queue[T, ccSingle, ccSingle, stEager, S, SpscMaxThreads]]
 
   LockfreequeuesUnboundedSpscAdapter*[S: static int, T] = object
     ## Heap queue (see module doc); the cached `producer0` view borrows
@@ -77,7 +79,7 @@ proc makeLockfreequeuesUnboundedSpscAdapter*[S: static int, T](
     result.queue[] =
       newUnboundedSpscQueue[T, stEager, S, SpscMaxThreads]()
     queueValueInitOk = true
-    result.producer0 = result.queue[].getProducer()
+    result.producer0 = result.queue[].getProducerHere()
     queueInitOk = true
   finally:
     if not queueInitOk:
