@@ -37,7 +37,9 @@ jobs:
           nim-version: 'stable'
 
       - name: Install dependencies from nimble registry
-        run: nimble install -dy
+        run: |
+          nimble install -dy
+          nimble setup
 
       - name: Typestates verify
         run: typestates verify -W --format=github src/
@@ -121,7 +123,9 @@ jobs:
         # fetches every dep without building the package itself; the
         # subsequent step's `nimble test` invokes the package's test task
         # and the deps are resolved from nimble's pkgs2 store.
-        run: nimble install -dy
+        run: |
+          nimble install -dy
+          nimble setup
 
       - name: Run tests
         run: |
@@ -145,12 +149,6 @@ jobs:
               return 1
             fi
           }
-          # Skip `nimble develop -y` — nim.cfg's --noNimblePath +
-          # config.nims's explicit --path: directives mean nimble's
-          # package resolver is not used. The sibling-clone step above
-          # is what populates the local nimble store; going through
-          # `nimble develop` would only add a redundant dep-resolution
-          # round trip.
           echo "::group::Run test suite (includes arc, orc, refc, lock-free enforcement)"
           nimble_run nimble test
           echo "::endgroup::"

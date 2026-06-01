@@ -123,7 +123,9 @@ jobs:
       - name: Install dependencies from nimble registry
         # Uses lockfreequeues.nimble `requires` + nimble.lock SHAs
         # for deterministic dep resolution from registry/git.
-        run: nimble install -dy
+        run: |
+          nimble install -dy
+          nimble setup
 
       - name: Run bench harness tests
         run: nimble benchtests
@@ -196,7 +198,9 @@ jobs:
       - name: Install dependencies from nimble registry
         # Uses lockfreequeues.nimble `requires` + nimble.lock SHAs
         # for deterministic dep resolution from registry/git.
-        run: nimble install -dy
+        run: |
+          nimble install -dy
+          nimble setup
 
       # ---------- Track 3 MVP adapter installs (soft-skip) ----------
       #
