@@ -124,6 +124,13 @@ jobs:
         run: |
           nimble install -dy
           nimble setup
+          # Hand-fix typestates v0.12.0 srcDir flattening: nimble setup
+          # writes nimble.paths with a trailing /src component but the
+          # typestates v0.12.0 pkg ships flat. Create a self-referential
+          # src symlink inside each pkg dir so both layouts resolve.
+          for d in $(find ~/.nimble/pkgs2 -maxdepth 1 -type d -name "typestates-0.12.0-*" 2>/dev/null); do
+            [ -e "$d/src" ] || ln -s . "$d/src"
+          done
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
