@@ -173,8 +173,15 @@ const cases = @[
 ]
 
 proc runCase(c: Case): bool =
+  # Pass sibling paths explicitly so child compiles find debra +
+  # typestates whether or not the parent process's config.nims
+  # switch("path", ...) propagates. Local dev: paths from nimble.paths
+  # take precedence (entries to non-existent dirs are silently ignored
+  # by nim). CI without nimble.paths: these resolve to the cloned
+  # siblings under ../nim-debra and ../nim-typestates.
   let cmd =
-    &"nim c --threads:on --hints:off --warnings:off --path:src --compileOnly {c.file}"
+    &"nim c --threads:on --hints:off --warnings:off --path:src " &
+    &"--path:../nim-debra --path:../nim-typestates/src --compileOnly {c.file}"
   let (output, exitCode) = execCmdEx(cmd)
   case c.outcome
   of eoCompiles:
