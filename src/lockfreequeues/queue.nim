@@ -674,7 +674,7 @@ proc pop*[T; ST: static DeallocationStrategy, S, MaxThreads: static int](
     let head = seg.head
     let tail = seg.tail.load(moAcquire)
     if head < tail:
-      let value = seg.data[head]
+      let value = move(seg.data[head])
       seg.head = head + 1
       discard self.itemCount.fetchSub(1, moRelaxed)
       return some(value)
@@ -926,7 +926,8 @@ proc push*[
     ST: static DeallocationStrategy,
     S, MaxThreads: static int,
 ](
-    self: Bound[T, Tag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]], item: T
+    self: Bound[T, Tag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]],
+    item: sink T,
 ) {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## Push a single item onto the unbounded queue (cardinality-dispatched).
   when not defined(allowNonLockFreeQueueItems):
@@ -1047,7 +1048,7 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ccProd: stat
       self.queue.headSegment.store(nextSeg, moRelease)
       discard self.queue.segments.fetchSub(1, moRelaxed)
       return self.pop()
-    let v = seg.data[head]
+    let v = move(seg.data[head])
     seg.head = head + 1
     discard self.queue.itemCount.fetchSub(1, moRelaxed)
     return some(v)
@@ -1067,7 +1068,7 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ccProd: stat
         let tail = seg.tail.load(moAcquire)
         if seg.head < tail:
           if seg.committed[seg.head].load(moAcquire):
-            result = some(seg.data[seg.head])
+            result = some(move(seg.data[seg.head]))
             inc seg.head
             discard self.queue.itemCount.fetchSub(1, moRelaxed)
           break
@@ -1155,7 +1156,7 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ST: static D
         continue
 
       if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
-        result = some(seg.data[mySlot])
+        result = some(move(seg.data[mySlot]))
         discard self.queue.itemCount.fetchSub(1, moRelaxed)
         break
 
@@ -1214,7 +1215,7 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ST: static D
       if not seg.committed[mySlot].load(moAcquire):
         break
       if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
-        result = some(seg.data[mySlot])
+        result = some(move(seg.data[mySlot]))
         discard self.queue.itemCount.fetchSub(1, moRelaxed)
         break
 

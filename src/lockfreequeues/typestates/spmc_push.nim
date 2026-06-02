@@ -111,7 +111,7 @@ proc tryClaim*[N, C: static int, T](
     SPMCPushClaimResult[N] -> SPMCPushStart[N]()
 
 proc complete*[N, C: static int, T](
-    op: SPMCPushSlotClaimed[N], queue: var SpmcPushBase[N, C, T], item: T
+    op: SPMCPushSlotClaimed[N], queue: var SpmcPushBase[N, C, T], item: sink T
 ): bool {.inline, notATransition.} =
   ## Write item to the claimed slot, then publish the seq advance.
   ## The `seq.store(pos+1, moRelease)` is the producer->consumer edge.

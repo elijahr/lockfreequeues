@@ -113,6 +113,6 @@ proc complete*[N, P: static int, T](
   ## generation. The `seq.store(pos+N, moRelease)` is the consumer->next-
   ## producer edge; the next producer at virtual position `pos + N` will
   ## see this seq value via its acquire load and proceed to claim.
-  let value = queue.cells.dataPtr(op.slot)[] # C4 plain load; ordered by C2
+  let value = move(queue.cells.dataPtr(op.slot)[]) # C4 plain load; ordered by C2
   queue.cells.seqStore(op.slot, op.pos + uint64(N), moRelease) # C5 re-arm
   value

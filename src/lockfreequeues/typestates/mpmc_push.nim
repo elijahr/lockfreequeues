@@ -90,7 +90,7 @@ proc tryClaim*[N, P, C: static int, T](
     MPMCPushClaimResult[N] -> MPMCPushStart[N]() # producer raced ahead: retry
 
 proc complete*[N, P, C: static int, T](
-    op: MPMCPushSlotClaimed[N], queue: var MpmcPushBase[N, P, C, T], item: T
+    op: MPMCPushSlotClaimed[N], queue: var MpmcPushBase[N, P, C, T], item: sink T
 ): bool {.inline, notATransition.} =
   ## Write item to the claimed slot, then publish the seq advance.
   ## The `seq.store(pos+1, moRelease)` is the producer->consumer edge.

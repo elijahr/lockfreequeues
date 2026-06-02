@@ -423,7 +423,7 @@ proc consumerCount*[
 
 # --- SPSC push (direct on BQueue) ----------------------------------------
 proc push*[T; N: static int](
-    self: var BQueue[T, ccSingle, ccSingle, N, 0, 0], item: T
+    self: var BQueue[T, ccSingle, ccSingle, N, 0, 0], item: sink T
 ): bool =
   ## SPSC single-item push (lock-free; uses the SPSC typestate verbs).
   when not defined(allowNonLockFreeQueueItems):
@@ -454,7 +454,7 @@ proc push*[T; N: static int](
 
 # --- SPMC push (direct on BQueue; single producer side) ------------------
 proc push*[T; N, C: static int](
-    self: var BQueue[T, ccSingle, ccMulti, N, 0, C], item: T
+    self: var BQueue[T, ccSingle, ccMulti, N, 0, C], item: sink T
 ): bool =
   ## SPMC single-item push (defensive CAS, single-producer-side).
   when not defined(allowNonLockFreeQueueItems):
@@ -799,7 +799,7 @@ proc `=destroy`*[
 
 # --- MPSC push (via Bound) -----------------------------------------------
 proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: static int](
-    self: Bound[T, Tag, BQueue[T, ccMulti, ccSingle, N, P, 0]], item: T
+    self: Bound[T, Tag, BQueue[T, ccMulti, ccSingle, N, P, 0]], item: sink T
 ): bool {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## MPSC single-item push on a Bound producer endpoint.
   when not defined(allowNonLockFreeQueueItems):
@@ -825,7 +825,7 @@ proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: stati
 
 # --- MPMC push (via Bound) -----------------------------------------------
 proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P, C: static int](
-    self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]], item: T
+    self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]], item: sink T
 ): bool {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## MPMC single-item push on a Bound producer endpoint.
   when not defined(allowNonLockFreeQueueItems):
@@ -981,7 +981,12 @@ when defined(testing):
     check(self.tail.load(moRelaxed) == tail)
     for i in 0 .. N:
       if i < storage.len:
-        check(self.storage.data[i] == storage[i])
+        # Allow either the historical pushed value (copy semantics)
+        # OR `default(T)` (the moved-from sentinel left by `move()`
+        # in v5's pop path). See the ccProd/ccCons overload below for
+        # the full rationale.
+        let actual = self.storage.data[i]
+        check(actual == storage[i] or actual == default(T))
 
   proc checkState*[
       T;
@@ -1024,4 +1029,11 @@ when defined(testing):
       check(self.head.load(moRelaxed) == head)
       check(self.tail.load(moRelaxed) == tail)
       for i in 0 ..< N:
-        check(self.cells.cells[i].payload.data == data[i])
+        # Allow either the historical pushed value (copy semantics)
+        # OR `default(T)` (the moved-from sentinel left by `move()`
+        # in v5's pop path). Pre-pop the cell still holds the pushed
+        # value; after a pop returns the slot to default state. The
+        # data parameter expresses the steady-state pushed values,
+        # so either is a valid post-pop observation.
+        let actual = self.cells.cells[i].payload.data
+        check(actual == data[i] or actual == default(T))

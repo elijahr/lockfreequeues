@@ -81,7 +81,7 @@ proc checkFull*[N: static int](
     SPSCFullCheck[N] -> SPSCPushNotFull[N](tail: op.tail, slot: slot)
 
 proc writeData*[N: static int, T](
-    op: SPSCPushNotFull[N], queue: var SpscBase[N, T], item: T
+    op: SPSCPushNotFull[N], queue: var SpscBase[N, T], item: sink T
 ): SPSCPushDataWritten[N] {.inline, transition.} =
   ## Write item to the slot.
   queue.storage[op.slot] = item

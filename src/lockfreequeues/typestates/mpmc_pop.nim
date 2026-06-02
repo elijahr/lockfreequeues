@@ -96,6 +96,6 @@ proc complete*[N, P, C: static int, T](
   ## Note: the old protocol had a "fire-and-forget head advance" CAS here
   ## because head/reservedHead were separate. Vyukov has a single `head`
   ## cursor advanced by the claimant at C3, so no follow-up CAS is needed.
-  let value = queue.cells.dataPtr(op.slot)[] # C4 plain load; ordered by C2
+  let value = move(queue.cells.dataPtr(op.slot)[]) # C4 plain load; ordered by C2
   queue.cells.seqStore(op.slot, op.pos + uint64(N), moRelease) # C5 re-arm
   value

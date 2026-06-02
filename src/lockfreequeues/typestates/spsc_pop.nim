@@ -69,7 +69,7 @@ proc complete*[N: static int, T](
     op: SPSCPopNotEmpty[N], queue: var SpscBase[N, T]
 ): T {.inline, notATransition.} =
   ## Read value, advance head. Returns the value.
-  let value = queue.storage[op.slot]
+  let value = move(queue.storage[op.slot])
   let newHead = op.head.incOrResetN1(1)
   queue.head.storeReleaseN1(newHead)
   value
