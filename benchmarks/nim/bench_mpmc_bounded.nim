@@ -134,7 +134,7 @@ proc mpmcProducerThread[N, P, C: static int; T](
 ) {.thread.} =
   for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
     while not ctx.producer.push(T(i)):
-      backoffOnPeerWait()
+      benchBackoffOnPeerWait()
 
 proc mpmcConsumerThread[N, P, C: static int; T](
     ctx: ptr MpmcConsumerCtx[N, P, C, T]
@@ -145,7 +145,7 @@ proc mpmcConsumerThread[N, P, C: static int; T](
     if item.isSome:
       inc local
     else:
-      backoffOnPeerWait()
+      benchBackoffOnPeerWait()
 
 proc runOneMpmcRun[N, P, C: static int; T](
     queue: var MpmcQueueT[N, P, C, T], messageCount: int
@@ -233,7 +233,7 @@ proc qBoundedMpmcProducerThread[N, P, C: static int; T](
 ) {.thread.} =
   for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
     while not ctx.producer.push(T(i)):
-      backoffOnPeerWait()
+      benchBackoffOnPeerWait()
 
 proc qBoundedMpmcConsumerThread[N, P, C: static int; T](
     ctx: ptr QBoundedMpmcConsumerCtx[N, P, C, T]
@@ -244,7 +244,7 @@ proc qBoundedMpmcConsumerThread[N, P, C: static int; T](
     if item.isSome:
       inc local
     else:
-      backoffOnPeerWait()
+      benchBackoffOnPeerWait()
 
 proc runOneQBoundedMpmcRun[N, P, C: static int; T](
     queue: var BQueue[T, ccMulti, ccMulti, N, P, C],

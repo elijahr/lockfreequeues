@@ -115,7 +115,7 @@ proc runOneUMpscRun[S: static int; T; MaxT: static int; P: static int](
         if local mod 10_000 == 0:
           benchProgress("unbounded_mpsc", "c0 popped", local)
     else:
-      backoffOnPeerWait()
+      benchBackoffOnPeerWait()
   for i in 0 ..< P: joinThread(producerThreads[i])
   let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
   if elapsedNs <= 0.0: return 0.0

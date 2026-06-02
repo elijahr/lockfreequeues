@@ -20,8 +20,36 @@
 ## in parallel while the implementation lands behind them.
 
 import std/[algorithm, atomics, heapqueue, json, math, monotimes, options,
-            random, tables, times]
+            os, random, tables, times]
 import ./adapter_versions
+import lockfreequeues/backoff as queue_backoff
+
+# ---------- Harness backoff runtime toggle ----------
+#
+# When `LFQ_BENCH_HARNESS_BACKOFF=0` is set in the environment at process
+# start, `benchBackoffOnPeerWait` early-returns immediately, exposing the
+# queue's CAS-retry path end-to-end without the harness's cpuPause safety
+# net. Default behavior (env var unset or `=1`) is unchanged.
+#
+# The env var is read once at module init via this top-level `let`
+# binding so there is zero `getEnv` cost in the bench hot path. In-process
+# `putEnv` after import will NOT exercise the cache; the toggle is tested
+# out-of-process by the `benchToggleSmoke` nimble task.
+#
+# Enables falsifiable validation that queue-side backoff is sufficient
+# without a harness-level smoothing layer.
+#
+# Exported so tests can assert the default-case value.
+let disableHarnessBackoff* = getEnv("LFQ_BENCH_HARNESS_BACKOFF", "1") == "0"
+
+proc benchBackoffOnPeerWait*() {.inline.} =
+  ## Harness-side wrapper over `lockfreequeues/backoff.backoffOnPeerWait`
+  ## that respects the `LFQ_BENCH_HARNESS_BACKOFF=0` runtime kill-switch.
+  ## Bench drivers call this instead of `backoffOnPeerWait` directly so
+  ## the toggle only affects harness call sites, never the queue-internal
+  ## peer-flag spins inside `src/lockfreequeues/`.
+  if disableHarnessBackoff: return
+  queue_backoff.backoffOnPeerWait()
 
 # ---------- Topology ----------
 

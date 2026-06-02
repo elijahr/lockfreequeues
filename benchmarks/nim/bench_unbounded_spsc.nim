@@ -92,7 +92,7 @@ proc uspscConsumerThread[S: static int; T](
         if local mod 10_000 == 0:
           benchProgress("unbounded_spsc", "1p1c", "c0 popped", local)
     else:
-      backoffOnPeerWait()
+      benchBackoffOnPeerWait()
 
 proc runOneUSpscRun[S: static int; T](
     queue: ptr USpscQueue[S, T], messageCount: int

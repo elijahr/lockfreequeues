@@ -53,6 +53,18 @@ suite "bench_common":
     when not compiles(initHistogram(false)):
       {.error: "initHistogram signature missing".}
 
+# ---------- HarnessBackoff env-var toggle ----------
+
+suite "bench_common benchBackoffOnPeerWait toggle":
+  test "disableHarnessBackoff defaults to false when LFQ_BENCH_HARNESS_BACKOFF unset":
+    # The toggle is cached at module init via a top-level `let` binding.
+    # Default behavior (env var unset or "1") must be `false` so the
+    # harness's cpuPause stays active for normal bench runs. Toggle-active
+    # case (env="0" -> true) is exercised out-of-process by the
+    # `benchToggleSmoke` nimble task; in-process `putEnv` after import
+    # would not re-evaluate the cached binding.
+    check disableHarnessBackoff == false
+
 # ---------- Task 0.2: BMFEmitter behavior ----------
 
 proc readJsonFile(path: string): JsonNode =

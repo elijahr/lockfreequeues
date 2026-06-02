@@ -94,7 +94,7 @@ proc uspmcConsumerThread[S: static int; T; MaxT: static int](
           if local mod 10_000 == 0:
             benchProgress("unbounded_spmc", "c" & $ctx.id & " popped", local)
       else:
-        backoffOnPeerWait()
+        benchBackoffOnPeerWait()
 
 proc runOneUSpmcRun[S: static int; T; MaxT: static int; C: static int](
     queue: ptr USpmcQueueT[S, T, MaxT],

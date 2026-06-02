@@ -95,7 +95,7 @@ proc spmcProducerThread[N, C: static int; T](
 ) {.thread.} =
   for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
     while not ctx.queue[].push(T(i)):
-      backoffOnPeerWait()
+      benchBackoffOnPeerWait()
 
 proc spmcConsumerThread[N, C: static int; T](
     ctx: ptr SpmcConsumerCtx[N, C, T]
@@ -106,7 +106,7 @@ proc spmcConsumerThread[N, C: static int; T](
     if item.isSome:
       inc local
     else:
-      backoffOnPeerWait()
+      benchBackoffOnPeerWait()
 
 proc runOneSpmcRun[N, C: static int; T](
     queue: var SpmcQueueT[N, C, T], messageCount: int
@@ -186,7 +186,7 @@ proc qBoundedSpmcProducerThread[N, C: static int; T](
 ) {.thread.} =
   for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
     while not ctx.queue[].push(T(i)):
-      backoffOnPeerWait()
+      benchBackoffOnPeerWait()
 
 proc qBoundedSpmcConsumerThread[N, C: static int; T](
     ctx: ptr QBoundedSpmcConsumerCtx[N, C, T]
@@ -197,7 +197,7 @@ proc qBoundedSpmcConsumerThread[N, C: static int; T](
     if item.isSome:
       inc local
     else:
-      backoffOnPeerWait()
+      benchBackoffOnPeerWait()
 
 proc runOneQBoundedSpmcRun[N, C: static int; T](
     queue: var BQueue[T, ccSingle, ccMulti, N, 0, C],
