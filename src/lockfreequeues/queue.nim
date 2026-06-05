@@ -79,6 +79,44 @@ static:
   assert LockFreeQueuesAdvanceEvery > 0,
     "LockFreeQueuesAdvanceEvery must be a positive integer"
 
+# ----------------------------------------------------------------------
+# Strict-LCRQ cell alias + close sentinel (Phase B / §2.1, §4).
+#
+# `LCRQCell[T]` is a *transparent* alias for `Atomic[Pair[uint64, T]]`:
+# a single 128-bit DWCAS-able cell whose first half is the seq counter
+# (`Pair.first`, encoding empty=0 / filled=1 / closed=high-bit) and
+# whose second half is the payload of type `T`. This replaces the
+# v4.x `committed: Atomic[bool]` + `data[i]: T` overlay on the
+# unbounded MPMC arm, unlocking the §4 close-on-empty progress
+# guarantee via DWCAS arbitration.
+#
+# `CLOSED_BIT` is the close sentinel: a cell with `seq == CLOSED_BIT`
+# is permanently closed — no producer can publish into it and no
+# consumer can claim it. The high bit is reserved for this purpose;
+# the remaining 63 bits encode the empty/filled epoch counter.
+#
+# These are type-level / constant introductions only — no production
+# call site references them yet. T2 lands the three cell primitives
+# (`tryPublish` / `tryClaim` / `tryCloseOnEmpty`) that consume them;
+# later tasks migrate `Segment` and `newSegment` to use a
+# `cells: array[S, LCRQCell[T]]` field on the MPMC arm.
+#
+# The width invariant (`sizeof(LCRQCell[T]) == 16` for any `T` with
+# `sizeof(T) == 8`) and the `CLOSED_BIT` bit position are guarded by
+# `tests/t_lcrq_cell_alias.nim`.
+# ----------------------------------------------------------------------
+const CLOSED_BIT* = 1'u64 shl 63
+  ## Strict-LCRQ §4 close sentinel. A cell with `seq == CLOSED_BIT`
+  ## is permanently closed: no producer can publish into it, no
+  ## consumer can claim it. See design §2.2.
+
+type LCRQCell*[T] = Atomic[Pair[uint64, T]]
+  ## Strict-LCRQ cell: 128-bit DWCAS-able pair of seq counter
+  ## (`Pair.first`) and payload (`Pair.second`). Transparent alias
+  ## for `Atomic[Pair[uint64, T]]` — assigning a `LCRQCell[T]` to /
+  ## from the spelled-out type requires no conversion. See design
+  ## §2.1 (cell shape) and §4 (close-on-empty progress argument).
+
 ## ----------------------------------------------------------------------
 ## Middle-axis Lifecycle typestate.
 ##
