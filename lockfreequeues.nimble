@@ -12,7 +12,7 @@ entryPoints    = @["tests/test.nim"]
 requires "nim >= 2.2.10"
 requires "unittest2"
 requires "typestates >= 0.12.0"
-requires "debra >= 0.9.0"
+requires "debra >= 0.10.0"
 
 # Tasks
 task should_fail, "Verifies compile-fail negative controls":
