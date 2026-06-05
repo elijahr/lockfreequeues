@@ -149,10 +149,7 @@ type BQueue*[T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int]
   ## Spsc internals. No debra integration; the bounded body owns no
   ## heap state and the default destructor is sufficient.
   ##
-  ## Field-layout split by cardinality matches the unified
-  ## `Queue[..., rkNone, ...]` bounded body verbatim (lifted from
-  ## `queue.nim` L170-194 at HEAD 2ddca6a, with `ST` and `RK`
-  ## phantom-params dropped):
+  ## Field-layout split by cardinality:
   ##   - SPSC (`ccSingle × ccSingle`): `StorageN1[N, T]` (N+1 slots,
   ##     no per-slot seq counter); head/tail are `Atomic[int]`.
   ##   - All other bounded shapes (MPSC / SPMC / MPMC):
@@ -172,13 +169,12 @@ type BQueue*[T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int]
       consumerThreadIds*: array[C, Atomic[int]]
 
 ## ----------------------------------------------------------------------
-## Param-coherence guards — bounded subset of
+## Param-coherence guards for BQueue.
 ##
-## The 6 rkNone-side guards from the legacy `assertQueueParams`
-## (queue.nim L274-297 at HEAD 2ddca6a). The unbounded-side guards
-## (`S > 0`, `MaxThreads > 0`, `N == 0 and P == 0 and C == 0`) do not
-## apply to BQueue — BQueue has no `S` or `MaxThreads` and its `N` is
-## required positive.
+## Asserts the 6 bounded-side invariants: N > 0, P/C consistent with
+## cardinality, etc. The unbounded-side guards (S > 0, MaxThreads > 0,
+## N == 0 and P == 0 and C == 0) do not apply — BQueue has no S or
+## MaxThreads and its N is required positive.
 ## ----------------------------------------------------------------------
 
 template assertBQueueParams*[
@@ -279,10 +275,10 @@ static:
     offsetOf(MpmcBase[8, 4, 4, int], cells)
 
 ## ----------------------------------------------------------------------
-## Constructor / accessors — bounded subset.
+## Constructor / accessors.
 ##
-## Lifted from queue.nim L485-545 at HEAD 2ddca6a with the unified type
-## signature replaced by BQueue's 6-param form (ST dropped).
+## 6-param BQueue type signature (no ST phantom — bounded body has no
+## deallocation strategy; default destructor is sufficient).
 ## ----------------------------------------------------------------------
 
 proc clear[T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int](
@@ -394,8 +390,7 @@ proc consumerCount*[T; ccProd, ccCons: static PinScopeCardinality, N, P, C: stat
 ##
 ## Defined only for `ccProd == ccMulti` resp. `ccCons == ccMulti`.
 ## Single-cardinality side pushes/pops directly through `BQueue.push` /
-## `BQueue.pop` (no handshake required). Lifted from queue.nim
-## L557-632 with the bounded-only `RK == rkNone` arm extracted.
+## `BQueue.pop` (no handshake required).
 ## ----------------------------------------------------------------------
 
 # --- SPSC push (direct on BQueue) ----------------------------------------
