@@ -19,16 +19,16 @@ import std/options
 import lockfreequeues/queue
 import debra/atomics
 
-# Convenience constructors — explicit Pair[uint64, T] literals for the
+# Convenience constructors — explicit Pair[uint, T] literals for the
 # DWCAS-shape cell init. Mirrors design §2.3 / §2.5.1 state-machine
 # entries (empty / filled / closed-empty).
 
-proc storeCell[T](cell: var LCRQCell[T], seqVal: uint64, payload: T) =
+proc storeCell[T](cell: var LCRQCell[T], seqVal: uint, payload: T) =
   ## Single-threaded direct store of (seq, payload). Used to install
   ## test pre-conditions; production code goes through the primitives.
-  store(cell, Pair[uint64, T](first: seqVal, second: payload), moRelaxed)
+  store(cell, Pair[uint, T](first: seqVal, second: payload), moRelaxed)
 
-proc readCell[T](cell: var LCRQCell[T]): Pair[uint64, T] =
+proc readCell[T](cell: var LCRQCell[T]): Pair[uint, T] =
   load(cell, moRelaxed)
 
 suite "T2: tryPublish / tryClaim / tryCloseOnEmpty cell primitives":
@@ -38,24 +38,24 @@ suite "T2: tryPublish / tryClaim / tryCloseOnEmpty cell primitives":
 
   test "T2.P1: tryPublish on empty cell succeeds, advances seq to 1":
     var cell: LCRQCell[int]
-    storeCell(cell, 0'u64, 0)
-    check tryPublish(cell, 0'u64, 42) == true
+    storeCell(cell, 0'u, 0)
+    check tryPublish(cell, 0'u, 42) == true
     let after = readCell(cell)
-    check after.first == 1'u64
+    check after.first == 1'u
     check after.second == 42
 
   test "T2.P2: tryPublish on already-filled cell fails; cell unchanged":
     var cell: LCRQCell[int]
-    storeCell(cell, 1'u64, 17)
-    check tryPublish(cell, 0'u64, 99) == false
+    storeCell(cell, 1'u, 17)
+    check tryPublish(cell, 0'u, 99) == false
     let after = readCell(cell)
-    check after.first == 1'u64
+    check after.first == 1'u
     check after.second == 17
 
   test "T2.P3: tryPublish on closed cell fails; cell unchanged":
     var cell: LCRQCell[int]
     storeCell(cell, CLOSED_BIT, 0)
-    check tryPublish(cell, 0'u64, 7) == false
+    check tryPublish(cell, 0'u, 7) == false
     let after = readCell(cell)
     check after.first == CLOSED_BIT
     check after.second == 0
@@ -64,10 +64,10 @@ suite "T2: tryPublish / tryClaim / tryCloseOnEmpty cell primitives":
     # A racing producer that observed seq=1 (already filled) must not
     # be able to overwrite the cell by guessing expectedSeq=1.
     var cell: LCRQCell[int]
-    storeCell(cell, 1'u64, 17)
-    check tryPublish(cell, 1'u64, 99) == false
+    storeCell(cell, 1'u, 17)
+    check tryPublish(cell, 1'u, 99) == false
     let after = readCell(cell)
-    check after.first == 1'u64
+    check after.first == 1'u
     check after.second == 17
 
   test "T2.P5: tryPublish[ptr X] with nil value asserts (Option transport restriction)":
@@ -77,9 +77,9 @@ suite "T2: tryPublish / tryClaim / tryCloseOnEmpty cell primitives":
     # an unrelated consumer's `tryClaim` call. `doAssert` so the guard
     # survives `-d:danger`.
     var cell: LCRQCell[ptr int]
-    storeCell(cell, 0'u64, nil)
+    storeCell(cell, 0'u, nil)
     expect AssertionDefect:
-      discard tryPublish(cell, 0'u64, nil)
+      discard tryPublish(cell, 0'u, nil)
 
   # ------------------------------------------------------------------
   # tryClaim — CRITICAL-1 contract: CAS is the sole authority on state.
@@ -88,11 +88,11 @@ suite "T2: tryPublish / tryClaim / tryCloseOnEmpty cell primitives":
 
   test "T2.C1: tryClaim on filled cell returns the payload; seq stays at 1, payload zeroed":
     var cell: LCRQCell[int]
-    storeCell(cell, 1'u64, 42)
-    let claimed = tryClaim(cell, 0'u64)
+    storeCell(cell, 1'u, 42)
+    let claimed = tryClaim(cell, 0'u)
     check claimed == some(42)
     let after = readCell(cell)
-    check after.first == 1'u64
+    check after.first == 1'u
     check after.second == 0 # default(int) — CAS zeroed the payload slot
 
   test "T2.C2: tryClaim on filled cell with default(T) payload returns some(default(T)) — CRITICAL-1 regression":
@@ -100,12 +100,12 @@ suite "T2: tryPublish / tryClaim / tryCloseOnEmpty cell primitives":
     # short-circuit would silently drop this. The production primitive
     # MUST NOT have that short-circuit: CAS is sole authority.
     var cell: LCRQCell[int]
-    storeCell(cell, 1'u64, 0) # legitimately published default(int)
-    let claimed = tryClaim(cell, 0'u64)
+    storeCell(cell, 1'u, 0) # legitimately published default(int)
+    let claimed = tryClaim(cell, 0'u)
     check claimed == some(0)
     check claimed.isSome
     let after = readCell(cell)
-    check after.first == 1'u64
+    check after.first == 1'u
     check after.second == 0
 
   test "T2.C3: tryClaim on filled cell with non-nil pointer payload round-trips through Option[ptr int]":
@@ -122,27 +122,27 @@ suite "T2: tryPublish / tryClaim / tryCloseOnEmpty cell primitives":
     var sentinelHolder: int = 0xDEAD
     let sentinel: ptr int = addr sentinelHolder
     var cell: LCRQCell[ptr int]
-    storeCell(cell, 1'u64, sentinel)
-    let claimed = tryClaim(cell, 0'u64)
+    storeCell(cell, 1'u, sentinel)
+    let claimed = tryClaim(cell, 0'u)
     check claimed.isSome
     check claimed.get() == sentinel
     let after = readCell(cell)
-    check after.first == 1'u64
+    check after.first == 1'u
     check after.second == nil # CAS zeroed the payload slot
 
   test "T2.C4: tryClaim on empty cell returns none(T)":
     var cell: LCRQCell[int]
-    storeCell(cell, 0'u64, 0)
-    let claimed = tryClaim(cell, 0'u64)
+    storeCell(cell, 0'u, 0)
+    let claimed = tryClaim(cell, 0'u)
     check claimed.isNone
     let after = readCell(cell)
-    check after.first == 0'u64
+    check after.first == 0'u
     check after.second == 0
 
   test "T2.C5: tryClaim on closed cell returns none(T)":
     var cell: LCRQCell[int]
     storeCell(cell, CLOSED_BIT, 0)
-    let claimed = tryClaim(cell, 0'u64)
+    let claimed = tryClaim(cell, 0'u)
     check claimed.isNone
     let after = readCell(cell)
     check after.first == CLOSED_BIT
@@ -154,24 +154,24 @@ suite "T2: tryPublish / tryClaim / tryCloseOnEmpty cell primitives":
 
   test "T2.X1: tryCloseOnEmpty on empty cell succeeds, sets CLOSED_BIT":
     var cell: LCRQCell[int]
-    storeCell(cell, 0'u64, 0)
-    check tryCloseOnEmpty(cell, 0'u64) == true
+    storeCell(cell, 0'u, 0)
+    check tryCloseOnEmpty(cell, 0'u) == true
     let after = readCell(cell)
     check after.first == CLOSED_BIT
     check after.second == 0
 
   test "T2.X2: tryCloseOnEmpty on filled cell fails; cell unchanged":
     var cell: LCRQCell[int]
-    storeCell(cell, 1'u64, 42)
-    check tryCloseOnEmpty(cell, 0'u64) == false
+    storeCell(cell, 1'u, 42)
+    check tryCloseOnEmpty(cell, 0'u) == false
     let after = readCell(cell)
-    check after.first == 1'u64
+    check after.first == 1'u
     check after.second == 42
 
   test "T2.X3: tryCloseOnEmpty on already-closed cell fails; cell unchanged":
     var cell: LCRQCell[int]
     storeCell(cell, CLOSED_BIT, 0)
-    check tryCloseOnEmpty(cell, 0'u64) == false
+    check tryCloseOnEmpty(cell, 0'u) == false
     let after = readCell(cell)
     check after.first == CLOSED_BIT
     check after.second == 0

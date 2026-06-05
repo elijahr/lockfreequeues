@@ -7,7 +7,7 @@
 ## has reserved a tail slot past `mySlot` (i.e. the producer is
 ## mid-publish OR a peer consumer drove close-on-empty on an earlier
 ## slot), the consumer must NOT simply `break` out of the pop loop.
-## Instead it drives `tryCloseOnEmpty(seg.cells[mySlot], 0'u64)` and
+## Instead it drives `tryCloseOnEmpty(seg.cells[mySlot], 0'u)` and
 ## inline-skips closed cells via a per-pop stack counter
 ## `closesSeenThisSegment`, escalating to `nextSeg` when the count
 ## reaches the StarvingThreshold = S bound (design §5.2.1, §7.1).

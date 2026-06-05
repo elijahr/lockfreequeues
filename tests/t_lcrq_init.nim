@@ -41,7 +41,7 @@ suite "T4: MPMC newSegment cell-init contract (design §2.5.1)":
     check segPtr != nil
     for i in 0 ..< 16:
       let observed = load(segPtr.cells[i], moRelaxed)
-      check observed.first == 0'u64
+      check observed.first == 0'u
       check observed.second == 0
 
   test "T4.I2: every cell of a fresh MPMC segment is (seq=0, default(T)=nil) for T=ptr int":
@@ -54,5 +54,5 @@ suite "T4: MPMC newSegment cell-init contract (design §2.5.1)":
     let nilPtr: ptr int = nil
     for i in 0 ..< 16:
       let observed = load(segPtr.cells[i], moRelaxed)
-      check observed.first == 0'u64
+      check observed.first == 0'u
       check observed.second == nilPtr

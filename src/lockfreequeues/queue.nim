@@ -82,7 +82,7 @@ static:
 # ----------------------------------------------------------------------
 # Strict-LCRQ cell alias + close sentinel (Phase B / §2.1, §4).
 #
-# `LCRQCell[T]` is a *transparent* alias for `Atomic[Pair[uint64, T]]`:
+# `LCRQCell[T]` is a *transparent* alias for `Atomic[Pair[uint, T]]`:
 # a single 128-bit DWCAS-able cell whose first half is the seq counter
 # (`Pair.first`, encoding empty=0 / filled=1 / closed=high-bit) and
 # whose second half is the payload of type `T`. This replaces the
@@ -105,16 +105,24 @@ static:
 # `sizeof(T) == 8`) and the `CLOSED_BIT` bit position are guarded by
 # `tests/t_lcrq_cell_alias.nim`.
 # ----------------------------------------------------------------------
-const CLOSED_BIT* = 1'u64 shl 63
+const CLOSED_BIT* = 1'u shl (sizeof(uint) * 8 - 1)
   ## Strict-LCRQ §4 close sentinel. A cell with `seq == CLOSED_BIT`
   ## is permanently closed: no producer can publish into it, no
   ## consumer can claim it. See design §2.2.
+  ##
+  ## The sentinel occupies the high bit of the platform-native `uint`
+  ## so that `LCRQCell[T]` stays at native double-word width on every
+  ## target debra supports (16 bytes on 64-bit, 8 bytes on 32-bit).
+  ## On 64-bit (uint == uint64) the value is identical to `1'u64 shl 63`.
 
-type LCRQCell*[T] = Atomic[Pair[uint64, T]]
-  ## Strict-LCRQ cell: 128-bit DWCAS-able pair of seq counter
+type LCRQCell*[T] = Atomic[Pair[uint, T]]
+  ## Strict-LCRQ cell: native double-word DWCAS-able pair of seq counter
   ## (`Pair.first`) and payload (`Pair.second`). Transparent alias
-  ## for `Atomic[Pair[uint64, T]]` — assigning a `LCRQCell[T]` to /
-  ## from the spelled-out type requires no conversion. See design
+  ## for `Atomic[Pair[uint, T]]` — assigning a `LCRQCell[T]` to /
+  ## from the spelled-out type requires no conversion. Using
+  ## platform-native `uint` (rather than hardcoded `uint64`) keeps
+  ## the cell at the platform's native DWCAS width, preserving the
+  ## lock-free guarantee on every debra-supported target. See design
   ## §2.1 (cell shape) and §4 (close-on-empty progress argument).
 
 # ----------------------------------------------------------------------
@@ -149,7 +157,7 @@ type LCRQCell*[T] = Atomic[Pair[uint64, T]]
 # trigger for a future ring-segment variant.
 # ----------------------------------------------------------------------
 
-proc tryPublish*[T](cell: var LCRQCell[T], expectedSeq: uint64, value: T): bool =
+proc tryPublish*[T](cell: var LCRQCell[T], expectedSeq: uint, value: T): bool =
   ## §2.3 / §4. Producer publish via DWCAS into an empty cell.
   ## Returns true on success (cell now `(expectedSeq+1, value)`).
   ## Returns false if the cell is already filled, closed, or at a
@@ -165,8 +173,8 @@ proc tryPublish*[T](cell: var LCRQCell[T], expectedSeq: uint64, value: T): bool 
   when T is ptr or T is ref:
     doAssert value != nil,
       "Queue: cannot push nil for ptr/ref T (Option transport restriction)"
-  let expected = Pair[uint64, T](first: expectedSeq, second: default(T))
-  let desired = Pair[uint64, T](first: expectedSeq + 1, second: value)
+  let expected = Pair[uint, T](first: expectedSeq, second: default(T))
+  let desired = Pair[uint, T](first: expectedSeq + 1, second: value)
   var prev = expected
   # On CAS failure, debra writes the observed pair into `prev`; we don't
   # re-read it — escalation re-loads via fresh cell.load at the call site
@@ -174,7 +182,7 @@ proc tryPublish*[T](cell: var LCRQCell[T], expectedSeq: uint64, value: T): bool 
   dwcasOrderRelaxedCAS:
     result = compareExchangeStrong(cell, prev, desired, moRelease, moRelaxed)
 
-proc tryClaim*[T](cell: var LCRQCell[T], expectedSeq: uint64): Option[T] =
+proc tryClaim*[T](cell: var LCRQCell[T], expectedSeq: uint): Option[T] =
   ## §2.3 / §2.3.1 (CRITICAL-1). Consumer claim via DWCAS.
   ##
   ## CONTRACT: NEVER inspect `observed.second`. The CAS on the seq
@@ -184,19 +192,19 @@ proc tryClaim*[T](cell: var LCRQCell[T], expectedSeq: uint64): Option[T] =
   let observed = load(cell, moAcquire)
   if observed.first != expectedSeq + 1:
     return none(T)
-  let desired = Pair[uint64, T](first: observed.first, second: default(T))
+  let desired = Pair[uint, T](first: observed.first, second: default(T))
   var prev = observed
   dwcasOrderRelaxedCAS:
     if compareExchangeStrong(cell, prev, desired, moAcquireRelease, moRelaxed):
       return some(observed.second)
   return none(T)
 
-proc tryCloseOnEmpty*[T](cell: var LCRQCell[T], expectedSeq: uint64): bool =
+proc tryCloseOnEmpty*[T](cell: var LCRQCell[T], expectedSeq: uint): bool =
   ## §2.3 / §4. Consumer close-on-empty via DWCAS. Atomically sets
   ## `CLOSED_BIT` on an empty cell so no producer can later publish
   ## into it. Returns false if the cell is already filled or closed.
-  let expected = Pair[uint64, T](first: expectedSeq, second: default(T))
-  let desired = Pair[uint64, T](first: expectedSeq or CLOSED_BIT, second: default(T))
+  let expected = Pair[uint, T](first: expectedSeq, second: default(T))
+  let desired = Pair[uint, T](first: expectedSeq or CLOSED_BIT, second: default(T))
   var prev = expected
   # On CAS failure, debra writes the observed pair into `prev`; we don't
   # re-read it — escalation re-loads via fresh cell.load at the call site
@@ -437,7 +445,7 @@ proc newSegment[T; ccProd, ccCons: static PinScopeCardinality, S: static int]():
     # Synchronization: relaxed is sufficient — the segment is not
     # visible to other threads until the producer/consumer link it
     # into the queue chain via a release-store.
-    let zero = Pair[uint64, T](first: 0'u64, second: default(T))
+    let zero = Pair[uint, T](first: 0'u, second: default(T))
     for i in 0 ..< S:
       store(result.cells[i], zero, moRelaxed)
   elif ccProd == ccMulti:
@@ -515,7 +523,7 @@ proc segmentDestructor[T; ccProd, ccCons: static PinScopeCardinality, S: static 
   when not supportsCopyMem(T):
     let seg = cast[ptr Segment[T, ccProd, ccCons, S]](p)
     when ccProd == ccMulti and ccCons == ccMulti:
-      # Strict-LCRQ cells contain `Pair[uint64, T]` where T is constrained
+      # Strict-LCRQ cells contain `Pair[uint, T]` where T is constrained
       # to `supportsCopyMem(T) and sizeof(T) <= 8` (design §11.2). Cells
       # are therefore trivially destructible — no per-cell finalization
       # is required. This arm is statically unreachable for valid MPMC
@@ -984,7 +992,7 @@ proc `=destroy`*[
     let nextSeg = seg.next.load(moRelaxed)
     when not supportsCopyMem(T):
       when ccProd == ccMulti and ccCons == ccMulti:
-        # Strict-LCRQ cells contain `Pair[uint64, T]` where T is
+        # Strict-LCRQ cells contain `Pair[uint, T]` where T is
         # constrained to `supportsCopyMem(T) and sizeof(T) <= 8`
         # (design §11.2). Cells are therefore trivially destructible
         # and require no per-cell finalization at queue teardown. This
@@ -1130,14 +1138,14 @@ proc push*[
   when ccProd == ccMulti and ccCons == ccMulti:
     # Strict-LCRQ T-constraint enforcement (design §11.2). Starting in
     # v5.0.0, unbounded MPMC publishes via 128-bit DWCAS into
-    # `Atomic[Pair[uint64, T]]`, which requires T to be trivially
+    # `Atomic[Pair[uint, T]]`, which requires T to be trivially
     # copyable and fit alongside the 64-bit seq counter.
     static:
-      when sizeof(T) > 8:
+      when sizeof(T) > sizeof(uint):
         {.
           error: """
 Queue[T, ccMulti, ccMulti, ...] requires sizeof(T) <= 8 starting in v5.0.0.
-The strict-LCRQ migration uses 128-bit DWCAS (Atomic[Pair[uint64, T]]),
+The strict-LCRQ migration uses 128-bit DWCAS (Atomic[Pair[uint, T]]),
 which constrains T to fit in 8 bytes alongside the seq counter.
 For wide T payloads, use BQueue[T] (bounded MPMC, Vyukov per-slot seq)
 which preserves move-only T support. See CHANGELOG.md v5.0.0 BREAKING.
@@ -1218,7 +1226,7 @@ which preserves move-only T support. See CHANGELOG.md v5.0.0 BREAKING.
             # `expectedSeq = 0` is the invariant at v5.0.0 call sites
             # (linked-segment specialization, R degenerate per design
             # §2.5 / §2.5.3).
-            if not tryPublish[T](seg.cells[tail], 0'u64, item):
+            if not tryPublish[T](seg.cells[tail], 0'u, item):
               # T9 / design §4.2 + §6.4: close-CAS-on-empty arbitration.
               # tryPublish failed: the cell either holds `CLOSED_BIT`
               # (a peer consumer's slow-path `tryCloseOnEmpty` won the
@@ -1227,7 +1235,7 @@ which preserves move-only T support. See CHANGELOG.md v5.0.0 BREAKING.
               # unexpected seq value. Re-load with moAcquire to
               # discriminate.
               let observed = load(seg.cells[tail], moAcquire)
-              if (observed.first and CLOSED_BIT) != 0'u64:
+              if (observed.first and CLOSED_BIT) != 0'u:
                 # Cell closed by consumer. Per design §4.2 + §6.4,
                 # the close is a §4 contract (permanent), not a
                 # transient failure: the producer MUST escalate to
@@ -1508,7 +1516,7 @@ proc pop*[
           # invocation.
           var publishableSeen = false
           while mySlot < S and seg.tail.load(moAcquire) > mySlot:
-            if tryCloseOnEmpty[T](seg.cells[mySlot], 0'u64):
+            if tryCloseOnEmpty[T](seg.cells[mySlot], 0'u):
               # We won the close-on-empty CAS. Inline-skip past it.
               inc closesSeenThisSegment
               if closesSeenThisSegment >= S:
@@ -1523,7 +1531,7 @@ proc pop*[
             #       subsequent outer-loop iteration once mySlot
             #       realigns with prevConsumerIdx+1.
             let recheck = load(seg.cells[mySlot], moAcquire)
-            if (recheck.first and CLOSED_BIT) != 0'u64:
+            if (recheck.first and CLOSED_BIT) != 0'u:
               inc closesSeenThisSegment
               if closesSeenThisSegment >= S:
                 break
@@ -1584,7 +1592,7 @@ proc pop*[
       # but does not coordinate ownership; the prevConsumerIdx CAS
       # coordinates ownership but does not extract the value.
       if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
-        let claimed = tryClaim[T](seg.cells[mySlot], 0'u64)
+        let claimed = tryClaim[T](seg.cells[mySlot], 0'u)
         if claimed.isSome:
           result = claimed
           discard self.queue.itemCount.fetchSub(1, moRelaxed)
@@ -1603,7 +1611,7 @@ proc pop*[
         #       and has not yet published. Retry on the next outer
         #       loop iteration.
         let recheck = load(seg.cells[mySlot], moAcquire)
-        if (recheck.first and CLOSED_BIT) != 0'u64:
+        if (recheck.first and CLOSED_BIT) != 0'u:
           let nextSeg = seg.next.load(moAcquire)
           if nextSeg == nil:
             break
@@ -1637,7 +1645,7 @@ proc pop*[
           while true:
             backoffOnRetry(spins)
             let inner = load(seg.cells[mySlot], moAcquire)
-            if (inner.first and CLOSED_BIT) != 0'u64:
+            if (inner.first and CLOSED_BIT) != 0'u:
               # Cell was closed while we waited (close-on-empty raced
               # the producer). Escalate to nextSeg, same as case (a).
               let nextSeg = seg.next.load(moAcquire)
@@ -1660,9 +1668,9 @@ proc pop*[
                 closesSeenThisSegment = 0
               closedEscalated = true
               break waitForPublish
-            if inner.first != 0'u64:
+            if inner.first != 0'u:
               # Producer published. Claim the value.
-              let claimed = tryClaim[T](seg.cells[mySlot], 0'u64)
+              let claimed = tryClaim[T](seg.cells[mySlot], 0'u)
               if claimed.isSome:
                 result = claimed
                 discard self.queue.itemCount.fetchSub(1, moRelaxed)
