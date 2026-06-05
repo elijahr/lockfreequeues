@@ -1678,7 +1678,6 @@ proc pop*[
         const MaxWaitForPublishSpins = 1024
         var noNextOnClose = false
         var fellThroughOnClose = false
-        var publishedDuringEscalation = false
         block waitForPublish:
           var waitSpins = 0
           while true:
@@ -1725,7 +1724,6 @@ proc pop*[
               # our budget exhaustion. Loop iterates and the
               # `inner.first != 0'u` branch above will claim the
               # value on the next acquire-load.
-              publishedDuringEscalation = true
               continue
         if noNextOnClose:
           # Closed cell with no successor segment: caller will retry,
@@ -1761,8 +1759,6 @@ proc pop*[
               closesSeenThisSegment = 0
           backoffOnRetry(spins)
           continue
-        # Suppress unused-warning paths.
-        discard publishedDuringEscalation
         continue
       # prevConsumerIdx CAS lost to a peer consumer. Retry the outer
       # loop to re-read prevIdx and recompute mySlot.
