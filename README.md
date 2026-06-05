@@ -277,19 +277,39 @@ See [CHANGELOG.md](CHANGELOG.md). The current release is
 
 ## References
 
+### Queue algorithms
+
+- Adam Morrison and Yehuda Afek, ["Fast Concurrent Queues for x86
+  Processors"](https://www.cs.tau.ac.il/~mad/publications/ppopp2013-x86queues.pdf)
+  (PPoPP 2013, pp. 103-112, DOI [10.1145/2442516.2442527](https://doi.org/10.1145/2442516.2442527)).
+  The LCRQ (Linked Concurrent Ring Queue) algorithm; in v5.0.0 the unbounded
+  MPMC arm is a strict LCRQ migration with the close-CAS-on-empty progress
+  rule (design doc §4).
+- Dmitry Vyukov, ["Bounded MPMC queue"](https://sites.google.com/site/1024cores/home/lock-free-algorithms/queues/bounded-mpmc-queue)
+  (1024cores.net, 2011; original site `www.1024cores.net` was inaccessible
+  at audit time — Google Sites mirror linked). The per-slot sequence-counter
+  bounded MPMC scheme used by `BQueue` for the bounded MPMC arm.
+- Maged M. Michael and Michael L. Scott, ["Simple, Fast, and Practical
+  Non-Blocking and Blocking Concurrent Queue Algorithms"](https://www.cs.rochester.edu/u/scott/papers/1996_PODC_queues.pdf)
+  (PODC 1996, pp. 267-275, DOI [10.1145/248052.248106](https://doi.org/10.1145/248052.248106)).
+  The classical MS-queue; baseline against which LCRQ is compared.
+
+### Memory reclamation
+
+- Trevor Brown, ["Reclaiming Memory for Lock-Free Data Structures: There has to
+  be a Better Way"](http://www.cs.utoronto.ca/~tabrown/debra/paper.podc15.pdf)
+  (PODC 2015, pp. 261-270, DOI [10.1145/2767386.2767436](https://doi.org/10.1145/2767386.2767436)).
+  DEBRA (Distributed Epoch-Based Reclamation); the SMR scheme used by
+  `nim-debra` for unbounded multi-thread queues.
+
+### Practitioner writings
+
 - Juho Snellman, ["I've been writing ring buffers wrong all these years"](https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/)
   ([alt](https://web.archive.org/web/20200530040210/https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/)).
 - Mamy Ratsimbazafy, [research on SPSC channels](https://github.com/mratsim/weave/blob/master/weave/cross_thread_com/channels_spsc.md#litterature)
   for weave.
 - Henrique F. Bucher, ["Yes, You Have Been Writing SPSC Queues Wrong Your Entire Life"](http://www.vitorian.com/x1/archives/370)
   ([alt](https://web.archive.org/web/20191225164231/http://www.vitorian.com/x1/archives/370)).
-- Maged M. Michael and Michael L. Scott, "Simple, Fast, and Practical
-  Non-Blocking and Blocking Concurrent Queue Algorithms" (PODC 1996).
-- Dmitry Vyukov's writings on bounded MPMC ring buffers and CAS-based
-  coordination patterns.
-- Trevor Brown, ["Reclaiming Memory for Lock-Free Data Structures: There has to
-  be a Better Way"](https://www.cs.utoronto.ca/~tabrown/debra/) (DEBRA, the
-  reclamation scheme used by the unbounded queues).
 
 Many thanks to Mamy Ratsimbazafy for reviewing the initial release and
 offering suggestions.

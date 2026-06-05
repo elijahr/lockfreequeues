@@ -1297,6 +1297,11 @@ marker count is 0 at T9 and at all post-T9 commits.
 
 - [Migration guide](docs/migration.md) — full migration table from
   4.1.x to 5.0.0; cited in BREAKING.
+- [README References section](README.md#references) — fact-checked
+  bibliography for the algorithms underlying v5.0.0: Morrison & Afek
+  (LCRQ, PPoPP 2013), Vyukov (bounded MPMC), Michael & Scott (MS-queue
+  baseline), and Brown (DEBRA, PODC 2015). Each citation verified at
+  audit time against authoritative sources.
 
 ## [4.1.0] - 2026-05-01
 
