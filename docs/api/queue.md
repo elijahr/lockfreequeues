@@ -53,6 +53,23 @@ Body layout splits on `(ccProd, ccCons) is (ccSingle, ccSingle)`:
 
 The parameter order is load-bearing: `T, ccProd, ccCons, ST, S, MaxThreads`.
 
+!!! warning "v5.0.0 Phase B — unbounded MPMC `T` constraint"
+
+    The unbounded MPMC shape (`Queue[T, ccMulti, ccMulti, …]`) requires
+    **`supportsCopyMem(T) AND sizeof(T) <= 8`** (8 bytes on 64-bit;
+    4 bytes on 32-bit). Each cell packs a `(seq, payload)` pair into
+    a single DWCAS word per the LCRQ paper §4 close-CAS-on-empty
+    progress rule.
+
+    Violations fail at compile time with a `{.error.}` overload that
+    cites the migration path. For wider or move-only `T`, switch to
+    `BQueue[T, ccMulti, ccMulti, …]` (bounded MPMC, Vyukov per-slot
+    seq) — `BQueue` preserves general `T` support and is unchanged in
+    v5.0.0. To keep unbounded MPMC, wrap as `ptr T`; see
+    [`docs/migrations/v5.0.0.md`](../migrations/v5.0.0.md) "Phase B"
+    recipes and `examples/job_scheduler.nim`. The other three
+    unbounded shapes (SPSC / SPMC / MPSC) are unaffected.
+
 ## Constructors
 
 `newQueue(Queue[T, ccProd, ccCons, ST, S, MaxThreads])` is the

@@ -48,6 +48,12 @@ Linked segments that grow as needed. The MP/MC shapes use DEBRA+ epoch-based rec
 plain `array[S, T]`, so the queue rejects `ref T` item types under `arc` /
 `orc` / `atomicArc` at compile time. Use a value type, a `ptr T`, or pass
 `-d:allowNonLockFreeQueueItems` to disable the check at your own risk.
+Additionally in v5.0.0, the unbounded MPMC arm
+(`Queue[T, ccMulti, ccMulti, …]`) requires
+`supportsCopyMem(T) AND sizeof(T) <= 8` (Phase B strict-LCRQ migration);
+for wider or move-only `T`, use `BQueue[T, ccMulti, ccMulti, …]` or wrap
+as `ptr T`. See
+[Phase B migration](migrations/v5.0.0.md#phase-b--strict-lcrq-migration-on-unbounded-mpmc).
 
 **Atomics.** All atomics route through `debra/atomics`, which statically
 rejects any `Atomic[T]` instantiation that would fall back to libatomic
