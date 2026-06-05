@@ -1534,12 +1534,26 @@ proc pop*[
           # below; or (c) run off the end of the segment (mySlot >= S)
           # — same fall-through. Bounded by S iterations per outer
           # invocation.
+          # The slow-path inner scan uses a LOCAL counter, not the
+          # segment-wide `closesSeenThisSegment`. Rationale: the slow
+          # path does NOT advance `prevConsumerIdx`, so a subsequent
+          # outer-loop iteration that re-enters this scan walks the
+          # same `mySlot` range and would re-observe the same already-
+          # CLOSED cells. Folding those re-observations into the
+          # segment-wide counter would inflate it across iterations
+          # and trip the starvation threshold prematurely — causing
+          # `retireOnCAS` to fire on a segment that still has
+          # publishable cells past mySlot, orphaning them (data
+          # loss). The local counter is reset on every outer iter, so
+          # the threshold-hit decision below reflects only THIS
+          # scan's closes.
           var publishableSeen = false
+          var localScanCloses = 0
           while mySlot < S and seg.tail.load(moAcquire) > mySlot:
             if tryCloseOnEmpty[T](seg.cells[mySlot], 0'u):
               # We won the close-on-empty CAS. Inline-skip past it.
-              inc closesSeenThisSegment
-              if closesSeenThisSegment >= S:
+              inc localScanCloses
+              if localScanCloses >= S:
                 break
               inc mySlot
               continue
@@ -1552,8 +1566,8 @@ proc pop*[
             #       realigns with prevConsumerIdx+1.
             let recheck = load(seg.cells[mySlot], moAcquire)
             if (recheck.first and CLOSED_BIT) != 0'u:
-              inc closesSeenThisSegment
-              if closesSeenThisSegment >= S:
+              inc localScanCloses
+              if localScanCloses >= S:
                 break
               inc mySlot
               continue
@@ -1570,8 +1584,7 @@ proc pop*[
             # gets a fair chance.
             backoffOnRetry(spins)
             continue
-          if closesSeenThisSegment < S and mySlot < S and
-              seg.tail.load(moAcquire) <= mySlot:
+          if localScanCloses < S and mySlot < S and seg.tail.load(moAcquire) <= mySlot:
             # We closed some cells but the tail caught back up (no
             # more empty cells past mySlot in the race-window). Retry
             # outer to re-evaluate the fast-path; prevConsumerIdx may

@@ -1314,6 +1314,23 @@ guarantee. The migration landed atomically across commits T0..T9 on
 - `debra` bumped to `>= 0.10.0` for the DWCAS surface used by the
   strict-LCRQ cell primitives.
 
+#### Platform requirements (Phase B)
+
+- **arm64 hosts require ARMv8.1-A or newer** (LSE atomic
+  instructions: `CAS`, `CASP`, etc.). `nim.cfg` passes
+  `-march=armv8.1-a+lse` on gcc/clang for arm64 so DWCAS is inlined
+  rather than routed through libgcc outline helpers. Pre-ARMv8.1
+  hardware — notably Raspberry Pi 4 / Cortex-A72, Cortex-A53/A57,
+  and the original Pixel C — lacks LSE; binaries built with these
+  flags will fault with `SIGILL` (Illegal Instruction) at the first
+  CAS. Affected users must either upgrade the host (most ARM SoCs
+  released since 2019, plus Apple Silicon and Graviton2/3/4,
+  support LSE) or pre-v5.0.0 `lockfreequeues` and pre-0.10.0
+  `nim-debra` releases that do not require DWCAS. The macOS arm64
+  target (Apple Silicon) and ubuntu-24.04-arm CI runner both
+  support LSE; the constraint affects self-hosted builds on older
+  SBCs / dev boards only.
+
 #### Bisect notes (Phase B)
 
 The T3..T7 commit range (`77c7f20c..51f10b63` on
