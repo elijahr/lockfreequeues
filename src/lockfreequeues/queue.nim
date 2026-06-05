@@ -157,7 +157,9 @@ type LCRQCell*[T] = Atomic[Pair[uint, T]]
 # trigger for a future ring-segment variant.
 # ----------------------------------------------------------------------
 
-proc tryPublish*[T](cell: var LCRQCell[T], expectedSeq: uint, value: T): bool =
+proc tryPublish*[T](
+    cell: var LCRQCell[T], expectedSeq: uint, value: T
+): bool {.inline.} =
   ## §2.3 / §4. Producer publish via DWCAS into an empty cell.
   ## Returns true on success (cell now `(expectedSeq+1, value)`).
   ## Returns false if the cell is already filled, closed, or at a
@@ -182,7 +184,7 @@ proc tryPublish*[T](cell: var LCRQCell[T], expectedSeq: uint, value: T): bool =
   dwcasOrderRelaxedCAS:
     result = compareExchangeStrong(cell, prev, desired, moRelease, moRelaxed)
 
-proc tryClaim*[T](cell: var LCRQCell[T], expectedSeq: uint): Option[T] =
+proc tryClaim*[T](cell: var LCRQCell[T], expectedSeq: uint): Option[T] {.inline.} =
   ## §2.3 / §2.3.1 (CRITICAL-1). Consumer claim via DWCAS.
   ##
   ## CONTRACT: NEVER inspect `observed.second`. The CAS on the seq
@@ -199,7 +201,7 @@ proc tryClaim*[T](cell: var LCRQCell[T], expectedSeq: uint): Option[T] =
       return some(observed.second)
   return none(T)
 
-proc tryCloseOnEmpty*[T](cell: var LCRQCell[T], expectedSeq: uint): bool =
+proc tryCloseOnEmpty*[T](cell: var LCRQCell[T], expectedSeq: uint): bool {.inline.} =
   ## §2.3 / §4. Consumer close-on-empty via DWCAS. Atomically sets
   ## `CLOSED_BIT` on an empty cell so no producer can later publish
   ## into it. Returns false if the cell is already filled or closed.
