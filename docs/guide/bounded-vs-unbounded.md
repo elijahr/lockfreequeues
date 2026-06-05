@@ -313,6 +313,31 @@ that match your latency budget. If the queue routinely fills for 200 ms
 at a time, 10 short retries are not enough; if you need <1 ms response,
 do not sleep at all.
 
+## Item-type constraints (v5.0.0 Phase B)
+
+The unbounded MPMC arm carries a narrower item-type constraint than the
+other shapes, because its Phase B strict-LCRQ migration packs each
+cell's `(seq, payload)` pair into a single DWCAS word.
+
+| Shape | Item type rules |
+|-------|-----------------|
+| Unbounded MPMC (`Queue[T, ccMulti, ccMulti, …]`) | **`supportsCopyMem(T) AND sizeof(T) <= 8`** on 64-bit (`<= 4` on 32-bit). Lock-free progress via strict-LCRQ (close-CAS-on-empty, paper §4). |
+| Unbounded SPSC / SPMC / MPSC | `supportsCopyMem(T)`; no `sizeof(T)` cap. |
+| Bounded MPMC and friends (`BQueue[T, …]`) | Move-only T, wide T, and ref T (with `-d:allowNonLockFreeQueueItems`) all supported. Lock-free progress via Vyukov per-slot seq. |
+
+**Decision shortcut for MPMC workloads:**
+
+- If `T` fits in `sizeof(uint)` (8 bytes on 64-bit) and is trivially
+  copyable — integer IDs, raw pointers, small distinct wrappers — pick
+  unbounded MPMC for unbounded growth + strict-LCRQ progress.
+- Otherwise — move-only types, wide value types, ref types — pick
+  `BQueue[T, ccMulti, ccMulti, …]`. Trade-off is bounded capacity and
+  caller-driven backpressure, in exchange for general T support.
+- A common middle path is unbounded MPMC of `ptr T` with caller-owned
+  or debra-owned allocation; see
+  [`docs/migrations/v5.0.0.md`](../migrations/v5.0.0.md) Phase B
+  recipes for the `ptr T` pattern.
+
 ## Trade-offs at a glance
 
 | Dimension | Bounded | Unbounded |

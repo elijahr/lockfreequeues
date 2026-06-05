@@ -19,9 +19,9 @@ void lfds711_freelist_init_valid_on_current_logical_core( struct lfds711_freelis
   LFDS711_PAL_ASSERT( (lfds711_pal_uint_t) fs->top % LFDS711_PAL_ATOMIC_ISOLATION_IN_BYTES == 0 );
   LFDS711_PAL_ASSERT( (lfds711_pal_uint_t) &fs->elimination_array_size_in_elements % LFDS711_PAL_ATOMIC_ISOLATION_IN_BYTES == 0 );
   // TRD : elimination_array can be NULL
-  LFDS711_PAL_ASSERT( (elimination_array == NULL) or 
+  LFDS711_PAL_ASSERT( (elimination_array == NULL) or
                       ( (elimination_array != NULL) and (lfds711_pal_uint_t) elimination_array % LFDS711_PAL_ATOMIC_ISOLATION_IN_BYTES == 0 ) );
-  LFDS711_PAL_ASSERT( (elimination_array == NULL and elimination_array_size_in_elements == 0) or 
+  LFDS711_PAL_ASSERT( (elimination_array == NULL and elimination_array_size_in_elements == 0) or
                       (elimination_array != NULL and elimination_array_size_in_elements >= 2 and (elimination_array_size_in_elements & (elimination_array_size_in_elements-1)) == 0) );
   // TRD : user_state can be NULL
 
@@ -45,4 +45,3 @@ void lfds711_freelist_init_valid_on_current_logical_core( struct lfds711_freelis
 
   return;
 }
-

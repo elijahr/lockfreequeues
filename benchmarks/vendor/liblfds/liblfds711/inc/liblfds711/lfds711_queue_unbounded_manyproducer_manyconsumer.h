@@ -59,4 +59,3 @@ void lfds711_queue_umm_query( struct lfds711_queue_umm_state *qumms,
                               enum lfds711_queue_umm_query query_type,
                               void *query_input,
                               void *query_output );
-

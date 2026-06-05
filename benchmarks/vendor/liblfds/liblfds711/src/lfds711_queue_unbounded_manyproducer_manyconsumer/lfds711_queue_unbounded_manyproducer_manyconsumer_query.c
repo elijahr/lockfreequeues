@@ -130,4 +130,3 @@ static void lfds711_queue_umm_internal_validate( struct lfds711_queue_umm_state 
 
   return;
 }
-

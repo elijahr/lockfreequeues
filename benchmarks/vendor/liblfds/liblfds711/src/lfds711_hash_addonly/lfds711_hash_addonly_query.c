@@ -116,4 +116,3 @@ static void lfds711_hash_a_internal_validate( struct lfds711_hash_a_state *has,
 
   return;
 }
-

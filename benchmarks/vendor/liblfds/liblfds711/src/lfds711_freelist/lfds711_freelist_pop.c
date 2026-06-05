@@ -86,4 +86,3 @@ int lfds711_freelist_pop( struct lfds711_freelist_state *fs,
 
   return 1;
 }
-

@@ -27,4 +27,3 @@ void lfds711_queue_bss_cleanup( struct lfds711_queue_bss_state *qbsss,
 
   return;
 }
-

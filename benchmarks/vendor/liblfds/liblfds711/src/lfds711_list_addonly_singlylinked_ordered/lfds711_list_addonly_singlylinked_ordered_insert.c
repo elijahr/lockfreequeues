@@ -10,7 +10,7 @@ enum lfds711_list_aso_insert_result lfds711_list_aso_insert( struct lfds711_list
                                                              struct lfds711_list_aso_element *lasoe,
                                                              struct lfds711_list_aso_element **existing_lasoe )
 {
-  char unsigned 
+  char unsigned
     result;
 
   enum lfds711_misc_flag
@@ -133,4 +133,3 @@ enum lfds711_list_aso_insert_result lfds711_list_aso_insert( struct lfds711_list
 
   return LFDS711_LIST_ASO_INSERT_RESULT_SUCCESS;
 }
-

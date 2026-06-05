@@ -57,4 +57,3 @@ int lfds711_hash_a_iterate( struct lfds711_hash_a_iterate *hai,
 
   return rv;
 }
-

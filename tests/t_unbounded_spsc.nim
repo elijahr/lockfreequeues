@@ -15,8 +15,7 @@ import lockfreequeues/internal/pinscope_stub
 import lockfreequeues/endpoint
 import lockfreequeues/role_tags
 
-const MT = 4
-  ## Type-uniform MaxThreads phantom for the spsc-absorbed branch.
+const MT = 4 ## Type-uniform MaxThreads phantom for the spsc-absorbed branch.
 
 suite "UnboundedSpsc":
   test "newUnboundedSpscQueue creates valid instance":

@@ -25,7 +25,9 @@
 
 when defined(adapter_boost_lockfree_queue_available):
   when not defined(cpp):
-    {.error: "boost_lockfree_queue_adapter requires `nim cpp` (Boost.LockFree is C++).".}
+    {.
+      error: "boost_lockfree_queue_adapter requires `nim cpp` (Boost.LockFree is C++)."
+    .}
 
   import ../bench_common
   import ../adapter
@@ -47,19 +49,25 @@ when defined(adapter_boost_lockfree_queue_available):
   # and trivially copy-assignable; ``uint64_t`` satisfies both. We always
   # store ``uint64`` regardless of the harness's ``T`` (the harness uses
   # ``uint64`` as its payload by convention; see ``bench_common.nim``).
-  type
-    BoostQueueRaw {.importcpp: "boost::lockfree::queue<unsigned long long>",
-                    header: "boost/lockfree/queue.hpp", byref.} = object
+  type BoostQueueRaw {.
+    importcpp: "boost::lockfree::queue<unsigned long long>",
+    header: "boost/lockfree/queue.hpp",
+    byref
+  .} = object
 
-  proc constructBoostQueueRaw(capacity: csize_t): BoostQueueRaw
-      {.importcpp: "boost::lockfree::queue<unsigned long long>(@)",
-        header: "boost/lockfree/queue.hpp", constructor.}
+  proc constructBoostQueueRaw(
+    capacity: csize_t
+  ): BoostQueueRaw {.
+    importcpp: "boost::lockfree::queue<unsigned long long>(@)",
+    header: "boost/lockfree/queue.hpp",
+    constructor
+  .}
 
-  proc bpush(q: var BoostQueueRaw; v: culonglong): bool
-      {.importcpp: "#.bounded_push(@)".}
+  proc bpush(
+    q: var BoostQueueRaw, v: culonglong
+  ): bool {.importcpp: "#.bounded_push(@)".}
 
-  proc bpop(q: var BoostQueueRaw; v: var culonglong): bool
-      {.importcpp: "#.pop(@)".}
+  proc bpop(q: var BoostQueueRaw, v: var culonglong): bool {.importcpp: "#.pop(@)".}
 
   const topologiesSupported* = {tMpmc}
 
@@ -70,7 +78,9 @@ when defined(adapter_boost_lockfree_queue_available):
       ## (``boost::lockfree::queue`` is non-copyable and non-movable).
     capacity*: int
 
-  proc makeBoostLockfreeQueueAdapter*[T](capacity: int = 1024): BoostLockfreeQueueAdapter[T] =
+  proc makeBoostLockfreeQueueAdapter*[T](
+      capacity: int = 1024
+  ): BoostLockfreeQueueAdapter[T] =
     ## ``capacity`` is the fixed node-pool size; pushes that exceed it
     ## return ``prFull``. Default 1024 mirrors other bounded adapters.
     ## Backing storage uses ``allocAligned`` (cache-line aligned, zeroed)
@@ -83,7 +93,15 @@ when defined(adapter_boost_lockfree_queue_available):
     # Placement-construct the C++ object in the alloc'd storage. Going via
     # an importcpp constructor proc keeps Nim from emitting a Nim-level
     # constructor call.
-    {.emit: ["new (", result.queue, ") boost::lockfree::queue<unsigned long long>(", csize_t(capacity), ");"].}
+    {.
+      emit: [
+        "new (",
+        result.queue,
+        ") boost::lockfree::queue<unsigned long long>(",
+        csize_t(capacity),
+        ");",
+      ]
+    .}
 
   proc cleanup*[T](a: var BoostLockfreeQueueAdapter[T]) =
     if a.queue != nil:
@@ -94,10 +112,7 @@ when defined(adapter_boost_lockfree_queue_available):
   proc push*[T](a: var BoostLockfreeQueueAdapter[T], item: T): PushResult =
     if a.queue == nil:
       return prFull
-    if bpush(a.queue[], culonglong(uint64(item))):
-      prSuccess
-    else:
-      prFull
+    if bpush(a.queue[], culonglong(uint64(item))): prSuccess else: prFull
 
   proc pop*[T](a: var BoostLockfreeQueueAdapter[T]): PopResult[T] =
     if a.queue == nil:

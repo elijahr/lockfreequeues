@@ -184,3 +184,43 @@ The release-time documentation surface is:
 - `THIRD_PARTY_LICENSES.md`.
 
 If a doc isn't reachable from one of those, it shouldn't be tracked.
+
+## Reviewer config
+
+### PR Review Bot
+
+- Bot username: `gemini-code-assist`
+- Re-review comment: `/gemini review`
+- Auto-reviews on PR creation: no — manual `/gemini review` comment required every cycle (including the first)
+- Parallel bot: `axiomantic-momus` (fires automatically via
+  `.github/workflows/momus.yml`)
+- Gating priority: gemini gates the PR; momus is informational unless
+  gemini is unavailable (per memory
+  `feedback_momus_dance_after_iteration`).
+
+## Phase B: strict-LCRQ migration on MPMC (v5.0.0)
+
+Starting in v5.0.0, the unbounded `Queue[T, ccMulti, ccMulti, ...]` uses
+strict-LCRQ cells via debra DWCAS. This narrows `T` to `supportsCopyMem(T)`
+AND `sizeof(T) <= 8`. For wider T, use `BQueue[T]` (bounded MPMC, Vyukov
+per-slot seq), which preserves general T support including move-only types.
+
+The migration was atomic across commits T0..T9 on
+`feat/v5.0.0-strict-lcrq`. The T3..T7 range
+(`77c7f20c..51f10b63`) contains partial-migration `STRICT-LCRQ-PARTIAL`
+sentinels in source — use `git bisect skip` for SHAs in that range.
+The green-gate commits are T8 (`33b8d49f`) and T9 (`cd8b27a1`); the
+`STRICT-LCRQ-PARTIAL` marker count is 0 at and after T9.
+CHANGELOG.md v5.0.0 has the full migration notes (BREAKING /
+Added / Removed / Fixed / Dependencies / Bisect-notes) under the
+"Phase B: strict-LCRQ migration on unbounded MPMC" subsection.
+
+Cycle-4 (post-T16) gemini fixes landed two correctness changes worth
+knowing when touching MPMC pop:
+- **CR-1**: `waitForPublish` is bounded by `MaxWaitForPublishSpins =
+  1024`, with escalation to `tryCloseOnEmpty` on budget exhaustion
+  (defends LCRQ §4 progress against stalled producers).
+- **CR-2**: the §5.3 CLOSED-detection branch falls through to the §5.2
+  slow-path inline-skip rather than short-circuiting to eager
+  retirement. Invariant change: `prevConsumerIdx` advances on **both**
+  successful claims AND skipped-closed cells (previously claim-count-only).

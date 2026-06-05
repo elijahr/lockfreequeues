@@ -45,24 +45,16 @@ import unittest2
 
 const
   RepoRoot = currentSourcePath().parentDir.parentDir
-  PreSplitFixturePath =
-    RepoRoot / "tests" / "fixtures" / "pre-split-slugs.json"
+  PreSplitFixturePath = RepoRoot / "tests" / "fixtures" / "pre-split-slugs.json"
   BenchSpscSrc = RepoRoot / "benchmarks" / "nim" / "bench_spsc.nim"
   BenchMpscSrc = RepoRoot / "benchmarks" / "nim" / "bench_mpsc.nim"
-  BenchMpmcMpmcSrc =
-    RepoRoot / "benchmarks" / "nim" / "bench_mpmc_bounded.nim"
-  BenchMpmcSpmcSrc =
-    RepoRoot / "benchmarks" / "nim" / "bench_spmc_bounded.nim"
-  BenchUnboundedSpscSrc =
-    RepoRoot / "benchmarks" / "nim" / "bench_unbounded_spsc.nim"
-  BenchUnboundedSpmcSrc =
-    RepoRoot / "benchmarks" / "nim" / "bench_unbounded_spmc.nim"
-  BenchUnboundedMpscSrc =
-    RepoRoot / "benchmarks" / "nim" / "bench_unbounded_mpsc.nim"
-  BenchUnboundedMpmcSrc =
-    RepoRoot / "benchmarks" / "nim" / "bench_unbounded_mpmc.nim"
-  SupersetCheckScript =
-    RepoRoot / "benchmarks" / "scripts" / "superset_check.py"
+  BenchMpmcMpmcSrc = RepoRoot / "benchmarks" / "nim" / "bench_mpmc_bounded.nim"
+  BenchMpmcSpmcSrc = RepoRoot / "benchmarks" / "nim" / "bench_spmc_bounded.nim"
+  BenchUnboundedSpscSrc = RepoRoot / "benchmarks" / "nim" / "bench_unbounded_spsc.nim"
+  BenchUnboundedSpmcSrc = RepoRoot / "benchmarks" / "nim" / "bench_unbounded_spmc.nim"
+  BenchUnboundedMpscSrc = RepoRoot / "benchmarks" / "nim" / "bench_unbounded_mpsc.nim"
+  BenchUnboundedMpmcSrc = RepoRoot / "benchmarks" / "nim" / "bench_unbounded_mpmc.nim"
+  SupersetCheckScript = RepoRoot / "benchmarks" / "scripts" / "superset_check.py"
 
 # ---------- Task 2.1: pre-split fixture exists and is non-empty ----------
 
@@ -96,8 +88,7 @@ proc compileBench(src: string, defs: openArray[string], suffix: string): string 
   cmd.add(" -o:" & outBin & " " & src)
   let (output, exitCode) = execCmdEx(cmd)
   if exitCode != 0:
-    raise newException(IOError,
-      "compile failed for " & src & ":\n" & output)
+    raise newException(IOError, "compile failed for " & src & ":\n" & output)
   result = outBin
 
 proc parseBmf(path: string): JsonNode =
@@ -107,13 +98,14 @@ proc parseBmf(path: string): JsonNode =
 
 suite "topology split: bench_spsc (Task 2.3)":
   test "compiles + emits BMF containing lockfreequeues_spsc/spsc/1p1c":
-    let bin = compileBench(BenchSpscSrc, [
-      "BenchSpscMessageCount=1000",
-      "BenchSpscRuns=2",
-      "BenchSpscWarmup=0",
-    ], "spsc")
+    let bin = compileBench(
+      BenchSpscSrc,
+      ["BenchSpscMessageCount=1000", "BenchSpscRuns=2", "BenchSpscWarmup=0"],
+      "spsc",
+    )
     let bmf = getTempDir() / "bench_spsc_t23.json"
-    if fileExists(bmf): removeFile(bmf)
+    if fileExists(bmf):
+      removeFile(bmf)
     let cmd = bin & " --bmf-out=" & bmf
     let (_, exitCode) = execCmdEx(cmd)
     check exitCode == 0
@@ -129,13 +121,14 @@ suite "topology split: bench_spsc (Task 2.3)":
 
 suite "topology split: bench_mpsc (Task 2.4)":
   test "compiles + emits BMF for mpsc 1p1c, 2p1c, 4p1c":
-    let bin = compileBench(BenchMpscSrc, [
-      "BenchMpscMessageCount=1000",
-      "BenchMpscRuns=2",
-      "BenchMpscWarmup=0",
-    ], "mpsc")
+    let bin = compileBench(
+      BenchMpscSrc,
+      ["BenchMpscMessageCount=1000", "BenchMpscRuns=2", "BenchMpscWarmup=0"],
+      "mpsc",
+    )
     let bmf = getTempDir() / "bench_mpsc_t24.json"
-    if fileExists(bmf): removeFile(bmf)
+    if fileExists(bmf):
+      removeFile(bmf)
     let cmd = bin & " --bmf-out=" & bmf
     let (_, exitCode) = execCmdEx(cmd)
     check exitCode == 0
@@ -157,13 +150,14 @@ suite "topology split: bench_mpsc (Task 2.4)":
 
 suite "topology split: bench_mpmc_bounded (Task 2.5a)":
   test "compiles + emits BMF for mpmc 4x4 grid + 8p8c + channels {1,2,4}p{1,2,4}c":
-    let bin = compileBench(BenchMpmcMpmcSrc, [
-      "BenchMpmcMessageCount=1000",
-      "BenchMpmcRuns=2",
-      "BenchMpmcWarmup=0",
-    ], "mpmc_mpmc")
+    let bin = compileBench(
+      BenchMpmcMpmcSrc,
+      ["BenchMpmcMessageCount=1000", "BenchMpmcRuns=2", "BenchMpmcWarmup=0"],
+      "mpmc_mpmc",
+    )
     let bmf = getTempDir() / "bench_mpmc_bounded_t25a.json"
-    if fileExists(bmf): removeFile(bmf)
+    if fileExists(bmf):
+      removeFile(bmf)
     let cmd = bin & " --bmf-out=" & bmf
     let (_, exitCode) = execCmdEx(cmd)
     check exitCode == 0
@@ -192,13 +186,14 @@ suite "topology split: bench_mpmc_bounded (Task 2.5a)":
 
 suite "topology split: bench_spmc_bounded (Task 2.5b)":
   test "compiles + emits BMF for spmc 1p{1,2,4}c":
-    let bin = compileBench(BenchMpmcSpmcSrc, [
-      "BenchMpmcMessageCount=1000",
-      "BenchMpmcRuns=2",
-      "BenchMpmcWarmup=0",
-    ], "mpmc_spmc")
+    let bin = compileBench(
+      BenchMpmcSpmcSrc,
+      ["BenchMpmcMessageCount=1000", "BenchMpmcRuns=2", "BenchMpmcWarmup=0"],
+      "mpmc_spmc",
+    )
     let bmf = getTempDir() / "bench_spmc_bounded_t25b.json"
-    if fileExists(bmf): removeFile(bmf)
+    if fileExists(bmf):
+      removeFile(bmf)
     let cmd = bin & " --bmf-out=" & bmf
     let (_, exitCode) = execCmdEx(cmd)
     check exitCode == 0
@@ -225,92 +220,85 @@ suite "topology split: bench_spmc_bounded (Task 2.5b)":
 
 suite "topology split: bench_unbounded_spsc (Task 2.6a)":
   test "compiles + emits BMF for unbounded_spsc 1p1c":
-    let bin = compileBench(BenchUnboundedSpscSrc, [
-      "UnboundedSpscMessageCount=500",
-      "UnboundedSpscRuns=2",
-      "BenchUnboundedWarmup=0",
-    ], "unbounded_spsc")
+    let bin = compileBench(
+      BenchUnboundedSpscSrc,
+      ["UnboundedSpscMessageCount=500", "UnboundedSpscRuns=2", "BenchUnboundedWarmup=0"],
+      "unbounded_spsc",
+    )
     let bmf = getTempDir() / "bench_unbounded_spsc_t26a.json"
-    if fileExists(bmf): removeFile(bmf)
+    if fileExists(bmf):
+      removeFile(bmf)
     let cmd = bin & " --bmf-out=" & bmf
     let (_, exitCode) = execCmdEx(cmd)
     check exitCode == 0
     let node = parseBmf(bmf)
     check node.hasKey("lockfreequeues_unbounded_spsc/spsc_unbounded/1p1c")
     # Other unbounded families must NOT appear here (split contract).
-    check (not node.hasKey(
-      "lockfreequeues_unbounded_spmc/mpmc_unbounded/1p1c"))
-    check (not node.hasKey(
-      "lockfreequeues_unbounded_mpsc/mpsc_unbounded/1p1c"))
-    check (not node.hasKey(
-      "lockfreequeues_unbounded_mpmc/mpmc_unbounded/1p1c"))
+    check (not node.hasKey("lockfreequeues_unbounded_spmc/mpmc_unbounded/1p1c"))
+    check (not node.hasKey("lockfreequeues_unbounded_mpsc/mpsc_unbounded/1p1c"))
+    check (not node.hasKey("lockfreequeues_unbounded_mpmc/mpmc_unbounded/1p1c"))
     removeFile(bmf)
 
 # ---------- Task 2.6b: bench_unbounded_spmc emits spmc 1p{1,2,4}c -----
 
 suite "topology split: bench_unbounded_spmc (Task 2.6b)":
   test "compiles + emits BMF for unbounded_spmc 1p{1,2,4}c":
-    let bin = compileBench(BenchUnboundedSpmcSrc, [
-      "UnboundedSpmcMessageCount=500",
-      "UnboundedSpmcRuns=2",
-      "BenchUnboundedWarmup=0",
-    ], "unbounded_spmc")
+    let bin = compileBench(
+      BenchUnboundedSpmcSrc,
+      ["UnboundedSpmcMessageCount=500", "UnboundedSpmcRuns=2", "BenchUnboundedWarmup=0"],
+      "unbounded_spmc",
+    )
     let bmf = getTempDir() / "bench_unbounded_spmc_t26b.json"
-    if fileExists(bmf): removeFile(bmf)
+    if fileExists(bmf):
+      removeFile(bmf)
     let cmd = bin & " --bmf-out=" & bmf
     let (_, exitCode) = execCmdEx(cmd)
     check exitCode == 0
     let node = parseBmf(bmf)
     for c in [1, 2, 4]:
-      check node.hasKey(
-        "lockfreequeues_unbounded_spmc/mpmc_unbounded/1p" & $c & "c")
+      check node.hasKey("lockfreequeues_unbounded_spmc/mpmc_unbounded/1p" & $c & "c")
     # Other unbounded families must NOT appear here (split contract).
-    check (not node.hasKey(
-      "lockfreequeues_unbounded_spsc/spsc_unbounded/1p1c"))
-    check (not node.hasKey(
-      "lockfreequeues_unbounded_mpsc/mpsc_unbounded/1p1c"))
-    check (not node.hasKey(
-      "lockfreequeues_unbounded_mpmc/mpmc_unbounded/1p1c"))
+    check (not node.hasKey("lockfreequeues_unbounded_spsc/spsc_unbounded/1p1c"))
+    check (not node.hasKey("lockfreequeues_unbounded_mpsc/mpsc_unbounded/1p1c"))
+    check (not node.hasKey("lockfreequeues_unbounded_mpmc/mpmc_unbounded/1p1c"))
     removeFile(bmf)
 
 # ---------- Task 2.6c: bench_unbounded_mpsc emits mpsc {1,2,4}p1c -----
 
 suite "topology split: bench_unbounded_mpsc (Task 2.6c)":
   test "compiles + emits BMF for unbounded_mpsc {1,2,4}p1c":
-    let bin = compileBench(BenchUnboundedMpscSrc, [
-      "UnboundedMpscMessageCount=500",
-      "UnboundedMpscRuns=2",
-      "BenchUnboundedWarmup=0",
-    ], "unbounded_mpsc")
+    let bin = compileBench(
+      BenchUnboundedMpscSrc,
+      ["UnboundedMpscMessageCount=500", "UnboundedMpscRuns=2", "BenchUnboundedWarmup=0"],
+      "unbounded_mpsc",
+    )
     let bmf = getTempDir() / "bench_unbounded_mpsc_t26c.json"
-    if fileExists(bmf): removeFile(bmf)
+    if fileExists(bmf):
+      removeFile(bmf)
     let cmd = bin & " --bmf-out=" & bmf
     let (_, exitCode) = execCmdEx(cmd)
     check exitCode == 0
     let node = parseBmf(bmf)
     for p in [1, 2, 4]:
-      check node.hasKey(
-        "lockfreequeues_unbounded_mpsc/mpsc_unbounded/" & $p & "p1c")
+      check node.hasKey("lockfreequeues_unbounded_mpsc/mpsc_unbounded/" & $p & "p1c")
     # Other unbounded families must NOT appear here (split contract).
-    check (not node.hasKey(
-      "lockfreequeues_unbounded_spsc/spsc_unbounded/1p1c"))
-    check (not node.hasKey(
-      "lockfreequeues_unbounded_spmc/mpmc_unbounded/1p1c"))
-    check (not node.hasKey(
-      "lockfreequeues_unbounded_mpmc/mpmc_unbounded/1p1c"))
+    check (not node.hasKey("lockfreequeues_unbounded_spsc/spsc_unbounded/1p1c"))
+    check (not node.hasKey("lockfreequeues_unbounded_spmc/mpmc_unbounded/1p1c"))
+    check (not node.hasKey("lockfreequeues_unbounded_mpmc/mpmc_unbounded/1p1c"))
     removeFile(bmf)
 
 # ---------- Task 2.6d: bench_unbounded_mpmc emits mpmc full grid -----
 
 suite "topology split: bench_unbounded_mpmc (Task 2.6d)":
   test "compiles + emits BMF for unbounded_mpmc {1,2,4}p{1,2,4}c":
-    let bin = compileBench(BenchUnboundedMpmcSrc, [
-      "UnboundedMpmcMessageCount=500",
-      "UnboundedMpmcRuns=2",
-      "BenchUnboundedWarmup=0",
-    ], "unbounded_mpmc")
+    let bin = compileBench(
+      BenchUnboundedMpmcSrc,
+      ["UnboundedMpmcMessageCount=500", "UnboundedMpmcRuns=2", "BenchUnboundedWarmup=0"],
+      "unbounded_mpmc",
+    )
     let bmf = getTempDir() / "bench_unbounded_mpmc_t26d.json"
-    if fileExists(bmf): removeFile(bmf)
+    if fileExists(bmf):
+      removeFile(bmf)
     let cmd = bin & " --bmf-out=" & bmf
     let (_, exitCode) = execCmdEx(cmd)
     check exitCode == 0
@@ -318,15 +306,12 @@ suite "topology split: bench_unbounded_mpmc (Task 2.6d)":
     for p in [1, 2, 4]:
       for c in [1, 2, 4]:
         check node.hasKey(
-          "lockfreequeues_unbounded_mpmc/mpmc_unbounded/" &
-          $p & "p" & $c & "c")
+          "lockfreequeues_unbounded_mpmc/mpmc_unbounded/" & $p & "p" & $c & "c"
+        )
     # Other unbounded families must NOT appear here (split contract).
-    check (not node.hasKey(
-      "lockfreequeues_unbounded_spsc/spsc_unbounded/1p1c"))
-    check (not node.hasKey(
-      "lockfreequeues_unbounded_spmc/mpmc_unbounded/1p1c"))
-    check (not node.hasKey(
-      "lockfreequeues_unbounded_mpsc/mpsc_unbounded/1p1c"))
+    check (not node.hasKey("lockfreequeues_unbounded_spsc/spsc_unbounded/1p1c"))
+    check (not node.hasKey("lockfreequeues_unbounded_spmc/mpmc_unbounded/1p1c"))
+    check (not node.hasKey("lockfreequeues_unbounded_mpsc/mpsc_unbounded/1p1c"))
     removeFile(bmf)
 
 # ---------- Task 2.7: strict-superset deletion-safety check ----------
@@ -341,47 +326,48 @@ suite "topology split: deletion-safety (Task 2.7)":
     # mpmc_mpmc/mpmc_spmc split; added the four-way
     # unbounded split.
     let dir = createTempDir("topology_split_superset_", "")
-    defer: removeDir(dir)
-    let spscBin = compileBench(BenchSpscSrc, [
-      "BenchSpscMessageCount=1000",
-      "BenchSpscRuns=2",
-      "BenchSpscWarmup=0",
-    ], "superset_spsc")
-    let mpscBin = compileBench(BenchMpscSrc, [
-      "BenchMpscMessageCount=1000",
-      "BenchMpscRuns=2",
-      "BenchMpscWarmup=0",
-    ], "superset_mpsc")
-    let mpmcMpmcBin = compileBench(BenchMpmcMpmcSrc, [
-      "BenchMpmcMessageCount=1000",
-      "BenchMpmcRuns=2",
-      "BenchMpmcWarmup=0",
-    ], "superset_mpmc_mpmc")
-    let mpmcSpmcBin = compileBench(BenchMpmcSpmcSrc, [
-      "BenchMpmcMessageCount=1000",
-      "BenchMpmcRuns=2",
-      "BenchMpmcWarmup=0",
-    ], "superset_mpmc_spmc")
-    let unboundedSpscBin = compileBench(BenchUnboundedSpscSrc, [
-      "UnboundedSpscMessageCount=500",
-      "UnboundedSpscRuns=2",
-      "BenchUnboundedWarmup=0",
-    ], "superset_unbounded_spsc")
-    let unboundedSpmcBin = compileBench(BenchUnboundedSpmcSrc, [
-      "UnboundedSpmcMessageCount=500",
-      "UnboundedSpmcRuns=2",
-      "BenchUnboundedWarmup=0",
-    ], "superset_unbounded_spmc")
-    let unboundedMpscBin = compileBench(BenchUnboundedMpscSrc, [
-      "UnboundedMpscMessageCount=500",
-      "UnboundedMpscRuns=2",
-      "BenchUnboundedWarmup=0",
-    ], "superset_unbounded_mpsc")
-    let unboundedMpmcBin = compileBench(BenchUnboundedMpmcSrc, [
-      "UnboundedMpmcMessageCount=500",
-      "UnboundedMpmcRuns=2",
-      "BenchUnboundedWarmup=0",
-    ], "superset_unbounded_mpmc")
+    defer:
+      removeDir(dir)
+    let spscBin = compileBench(
+      BenchSpscSrc,
+      ["BenchSpscMessageCount=1000", "BenchSpscRuns=2", "BenchSpscWarmup=0"],
+      "superset_spsc",
+    )
+    let mpscBin = compileBench(
+      BenchMpscSrc,
+      ["BenchMpscMessageCount=1000", "BenchMpscRuns=2", "BenchMpscWarmup=0"],
+      "superset_mpsc",
+    )
+    let mpmcMpmcBin = compileBench(
+      BenchMpmcMpmcSrc,
+      ["BenchMpmcMessageCount=1000", "BenchMpmcRuns=2", "BenchMpmcWarmup=0"],
+      "superset_mpmc_mpmc",
+    )
+    let mpmcSpmcBin = compileBench(
+      BenchMpmcSpmcSrc,
+      ["BenchMpmcMessageCount=1000", "BenchMpmcRuns=2", "BenchMpmcWarmup=0"],
+      "superset_mpmc_spmc",
+    )
+    let unboundedSpscBin = compileBench(
+      BenchUnboundedSpscSrc,
+      ["UnboundedSpscMessageCount=500", "UnboundedSpscRuns=2", "BenchUnboundedWarmup=0"],
+      "superset_unbounded_spsc",
+    )
+    let unboundedSpmcBin = compileBench(
+      BenchUnboundedSpmcSrc,
+      ["UnboundedSpmcMessageCount=500", "UnboundedSpmcRuns=2", "BenchUnboundedWarmup=0"],
+      "superset_unbounded_spmc",
+    )
+    let unboundedMpscBin = compileBench(
+      BenchUnboundedMpscSrc,
+      ["UnboundedMpscMessageCount=500", "UnboundedMpscRuns=2", "BenchUnboundedWarmup=0"],
+      "superset_unbounded_mpsc",
+    )
+    let unboundedMpmcBin = compileBench(
+      BenchUnboundedMpmcSrc,
+      ["UnboundedMpmcMessageCount=500", "UnboundedMpmcRuns=2", "BenchUnboundedWarmup=0"],
+      "superset_unbounded_mpmc",
+    )
     let spscJson = dir / "spsc.json"
     let mpscJson = dir / "mpsc.json"
     let mpmcMpmcJson = dir / "mpmc_mpmc.json"
@@ -406,18 +392,18 @@ suite "topology split: deletion-safety (Task 2.7)":
       if exitCode != 0:
         echo "binary failed: ", bin, "\n", output
     # Merge.
-    let mergeCmd = "python3 " & RepoRoot / "benchmarks" / "merge_bmf.py" &
-      " " & mergedJson & " " & spscJson & " " & mpscJson & " " &
-      mpmcMpmcJson & " " & mpmcSpmcJson & " " &
-      unboundedSpscJson & " " & unboundedSpmcJson & " " &
-      unboundedMpscJson & " " & unboundedMpmcJson
+    let mergeCmd =
+      "python3 " & RepoRoot / "benchmarks" / "merge_bmf.py" & " " & mergedJson & " " &
+      spscJson & " " & mpscJson & " " & mpmcMpmcJson & " " & mpmcSpmcJson & " " &
+      unboundedSpscJson & " " & unboundedSpmcJson & " " & unboundedMpscJson & " " &
+      unboundedMpmcJson
     let (mergeOutput, mergeExit) = execCmdEx(mergeCmd)
     check mergeExit == 0
     if mergeExit != 0:
       echo "merge failed:\n", mergeOutput
     # Superset check.
-    let supersetCmd = "python3 " & SupersetCheckScript &
-      " " & PreSplitFixturePath & " " & mergedJson
+    let supersetCmd =
+      "python3 " & SupersetCheckScript & " " & PreSplitFixturePath & " " & mergedJson
     let (supersetOutput, supersetExit) = execCmdEx(supersetCmd)
     check supersetExit == 0
     if supersetExit != 0:

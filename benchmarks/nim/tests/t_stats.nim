@@ -1,5 +1,3 @@
-
-
 import unittest2
 import std/math
 import ../stats

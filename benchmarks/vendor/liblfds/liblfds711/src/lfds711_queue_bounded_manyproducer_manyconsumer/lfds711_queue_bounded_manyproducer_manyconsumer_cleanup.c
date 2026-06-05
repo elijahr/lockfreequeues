@@ -24,4 +24,3 @@ void lfds711_queue_bmm_cleanup( struct lfds711_queue_bmm_state *qbmms,
 
   return;
 }
-

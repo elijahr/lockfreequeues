@@ -32,4 +32,3 @@ void lfds711_list_asu_init_valid_on_current_logical_core( struct lfds711_list_as
 
   return;
 }
-

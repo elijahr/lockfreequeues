@@ -83,4 +83,3 @@ int lfds711_queue_bmm_dequeue( struct lfds711_queue_bmm_state *qbmms,
 
   return rv;
 }
-

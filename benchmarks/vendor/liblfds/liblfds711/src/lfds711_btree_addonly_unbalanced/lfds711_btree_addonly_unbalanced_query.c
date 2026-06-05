@@ -123,4 +123,3 @@ static void lfds711_btree_au_internal_validate( struct lfds711_btree_au_state *b
 
   return;
 }
-

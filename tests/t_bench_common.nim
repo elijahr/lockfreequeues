@@ -19,20 +19,26 @@ suite "bench_common":
     # or deleted by future tasks, this test stops compiling. Bodies of
     # `initBMFEmitter` etc. raise `AssertionDefect` until tasks 0.2-0.6
     # land their implementations, so we MUST NOT call them here.
-    when not declared(BMFEmitter): {.error: "BMFEmitter missing".}
-    when not declared(Histogram): {.error: "Histogram missing".}
-    when not declared(LatencyMetrics): {.error: "LatencyMetrics missing".}
-    when not declared(ThroughputMetrics): {.error: "ThroughputMetrics missing".}
-    when not declared(Topology): {.error: "Topology missing".}
-    when not declared(MeasureValue): {.error: "MeasureValue missing".}
-    when not declared(PushResult): {.error: "PushResult missing".}
-    when not declared(PopResult): {.error: "PopResult missing".}
+    when not declared(BMFEmitter):
+      {.error: "BMFEmitter missing".}
+    when not declared(Histogram):
+      {.error: "Histogram missing".}
+    when not declared(LatencyMetrics):
+      {.error: "LatencyMetrics missing".}
+    when not declared(ThroughputMetrics):
+      {.error: "ThroughputMetrics missing".}
+    when not declared(Topology):
+      {.error: "Topology missing".}
+    when not declared(MeasureValue):
+      {.error: "MeasureValue missing".}
+    when not declared(PushResult):
+      {.error: "PushResult missing".}
+    when not declared(PopResult):
+      {.error: "PopResult missing".}
 
     # Reference all six Topology members so renames break here.
-    let topologies = {
-      tSpsc, tMpsc, tMpmc,
-      tSpscUnbounded, tMpscUnbounded, tMpmcUnbounded,
-    }
+    let topologies =
+      {tSpsc, tMpsc, tMpmc, tSpscUnbounded, tMpscUnbounded, tMpmcUnbounded}
     check topologies.card == 6
 
     # Default-init the result-type objects (no stub-body call required).
@@ -128,7 +134,7 @@ suite "bench_common BMFEmitter":
   test "NaN bounds are omitted":
     let path = getTempDir() / "bench_common_nan_bounds.json"
     var em = initBMFEmitter()
-    em.addMeasure("foo/spsc/1p1c", "throughput", 100.0)  # both bounds default NaN
+    em.addMeasure("foo/spsc/1p1c", "throughput", 100.0) # both bounds default NaN
     em.emit(path)
     let node = readJsonFile(path)
     let inner = node["foo/spsc/1p1c"]["throughput"]
@@ -142,8 +148,7 @@ suite "bench_common BMFEmitter":
   test "finite bounds emit lower_value and upper_value":
     let path = getTempDir() / "bench_common_finite_bounds.json"
     var em = initBMFEmitter()
-    em.addMeasure("foo/spsc/1p1c", "throughput", 100.0,
-                  lower = 95.0, upper = 105.0)
+    em.addMeasure("foo/spsc/1p1c", "throughput", 100.0, lower = 95.0, upper = 105.0)
     em.emit(path)
     let inner = readJsonFile(path)["foo/spsc/1p1c"]["throughput"]
     check inner["value"].getFloat() == 100.0
@@ -163,7 +168,7 @@ suite "bench_common Stats":
   test "stddev of [1,2,3,4] matches numpy's sample stddev":
     # numpy default ddof=1 (sample): sqrt(sum((x-mean)^2) / (n-1)) = sqrt(5/3)
     let s = stddev(@[1.0, 2.0, 3.0, 4.0])
-    let expected = 1.2909944487358056  # sqrt(5/3)
+    let expected = 1.2909944487358056 # sqrt(5/3)
     check abs(s - expected) < 1e-9
 
   test "stddev of singleton is 0":
@@ -175,13 +180,15 @@ suite "bench_common Stats":
 
   test "percentile(0..99, 0.5) is 49.5 (linear interpolation)":
     var data: seq[float]
-    for i in 0 .. 99: data.add(float(i))
+    for i in 0 .. 99:
+      data.add(float(i))
     # Linear interpolation: index = 0.5 * 99 = 49.5; data[49] + 0.5 * (data[50]-data[49]) = 49.5
     check abs(percentile(data, 0.5) - 49.5) < 1e-9
 
   test "percentile(p=0.0) is min, percentile(p=1.0) is max":
     var data: seq[float]
-    for i in 0 .. 99: data.add(float(i))
+    for i in 0 .. 99:
+      data.add(float(i))
     check percentile(data, 0.0) == 0.0
     check percentile(data, 1.0) == 99.0
 
@@ -199,12 +206,14 @@ proc generateLogNormal(n: int, seed: int64): seq[float] =
     # Box-Muller: two uniforms -> two standard normals.
     let u1 = r.rand(1.0)
     let u2 = r.rand(1.0)
-    if u1 == 0.0: continue
+    if u1 == 0.0:
+      continue
     let mag = sqrt(-2.0 * ln(u1))
     let z0 = mag * cos(2.0 * PI * u2)
     let z1 = mag * sin(2.0 * PI * u2)
     result[i] = exp(z0)
-    if i + 1 < n: result[i + 1] = exp(z1)
+    if i + 1 < n:
+      result[i + 1] = exp(z1)
     i += 2
 
 suite "bench_common Histogram":
@@ -218,7 +227,8 @@ suite "bench_common Histogram":
     let samples = generateLogNormal(100_000, 0xC0FFEE'i64)
     let exact = percentile(samples, 0.99)
     var h = initHistogram()
-    for v in samples: h.record(v)
+    for v in samples:
+      h.record(v)
     let approx = h.percentile(0.99)
     let relErr = abs(approx - exact) / exact
     check relErr < 0.01
@@ -227,7 +237,8 @@ suite "bench_common Histogram":
     let samples = generateLogNormal(100_000, 0xBEEF'i64)
     let exact = percentile(samples, 0.50)
     var h = initHistogram()
-    for v in samples: h.record(v)
+    for v in samples:
+      h.record(v)
     let approx = h.percentile(0.50)
     # Reservoir is a uniform sample of 99K of 100K — within 5% on a
     # well-behaved log-normal.
@@ -281,7 +292,8 @@ suite "bench_common Histogram":
       let samples = generateLogNormal(3_300_000, 0xDEADBEEF'i64)
       let exact = percentile(samples, 0.999)
       var h = initHistogram()
-      for v in samples: h.record(v)
+      for v in samples:
+        h.record(v)
       let approx = h.percentile(0.999)
       let relErr = abs(approx - exact) / exact
       check relErr < 0.05
@@ -314,7 +326,8 @@ proc pop(a: var SmokeAdapter): PopResult[uint64] =
 suite "bench_common runThroughputHarness":
   test "smoke: 1P/1C, 1000 messages, 1 run, 0 warmup completes":
     let metrics = runThroughputHarness[SmokeAdapter](
-      queueInit = proc(cap: int): SmokeAdapter = initSmokeAdapter(cap),
+      queueInit = proc(cap: int): SmokeAdapter =
+        initSmokeAdapter(cap),
       capacity = 1024,
       numProducers = 1,
       numConsumers = 1,
@@ -330,7 +343,8 @@ suite "bench_common runThroughputHarness":
 suite "bench_common runLatencyHarness":
   test "smoke: 1P/1C, 1000 messages, 1 run, 0 warmup; p50<p99<max":
     let metrics = runLatencyHarness[SmokeAdapter](
-      queueInit = proc(): SmokeAdapter = initSmokeAdapter(1024),
+      queueInit = proc(): SmokeAdapter =
+        initSmokeAdapter(1024),
       messageCount = 1000,
       runCount = 1,
       warmupCount = 0,
@@ -351,9 +365,7 @@ import ../benchmarks/nim/adapters/lockfreequeues_unbounded_mpmc_adapter
 
 const SmokeMessageCount = 100
 
-proc roundTripUint64Set[A](
-    adapter: var A, count: int
-): tuple[popped: int, ok: bool] =
+proc roundTripUint64Set[A](adapter: var A, count: int): tuple[popped: int, ok: bool] =
   ## Push `count` sequential uint64s, then pop them all back. Returns
   ## (popped_count, set_equality_ok).
   for i in 0 ..< count:

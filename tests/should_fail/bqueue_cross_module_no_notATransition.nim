@@ -29,11 +29,7 @@ import typestates
 # A `{.transition.}` proc on the BQueueLifecycle states, declared in
 # THIS test module rather than in `bqueue.nim`. The verifier must
 # reject this at the `{.transition.}` pragma site.
-proc evilTransition*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    N, P, C: static int,
-](
+proc evilTransition*[T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int](
     s: BQueueInit[T, ccProd, ccCons, N, P, C]
 ): BQueueDestroyed[T, ccProd, ccCons, N, P, C] {.transition.} =
   BQueueDestroyed[T, ccProd, ccCons, N, P, C](

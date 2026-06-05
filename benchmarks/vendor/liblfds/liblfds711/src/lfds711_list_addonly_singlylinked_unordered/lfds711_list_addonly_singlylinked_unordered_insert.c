@@ -44,7 +44,7 @@ void lfds711_list_asu_insert_at_position( struct lfds711_list_asu_state *lasus,
 void lfds711_list_asu_insert_at_start( struct lfds711_list_asu_state *lasus,
                                        struct lfds711_list_asu_element *lasue )
 {
-  char unsigned 
+  char unsigned
     result;
 
   lfds711_pal_uint_t
@@ -81,7 +81,7 @@ void lfds711_list_asu_insert_at_start( struct lfds711_list_asu_state *lasus,
 void lfds711_list_asu_insert_at_end( struct lfds711_list_asu_state *lasus,
                                      struct lfds711_list_asu_element *lasue )
 {
-  char unsigned 
+  char unsigned
     result;
 
   enum lfds711_misc_flag
@@ -159,7 +159,7 @@ void lfds711_list_asu_insert_after_element( struct lfds711_list_asu_state *lasus
                                             struct lfds711_list_asu_element *lasue,
                                             struct lfds711_list_asu_element *lasue_predecessor )
 {
-  char unsigned 
+  char unsigned
     result;
 
   lfds711_pal_uint_t
@@ -190,4 +190,3 @@ void lfds711_list_asu_insert_after_element( struct lfds711_list_asu_state *lasus
 }
 
 #pragma warning( default : 4100 )
-

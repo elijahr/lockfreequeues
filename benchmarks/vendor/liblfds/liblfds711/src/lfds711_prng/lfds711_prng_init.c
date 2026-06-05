@@ -39,4 +39,3 @@ void lfds711_prng_st_init( struct lfds711_prng_st_state *psts, lfds711_pal_uint_
 
   return;
 }
-

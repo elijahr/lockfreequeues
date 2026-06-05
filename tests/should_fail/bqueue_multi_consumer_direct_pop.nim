@@ -1,4 +1,3 @@
-
 ## direct `pop` on a multi-consumer `BQueue` is gated by a
 ## `{.error.}` overload. Calling `pop()` on a `ccCons == ccMulti`
 ## BQueue must fail at compile time with a message pointing the caller

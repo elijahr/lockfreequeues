@@ -84,4 +84,3 @@ static void lfds711_queue_bss_internal_validate( struct lfds711_queue_bss_state 
 
   return;
 }
-

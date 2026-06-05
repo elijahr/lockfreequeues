@@ -10,12 +10,12 @@
 ## , §5 (verbatim source).
 
 type DeallocationStrategy* = enum
-  stManual    ## Reserved for future batch-retire; no specialization in v5.0.
-  stEager     ## Active in v5.0; per-pop best-effort `reclaimNow(handle)`.
+  stManual ## Reserved for future batch-retire; no specialization in v5.0.
+  stEager ## Active in v5.0; per-pop best-effort `reclaimNow(handle)`.
 
 const
   Manual* = stManual
-  Eager*  = stEager
+  Eager* = stEager
 
 when defined(gcNone):
   const DefaultDeallocationStrategy* = stManual

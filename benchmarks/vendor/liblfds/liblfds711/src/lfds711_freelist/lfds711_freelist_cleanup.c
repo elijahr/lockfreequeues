@@ -33,4 +33,3 @@ void lfds711_freelist_cleanup( struct lfds711_freelist_state *fs,
 
   return;
 }
-

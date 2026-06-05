@@ -74,4 +74,3 @@ void lfds711_ringbuffer_write( struct lfds711_ringbuffer_state *rs,
 
   return;
 }
-

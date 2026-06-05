@@ -12,5 +12,5 @@
 ## generic params.
 
 type PinScopeCardinality* = enum
-  ccSingle   ## Single-thread cardinality marker for a pinned scope.
-  ccMulti    ## Multi-thread cardinality marker for a pinned scope.
+  ccSingle ## Single-thread cardinality marker for a pinned scope.
+  ccMulti ## Multi-thread cardinality marker for a pinned scope.

@@ -99,8 +99,8 @@ when defined(BenchMpmcTestCompileTime):
     doAssert BenchMpmcRuns == 33,
       "BenchMpmcRuns default must be 33 (got " & $BenchMpmcRuns & ")"
     doAssert BenchMpmcMessageCount == 1_000_000,
-      "BenchMpmcMessageCount default must be 1_000_000 (got " &
-      $BenchMpmcMessageCount & ")"
+      "BenchMpmcMessageCount default must be 1_000_000 (got " & $BenchMpmcMessageCount &
+        ")"
     doAssert BenchMpmcWarmup == 3,
       "BenchMpmcWarmup default must be 3 (got " & $BenchMpmcWarmup & ")"
 
@@ -113,30 +113,29 @@ const
 type
   # Unified BQueue[T, ccMulti, ccMulti, N, P, C]
   # instantiation alias — replaces legacy `Mpmc[N, P, C, T]`.
-  MpmcQueueT[N, P, C: static int; T] =
-    BQueue[T, ccMulti, ccMulti, N, P, C]
-  MpmcProducerT[N, P, C: static int; T] =
+  MpmcQueueT[N, P, C: static int, T] = BQueue[T, ccMulti, ccMulti, N, P, C]
+  MpmcProducerT[N, P, C: static int, T] =
     Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccMulti, N, P, C]]
-  MpmcConsumerT[N, P, C: static int; T] =
+  MpmcConsumerT[N, P, C: static int, T] =
     Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccMulti, N, P, C]]
 
-  MpmcProducerCtx[N, P, C: static int; T] = object
+  MpmcProducerCtx[N, P, C: static int, T] = object
     producer: MpmcProducerT[N, P, C, T]
     startIdx: int
     count: int
 
-  MpmcConsumerCtx[N, P, C: static int; T] = object
+  MpmcConsumerCtx[N, P, C: static int, T] = object
     consumer: MpmcConsumerT[N, P, C, T]
     count: int
 
-proc mpmcProducerThread[N, P, C: static int; T](
+proc mpmcProducerThread[N, P, C: static int, T](
     ctx: ptr MpmcProducerCtx[N, P, C, T]
 ) {.thread.} =
   for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
     while not ctx.producer.push(T(i)):
       benchBackoffOnPeerWait()
 
-proc mpmcConsumerThread[N, P, C: static int; T](
+proc mpmcConsumerThread[N, P, C: static int, T](
     ctx: ptr MpmcConsumerCtx[N, P, C, T]
 ) {.thread.} =
   var local = 0
@@ -147,7 +146,7 @@ proc mpmcConsumerThread[N, P, C: static int; T](
     else:
       benchBackoffOnPeerWait()
 
-proc runOneMpmcRun[N, P, C: static int; T](
+proc runOneMpmcRun[N, P, C: static int, T](
     queue: var MpmcQueueT[N, P, C, T], messageCount: int
 ): float =
   let baseP = messageCount div P
@@ -162,39 +161,34 @@ proc runOneMpmcRun[N, P, C: static int; T](
   for i in 0 ..< P:
     let count = baseP + (if i < remP: 1 else: 0)
     producerCtxs[i] = MpmcProducerCtx[N, P, C, T](
-      producer: queue.getProducerHere(idx = i),
-      startIdx: nextStart,
-      count: count,
+      producer: queue.getProducerHere(idx = i), startIdx: nextStart, count: count
     )
     nextStart += count
   for i in 0 ..< C:
     let count = baseC + (if i < remC: 1 else: 0)
     consumerCtxs[i] = MpmcConsumerCtx[N, P, C, T](
-      consumer: queue.getConsumerHere(idx = i),
-      count: count,
+      consumer: queue.getConsumerHere(idx = i), count: count
     )
   let startTime = getMonoTime()
   for i in 0 ..< P:
     createThread(
-      producerThreads[i],
-      mpmcProducerThread[N, P, C, T],
-      addr producerCtxs[i],
+      producerThreads[i], mpmcProducerThread[N, P, C, T], addr producerCtxs[i]
     )
   for i in 0 ..< C:
     createThread(
-      consumerThreads[i],
-      mpmcConsumerThread[N, P, C, T],
-      addr consumerCtxs[i],
+      consumerThreads[i], mpmcConsumerThread[N, P, C, T], addr consumerCtxs[i]
     )
-  for i in 0 ..< P: joinThread(producerThreads[i])
-  for i in 0 ..< C: joinThread(consumerThreads[i])
+  for i in 0 ..< P:
+    joinThread(producerThreads[i])
+  for i in 0 ..< C:
+    joinThread(consumerThreads[i])
   let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
-  if elapsedNs <= 0.0: return 0.0
+  if elapsedNs <= 0.0:
+    return 0.0
   result = float(messageCount) * 1_000_000.0 / elapsedNs
 
-proc runMpmcShape[N, P, C: static int; T](
-    em: var BMFEmitter,
-    runs, warmup, messageCount: int,
+proc runMpmcShape[N, P, C: static int, T](
+    em: var BMFEmitter, runs, warmup, messageCount: int
 ) =
   let slug = "lockfreequeues_mpmc/mpmc/" & $P & "p" & $C & "c"
   echo fmt"Mpmc {P}p{C}c ({slug}):"
@@ -219,23 +213,23 @@ proc runMpmcShape[N, P, C: static int; T](
 # metric / units (throughput_ops_ms) match the legacy Mpmc baseline.
 
 type
-  QBoundedMpmcProducerCtx[N, P, C: static int; T] = object
+  QBoundedMpmcProducerCtx[N, P, C: static int, T] = object
     producer: Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccMulti, N, P, C]]
     startIdx: int
     count: int
 
-  QBoundedMpmcConsumerCtx[N, P, C: static int; T] = object
+  QBoundedMpmcConsumerCtx[N, P, C: static int, T] = object
     consumer: Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccMulti, N, P, C]]
     count: int
 
-proc qBoundedMpmcProducerThread[N, P, C: static int; T](
+proc qBoundedMpmcProducerThread[N, P, C: static int, T](
     ctx: ptr QBoundedMpmcProducerCtx[N, P, C, T]
 ) {.thread.} =
   for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
     while not ctx.producer.push(T(i)):
       benchBackoffOnPeerWait()
 
-proc qBoundedMpmcConsumerThread[N, P, C: static int; T](
+proc qBoundedMpmcConsumerThread[N, P, C: static int, T](
     ctx: ptr QBoundedMpmcConsumerCtx[N, P, C, T]
 ) {.thread.} =
   var local = 0
@@ -246,60 +240,51 @@ proc qBoundedMpmcConsumerThread[N, P, C: static int; T](
     else:
       benchBackoffOnPeerWait()
 
-proc runOneQBoundedMpmcRun[N, P, C: static int; T](
-    queue: var BQueue[T, ccMulti, ccMulti, N, P, C],
-    messageCount: int,
+proc runOneQBoundedMpmcRun[N, P, C: static int, T](
+    queue: var BQueue[T, ccMulti, ccMulti, N, P, C], messageCount: int
 ): float =
   let baseP = messageCount div P
   let remP = messageCount mod P
   let baseC = messageCount div C
   let remC = messageCount mod C
-  var producerThreads:
-    array[P, Thread[ptr QBoundedMpmcProducerCtx[N, P, C, T]]]
-  var consumerThreads:
-    array[C, Thread[ptr QBoundedMpmcConsumerCtx[N, P, C, T]]]
+  var producerThreads: array[P, Thread[ptr QBoundedMpmcProducerCtx[N, P, C, T]]]
+  var consumerThreads: array[C, Thread[ptr QBoundedMpmcConsumerCtx[N, P, C, T]]]
   var producerCtxs: array[P, QBoundedMpmcProducerCtx[N, P, C, T]]
   var consumerCtxs: array[C, QBoundedMpmcConsumerCtx[N, P, C, T]]
   var nextStart = 0
   for i in 0 ..< P:
     let count = baseP + (if i < remP: 1 else: 0)
     producerCtxs[i] = QBoundedMpmcProducerCtx[N, P, C, T](
-      producer: queue.getProducerHere(idx = i),
-      startIdx: nextStart,
-      count: count,
+      producer: queue.getProducerHere(idx = i), startIdx: nextStart, count: count
     )
     nextStart += count
   for i in 0 ..< C:
     let count = baseC + (if i < remC: 1 else: 0)
     consumerCtxs[i] = QBoundedMpmcConsumerCtx[N, P, C, T](
-      consumer: queue.getConsumerHere(idx = i),
-      count: count,
+      consumer: queue.getConsumerHere(idx = i), count: count
     )
   let startTime = getMonoTime()
   for i in 0 ..< P:
     createThread(
-      producerThreads[i],
-      qBoundedMpmcProducerThread[N, P, C, T],
-      addr producerCtxs[i],
+      producerThreads[i], qBoundedMpmcProducerThread[N, P, C, T], addr producerCtxs[i]
     )
   for i in 0 ..< C:
     createThread(
-      consumerThreads[i],
-      qBoundedMpmcConsumerThread[N, P, C, T],
-      addr consumerCtxs[i],
+      consumerThreads[i], qBoundedMpmcConsumerThread[N, P, C, T], addr consumerCtxs[i]
     )
-  for i in 0 ..< P: joinThread(producerThreads[i])
-  for i in 0 ..< C: joinThread(consumerThreads[i])
+  for i in 0 ..< P:
+    joinThread(producerThreads[i])
+  for i in 0 ..< C:
+    joinThread(consumerThreads[i])
   let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
-  if elapsedNs <= 0.0: return 0.0
+  if elapsedNs <= 0.0:
+    return 0.0
   result = float(messageCount) * 1_000_000.0 / elapsedNs
 
-proc runQBoundedMpmcShape[N, P, C: static int; T](
-    em: var BMFEmitter,
-    runs, warmup, messageCount: int,
+proc runQBoundedMpmcShape[N, P, C: static int, T](
+    em: var BMFEmitter, runs, warmup, messageCount: int
 ) =
-  let slug =
-    "lockfreequeues_queue_bounded_mpmc/mpmc/" & $P & "p" & $C & "c"
+  let slug = "lockfreequeues_queue_bounded_mpmc/mpmc/" & $P & "p" & $C & "c"
   echo fmt"QueueBoundedMpmc {P}p{C}c ({slug}):"
   for _ in 0 ..< warmup:
     var q = q_mod.newBQueue[T, ccMulti, ccMulti, N, P, C]()
@@ -321,11 +306,7 @@ proc runQBoundedMpmcShape[N, P, C: static int; T](
 proc initChannelsQ(capacity: int): ChannelsAdapter[uint64] =
   initChannelsAdapter[uint64](capacity)
 
-proc runChannelsShape(
-    em: var BMFEmitter,
-    p, c: int,
-    runs, warmup, messageCount: int,
-) =
+proc runChannelsShape(em: var BMFEmitter, p, c: int, runs, warmup, messageCount: int) =
   let slug = "nim_channels/mpmc/" & $p & "p" & $c & "c"
   echo fmt"Channels {p}p{c}c ({slug}):"
   let metrics = runThroughputHarness[ChannelsAdapter[uint64]](
@@ -341,7 +322,8 @@ proc runChannelsShape(
   echo fmt"  stddev: {metrics.ops_ms_stddev:.1f}"
   echo ""
   em.addMeasure(
-    slug, "throughput_ops_ms",
+    slug,
+    "throughput_ops_ms",
     metrics.ops_ms_mean,
     metrics.ops_ms_mean - metrics.ops_ms_stddev,
     metrics.ops_ms_mean + metrics.ops_ms_stddev,
@@ -410,7 +392,8 @@ proc runMvpMpmcShape[A](
   echo fmt"  runs: {metrics.runs}"
   echo ""
   em.addMeasure(
-    slug, "throughput_ops_ms",
+    slug,
+    "throughput_ops_ms",
     metrics.ops_ms_mean,
     metrics.ops_ms_mean - metrics.ops_ms_stddev,
     metrics.ops_ms_mean + metrics.ops_ms_stddev,
@@ -444,117 +427,138 @@ proc runVariant(variant: string, em: var BMFEmitter) =
   of "mpmc":
     # Full {1,2,4}p x {1,2,4}c grid (9 shapes) — design 2.4 / impl plan 2.5.
     runMpmcShape[MpmcCapacity, 1, 1, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runMpmcShape[MpmcCapacity, 1, 2, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runMpmcShape[MpmcCapacity, 1, 4, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runMpmcShape[MpmcCapacity, 2, 1, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runMpmcShape[MpmcCapacity, 2, 2, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runMpmcShape[MpmcCapacity, 2, 4, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runMpmcShape[MpmcCapacity, 4, 1, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runMpmcShape[MpmcCapacity, 4, 2, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runMpmcShape[MpmcCapacity, 4, 4, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     # 8p8c: explicit oversubscription regression case for issue #15
     # (CAS-retry livelock fix). Preserved from pre-split bench_throughput.
     runMpmcShape[MpmcCapacity, 8, 8, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
   of "queue_bounded_mpmc":
     # Queue parity harness for the full Mpmc shape set.
     runQBoundedMpmcShape[MpmcCapacity, 1, 1, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runQBoundedMpmcShape[MpmcCapacity, 1, 2, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runQBoundedMpmcShape[MpmcCapacity, 1, 4, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runQBoundedMpmcShape[MpmcCapacity, 2, 1, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runQBoundedMpmcShape[MpmcCapacity, 2, 2, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runQBoundedMpmcShape[MpmcCapacity, 2, 4, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runQBoundedMpmcShape[MpmcCapacity, 4, 1, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runQBoundedMpmcShape[MpmcCapacity, 4, 2, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runQBoundedMpmcShape[MpmcCapacity, 4, 4, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runQBoundedMpmcShape[MpmcCapacity, 8, 8, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
   of "channels":
     for p in [1, 2, 4]:
       for c in [1, 2, 4]:
-        runChannelsShape(em, p, c, BenchMpmcRuns, BenchMpmcWarmup,
-                         BenchMpmcMessageCount)
+        runChannelsShape(
+          em, p, c, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+        )
   else:
     when declared(initBoostMpmcQ):
       if variant == "boost_lockfree_queue":
         for p in [1, 2, 4]:
           for c in [1, 2, 4]:
             runMvpMpmcShape[BoostLockfreeQueueAdapter[uint64]](
-              em, "boost_lockfree_queue", initBoostMpmcQ,
-              p, c, BenchMpmcRuns, BenchMpmcWarmup,
-              BenchMpmcMessageCount, MpmcCapacity)
+              em, "boost_lockfree_queue", initBoostMpmcQ, p, c, BenchMpmcRuns,
+              BenchMpmcWarmup, BenchMpmcMessageCount, MpmcCapacity,
+            )
         return
     when declared(initCrossbeamArrayQ):
       if variant == "crossbeam_array_queue":
         for p in [1, 2, 4]:
           for c in [1, 2, 4]:
             runMvpMpmcShape[CrossbeamArrayQueueAdapter[uint64]](
-              em, "crossbeam_array_queue", initCrossbeamArrayQ,
-              p, c, BenchMpmcRuns, BenchMpmcWarmup,
-              BenchMpmcMessageCount, MpmcCapacity)
+              em, "crossbeam_array_queue", initCrossbeamArrayQ, p, c, BenchMpmcRuns,
+              BenchMpmcWarmup, BenchMpmcMessageCount, MpmcCapacity,
+            )
         return
     when declared(initThreadingChannelsQ):
       if variant == "threading_channels":
         for p in [1, 2, 4]:
           for c in [1, 2, 4]:
             runMvpMpmcShape[ThreadingChannelsAdapter[uint64]](
-              em, "threading_channels", initThreadingChannelsQ,
-              p, c, BenchMpmcRuns, BenchMpmcWarmup,
-              BenchMpmcMessageCount, MpmcCapacity)
+              em, "threading_channels", initThreadingChannelsQ, p, c, BenchMpmcRuns,
+              BenchMpmcWarmup, BenchMpmcMessageCount, MpmcCapacity,
+            )
         return
     when declared(initAtomicQueueMpmcQ):
       if variant == "atomic_queue":
         for p in [1, 2, 4]:
           for c in [1, 2, 4]:
             runMvpMpmcShape[AtomicQueueAdapter[uint64]](
-              em, "atomic_queue", initAtomicQueueMpmcQ,
-              p, c, BenchMpmcRuns, BenchMpmcWarmup,
-              BenchMpmcMessageCount, MpmcCapacity)
+              em, "atomic_queue", initAtomicQueueMpmcQ, p, c, BenchMpmcRuns,
+              BenchMpmcWarmup, BenchMpmcMessageCount, MpmcCapacity,
+            )
         return
     when declared(initRigtorpMpmcQ):
       if variant == "rigtorp_mpmc":
         for p in [1, 2, 4]:
           for c in [1, 2, 4]:
             runMvpMpmcShape[RigtorpMpmcAdapter[uint64]](
-              em, "rigtorp_mpmc", initRigtorpMpmcQ,
-              p, c, BenchMpmcRuns, BenchMpmcWarmup,
-              BenchMpmcMessageCount, MpmcCapacity)
+              em, "rigtorp_mpmc", initRigtorpMpmcQ, p, c, BenchMpmcRuns,
+              BenchMpmcWarmup, BenchMpmcMessageCount, MpmcCapacity,
+            )
         return
     when declared(initFlumeMpmcQ):
       if variant == "flume":
         for p in [1, 2, 4]:
           for c in [1, 2, 4]:
             runMvpMpmcShape[FlumeAdapter[uint64]](
-              em, "flume", initFlumeMpmcQ,
-              p, c, BenchMpmcRuns, BenchMpmcWarmup,
-              BenchMpmcMessageCount, MpmcCapacity)
+              em, "flume", initFlumeMpmcQ, p, c, BenchMpmcRuns, BenchMpmcWarmup,
+              BenchMpmcMessageCount, MpmcCapacity,
+            )
         return
     when declared(initKanalMpmcQ):
       if variant == "kanal":
         for p in [1, 2, 4]:
           for c in [1, 2, 4]:
             runMvpMpmcShape[KanalAdapter[uint64]](
-              em, "kanal", initKanalMpmcQ,
-              p, c, BenchMpmcRuns, BenchMpmcWarmup,
-              BenchMpmcMessageCount, MpmcCapacity)
+              em, "kanal", initKanalMpmcQ, p, c, BenchMpmcRuns, BenchMpmcWarmup,
+              BenchMpmcMessageCount, MpmcCapacity,
+            )
         return
     when declared(initLiblfdsMpmcQ):
       if variant == "liblfds":
@@ -563,9 +567,9 @@ proc runVariant(variant: string, em: var BMFEmitter) =
         for p in [1, 2, 4]:
           for c in [1, 2, 4]:
             runMvpMpmcShape[LiblfdsAdapter[uint64]](
-              em, "liblfds", initLiblfdsMpmcQ,
-              p, c, BenchMpmcRuns, BenchMpmcWarmup,
-              BenchMpmcMessageCount, MpmcCapacity)
+              em, "liblfds", initLiblfdsMpmcQ, p, c, BenchMpmcRuns, BenchMpmcWarmup,
+              BenchMpmcMessageCount, MpmcCapacity,
+            )
         return
     raise newException(ValueError, "unknown variant: " & variant)
 
@@ -579,7 +583,8 @@ when isMainModule:
     while true:
       p.next()
       case p.kind
-      of cmdEnd: break
+      of cmdEnd:
+        break
       of cmdLongOption, cmdShortOption:
         case p.key
         of "bmf-out":

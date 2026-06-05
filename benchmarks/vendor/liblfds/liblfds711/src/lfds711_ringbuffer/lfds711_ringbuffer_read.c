@@ -40,4 +40,3 @@ int lfds711_ringbuffer_read( struct lfds711_ringbuffer_state *rs,
 
   return rv;
 }
-

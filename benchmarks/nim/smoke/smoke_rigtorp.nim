@@ -23,10 +23,12 @@ when defined(adapter_rigtorp_mpmc_available):
   import ../adapter
 
 when not defined(adapter_rigtorp_spsc_available) and
-     not defined(adapter_rigtorp_mpmc_available):
-  {.error: "smoke_rigtorp requires at least one of " &
-           "-d:adapter_rigtorp_spsc_available or " &
-           "-d:adapter_rigtorp_mpmc_available.".}
+    not defined(adapter_rigtorp_mpmc_available):
+  {.
+    error:
+      "smoke_rigtorp requires at least one of " & "-d:adapter_rigtorp_spsc_available or " &
+      "-d:adapter_rigtorp_mpmc_available."
+  .}
 
 proc main() =
   setStdIoUnbuffered()
@@ -35,33 +37,35 @@ proc main() =
   when defined(adapter_rigtorp_spsc_available):
     block spsc:
       var a = makeRigtorpSpscAdapter[uint64](capacity = 64)
-      defer: cleanup(a)
+      defer:
+        cleanup(a)
       for i in 0'u64 ..< 32'u64:
         let r = a.push(i)
         doAssert r == prSuccess, "rigtorp_spsc push failed at i=" & $i
       var seen = 0
       while true:
         let r = a.pop()
-        if not r.success: break
+        if not r.success:
+          break
         inc seen
-      doAssert seen == 32,
-        "rigtorp_spsc popped " & $seen & " (expected 32)"
+      doAssert seen == 32, "rigtorp_spsc popped " & $seen & " (expected 32)"
       echo "rigtorp/SPSCQueue: 32 push/pop ok"
 
   when defined(adapter_rigtorp_mpmc_available):
     block mpmc:
       var a = makeRigtorpMpmcAdapter[uint64](capacity = 64)
-      defer: cleanup(a)
+      defer:
+        cleanup(a)
       for i in 0'u64 ..< 32'u64:
         let r = a.push(i)
         doAssert r == prSuccess, "rigtorp_mpmc push failed at i=" & $i
       var seen = 0
       while true:
         let r = a.pop()
-        if not r.success: break
+        if not r.success:
+          break
         inc seen
-      doAssert seen == 32,
-        "rigtorp_mpmc popped " & $seen & " (expected 32)"
+      doAssert seen == 32, "rigtorp_mpmc popped " & $seen & " (expected 32)"
       echo "rigtorp/MPMCQueue: 32 push/pop ok"
 
   echo "rigtorp smoke: ok"

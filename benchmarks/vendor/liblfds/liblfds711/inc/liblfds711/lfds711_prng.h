@@ -71,4 +71,3 @@ struct lfds711_prng_st_state
 /***** public prototypes *****/
 void lfds711_prng_init_valid_on_current_logical_core( struct lfds711_prng_state *ps, lfds711_pal_uint_t seed );
 void lfds711_prng_st_init( struct lfds711_prng_st_state *psts, lfds711_pal_uint_t seed );
-

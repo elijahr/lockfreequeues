@@ -50,8 +50,9 @@ proc prepareCAS*(atom: ptr Atomic[int], expected, desired: int): CASPending {.in
 proc executeCAS*(p: CASPending): CASResult {.transition.} =
   let attempt = CASAttempt(p)
   var expected = attempt.expected
-  let success =
-    attempt.atom[].compareExchangeWeak(expected, attempt.desired, moRelease, moAcquire)
+  let success = attempt.atom[].compareExchangeWeak(
+    expected, attempt.desired, moAcquireRelease, moAcquire
+  )
   if success:
     CASResult -> CASSucceeded(newVal: attempt.desired)
   else:

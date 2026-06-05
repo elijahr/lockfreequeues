@@ -44,4 +44,3 @@ void lfds711_stack_push( struct lfds711_stack_state *ss,
 
   return;
 }
-

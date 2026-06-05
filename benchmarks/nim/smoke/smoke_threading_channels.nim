@@ -16,7 +16,9 @@ when defined(adapter_threading_channels_available):
   import ../adapter
 
 when not defined(adapter_threading_channels_available):
-  {.error: "smoke_threading_channels requires -d:adapter_threading_channels_available.".}
+  {.
+    error: "smoke_threading_channels requires -d:adapter_threading_channels_available."
+  .}
 
 proc main() =
   setStdIoUnbuffered()
@@ -24,7 +26,8 @@ proc main() =
 
   block:
     var a = makeThreadingChannelsAdapter[uint64](capacity = 64)
-    defer: cleanup(a)
+    defer:
+      cleanup(a)
     for i in 0'u64 ..< 32'u64:
       let r = a.push(i)
       doAssert r == prSuccess, "threading_channels push failed at i=" & $i

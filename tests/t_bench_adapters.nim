@@ -15,9 +15,7 @@ import unittest2
 
 const SampleCount = 1000
 
-template runRoundTrip[A](
-    makeAdapterExpr: untyped, cleanupExpr: untyped
-): untyped =
+template runRoundTrip[A](makeAdapterExpr: untyped, cleanupExpr: untyped): untyped =
   ## Run a SampleCount-item ``uint64`` push-then-pop round-trip on ``adapter``.
   ## Asserts count match and set equality with the input range.
   block:
@@ -46,9 +44,7 @@ when defined(adapter_loony_available):
 
   suite "loony_adapter":
     test "push/pop 1000 uint64 round-trip preserves set":
-      runRoundTrip[LoonyAdapter[uint64]](
-        makeLoonyAdapter[uint64](), cleanup(adapter)
-      )
+      runRoundTrip[LoonyAdapter[uint64]](makeLoonyAdapter[uint64](), cleanup(adapter))
 
 when defined(adapter_boost_lockfree_queue_available):
   # Boost.LockFree is C++ -- only loadable under `nim cpp`. The adapter
@@ -62,8 +58,7 @@ when defined(adapter_boost_lockfree_queue_available):
     suite "boost_lockfree_queue_adapter":
       test "push/pop 1000 uint64 round-trip preserves set":
         runRoundTrip[BoostLockfreeQueueAdapter[uint64]](
-          makeBoostLockfreeQueueAdapter[uint64](capacity = 4096),
-          cleanup(adapter)
+          makeBoostLockfreeQueueAdapter[uint64](capacity = 4096), cleanup(adapter)
         )
 
 when defined(adapter_boost_lockfree_spsc_available):
@@ -74,8 +69,7 @@ when defined(adapter_boost_lockfree_spsc_available):
     suite "boost_lockfree_spsc_adapter":
       test "push/pop 1000 uint64 round-trip preserves set":
         runRoundTrip[BoostLockfreeSpscAdapter[uint64]](
-          makeBoostLockfreeSpscAdapter[uint64](capacity = 4096),
-          cleanup(adapter)
+          makeBoostLockfreeSpscAdapter[uint64](capacity = 4096), cleanup(adapter)
         )
 
 when defined(adapter_crossbeam_array_queue_available):
@@ -85,8 +79,7 @@ when defined(adapter_crossbeam_array_queue_available):
   suite "crossbeam_array_queue_adapter":
     test "push/pop 1000 uint64 round-trip preserves set":
       runRoundTrip[CrossbeamArrayQueueAdapter[uint64]](
-        makeCrossbeamArrayQueueAdapter[uint64](capacity = 4096),
-        cleanup(adapter)
+        makeCrossbeamArrayQueueAdapter[uint64](capacity = 4096), cleanup(adapter)
       )
 
 when defined(adapter_crossbeam_seg_queue_available):
@@ -96,8 +89,7 @@ when defined(adapter_crossbeam_seg_queue_available):
   suite "crossbeam_seg_queue_adapter":
     test "push/pop 1000 uint64 round-trip preserves set":
       runRoundTrip[CrossbeamSegQueueAdapter[uint64]](
-        makeCrossbeamSegQueueAdapter[uint64](),
-        cleanup(adapter)
+        makeCrossbeamSegQueueAdapter[uint64](), cleanup(adapter)
       )
 
 when defined(adapter_moodycamel_available):
@@ -112,8 +104,7 @@ when defined(adapter_moodycamel_available):
     suite "moodycamel_adapter":
       test "push/pop 1000 uint64 round-trip preserves set":
         runRoundTrip[MoodycamelAdapter[uint64]](
-          makeMoodycamelAdapter[uint64](capacity = 4096),
-          cleanup(adapter)
+          makeMoodycamelAdapter[uint64](capacity = 4096), cleanup(adapter)
         )
 
 when defined(adapter_threading_channels_available):
@@ -123,8 +114,7 @@ when defined(adapter_threading_channels_available):
   suite "threading_channels_adapter":
     test "push/pop 1000 uint64 round-trip preserves set":
       runRoundTrip[ThreadingChannelsAdapter[uint64]](
-        makeThreadingChannelsAdapter[uint64](capacity = 4096),
-        cleanup(adapter)
+        makeThreadingChannelsAdapter[uint64](capacity = 4096), cleanup(adapter)
       )
 
 when defined(adapter_nim_channel_available):
@@ -134,6 +124,5 @@ when defined(adapter_nim_channel_available):
   suite "nim_channel_adapter":
     test "push/pop 1000 uint64 round-trip preserves set":
       runRoundTrip[NimChannelAdapter[uint64]](
-        makeNimChannelAdapter[uint64](capacity = 4096),
-        cleanup(adapter)
+        makeNimChannelAdapter[uint64](capacity = 4096), cleanup(adapter)
       )

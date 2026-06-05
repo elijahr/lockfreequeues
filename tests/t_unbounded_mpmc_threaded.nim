@@ -83,9 +83,7 @@ suite "UnboundedMpmc threaded":
     var prodContexts: array[ProducerCount, ProducerContext[stEager, 8]]
     for i in 0 ..< ProducerCount:
       prodContexts[i] = ProducerContext[stEager, 8](
-        queue: addr queue,
-        producersDone: addr producersDone,
-        producerIdx: i,
+        queue: addr queue, producersDone: addr producersDone, producerIdx: i
       )
 
     var consContexts: array[ConsumerCount, ConsumerContext[stEager, 8]]
@@ -122,9 +120,7 @@ suite "UnboundedMpmc threaded":
     var prodContexts: array[ProducerCount, ProducerContext[stEager, 64]]
     for i in 0 ..< ProducerCount:
       prodContexts[i] = ProducerContext[stEager, 64](
-        queue: addr queue,
-        producersDone: addr producersDone,
-        producerIdx: i,
+        queue: addr queue, producersDone: addr producersDone, producerIdx: i
       )
 
     var consContexts: array[ConsumerCount, ConsumerContext[stEager, 64]]

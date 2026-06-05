@@ -78,4 +78,3 @@ static void lfds711_ringbuffer_internal_validate( struct lfds711_ringbuffer_stat
 
   return;
 }
-

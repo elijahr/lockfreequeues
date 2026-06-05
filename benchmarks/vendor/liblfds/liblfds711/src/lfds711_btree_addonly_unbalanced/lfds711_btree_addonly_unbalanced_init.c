@@ -30,4 +30,3 @@ void lfds711_btree_au_init_valid_on_current_logical_core( struct lfds711_btree_a
 
   return;
 }
-

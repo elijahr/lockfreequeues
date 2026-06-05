@@ -10,7 +10,7 @@ enum lfds711_btree_au_insert_result lfds711_btree_au_insert( struct lfds711_btre
                                                              struct lfds711_btree_au_element *baue,
                                                              struct lfds711_btree_au_element **existing_baue )
 {
-  char unsigned 
+  char unsigned
     result = 0;
 
   int
@@ -155,4 +155,3 @@ enum lfds711_btree_au_insert_result lfds711_btree_au_insert( struct lfds711_btre
 
   return LFDS711_BTREE_AU_INSERT_RESULT_SUCCESS;
 }
-

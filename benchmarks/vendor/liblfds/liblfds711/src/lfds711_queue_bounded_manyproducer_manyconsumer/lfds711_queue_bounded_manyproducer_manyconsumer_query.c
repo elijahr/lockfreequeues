@@ -126,4 +126,3 @@ static void lfds711_queue_bmm_internal_validate( struct lfds711_queue_bmm_state 
 
   return;
 }
-

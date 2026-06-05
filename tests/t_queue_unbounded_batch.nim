@@ -14,7 +14,7 @@
 ##     count > available returns `some(seq)` with up-to-available
 ##     elements.
 ##
-## 
+##
 ## Gap-fill between 3.3.6a (spsc call-site migration) and 3.3.6b-e
 ## (bulk migration). Pure additive; thin loop wrappers over the
 ## existing single-item rkEbr push/pop bodies.

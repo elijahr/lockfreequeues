@@ -38,8 +38,7 @@ type
     timestamp: int64
     value: int
 
-  QueueT =
-    Queue[Event, ccMulti, ccSingle, stEager, SegmentSize, MaxThreads]
+  QueueT = Queue[Event, ccMulti, ccSingle, stEager, SegmentSize, MaxThreads]
 
   SourceContext = object
     queue: ptr QueueT
@@ -51,9 +50,7 @@ type
 
 var
   manager = initDebraManager[MaxThreads]()
-  queue = newUnboundedMpscQueue[Event, stEager, SegmentSize, MaxThreads](
-    addr manager
-  )
+  queue = newUnboundedMpscQueue[Event, stEager, SegmentSize, MaxThreads](addr manager)
   running: Atomic[bool]
   eventsProduced: array[NumSources, Atomic[int]]
   eventsConsumed: Atomic[int]
@@ -160,8 +157,7 @@ when isMainModule:
   echo "Max queue depth: ", maxDepth
   echo "Final segments: ", queue.segmentCount()
   echo "Total time: ", totalTime, "ms"
-  echo "Throughput: ",
-    (consumed * 1000) div max(1, totalTime.int), " events/sec"
+  echo "Throughput: ", (consumed * 1000) div max(1, totalTime.int), " events/sec"
   if totalProduced == consumed:
     echo ""
     echo "All events processed - no data loss!"

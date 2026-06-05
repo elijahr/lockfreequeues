@@ -21,8 +21,7 @@
 ## are dropped (round-robin consumer ordering hangs under 4-vCPU
 ## oversubscription).
 
-import std/[atomics, monotimes, options, os, parseopt, sets, strformat,
-            syncio, times]
+import std/[atomics, monotimes, options, os, parseopt, sets, strformat, syncio, times]
 import ./bench_common
 import lockfreequeues/backoff
 import lockfreequeues/queue
@@ -69,23 +68,21 @@ when defined(BenchUnboundedTestCompileTime):
 # ---------- UnboundedMpmc harness (N producers, N consumers, DEBRA) ----------
 
 type
-  UMpmcQueueT[S: static int; T; MaxT: static int] =
+  UMpmcQueueT[S: static int, T; MaxT: static int] =
     Queue[T, ccMulti, ccMulti, stEager, S, MaxT]
 
-  UMpmcProducerCtx[S: static int; T; MaxT: static int] = object
+  UMpmcProducerCtx[S: static int, T; MaxT: static int] = object
     queue: ptr UMpmcQueueT[S, T, MaxT]
     manager: ptr DebraManager[MaxT, debra.ccMulti]
     startIdx: int
     count: int
-    id: int
-      ## Stable producer index used by -d:benchProgress logging.
+    id: int ## Stable producer index used by -d:benchProgress logging.
 
-  UMpmcConsumerCtx[S: static int; T; MaxT: static int] = object
+  UMpmcConsumerCtx[S: static int, T; MaxT: static int] = object
     queue: ptr UMpmcQueueT[S, T, MaxT]
     manager: ptr DebraManager[MaxT, debra.ccMulti]
     count: int
-    id: int
-      ## Stable consumer index used by -d:benchProgress logging.
+    id: int ## Stable consumer index used by -d:benchProgress logging.
 
 when defined(benchProgress):
   # Per-10k progress prints (opt-in via -d:benchProgress) for triaging
@@ -97,7 +94,7 @@ when defined(benchProgress):
     echo "[" & adapter & " " & benchShape & " " & tag & "=" & $n & "]"
     flushFile(stdout)
 
-proc umpmcProducerThread[S: static int; T; MaxT: static int](
+proc umpmcProducerThread[S: static int, T; MaxT: static int](
     ctx: ptr UMpmcProducerCtx[S, T, MaxT]
 ) {.thread.} =
   {.cast(gcsafe).}:
@@ -117,7 +114,7 @@ proc umpmcProducerThread[S: static int; T; MaxT: static int](
         if pushed mod 10_000 == 0:
           benchProgress("unbounded_mpmc", "p" & $ctx.id & " pushed", pushed)
 
-proc umpmcConsumerThread[S: static int; T; MaxT: static int](
+proc umpmcConsumerThread[S: static int, T; MaxT: static int](
     ctx: ptr UMpmcConsumerCtx[S, T, MaxT]
 ) {.thread.} =
   {.cast(gcsafe).}:
@@ -137,8 +134,7 @@ proc umpmcConsumerThread[S: static int; T; MaxT: static int](
       else:
         benchBackoffOnPeerWait()
 
-proc runOneUMpmcRun[S: static int; T; MaxT: static int;
-                      P: static int; C: static int](
+proc runOneUMpmcRun[S: static int, T; MaxT: static int, P: static int, C: static int](
     queue: ptr UMpmcQueueT[S, T, MaxT],
     manager: ptr DebraManager[MaxT, debra.ccMulti],
     messageCount: int,
@@ -155,40 +151,35 @@ proc runOneUMpmcRun[S: static int; T; MaxT: static int;
   for i in 0 ..< P:
     let count = baseP + (if i < remP: 1 else: 0)
     producerCtxs[i] = UMpmcProducerCtx[S, T, MaxT](
-      queue: queue, manager: manager,
-      startIdx: nextStart, count: count, id: i,
+      queue: queue, manager: manager, startIdx: nextStart, count: count, id: i
     )
     nextStart += count
   for i in 0 ..< C:
     let count = baseC + (if i < remC: 1 else: 0)
-    consumerCtxs[i] = UMpmcConsumerCtx[S, T, MaxT](
-      queue: queue, manager: manager, count: count, id: i,
-    )
+    consumerCtxs[i] =
+      UMpmcConsumerCtx[S, T, MaxT](queue: queue, manager: manager, count: count, id: i)
   let startTime = getMonoTime()
   for i in 0 ..< P:
     createThread(
-      producerThreads[i],
-      umpmcProducerThread[S, T, MaxT],
-      addr producerCtxs[i],
+      producerThreads[i], umpmcProducerThread[S, T, MaxT], addr producerCtxs[i]
     )
   for i in 0 ..< C:
     createThread(
-      consumerThreads[i],
-      umpmcConsumerThread[S, T, MaxT],
-      addr consumerCtxs[i],
+      consumerThreads[i], umpmcConsumerThread[S, T, MaxT], addr consumerCtxs[i]
     )
-  for i in 0 ..< P: joinThread(producerThreads[i])
-  for i in 0 ..< C: joinThread(consumerThreads[i])
+  for i in 0 ..< P:
+    joinThread(producerThreads[i])
+  for i in 0 ..< C:
+    joinThread(consumerThreads[i])
   let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
-  if elapsedNs <= 0.0: return 0.0
+  if elapsedNs <= 0.0:
+    return 0.0
   result = float(messageCount) * 1_000_000.0 / elapsedNs
 
-proc runUMpmcShape[P: static int; C: static int](
-    em: var BMFEmitter,
-    runs, warmup, messageCount: int,
+proc runUMpmcShape[P: static int, C: static int](
+    em: var BMFEmitter, runs, warmup, messageCount: int
 ) =
-  let slug = "lockfreequeues_unbounded_mpmc/mpmc_unbounded/" &
-    $P & "p" & $C & "c"
+  let slug = "lockfreequeues_unbounded_mpmc/mpmc_unbounded/" & $P & "p" & $C & "c"
   echo fmt"UnboundedMpmc {P}p{C}c ({slug}):"
   when defined(benchProgress):
     benchShape = $P & "p" & $C & "c"
@@ -197,10 +188,10 @@ proc runUMpmcShape[P: static int; C: static int](
     var manager = create(DebraManager[MaxThreads, debra.ccMulti])
     wasMoved(manager[])
     manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
-    var q =
-      newUnboundedMpmcQueue[uint64, stEager, SegmentSize, MaxThreads](manager)
+    var q = newUnboundedMpmcQueue[uint64, stEager, SegmentSize, MaxThreads](manager)
     discard runOneUMpmcRun[SegmentSize, uint64, MaxThreads, P, C](
-      addr q, manager, messageCount)
+      addr q, manager, messageCount
+    )
     reset(q)
     reset(manager[])
     dealloc(manager)
@@ -209,10 +200,12 @@ proc runUMpmcShape[P: static int; C: static int](
     var manager = create(DebraManager[MaxThreads, debra.ccMulti])
     wasMoved(manager[])
     manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
-    var q =
-      newUnboundedMpmcQueue[uint64, stEager, SegmentSize, MaxThreads](manager)
-    samples.add(runOneUMpmcRun[SegmentSize, uint64, MaxThreads, P, C](
-      addr q, manager, messageCount))
+    var q = newUnboundedMpmcQueue[uint64, stEager, SegmentSize, MaxThreads](manager)
+    samples.add(
+      runOneUMpmcRun[SegmentSize, uint64, MaxThreads, P, C](
+        addr q, manager, messageCount
+      )
+    )
     reset(q)
     reset(manager[])
     dealloc(manager)
@@ -273,7 +266,8 @@ proc runMvpUnboundedShape[A](
   echo fmt"  runs: {metrics.runs}"
   echo ""
   em.addMeasure(
-    slug, "throughput_ops_ms",
+    slug,
+    "throughput_ops_ms",
     metrics.ops_ms_mean,
     metrics.ops_ms_mean - metrics.ops_ms_stddev,
     metrics.ops_ms_mean + metrics.ops_ms_stddev,
@@ -299,70 +293,79 @@ const SupportedVariants = supportedVariantsList()
 proc runVariant(variant: string, em: var BMFEmitter) =
   case variant
   of "unbounded_mpmc":
-    runUMpmcShape[1, 1](em, UnboundedMpmcRuns, BenchUnboundedWarmup,
-      UnboundedMpmcMessageCount)
-    runUMpmcShape[1, 2](em, UnboundedMpmcRuns, BenchUnboundedWarmup,
-      UnboundedMpmcMessageCount)
-    runUMpmcShape[2, 1](em, UnboundedMpmcRuns, BenchUnboundedWarmup,
-      UnboundedMpmcMessageCount)
-    runUMpmcShape[2, 2](em, UnboundedMpmcRuns, BenchUnboundedWarmup,
-      UnboundedMpmcMessageCount)
+    runUMpmcShape[1, 1](
+      em, UnboundedMpmcRuns, BenchUnboundedWarmup, UnboundedMpmcMessageCount
+    )
+    runUMpmcShape[1, 2](
+      em, UnboundedMpmcRuns, BenchUnboundedWarmup, UnboundedMpmcMessageCount
+    )
+    runUMpmcShape[2, 1](
+      em, UnboundedMpmcRuns, BenchUnboundedWarmup, UnboundedMpmcMessageCount
+    )
+    runUMpmcShape[2, 2](
+      em, UnboundedMpmcRuns, BenchUnboundedWarmup, UnboundedMpmcMessageCount
+    )
     when not defined(BenchSkipOversubscribed):
-      runUMpmcShape[1, 4](em, UnboundedMpmcRuns, BenchUnboundedWarmup,
-        UnboundedMpmcMessageCount)
-      runUMpmcShape[2, 4](em, UnboundedMpmcRuns, BenchUnboundedWarmup,
-        UnboundedMpmcMessageCount)
-      runUMpmcShape[4, 1](em, UnboundedMpmcRuns, BenchUnboundedWarmup,
-        UnboundedMpmcMessageCount)
-      runUMpmcShape[4, 2](em, UnboundedMpmcRuns, BenchUnboundedWarmup,
-        UnboundedMpmcMessageCount)
-      runUMpmcShape[4, 4](em, UnboundedMpmcRuns, BenchUnboundedWarmup,
-        UnboundedMpmcMessageCount)
+      runUMpmcShape[1, 4](
+        em, UnboundedMpmcRuns, BenchUnboundedWarmup, UnboundedMpmcMessageCount
+      )
+      runUMpmcShape[2, 4](
+        em, UnboundedMpmcRuns, BenchUnboundedWarmup, UnboundedMpmcMessageCount
+      )
+      runUMpmcShape[4, 1](
+        em, UnboundedMpmcRuns, BenchUnboundedWarmup, UnboundedMpmcMessageCount
+      )
+      runUMpmcShape[4, 2](
+        em, UnboundedMpmcRuns, BenchUnboundedWarmup, UnboundedMpmcMessageCount
+      )
+      runUMpmcShape[4, 4](
+        em, UnboundedMpmcRuns, BenchUnboundedWarmup, UnboundedMpmcMessageCount
+      )
   else:
     when declared(initLoonyQ):
       if variant == "loony":
         for p in [1, 2, 4]:
           for c in [1, 2, 4]:
             runMvpUnboundedShape[LoonyAdapter[uint64]](
-              em, "loony", initLoonyQ,
-              p, c, UnboundedMpmcRuns, BenchUnboundedWarmup,
-              UnboundedMpmcMessageCount)
+              em, "loony", initLoonyQ, p, c, UnboundedMpmcRuns, BenchUnboundedWarmup,
+              UnboundedMpmcMessageCount,
+            )
         return
     when declared(initCrossbeamSegQ):
       if variant == "crossbeam_seg_queue":
         for p in [1, 2, 4]:
           for c in [1, 2, 4]:
             runMvpUnboundedShape[CrossbeamSegQueueAdapter[uint64]](
-              em, "crossbeam_seg_queue", initCrossbeamSegQ,
-              p, c, UnboundedMpmcRuns, BenchUnboundedWarmup,
-              UnboundedMpmcMessageCount)
+              em, "crossbeam_seg_queue", initCrossbeamSegQ, p, c, UnboundedMpmcRuns,
+              BenchUnboundedWarmup, UnboundedMpmcMessageCount,
+            )
         return
     when declared(initMoodycamelQ):
       if variant == "moodycamel":
         for p in [1, 2, 4]:
           for c in [1, 2, 4]:
             runMvpUnboundedShape[MoodycamelAdapter[uint64]](
-              em, "moodycamel", initMoodycamelQ,
-              p, c, UnboundedMpmcRuns, BenchUnboundedWarmup,
-              UnboundedMpmcMessageCount)
+              em, "moodycamel", initMoodycamelQ, p, c, UnboundedMpmcRuns,
+              BenchUnboundedWarmup, UnboundedMpmcMessageCount,
+            )
         return
     when declared(initFlumeUnboundedQ):
       if variant == "flume_unbounded":
         for p in [1, 2, 4]:
           for c in [1, 2, 4]:
             runMvpUnboundedShape[FlumeUnboundedAdapter[uint64]](
-              em, "flume_unbounded", initFlumeUnboundedQ,
-              p, c, UnboundedMpmcRuns, BenchUnboundedWarmup,
-              UnboundedMpmcMessageCount)
+              em, "flume_unbounded", initFlumeUnboundedQ, p, c, UnboundedMpmcRuns,
+              BenchUnboundedWarmup, UnboundedMpmcMessageCount,
+            )
         return
     when declared(initKanalUnboundedQ):
       if variant == "kanal_unbounded":
         for p in [1, 2, 4]:
           for c in [1, 2, 4]:
             runMvpUnboundedShape[KanalUnboundedAdapter[uint64]](
-              em, "kanal_unbounded", initKanalUnboundedQ,
-              p, c, UnboundedMpmcRuns, BenchUnboundedWarmup,
-              UnboundedMpmcMessageCount)
+              em, "kanal_unbounded", initKanalUnboundedQ, p, c, UnboundedMpmcRuns,
+              BenchUnboundedWarmup, UnboundedMpmcMessageCount,
+            )
         return
     raise newException(ValueError, "unknown variant: " & variant)
 
@@ -376,7 +379,8 @@ when isMainModule:
     while true:
       p.next()
       case p.kind
-      of cmdEnd: break
+      of cmdEnd:
+        break
       of cmdLongOption, cmdShortOption:
         case p.key
         of "bmf-out":

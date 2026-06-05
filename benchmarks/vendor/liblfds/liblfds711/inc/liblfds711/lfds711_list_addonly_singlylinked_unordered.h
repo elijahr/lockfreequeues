@@ -80,11 +80,10 @@ void lfds711_list_asu_insert_after_element( struct lfds711_list_asu_state *lasus
 
 int lfds711_list_asu_get_by_key( struct lfds711_list_asu_state *lasus,
                                  int (*key_compare_function)(void const *new_key, void const *existing_key),
-                                 void *key, 
+                                 void *key,
                                  struct lfds711_list_asu_element **lasue );
 
 void lfds711_list_asu_query( struct lfds711_list_asu_state *lasus,
                              enum lfds711_list_asu_query query_type,
                              void *query_input,
                              void *query_output );
-

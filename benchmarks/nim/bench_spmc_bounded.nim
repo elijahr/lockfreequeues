@@ -58,13 +58,12 @@ when defined(BenchMpmcTestCompileTime):
     doAssert BenchMpmcRuns == 33,
       "BenchMpmcRuns default must be 33 (got " & $BenchMpmcRuns & ")"
     doAssert BenchMpmcMessageCount == 1_000_000,
-      "BenchMpmcMessageCount default must be 1_000_000 (got " &
-      $BenchMpmcMessageCount & ")"
+      "BenchMpmcMessageCount default must be 1_000_000 (got " & $BenchMpmcMessageCount &
+        ")"
     doAssert BenchMpmcWarmup == 3,
       "BenchMpmcWarmup default must be 3 (got " & $BenchMpmcWarmup & ")"
 
-const
-  MpmcCapacity = 1024
+const MpmcCapacity = 1024
 
 # ---------- Spmc bespoke harness ----------
 #
@@ -76,28 +75,27 @@ const
 type
   # Unified BQueue[T, ccSingle, ccMulti, N, 0, C]
   # instantiation alias — replaces legacy `Spmc[N, C, T]`.
-  SpmcQueueT[N, C: static int; T] =
-    BQueue[T, ccSingle, ccMulti, N, 0, C]
-  SpmcConsumerT[N, C: static int; T] =
+  SpmcQueueT[N, C: static int, T] = BQueue[T, ccSingle, ccMulti, N, 0, C]
+  SpmcConsumerT[N, C: static int, T] =
     Bound[T, AnyThreadTag, BQueue[T, ccSingle, ccMulti, N, 0, C]]
 
-  SpmcProducerCtx[N, C: static int; T] = object
+  SpmcProducerCtx[N, C: static int, T] = object
     queue: ptr SpmcQueueT[N, C, T]
     startIdx: int
     count: int
 
-  SpmcConsumerCtx[N, C: static int; T] = object
+  SpmcConsumerCtx[N, C: static int, T] = object
     consumer: SpmcConsumerT[N, C, T]
     count: int
 
-proc spmcProducerThread[N, C: static int; T](
+proc spmcProducerThread[N, C: static int, T](
     ctx: ptr SpmcProducerCtx[N, C, T]
 ) {.thread.} =
   for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
     while not ctx.queue[].push(T(i)):
       benchBackoffOnPeerWait()
 
-proc spmcConsumerThread[N, C: static int; T](
+proc spmcConsumerThread[N, C: static int, T](
     ctx: ptr SpmcConsumerCtx[N, C, T]
 ) {.thread.} =
   var local = 0
@@ -108,44 +106,34 @@ proc spmcConsumerThread[N, C: static int; T](
     else:
       benchBackoffOnPeerWait()
 
-proc runOneSpmcRun[N, C: static int; T](
+proc runOneSpmcRun[N, C: static int, T](
     queue: var SpmcQueueT[N, C, T], messageCount: int
 ): float =
   let baseC = messageCount div C
   let remC = messageCount mod C
   var producerThread: Thread[ptr SpmcProducerCtx[N, C, T]]
-  var producerCtx = SpmcProducerCtx[N, C, T](
-    queue: addr queue, startIdx: 0, count: messageCount,
-  )
+  var producerCtx =
+    SpmcProducerCtx[N, C, T](queue: addr queue, startIdx: 0, count: messageCount)
   var consumerThreads: array[C, Thread[ptr SpmcConsumerCtx[N, C, T]]]
   var consumerCtxs: array[C, SpmcConsumerCtx[N, C, T]]
   for i in 0 ..< C:
     let count = baseC + (if i < remC: 1 else: 0)
-    consumerCtxs[i] = SpmcConsumerCtx[N, C, T](
-      consumer: queue.getConsumerHere(idx = i),
-      count: count,
-    )
+    consumerCtxs[i] =
+      SpmcConsumerCtx[N, C, T](consumer: queue.getConsumerHere(idx = i), count: count)
   let startTime = getMonoTime()
-  createThread(
-    producerThread,
-    spmcProducerThread[N, C, T],
-    addr producerCtx,
-  )
+  createThread(producerThread, spmcProducerThread[N, C, T], addr producerCtx)
   for i in 0 ..< C:
-    createThread(
-      consumerThreads[i],
-      spmcConsumerThread[N, C, T],
-      addr consumerCtxs[i],
-    )
+    createThread(consumerThreads[i], spmcConsumerThread[N, C, T], addr consumerCtxs[i])
   joinThread(producerThread)
-  for i in 0 ..< C: joinThread(consumerThreads[i])
+  for i in 0 ..< C:
+    joinThread(consumerThreads[i])
   let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
-  if elapsedNs <= 0.0: return 0.0
+  if elapsedNs <= 0.0:
+    return 0.0
   result = float(messageCount) * 1_000_000.0 / elapsedNs
 
-proc runSpmcShape[N, C: static int; T](
-    em: var BMFEmitter,
-    runs, warmup, messageCount: int,
+proc runSpmcShape[N, C: static int, T](
+    em: var BMFEmitter, runs, warmup, messageCount: int
 ) =
   let slug = "lockfreequeues_spmc/mpmc/1p" & $C & "c"
   echo fmt"Spmc 1p{C}c ({slug}):"
@@ -172,23 +160,23 @@ proc runSpmcShape[N, C: static int; T](
 # measures.
 
 type
-  QBoundedSpmcProducerCtx[N, C: static int; T] = object
+  QBoundedSpmcProducerCtx[N, C: static int, T] = object
     queue: ptr BQueue[T, ccSingle, ccMulti, N, 0, C]
     startIdx: int
     count: int
 
-  QBoundedSpmcConsumerCtx[N, C: static int; T] = object
+  QBoundedSpmcConsumerCtx[N, C: static int, T] = object
     consumer: Bound[T, AnyThreadTag, BQueue[T, ccSingle, ccMulti, N, 0, C]]
     count: int
 
-proc qBoundedSpmcProducerThread[N, C: static int; T](
+proc qBoundedSpmcProducerThread[N, C: static int, T](
     ctx: ptr QBoundedSpmcProducerCtx[N, C, T]
 ) {.thread.} =
   for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
     while not ctx.queue[].push(T(i)):
       benchBackoffOnPeerWait()
 
-proc qBoundedSpmcConsumerThread[N, C: static int; T](
+proc qBoundedSpmcConsumerThread[N, C: static int, T](
     ctx: ptr QBoundedSpmcConsumerCtx[N, C, T]
 ) {.thread.} =
   var local = 0
@@ -199,46 +187,38 @@ proc qBoundedSpmcConsumerThread[N, C: static int; T](
     else:
       benchBackoffOnPeerWait()
 
-proc runOneQBoundedSpmcRun[N, C: static int; T](
-    queue: var BQueue[T, ccSingle, ccMulti, N, 0, C],
-    messageCount: int,
+proc runOneQBoundedSpmcRun[N, C: static int, T](
+    queue: var BQueue[T, ccSingle, ccMulti, N, 0, C], messageCount: int
 ): float =
   let baseC = messageCount div C
   let remC = messageCount mod C
   var producerThread: Thread[ptr QBoundedSpmcProducerCtx[N, C, T]]
   var producerCtx = QBoundedSpmcProducerCtx[N, C, T](
-    queue: addr queue, startIdx: 0, count: messageCount,
+    queue: addr queue, startIdx: 0, count: messageCount
   )
-  var consumerThreads:
-    array[C, Thread[ptr QBoundedSpmcConsumerCtx[N, C, T]]]
+  var consumerThreads: array[C, Thread[ptr QBoundedSpmcConsumerCtx[N, C, T]]]
   var consumerCtxs: array[C, QBoundedSpmcConsumerCtx[N, C, T]]
   for i in 0 ..< C:
     let count = baseC + (if i < remC: 1 else: 0)
     consumerCtxs[i] = QBoundedSpmcConsumerCtx[N, C, T](
-      consumer: queue.getConsumerHere(idx = i),
-      count: count,
+      consumer: queue.getConsumerHere(idx = i), count: count
     )
   let startTime = getMonoTime()
-  createThread(
-    producerThread,
-    qBoundedSpmcProducerThread[N, C, T],
-    addr producerCtx,
-  )
+  createThread(producerThread, qBoundedSpmcProducerThread[N, C, T], addr producerCtx)
   for i in 0 ..< C:
     createThread(
-      consumerThreads[i],
-      qBoundedSpmcConsumerThread[N, C, T],
-      addr consumerCtxs[i],
+      consumerThreads[i], qBoundedSpmcConsumerThread[N, C, T], addr consumerCtxs[i]
     )
   joinThread(producerThread)
-  for i in 0 ..< C: joinThread(consumerThreads[i])
+  for i in 0 ..< C:
+    joinThread(consumerThreads[i])
   let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
-  if elapsedNs <= 0.0: return 0.0
+  if elapsedNs <= 0.0:
+    return 0.0
   result = float(messageCount) * 1_000_000.0 / elapsedNs
 
-proc runQBoundedSpmcShape[N, C: static int; T](
-    em: var BMFEmitter,
-    runs, warmup, messageCount: int,
+proc runQBoundedSpmcShape[N, C: static int, T](
+    em: var BMFEmitter, runs, warmup, messageCount: int
 ) =
   let slug = "lockfreequeues_queue_bounded_spmc/mpmc/1p" & $C & "c"
   echo fmt"QueueBoundedSpmc 1p{C}c ({slug}):"
@@ -269,19 +249,25 @@ proc runVariant(variant: string, em: var BMFEmitter) =
   of "spmc":
     # Single producer x {1,2,4} consumers — design 2.4.
     runSpmcShape[MpmcCapacity, 1, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runSpmcShape[MpmcCapacity, 2, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runSpmcShape[MpmcCapacity, 4, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
   of "queue_bounded_spmc":
     # Queue parity harness for the Spmc 1p<C>c set.
     runQBoundedSpmcShape[MpmcCapacity, 1, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runQBoundedSpmcShape[MpmcCapacity, 2, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
     runQBoundedSpmcShape[MpmcCapacity, 4, uint64](
-      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount)
+      em, BenchMpmcRuns, BenchMpmcWarmup, BenchMpmcMessageCount
+    )
   else:
     raise newException(ValueError, "unknown variant: " & variant)
 
@@ -295,7 +281,8 @@ when isMainModule:
     while true:
       p.next()
       case p.kind
-      of cmdEnd: break
+      of cmdEnd:
+        break
       of cmdLongOption, cmdShortOption:
         case p.key
         of "bmf-out":

@@ -51,15 +51,15 @@ when defined(BenchLatencyTestCompileTime):
       "BenchLatencyRuns default must be 33 (got " & $BenchLatencyRuns & ")"
     doAssert BenchLatencyMessageCount == 100_000,
       "BenchLatencyMessageCount default must be 100_000 (got " &
-      $BenchLatencyMessageCount & ")"
+        $BenchLatencyMessageCount & ")"
 
 when defined(BenchLatencyTestCompileTimeOverrides):
   static:
     doAssert BenchLatencyRuns == 2,
       "BenchLatencyRuns override must be 2 (got " & $BenchLatencyRuns & ")"
     doAssert BenchLatencyMessageCount == 1000,
-      "BenchLatencyMessageCount override must be 1000 (got " &
-      $BenchLatencyMessageCount & ")"
+      "BenchLatencyMessageCount override must be 1000 (got " & $BenchLatencyMessageCount &
+        ")"
 
 # ---------- Variant queueInit closures ----------
 #
@@ -91,35 +91,38 @@ proc initMpmc(): MpmcAdapter[LatencyCapacity, uint64] =
 # preserve the per-family naming so parity tooling can compute the
 # % delta directly.
 
-proc initQBoundedSpsc():
-    QueueBoundedAdapter[ccSingle, ccSingle, stEager,
-                        LatencyCapacity, 0, 0, uint64] =
-  makeQueueBoundedAdapter[ccSingle, ccSingle, stEager,
-                          LatencyCapacity, 0, 0, uint64](LatencyCapacity)
+proc initQBoundedSpsc(): QueueBoundedAdapter[
+    ccSingle, ccSingle, stEager, LatencyCapacity, 0, 0, uint64
+] =
+  makeQueueBoundedAdapter[ccSingle, ccSingle, stEager, LatencyCapacity, 0, 0, uint64](
+    LatencyCapacity
+  )
 
-proc initQBoundedSpmc():
-    QueueBoundedAdapter[ccSingle, ccMulti, stEager,
-                        LatencyCapacity, 0, 1, uint64] =
-  makeQueueBoundedAdapter[ccSingle, ccMulti, stEager,
-                          LatencyCapacity, 0, 1, uint64](LatencyCapacity)
+proc initQBoundedSpmc(): QueueBoundedAdapter[
+    ccSingle, ccMulti, stEager, LatencyCapacity, 0, 1, uint64
+] =
+  makeQueueBoundedAdapter[ccSingle, ccMulti, stEager, LatencyCapacity, 0, 1, uint64](
+    LatencyCapacity
+  )
 
-proc initQBoundedMpsc():
-    QueueBoundedAdapter[ccMulti, ccSingle, stEager,
-                        LatencyCapacity, 1, 0, uint64] =
-  makeQueueBoundedAdapter[ccMulti, ccSingle, stEager,
-                          LatencyCapacity, 1, 0, uint64](LatencyCapacity)
+proc initQBoundedMpsc(): QueueBoundedAdapter[
+    ccMulti, ccSingle, stEager, LatencyCapacity, 1, 0, uint64
+] =
+  makeQueueBoundedAdapter[ccMulti, ccSingle, stEager, LatencyCapacity, 1, 0, uint64](
+    LatencyCapacity
+  )
 
-proc initQBoundedMpmc():
-    QueueBoundedAdapter[ccMulti, ccMulti, stEager,
-                        LatencyCapacity, 1, 1, uint64] =
-  makeQueueBoundedAdapter[ccMulti, ccMulti, stEager,
-                          LatencyCapacity, 1, 1, uint64](LatencyCapacity)
+proc initQBoundedMpmc(): QueueBoundedAdapter[
+    ccMulti, ccMulti, stEager, LatencyCapacity, 1, 1, uint64
+] =
+  makeQueueBoundedAdapter[ccMulti, ccMulti, stEager, LatencyCapacity, 1, 1, uint64](
+    LatencyCapacity
+  )
 
 # ---------- Variant dispatch ----------
 
 const SupportedVariants = [
-  "spsc", "mpmc", "spmc", "mpsc",
-  "queue_bounded_spsc", "queue_bounded_mpmc",
+  "spsc", "mpmc", "spmc", "mpsc", "queue_bounded_spsc", "queue_bounded_mpmc",
   "queue_bounded_spmc", "queue_bounded_mpsc",
 ]
 
@@ -127,10 +130,14 @@ proc slugFor(variant: string): string =
   ## Slug per design 2.2 / table at design line 357. PR 1 covers the 1p1c
   ## smoke shape only; PR 2's topology split adds the full grid.
   case variant
-  of "spsc": "lockfreequeues_spsc/spsc/1p1c"
-  of "spmc": "lockfreequeues_spmc/mpmc/1p1c"
-  of "mpsc": "lockfreequeues_mpsc/mpsc/1p1c"
-  of "mpmc": "lockfreequeues_mpmc/mpmc/1p1c"
+  of "spsc":
+    "lockfreequeues_spsc/spsc/1p1c"
+  of "spmc":
+    "lockfreequeues_spmc/mpmc/1p1c"
+  of "mpsc":
+    "lockfreequeues_mpsc/mpsc/1p1c"
+  of "mpmc":
+    "lockfreequeues_mpmc/mpmc/1p1c"
   of "queue_bounded_spsc":
     "lockfreequeues_queue_bounded_spsc/spsc/1p1c"
   of "queue_bounded_spmc":
@@ -142,9 +149,7 @@ proc slugFor(variant: string): string =
   else:
     raise newException(ValueError, "unknown variant: " & variant)
 
-proc runVariant(
-    variant: string, em: var BMFEmitter
-) =
+proc runVariant(variant: string, em: var BMFEmitter) =
   ## Run one variant's latency harness, print stdout, and emit BMF.
   let slug = slugFor(variant)
   echo fmt"{variant} ({slug}):"
@@ -180,8 +185,8 @@ proc runVariant(
       )
     of "queue_bounded_spsc":
       runLatencyHarness[
-          QueueBoundedAdapter[ccSingle, ccSingle, stEager,
-                              LatencyCapacity, 0, 0, uint64]](
+        QueueBoundedAdapter[ccSingle, ccSingle, stEager, LatencyCapacity, 0, 0, uint64]
+      ](
         queueInit = initQBoundedSpsc,
         messageCount = BenchLatencyMessageCount,
         runCount = BenchLatencyRuns,
@@ -189,8 +194,8 @@ proc runVariant(
       )
     of "queue_bounded_spmc":
       runLatencyHarness[
-          QueueBoundedAdapter[ccSingle, ccMulti, stEager,
-                              LatencyCapacity, 0, 1, uint64]](
+        QueueBoundedAdapter[ccSingle, ccMulti, stEager, LatencyCapacity, 0, 1, uint64]
+      ](
         queueInit = initQBoundedSpmc,
         messageCount = BenchLatencyMessageCount,
         runCount = BenchLatencyRuns,
@@ -198,8 +203,8 @@ proc runVariant(
       )
     of "queue_bounded_mpsc":
       runLatencyHarness[
-          QueueBoundedAdapter[ccMulti, ccSingle, stEager,
-                              LatencyCapacity, 1, 0, uint64]](
+        QueueBoundedAdapter[ccMulti, ccSingle, stEager, LatencyCapacity, 1, 0, uint64]
+      ](
         queueInit = initQBoundedMpsc,
         messageCount = BenchLatencyMessageCount,
         runCount = BenchLatencyRuns,
@@ -207,8 +212,8 @@ proc runVariant(
       )
     of "queue_bounded_mpmc":
       runLatencyHarness[
-          QueueBoundedAdapter[ccMulti, ccMulti, stEager,
-                              LatencyCapacity, 1, 1, uint64]](
+        QueueBoundedAdapter[ccMulti, ccMulti, stEager, LatencyCapacity, 1, 1, uint64]
+      ](
         queueInit = initQBoundedMpmc,
         messageCount = BenchLatencyMessageCount,
         runCount = BenchLatencyRuns,
@@ -255,7 +260,8 @@ when isMainModule:
     while true:
       p.next()
       case p.kind
-      of cmdEnd: break
+      of cmdEnd:
+        break
       of cmdLongOption, cmdShortOption:
         case p.key
         of "bmf-out":

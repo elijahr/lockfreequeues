@@ -14,8 +14,7 @@
 ##   -d:UnboundedMpscMessageCount  (default 500_000)
 ##   -d:BenchUnboundedWarmup         (default 2)
 
-import std/[atomics, monotimes, options, os, parseopt, sets, strformat,
-            syncio, times]
+import std/[atomics, monotimes, options, os, parseopt, sets, strformat, syncio, times]
 import ./bench_common
 import ./adapters/lockfreequeues_unbounded_mpsc_adapter
 import lockfreequeues/backoff
@@ -43,16 +42,15 @@ when defined(BenchUnboundedTestCompileTime):
 # ---------- UnboundedMpsc harness (N producers, 1 consumer, DEBRA) ----------
 
 type
-  UMpscQueueT[S: static int; T; MaxT: static int] =
+  UMpscQueueT[S: static int, T; MaxT: static int] =
     Queue[T, ccMulti, ccSingle, stEager, S, MaxT]
 
-  UMpscProducerCtx2[S: static int; T; MaxT: static int] = object
+  UMpscProducerCtx2[S: static int, T; MaxT: static int] = object
     queue: ptr UMpscQueueT[S, T, MaxT]
     manager: ptr DebraManager[MaxT, debra.ccSingle]
     startIdx: int
     count: int
-    id: int
-      ## Stable producer index used by -d:benchProgress logging.
+    id: int ## Stable producer index used by -d:benchProgress logging.
 
 when defined(benchProgress):
   # Per-10k progress prints (opt-in via -d:benchProgress) for triaging
@@ -64,7 +62,7 @@ when defined(benchProgress):
     echo "[" & adapter & " " & benchShape & " " & tag & "=" & $n & "]"
     flushFile(stdout)
 
-proc umpscProducerThread[S: static int; T; MaxT: static int](
+proc umpscProducerThread[S: static int, T; MaxT: static int](
     ctx: ptr UMpscProducerCtx2[S, T, MaxT]
 ) {.thread.} =
   {.cast(gcsafe).}:
@@ -79,7 +77,7 @@ proc umpscProducerThread[S: static int; T; MaxT: static int](
         if pushed mod 10_000 == 0:
           benchProgress("unbounded_mpsc", "p" & $ctx.id & " pushed", pushed)
 
-proc runOneUMpscRun[S: static int; T; MaxT: static int; P: static int](
+proc runOneUMpscRun[S: static int, T; MaxT: static int, P: static int](
     queue: ptr UMpscQueueT[S, T, MaxT],
     manager: ptr DebraManager[MaxT, debra.ccSingle],
     messageCount: int,
@@ -92,8 +90,7 @@ proc runOneUMpscRun[S: static int; T; MaxT: static int; P: static int](
   for i in 0 ..< P:
     let count = baseP + (if i < remP: 1 else: 0)
     producerCtxs[i] = UMpscProducerCtx2[S, T, MaxT](
-      queue: queue, manager: manager,
-      startIdx: nextStart, count: count, id: i,
+      queue: queue, manager: manager, startIdx: nextStart, count: count, id: i
     )
     nextStart += count
   # This (main) thread is the single consumer; bind its endpoint before
@@ -102,9 +99,7 @@ proc runOneUMpscRun[S: static int; T; MaxT: static int; P: static int](
   let startTime = getMonoTime()
   for i in 0 ..< P:
     createThread(
-      producerThreads[i],
-      umpscProducerThread[S, T, MaxT],
-      addr producerCtxs[i],
+      producerThreads[i], umpscProducerThread[S, T, MaxT], addr producerCtxs[i]
     )
   var local = 0
   while local < messageCount:
@@ -116,15 +111,14 @@ proc runOneUMpscRun[S: static int; T; MaxT: static int; P: static int](
           benchProgress("unbounded_mpsc", "c0 popped", local)
     else:
       benchBackoffOnPeerWait()
-  for i in 0 ..< P: joinThread(producerThreads[i])
+  for i in 0 ..< P:
+    joinThread(producerThreads[i])
   let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
-  if elapsedNs <= 0.0: return 0.0
+  if elapsedNs <= 0.0:
+    return 0.0
   result = float(messageCount) * 1_000_000.0 / elapsedNs
 
-proc runUMpscShape[P: static int](
-    em: var BMFEmitter,
-    runs, warmup, messageCount: int,
-) =
+proc runUMpscShape[P: static int](em: var BMFEmitter, runs, warmup, messageCount: int) =
   let slug = "lockfreequeues_unbounded_mpsc/mpsc_unbounded/" & $P & "p1c"
   echo fmt"UnboundedMpsc {P}p1c ({slug}):"
   when defined(benchProgress):
@@ -133,13 +127,17 @@ proc runUMpscShape[P: static int](
   for _ in 0 ..< warmup:
     var a = initUnboundedMpscAdapter[SegmentSize, uint64, MaxThreads]()
     discard runOneUMpscRun[SegmentSize, uint64, MaxThreads, P](
-      a.queue, a.manager, messageCount)
+      a.queue, a.manager, messageCount
+    )
     deinitUnboundedMpscAdapter(a)
   var samples: seq[float] = @[]
   for _ in 0 ..< runs:
     var a = initUnboundedMpscAdapter[SegmentSize, uint64, MaxThreads]()
-    samples.add(runOneUMpscRun[SegmentSize, uint64, MaxThreads, P](
-      a.queue, a.manager, messageCount))
+    samples.add(
+      runOneUMpscRun[SegmentSize, uint64, MaxThreads, P](
+        a.queue, a.manager, messageCount
+      )
+    )
     deinitUnboundedMpscAdapter(a)
   let m = mean(samples)
   let s = stddev(samples)
@@ -159,12 +157,15 @@ const SupportedVariants = supportedVariantsList()
 proc runVariant(variant: string, em: var BMFEmitter) =
   case variant
   of "unbounded_mpsc":
-    runUMpscShape[1](em, UnboundedMpscRuns, BenchUnboundedWarmup,
-      UnboundedMpscMessageCount)
-    runUMpscShape[2](em, UnboundedMpscRuns, BenchUnboundedWarmup,
-      UnboundedMpscMessageCount)
-    runUMpscShape[4](em, UnboundedMpscRuns, BenchUnboundedWarmup,
-      UnboundedMpscMessageCount)
+    runUMpscShape[1](
+      em, UnboundedMpscRuns, BenchUnboundedWarmup, UnboundedMpscMessageCount
+    )
+    runUMpscShape[2](
+      em, UnboundedMpscRuns, BenchUnboundedWarmup, UnboundedMpscMessageCount
+    )
+    runUMpscShape[4](
+      em, UnboundedMpscRuns, BenchUnboundedWarmup, UnboundedMpscMessageCount
+    )
   else:
     raise newException(ValueError, "unknown variant: " & variant)
 
@@ -178,7 +179,8 @@ when isMainModule:
     while true:
       p.next()
       case p.kind
-      of cmdEnd: break
+      of cmdEnd:
+        break
       of cmdLongOption, cmdShortOption:
         case p.key
         of "bmf-out":

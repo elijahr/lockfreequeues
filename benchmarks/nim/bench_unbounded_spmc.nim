@@ -14,8 +14,7 @@
 ##   -d:UnboundedSpmcMessageCount  (default 500_000)
 ##   -d:BenchUnboundedWarmup         (default 2)
 
-import std/[monotimes, options, os, parseopt, sets, strformat,
-            syncio, times]
+import std/[monotimes, options, os, parseopt, sets, strformat, syncio, times]
 import ./bench_common
 import lockfreequeues/backoff
 import lockfreequeues/queue
@@ -42,14 +41,14 @@ when defined(BenchUnboundedTestCompileTime):
 # ---------- UnboundedSpmc harness (single producer, N consumers, DEBRA) ----------
 
 type
-  USpmcQueueT[S: static int; T; MaxT: static int] =
+  USpmcQueueT[S: static int, T; MaxT: static int] =
     Queue[T, ccSingle, ccMulti, stEager, S, MaxT]
 
-  USpmcProducerCtx[S: static int; T; MaxT: static int] = object
+  USpmcProducerCtx[S: static int, T; MaxT: static int] = object
     queue: ptr USpmcQueueT[S, T, MaxT]
     count: int
 
-  USpmcConsumerCtx[S: static int; T; MaxT: static int] = object
+  USpmcConsumerCtx[S: static int, T; MaxT: static int] = object
     queue: ptr USpmcQueueT[S, T, MaxT]
     manager: ptr DebraManager[MaxT, debra.ccMulti]
     count: int
@@ -68,7 +67,7 @@ when defined(benchProgress):
     echo "[" & adapter & " " & benchShape & " " & tag & "=" & $n & "]"
     flushFile(stdout)
 
-proc uspmcProducerThread[S: static int; T; MaxT: static int](
+proc uspmcProducerThread[S: static int, T; MaxT: static int](
     ctx: ptr USpmcProducerCtx[S, T, MaxT]
 ) {.thread.} =
   {.cast(gcsafe).}:
@@ -79,7 +78,7 @@ proc uspmcProducerThread[S: static int; T; MaxT: static int](
         if (i + 1) mod 10_000 == 0:
           benchProgress("unbounded_spmc", "p0 pushed", i + 1)
 
-proc uspmcConsumerThread[S: static int; T; MaxT: static int](
+proc uspmcConsumerThread[S: static int, T; MaxT: static int](
     ctx: ptr USpmcConsumerCtx[S, T, MaxT]
 ) {.thread.} =
   {.cast(gcsafe).}:
@@ -96,7 +95,7 @@ proc uspmcConsumerThread[S: static int; T; MaxT: static int](
       else:
         benchBackoffOnPeerWait()
 
-proc runOneUSpmcRun[S: static int; T; MaxT: static int; C: static int](
+proc runOneUSpmcRun[S: static int, T; MaxT: static int, C: static int](
     queue: ptr USpmcQueueT[S, T, MaxT],
     manager: ptr DebraManager[MaxT, debra.ccMulti],
     messageCount: int,
@@ -105,35 +104,27 @@ proc runOneUSpmcRun[S: static int; T; MaxT: static int; C: static int](
   let remC = messageCount mod C
   var producerThread: Thread[ptr USpmcProducerCtx[S, T, MaxT]]
   var consumerThreads: array[C, Thread[ptr USpmcConsumerCtx[S, T, MaxT]]]
-  var producerCtx = USpmcProducerCtx[S, T, MaxT](
-    queue: queue, count: messageCount,
-  )
+  var producerCtx = USpmcProducerCtx[S, T, MaxT](queue: queue, count: messageCount)
   var consumerCtxs: array[C, USpmcConsumerCtx[S, T, MaxT]]
   for i in 0 ..< C:
     let count = baseC + (if i < remC: 1 else: 0)
-    consumerCtxs[i] = USpmcConsumerCtx[S, T, MaxT](
-      queue: queue, manager: manager, count: count, id: i,
-    )
+    consumerCtxs[i] =
+      USpmcConsumerCtx[S, T, MaxT](queue: queue, manager: manager, count: count, id: i)
   let startTime = getMonoTime()
-  createThread(producerThread,
-               uspmcProducerThread[S, T, MaxT],
-               addr producerCtx)
+  createThread(producerThread, uspmcProducerThread[S, T, MaxT], addr producerCtx)
   for i in 0 ..< C:
     createThread(
-      consumerThreads[i],
-      uspmcConsumerThread[S, T, MaxT],
-      addr consumerCtxs[i],
+      consumerThreads[i], uspmcConsumerThread[S, T, MaxT], addr consumerCtxs[i]
     )
   joinThread(producerThread)
-  for i in 0 ..< C: joinThread(consumerThreads[i])
+  for i in 0 ..< C:
+    joinThread(consumerThreads[i])
   let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
-  if elapsedNs <= 0.0: return 0.0
+  if elapsedNs <= 0.0:
+    return 0.0
   result = float(messageCount) * 1_000_000.0 / elapsedNs
 
-proc runUSpmcShape[C: static int](
-    em: var BMFEmitter,
-    runs, warmup, messageCount: int,
-) =
+proc runUSpmcShape[C: static int](em: var BMFEmitter, runs, warmup, messageCount: int) =
   let slug = "lockfreequeues_unbounded_spmc/mpmc_unbounded/1p" & $C & "c"
   echo fmt"UnboundedSpmc 1p{C}c ({slug}):"
   when defined(benchProgress):
@@ -143,10 +134,9 @@ proc runUSpmcShape[C: static int](
     var manager = create(DebraManager[MaxThreads, debra.ccMulti])
     wasMoved(manager[])
     manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
-    var q =
-      newUnboundedSpmcQueue[uint64, stEager, SegmentSize, MaxThreads](manager)
-    discard runOneUSpmcRun[SegmentSize, uint64, MaxThreads, C](
-      addr q, manager, messageCount)
+    var q = newUnboundedSpmcQueue[uint64, stEager, SegmentSize, MaxThreads](manager)
+    discard
+      runOneUSpmcRun[SegmentSize, uint64, MaxThreads, C](addr q, manager, messageCount)
     reset(q)
     reset(manager[])
     dealloc(manager)
@@ -155,10 +145,10 @@ proc runUSpmcShape[C: static int](
     var manager = create(DebraManager[MaxThreads, debra.ccMulti])
     wasMoved(manager[])
     manager[] = initDebraManager[MaxThreads, debra.ccMulti]()
-    var q =
-      newUnboundedSpmcQueue[uint64, stEager, SegmentSize, MaxThreads](manager)
-    samples.add(runOneUSpmcRun[SegmentSize, uint64, MaxThreads, C](
-      addr q, manager, messageCount))
+    var q = newUnboundedSpmcQueue[uint64, stEager, SegmentSize, MaxThreads](manager)
+    samples.add(
+      runOneUSpmcRun[SegmentSize, uint64, MaxThreads, C](addr q, manager, messageCount)
+    )
     reset(q)
     reset(manager[])
     dealloc(manager)
@@ -180,13 +170,16 @@ const SupportedVariants = supportedVariantsList()
 proc runVariant(variant: string, em: var BMFEmitter) =
   case variant
   of "unbounded_spmc":
-    runUSpmcShape[1](em, UnboundedSpmcRuns, BenchUnboundedWarmup,
-      UnboundedSpmcMessageCount)
-    runUSpmcShape[2](em, UnboundedSpmcRuns, BenchUnboundedWarmup,
-      UnboundedSpmcMessageCount)
+    runUSpmcShape[1](
+      em, UnboundedSpmcRuns, BenchUnboundedWarmup, UnboundedSpmcMessageCount
+    )
+    runUSpmcShape[2](
+      em, UnboundedSpmcRuns, BenchUnboundedWarmup, UnboundedSpmcMessageCount
+    )
     when not defined(BenchSkipOversubscribed):
-      runUSpmcShape[4](em, UnboundedSpmcRuns, BenchUnboundedWarmup,
-        UnboundedSpmcMessageCount)
+      runUSpmcShape[4](
+        em, UnboundedSpmcRuns, BenchUnboundedWarmup, UnboundedSpmcMessageCount
+      )
   else:
     raise newException(ValueError, "unknown variant: " & variant)
 
@@ -200,7 +193,8 @@ when isMainModule:
     while true:
       p.next()
       case p.kind
-      of cmdEnd: break
+      of cmdEnd:
+        break
       of cmdLongOption, cmdShortOption:
         case p.key
         of "bmf-out":

@@ -21,7 +21,7 @@
 ##   5. (γ) bounded-asymmetry: retireOnPublish on
 ##      Queue[..., ccCons=ccMulti, rkEbr, ...].
 ##
-## 
+##
 
 import std/[osproc, strformat, strutils]
 
@@ -38,31 +38,36 @@ type
 
 const cases = @[
   Case(
-    name: "t_queue_cardinality_mismatch §6.3 (1) — Consumer ST=stManual vs Queue ST=stEager",
+    name:
+      "t_queue_cardinality_mismatch §6.3 (1) — Consumer ST=stManual vs Queue ST=stEager",
     file: "tests/should_fail/strategy_st_mismatch.nim",
     outcome: eoCompileFails,
     substring: "stManual",
   ),
   Case(
-    name: "t_queue_cardinality_mismatch §6.3 (2) — ccCons=ccSingle queue rejects ccMulti handle",
+    name:
+      "t_queue_cardinality_mismatch §6.3 (2) — ccCons=ccSingle queue rejects ccMulti handle",
     file: "tests/should_fail/cc_consumer_single_rejects_multi.nim",
     outcome: eoCompileFails,
     substring: "newUnboundedMpscQueue",
   ),
   Case(
-    name: "t_queue_cardinality_mismatch §6.3 (3) — ccCons=ccMulti queue rejects ccSingle manager",
+    name:
+      "t_queue_cardinality_mismatch §6.3 (3) — ccCons=ccMulti queue rejects ccSingle manager",
     file: "tests/should_fail/cc_consumer_multi_rejects_single.nim",
     outcome: eoCompileFails,
     substring: "newUnboundedMpmcQueue",
   ),
   Case(
-    name: "t_queue_bounded_no_retire §6.3 (4) — retireOnCAS on Queue[..., rkNone, ...] (γ guard)",
+    name:
+      "t_queue_bounded_no_retire §6.3 (4) — retireOnCAS on Queue[..., rkNone, ...] (γ guard)",
     file: "tests/should_fail/bounded_no_retire_on_cas.nim",
     outcome: eoCompileFails,
     substring: "retireOnCAS",
   ),
   Case(
-    name: "t_queue_bounded_no_retire §6.3 (5) — retireOnPublish on Queue[..., ccCons=ccMulti, rkEbr, ...] (γ guard)",
+    name:
+      "t_queue_bounded_no_retire §6.3 (5) — retireOnPublish on Queue[..., ccCons=ccMulti, rkEbr, ...] (γ guard)",
     file: "tests/should_fail/bounded_no_retire_on_publish_mc.nim",
     outcome: eoCompileFails,
     substring: "retireOnPublish",
@@ -74,25 +79,29 @@ const cases = @[
   # `newUnboundedSpmcQueue`). Family-level rather than per-individual-
   # wrapper.
   Case(
-    name: "t_bqueue_cardinality §6.3 (6) — direct push on ccProd=ccMulti BQueue is forbidden",
+    name:
+      "t_bqueue_cardinality §6.3 (6) — direct push on ccProd=ccMulti BQueue is forbidden",
     file: "tests/should_fail/bqueue_multi_producer_direct_push.nim",
     outcome: eoCompileFails,
     substring: "multi-producer BQueue",
   ),
   Case(
-    name: "t_bqueue_cardinality §6.3 (7) — direct pop on ccCons=ccMulti BQueue is forbidden",
+    name:
+      "t_bqueue_cardinality §6.3 (7) — direct pop on ccCons=ccMulti BQueue is forbidden",
     file: "tests/should_fail/bqueue_multi_consumer_direct_pop.nim",
     outcome: eoCompileFails,
     substring: "multi-consumer BQueue",
   ),
   Case(
-    name: "t_queue_cardinality §6.3 (8) — direct pop on ccCons=ccMulti Queue is forbidden",
+    name:
+      "t_queue_cardinality §6.3 (8) — direct pop on ccCons=ccMulti Queue is forbidden",
     file: "tests/should_fail/queue_multi_consumer_direct_pop.nim",
     outcome: eoCompileFails,
     substring: "multi-consumer Queue",
   ),
   Case(
-    name: "t_bqueue_cardinality §6.3 (9) — direct batch push on ccProd=ccMulti BQueue is forbidden",
+    name:
+      "t_bqueue_cardinality §6.3 (9) — direct batch push on ccProd=ccMulti BQueue is forbidden",
     file: "tests/should_fail/bqueue_multi_producer_batch_push.nim",
     outcome: eoCompileFails,
     substring: "batch push on a multi-producer BQueue",
@@ -129,7 +138,8 @@ const cases = @[
     substring: "QueueConsumer",
   ),
   Case(
-    name: "t_bqueue_lifecycle §6.3 (14) — F.3.5 cross-module state-preserving op requires {.notATransition.}",
+    name:
+      "t_bqueue_lifecycle §6.3 (14) — F.3.5 cross-module state-preserving op requires {.notATransition.}",
     file: "tests/should_fail/bqueue_cross_module_no_notATransition.nim",
     outcome: eoCompileFails,
     substring: "notATransition",
@@ -165,10 +175,30 @@ const cases = @[
     substring: "MpmcConsumerTag",
   ),
   Case(
-    name: "spawn C14.5 — defineProducerWorker inside proc body must compile-fail (module-scope guard)",
+    name:
+      "spawn C14.5 — defineProducerWorker inside proc body must compile-fail (module-scope guard)",
     file: "tests/should_fail/spawn_nested_scope.nim",
     outcome: eoCompileFails,
     substring: "top level",
+  ),
+  Case(
+    name:
+      "Phase B T13 (design §9.3 / SCOPE-7) — unbounded MPMC Queue rejects sizeof(T) > 8",
+    file: "tests/should_fail/unbounded_mpmc_wide_T_rejected.nim",
+    outcome: eoCompileFails,
+    # Two layered guards reject wide T on the ccMulti × ccMulti arm:
+    #   1. debra's `enforceDwcasConstraints` static assertion (fires at
+    #      construction-time via `Atomic[Pair[uint64, T]].store` in
+    #      `newSegment`): "sizeof(B) <= 8 Pair half-type ... must be
+    #      <= 8 bytes (DWCAS pairs two 64-bit registers)".
+    #   2. The v5.0.0 `{.error.}` in `proc push` (queue.nim L1136-L1145):
+    #      "requires sizeof(T) <= 8".
+    # Construction trips (1) before `push` is expanded, so we pin
+    # against debra's substring — the OUTER enforcement layer. If the
+    # narrowing is ever removed from the unbounded MPMC arm, BOTH
+    # layers stop firing and the test fails — the tripwire is sound
+    # either way.
+    substring: "Pair half-type",
   ),
 ]
 

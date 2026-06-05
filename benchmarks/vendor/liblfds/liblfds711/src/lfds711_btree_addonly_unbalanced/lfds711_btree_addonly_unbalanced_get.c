@@ -479,4 +479,3 @@ int lfds711_btree_au_get_by_absolute_position_and_then_by_relative_position( str
 
   return rv;
 }
-

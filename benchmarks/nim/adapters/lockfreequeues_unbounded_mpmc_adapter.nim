@@ -35,18 +35,16 @@ import ../bench_common
 const topologiesSupported* = {tMpmcUnbounded}
 
 type
-  UnboundedMpmcAdapterQueue[S: static int, T;
-                              MaxThreads: static int] =
+  UnboundedMpmcAdapterQueue[S: static int, T; MaxThreads: static int] =
     Queue[T, ccMulti, ccMulti, stEager, S, MaxThreads]
-  UnboundedMpmcAdapterProducer[S: static int, T;
-                                 MaxThreads: static int] =
-    Bound[T, AnyThreadTag, Queue[T, ccMulti, ccMulti, stEager, S, MaxThreads]]
-  UnboundedMpmcAdapterConsumer[S: static int, T;
-                                 MaxThreads: static int] =
+
+  UnboundedMpmcAdapterProducer[S: static int, T; MaxThreads: static int] =
     Bound[T, AnyThreadTag, Queue[T, ccMulti, ccMulti, stEager, S, MaxThreads]]
 
-  LockfreequeuesUnboundedMpmcAdapter*[S: static int, T;
-                                        MaxThreads: static int] = object
+  UnboundedMpmcAdapterConsumer[S: static int, T; MaxThreads: static int] =
+    Bound[T, AnyThreadTag, Queue[T, ccMulti, ccMulti, stEager, S, MaxThreads]]
+
+  LockfreequeuesUnboundedMpmcAdapter*[S: static int, T; MaxThreads: static int] = object
     ## Heap manager AND heap queue. The manager is heap-pointer because
     ## the unified `newUnboundedMpmcQueue` borrow form takes a
     ## `ptr DebraManager`. The queue is heap-pointer because the cached
@@ -62,9 +60,8 @@ type
     producer0*: UnboundedMpmcAdapterProducer[S, T, MaxThreads]
     consumer0*: UnboundedMpmcAdapterConsumer[S, T, MaxThreads]
 
-proc makeLockfreequeuesUnboundedMpmcAdapter*[S: static int, T;
-                                                MaxThreads: static int](
-    capacity: int = 0   # ignored for unbounded
+proc makeLockfreequeuesUnboundedMpmcAdapter*[S: static int, T; MaxThreads: static int](
+    capacity: int = 0, # ignored for unbounded
 ): LockfreequeuesUnboundedMpmcAdapter[S, T, MaxThreads] =
   result.manager = create(DebraManager[MaxThreads, debra.ccMulti])
   # wasMoved before the deref-assign: `create`'s zero-fill is not tracked by
@@ -104,8 +101,7 @@ proc makeLockfreequeuesUnboundedMpmcAdapter*[S: static int, T;
     # Same rationale for the queue: the unified Queue carries a typestate
     # `=destroy`, so mark the created slot moved-from before assigning into it.
     wasMoved(result.queue[])
-    result.queue[] =
-      newUnboundedMpmcQueue[T, stEager, S, MaxThreads](result.manager)
+    result.queue[] = newUnboundedMpmcQueue[T, stEager, S, MaxThreads](result.manager)
     queueValueInitOk = true
     # Cache producer-0 / consumer-0 for the 1P/1C smoke path, where the
     # init thread IS the operating thread. getProducer/getConsumer no

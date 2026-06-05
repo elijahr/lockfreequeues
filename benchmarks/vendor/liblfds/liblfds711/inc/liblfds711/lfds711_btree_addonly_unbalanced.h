@@ -71,7 +71,7 @@ struct lfds711_btree_au_state
   int
     (*key_compare_function)( void const *new_key, void const *existing_key );
 
-  enum lfds711_btree_au_existing_key 
+  enum lfds711_btree_au_existing_key
     existing_key;
 
   void
@@ -96,7 +96,7 @@ enum lfds711_btree_au_insert_result lfds711_btree_au_insert( struct lfds711_btre
                                                              struct lfds711_btree_au_element **existing_baue );
   // TRD : if a link collides with an existing key and existing_baue is non-NULL, existing_baue is set to the existing element
 
-int lfds711_btree_au_get_by_key( struct lfds711_btree_au_state *baus, 
+int lfds711_btree_au_get_by_key( struct lfds711_btree_au_state *baus,
                                  int (*key_compare_function)(void const *new_key, void const *existing_key),
                                  void *key,
                                  struct lfds711_btree_au_element **baue );
@@ -118,4 +118,3 @@ void lfds711_btree_au_query( struct lfds711_btree_au_state *baus,
                              enum lfds711_btree_au_query query_type,
                              void *query_input,
                              void *query_output );
-

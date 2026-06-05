@@ -1,4 +1,3 @@
-
 ## direct `push` on a multi-producer `BQueue` is gated by a
 ## `{.error.}` overload. Calling `push(item)` on a `ccProd == ccMulti`
 ## BQueue must fail at compile time with a message pointing the caller

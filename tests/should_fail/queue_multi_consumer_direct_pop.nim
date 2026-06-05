@@ -1,4 +1,3 @@
-
 ## direct `pop` on a multi-consumer unbounded `Queue` is gated by a
 ## A `{.error.}` overload. Calling `pop()` on a
 ## `ccCons == ccMulti` Queue must fail at compile time with a message

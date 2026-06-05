@@ -63,4 +63,3 @@ void lfds711_queue_bmm_query( struct lfds711_queue_bmm_state *qbmms,
                               enum lfds711_queue_bmm_query query_type,
                               void *query_input,
                               void *query_output );
-

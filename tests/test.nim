@@ -30,34 +30,28 @@ import ./t_unbounded_spsc
 import ./t_unbounded_spsc_threaded
 import ./t_unbounded_auto_create
 import ./t_queue_strategy_phantom
+import ./t_lcrq_cell_alias
+import ./t_lcrq_cell_primitives
+import ./t_lcrq_init
+import ./t_lcrq_push_single
+import ./t_lcrq_pop_single
+import ./t_lcrq_pop_race
+import ./t_lcrq_pop_slowpath
+import ./t_lcrq_push_close_race
+import ./t_lcrq_pop_critical_repros
+import ./t_bqueue_mpmc_wide_T_accepted
 
 import ./t_wraparound
 
 export
-  t_aligned_alloc,
-  t_atomic_dsl,
-  t_backoff,
-  t_slot_seq_generation_rollover,
-  t_queue_enums,
-  t_queue_type_shell,
-  t_queue_bounded_mpsc_smoke,
-  t_queue_bounded_mpsc,
-  t_queue_bounded_spmc,
-  t_queue_bounded_mpmc,
-  t_queue_bounded_spsc,
-  t_queue_bounded_mpsc_threaded,
-  t_queue_bounded_spsc_threaded,
-  t_queue_bounded_mpmc_threaded,
-  t_queue_bounded_spmc_threaded,
-  t_unbounded_mpmc,
-  t_unbounded_mpmc_threaded,
-  t_unbounded_mpsc,
-  t_unbounded_mpsc_threaded,
-  t_unbounded_padding,
-  t_unbounded_spmc,
-  t_unbounded_spmc_threaded,
-  t_unbounded_spsc,
-  t_unbounded_spsc_threaded,
-  t_unbounded_auto_create,
-  t_queue_strategy_phantom,
-  t_wraparound
+  t_aligned_alloc, t_atomic_dsl, t_backoff, t_slot_seq_generation_rollover,
+  t_queue_enums, t_queue_type_shell, t_queue_bounded_mpsc_smoke, t_queue_bounded_mpsc,
+  t_queue_bounded_spmc, t_queue_bounded_mpmc, t_queue_bounded_spsc,
+  t_queue_bounded_mpsc_threaded, t_queue_bounded_spsc_threaded,
+  t_queue_bounded_mpmc_threaded, t_queue_bounded_spmc_threaded, t_unbounded_mpmc,
+  t_unbounded_mpmc_threaded, t_unbounded_mpsc, t_unbounded_mpsc_threaded,
+  t_unbounded_padding, t_unbounded_spmc, t_unbounded_spmc_threaded, t_unbounded_spsc,
+  t_unbounded_spsc_threaded, t_unbounded_auto_create, t_queue_strategy_phantom,
+  t_lcrq_cell_alias, t_lcrq_cell_primitives, t_lcrq_init, t_lcrq_push_single,
+  t_lcrq_pop_single, t_lcrq_pop_race, t_lcrq_pop_slowpath, t_lcrq_push_close_race,
+  t_lcrq_pop_critical_repros, t_bqueue_mpmc_wide_T_accepted, t_wraparound

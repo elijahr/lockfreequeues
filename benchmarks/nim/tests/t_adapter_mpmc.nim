@@ -5,7 +5,8 @@ import ../adapter
 suite "MpmcAdapter":
   test "push and pop":
     var q = initMpmcAdapter[16, int]()
-    defer: q.deinitMpmcAdapter()
+    defer:
+      q.deinitMpmcAdapter()
     check q.push(42) == prSuccess
     let popResult = q.pop()
     check popResult.success
@@ -13,13 +14,15 @@ suite "MpmcAdapter":
 
   test "empty pop":
     var q = initMpmcAdapter[16, int]()
-    defer: q.deinitMpmcAdapter()
+    defer:
+      q.deinitMpmcAdapter()
     let popResult = q.pop()
     check not popResult.success
 
   test "full queue":
     var q = initMpmcAdapter[4, int]()
-    defer: q.deinitMpmcAdapter()
+    defer:
+      q.deinitMpmcAdapter()
     check q.push(1) == prSuccess
     check q.push(2) == prSuccess
     check q.push(3) == prSuccess
@@ -29,5 +32,6 @@ suite "MpmcAdapter":
 
   test "name":
     var q = initMpmcAdapter[16, int]()
-    defer: q.deinitMpmcAdapter()
+    defer:
+      q.deinitMpmcAdapter()
     check q.name == "lockfreequeues/Mpmc[16]"

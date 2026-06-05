@@ -63,4 +63,3 @@ void lfds711_ringbuffer_query( struct lfds711_ringbuffer_state *rs,
                                enum lfds711_ringbuffer_query query_type,
                                void *query_input,
                                void *query_output );
-

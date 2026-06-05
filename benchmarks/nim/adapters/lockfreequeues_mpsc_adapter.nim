@@ -20,8 +20,7 @@ import ../bench_common
 const topologiesSupported* = {tMpsc}
 
 type
-  MpscQueue*[N, P: static int, T] =
-    BQueue[T, ccMulti, ccSingle, N, P, 0]
+  MpscQueue*[N, P: static int, T] = BQueue[T, ccMulti, ccSingle, N, P, 0]
   MpscProducerView*[N, P: static int, T] =
     Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccSingle, N, P, 0]]
 
@@ -60,9 +59,7 @@ proc makeLockfreequeuesMpscAdapter*[N, P: static int, T](
   result.queue[] = newBQueue[T, ccMulti, ccSingle, N, P, 0]()
   result.producer = result.queue[].getProducerHere(idx = 0)
 
-proc cleanup*[N, P: static int, T](
-    a: var LockfreequeuesMpscAdapter[N, P, T]
-) =
+proc cleanup*[N, P: static int, T](a: var LockfreequeuesMpscAdapter[N, P, T]) =
   # Reset the cached producer view BEFORE deallocating the queue it borrows
   # from. The view holds a pointer into `a.queue[]` and carries a typestate
   # `=destroy` that would otherwise run at adapter scope exit (after this

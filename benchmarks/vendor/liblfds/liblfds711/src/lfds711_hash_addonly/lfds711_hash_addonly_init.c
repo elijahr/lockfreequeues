@@ -51,4 +51,3 @@ void lfds711_hash_a_init_valid_on_current_logical_core( struct lfds711_hash_a_st
 
   return;
 }
-

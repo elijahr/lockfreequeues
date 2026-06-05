@@ -54,4 +54,3 @@ int lfds711_stack_pop( struct lfds711_stack_state *ss,
 
   return 1;
 }
-

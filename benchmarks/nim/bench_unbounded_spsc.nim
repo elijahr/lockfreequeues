@@ -21,8 +21,7 @@
 ##   -d:UnboundedSpscMessageCount  (default 500_000)
 ##   -d:BenchUnboundedWarmup         (default 2)
 
-import std/[monotimes, options, os, parseopt, sets, strformat,
-            syncio, times]
+import std/[monotimes, options, os, parseopt, sets, strformat, syncio, times]
 import ./bench_common
 import lockfreequeues/backoff
 import lockfreequeues/queue
@@ -37,8 +36,7 @@ const
   BenchUnboundedWarmup* {.intdefine.} = 2
 
   SegmentSize = 64
-  SpscMaxThreads = 4
-    ## Type-uniform phantom for the spsc-absorbed `Queue` branch.
+  SpscMaxThreads = 4 ## Type-uniform phantom for the spsc-absorbed `Queue` branch.
 
 when defined(BenchUnboundedTestCompileTime):
   static:
@@ -48,14 +46,14 @@ when defined(BenchUnboundedTestCompileTime):
 # ---------- UnboundedSpsc harness (no DEBRA, plain SPSC) ----------
 
 type
-  USpscQueue[S: static int; T] =
+  USpscQueue[S: static int, T] =
     Queue[T, ccSingle, ccSingle, stEager, S, SpscMaxThreads]
 
-  USpscProducerCtx[S: static int; T] = object
+  USpscProducerCtx[S: static int, T] = object
     queue: ptr USpscQueue[S, T]
     count: int
 
-  USpscConsumerCtx[S: static int; T] = object
+  USpscConsumerCtx[S: static int, T] = object
     queue: ptr USpscQueue[S, T]
     count: int
 
@@ -69,9 +67,7 @@ when defined(benchProgress):
     echo "[" & adapter & " " & shape & " " & tag & "=" & $n & "]"
     flushFile(stdout)
 
-proc uspscProducerThread[S: static int; T](
-    ctx: ptr USpscProducerCtx[S, T]
-) {.thread.} =
+proc uspscProducerThread[S: static int, T](ctx: ptr USpscProducerCtx[S, T]) {.thread.} =
   var producer = ctx.queue[].getProducerHere()
   for i in 0 ..< ctx.count:
     producer.push(T(i))
@@ -79,9 +75,7 @@ proc uspscProducerThread[S: static int; T](
       if (i + 1) mod 10_000 == 0:
         benchProgress("unbounded_spsc", "1p1c", "p0 pushed", i + 1)
 
-proc uspscConsumerThread[S: static int; T](
-    ctx: ptr USpscConsumerCtx[S, T]
-) {.thread.} =
+proc uspscConsumerThread[S: static int, T](ctx: ptr USpscConsumerCtx[S, T]) {.thread.} =
   var consumer = ctx.queue[].getConsumerHere()
   var local = 0
   while local < ctx.count:
@@ -94,7 +88,7 @@ proc uspscConsumerThread[S: static int; T](
     else:
       benchBackoffOnPeerWait()
 
-proc runOneUSpscRun[S: static int; T](
+proc runOneUSpscRun[S: static int, T](
     queue: ptr USpscQueue[S, T], messageCount: int
 ): float =
   var producerThread: Thread[ptr USpscProducerCtx[S, T]]
@@ -107,7 +101,8 @@ proc runOneUSpscRun[S: static int; T](
   joinThread(producerThread)
   joinThread(consumerThread)
   let elapsedNs = float(inNanoseconds(getMonoTime() - startTime))
-  if elapsedNs <= 0.0: return 0.0
+  if elapsedNs <= 0.0:
+    return 0.0
   result = float(messageCount) * 1_000_000.0 / elapsedNs
 
 proc runUSpscShape(em: var BMFEmitter, runs, warmup, messageCount: int) =
@@ -138,9 +133,9 @@ const SupportedVariants = supportedVariantsList()
 proc runVariant(variant: string, em: var BMFEmitter) =
   case variant
   of "unbounded_spsc":
-    runUSpscShape(em,
-      UnboundedSpscRuns, BenchUnboundedWarmup,
-      UnboundedSpscMessageCount)
+    runUSpscShape(
+      em, UnboundedSpscRuns, BenchUnboundedWarmup, UnboundedSpscMessageCount
+    )
   else:
     raise newException(ValueError, "unknown variant: " & variant)
 
@@ -154,7 +149,8 @@ when isMainModule:
     while true:
       p.next()
       case p.kind
-      of cmdEnd: break
+      of cmdEnd:
+        break
       of cmdLongOption, cmdShortOption:
         case p.key
         of "bmf-out":

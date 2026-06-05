@@ -1,5 +1,3 @@
-
-
 ## JSON results format for benchmark output.
 
 import std/[json, times, cpuinfo]
@@ -57,8 +55,15 @@ proc toJson*(m: ThroughputMetrics): JsonNode =
   %*{"mean": m.mean, "min": m.min, "max": m.max, "stddev": m.stddev}
 
 proc toJson*(m: LatencyMetrics): JsonNode =
-  %*{"mean": m.mean, "p50": m.p50, "p95": m.p95, "p99": m.p99,
-     "p999": m.p999, "min": m.min, "max": m.max}
+  %*{
+    "mean": m.mean,
+    "p50": m.p50,
+    "p95": m.p95,
+    "p99": m.p99,
+    "p999": m.p999,
+    "min": m.min,
+    "max": m.max,
+  }
 
 proc toJson*(r: BenchmarkResult): JsonNode =
   %*{
@@ -66,10 +71,8 @@ proc toJson*(r: BenchmarkResult): JsonNode =
     "language": r.language,
     "version": r.version,
     "thread_config": r.threadConfig,
-    "metrics": {
-      "throughput_ops_ms": r.throughputOpsMs.toJson,
-      "latency_ns": r.latencyNs.toJson
-    }
+    "metrics":
+      {"throughput_ops_ms": r.throughputOpsMs.toJson, "latency_ns": r.latencyNs.toJson},
   }
 
 proc toJson*(m: BenchmarkMetadata): JsonNode =
@@ -78,7 +81,7 @@ proc toJson*(m: BenchmarkMetadata): JsonNode =
     "platform": m.platform,
     "cpu": m.cpu,
     "cores": m.cores,
-    "runner": m.runner
+    "runner": m.runner,
   }
 
 proc toJson*(b: BenchmarkInfo): JsonNode =
@@ -86,18 +89,14 @@ proc toJson*(b: BenchmarkInfo): JsonNode =
     "name": b.name,
     "queue_type": b.queueType,
     "message_count": b.messageCount,
-    "runs": b.runs
+    "runs": b.runs,
   }
 
 proc toJson*(o: BenchmarkOutput): JsonNode =
   var results = newJArray()
   for r in o.results:
     results.add(r.toJson)
-  %*{
-    "metadata": o.metadata.toJson,
-    "benchmark": o.benchmark.toJson,
-    "results": results
-  }
+  %*{"metadata": o.metadata.toJson, "benchmark": o.benchmark.toJson, "results": results}
 
 proc writeResults*(output: BenchmarkOutput, filename: string) =
   let json = output.toJson

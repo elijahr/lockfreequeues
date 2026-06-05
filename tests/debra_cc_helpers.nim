@@ -16,7 +16,9 @@
 
 import debra
 
-proc initMultiConsumerManager*[MaxThreads: static int](): DebraManager[MaxThreads, ccMulti] =
+proc initMultiConsumerManager*[MaxThreads: static int](): DebraManager[
+    MaxThreads, ccMulti
+] =
   ## Returns a fresh `DebraManager[MaxThreads, ccMulti]` for tests of
   ## `ccCons == ccMulti` queues (spmc-equiv, mpmc-equiv).
   initDebraManager[MaxThreads, ccMulti]()

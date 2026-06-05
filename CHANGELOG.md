@@ -1216,10 +1216,141 @@ v4.3-no-post-release-deferral rule's spirit because the work is not
 silently dropped — it is explicitly tracked here as orphan with a named
 destination subsystem.
 
+### Phase B: strict-LCRQ migration on unbounded MPMC
+
+Late in the v5.0.0 cycle, the unbounded `Queue[T, ccMulti, ccMulti, ...]`
+arm was migrated from a `committed: array[S, Atomic[bool]]` overlay onto
+strict-LCRQ cells per the LCRQ paper §4 close-CAS-on-empty progress
+guarantee. The migration landed atomically across commits T0..T9 on
+`feat/v5.0.0-strict-lcrq` (T10..T16 are follow-on cleanup + docs).
+
+#### 🚨 BREAKING CHANGES (Phase B)
+
+- **`Queue[T, ccMulti, ccMulti, ...]` (unbounded MPMC) now requires
+  `supportsCopyMem(T) AND sizeof(T) <= 8`.** The strict-LCRQ cell layout
+  is a packed 128-bit DWCAS word; T must fit in the 8-byte value lane and
+  must be trivially copyable. Wider T or non-trivially-copyable T is
+  rejected at compile time with a `{.error.}` overload that cites the
+  migration path below.
+- **Migration:** for wider T (anything larger than 8 bytes, or move-only /
+  ref-type / non-`supportsCopyMem` T), use `BQueue[T, ccMulti, ccMulti,
+  N, P, C]` (bounded MPMC, Vyukov per-slot seq). `BQueue` is unchanged
+  in v5.0.0 and preserves general T support including move-only types.
+  For T that fits in 8 bytes and is trivially copyable (integers,
+  pointers, small `distinct` integer types, etc.), no source change is
+  required.
+
+#### Added (Phase B)
+
+- Strict-LCRQ migration on unbounded MPMC queue per the LCRQ paper §4
+  close-CAS-on-empty progress guarantee. Resolves the case-(b)
+  consumer-reservation race in the pop fast-path via an inner-spin
+  pattern (Phase B design §5.3).
+- New cell primitives on `LCRQCell[T]`: `tryPublish`, `tryClaim`, and
+  `tryCloseOnEmpty`. These wrap the DWCAS operations on the packed
+  128-bit cell word and form the strict-LCRQ surface used by the MPMC
+  arm.
+- Compile-time `{.error.}` guards on T-constraint violation with
+  migration guidance pointing at `BQueue[T]`.
+- Test infrastructure: `t_lcrq_cell_*`, `t_lcrq_init`,
+  `t_lcrq_push_single`, `t_lcrq_pop_single`, `t_lcrq_pop_race`,
+  `t_lcrq_pop_slowpath`, `t_lcrq_push_close_race`,
+  `t_bqueue_mpmc_wide_T_accepted`, and the
+  `should_fail/unbounded_mpmc_wide_T_rejected` negative control.
+
+#### Removed (Phase B)
+
+- Internal `committed: array[S, Atomic[bool]]` + `data: array[S, T]`
+  overlay on the MPMC arm. Replaced by `cells: array[S, LCRQCell[T]]`.
+- `t_queue_unbounded_mpmc_move_analyzer.nim` — the capability it covered
+  (move-only T on unbounded MPMC) was removed by the T narrowing above.
+  Coverage is preserved on the BQueue twin
+  (`t_bqueue_mpmc_wide_T_accepted` plus the move-only test that already
+  exercises `BQueue`).
+
+#### Fixed (Phase B)
+
+- C11-incorrect CAS ordering pairs at `typestates/cas.nim:54` and
+  `endpoint.nim:223` / `endpoint.nim:258`. Forced-fallout from debra
+  v0.10.0's `validCasFailureOrder` strictening; the failure-order
+  argument is now well-formed under C11.
+- Case-(b) consumer-reservation race in the pop fast-path (the inner-
+  spin pattern documented in Phase B design §5.3).
+- **CR-2 — premature segment retirement on CLOSED cells at low
+  index.** In the §5.3 CLOSED-detection branch, the consumer
+  previously short-circuited to the eager-retire path the moment it
+  observed a CLOSED cell, even when other live (or claimable) cells
+  remained in the segment. Under contention this could trigger
+  segment retirement while the producer for a higher-indexed cell
+  was still mid-publish, dropping the in-flight item. The CLOSED
+  branch now falls through to the §5.2 slow-path inline-skip, which
+  scans across closed cells without retiring; the invariant on
+  `prevConsumerIdx` is correspondingly broadened: **it advances on
+  both successful claims AND skipped-closed cells** (previously
+  documented as claim-count-only). Repro: `t_pop_cr2_premature_retire`
+  (committed in cycle-4).
+- **CR-1 — unbounded spin in `waitForPublish` when a producer
+  stalls.** A producer preempted (or killed) between its tail-CAS
+  reservation and its `tryPublish` left consumers spinning in
+  `waitForPublish` indefinitely, violating the lock-free progress
+  argument from LCRQ paper §4. The wait loop is now bounded by
+  `MaxWaitForPublishSpins = 1024`; when the budget is exhausted the
+  consumer escalates to `tryCloseOnEmpty` on the contested cell,
+  which either lets the consumer move on (cell closed) or restarts
+  the claim path (the late producer published just-in-time). Repro:
+  `t_pop_cr1_producer_stall` (committed in cycle-4). Lock-free
+  progress is now actually enforced, not merely asserted.
+- **32-bit cleanliness.** Test infrastructure that previously
+  hardcoded 8-byte assumptions has been rewritten in terms of
+  `sizeof(uint)`: `t_lcrq_cell_alias` asserts on `sizeof(uint) * 2`
+  (the cell width), the compile-time T-constraint error message is
+  generated dynamically rather than literal `"> 8 bytes"`, and the
+  unbounded MPMC stress-test uses `Atomic[int64]` for cross-thread
+  sums so 32-bit hosts do not overflow during the validation
+  reduction.
+
+#### Dependencies (Phase B)
+
+- `debra` bumped to `>= 0.10.0` for the DWCAS surface used by the
+  strict-LCRQ cell primitives.
+
+#### Platform requirements (Phase B)
+
+- **arm64 hosts require ARMv8.1-A or newer** (LSE atomic
+  instructions: `CAS`, `CASP`, etc.). `nim.cfg` passes
+  `-march=armv8.1-a+lse` on gcc/clang for arm64 so DWCAS is inlined
+  rather than routed through libgcc outline helpers. Pre-ARMv8.1
+  hardware — notably Raspberry Pi 4 / Cortex-A72, Cortex-A53/A57,
+  and the original Pixel C — lacks LSE; binaries built with these
+  flags will fault with `SIGILL` (Illegal Instruction) at the first
+  CAS. Affected users must either upgrade the host (most ARM SoCs
+  released since 2019, plus Apple Silicon and Graviton2/3/4,
+  support LSE) or pre-v5.0.0 `lockfreequeues` and pre-0.10.0
+  `nim-debra` releases that do not require DWCAS. The macOS arm64
+  target (Apple Silicon) and ubuntu-24.04-arm CI runner both
+  support LSE; the constraint affects self-hosted builds on older
+  SBCs / dev boards only.
+
+#### Bisect notes (Phase B)
+
+The T3..T7 commit range (`77c7f20c..51f10b63` on
+`feat/v5.0.0-strict-lcrq`) intentionally contains partial-migration
+states marked with `STRICT-LCRQ-PARTIAL` sentinels in source. These
+commits do NOT pass the full test suite by design — they are interior
+points in the atomic migration. When bisecting through this range, use
+`git bisect skip` for SHAs in `77c7f20c..51f10b63`. The green-gate
+commits are T8 (`33b8d49f`) and T9 (`cd8b27a1`); STRICT-LCRQ-PARTIAL
+marker count is 0 at T9 and at all post-T9 commits.
+
 ### References
 
 - [Migration guide](docs/migration.md) — full migration table from
   4.1.x to 5.0.0; cited in BREAKING.
+- [README References section](README.md#references) — fact-checked
+  bibliography for the algorithms underlying v5.0.0: Morrison & Afek
+  (LCRQ, PPoPP 2013), Vyukov (bounded MPMC), Michael & Scott (MS-queue
+  baseline), and Brown (DEBRA, PODC 2015). Each citation verified at
+  audit time against authoritative sources.
 
 ## [4.1.0] - 2026-05-01
 

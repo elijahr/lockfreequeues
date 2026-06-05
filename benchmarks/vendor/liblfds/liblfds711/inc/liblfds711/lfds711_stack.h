@@ -54,5 +54,3 @@ void lfds711_stack_query( struct lfds711_stack_state *ss,
                           enum lfds711_stack_query query_type,
                           void *query_input,
                           void *query_output );
-
-

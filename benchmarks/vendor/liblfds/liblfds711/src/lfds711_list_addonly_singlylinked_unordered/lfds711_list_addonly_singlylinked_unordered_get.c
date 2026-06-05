@@ -8,7 +8,7 @@
 /****************************************************************************/
 int lfds711_list_asu_get_by_key( struct lfds711_list_asu_state *lasus,
                                  int (*key_compare_function)(void const *new_key, void const *existing_key),
-                                 void *key, 
+                                 void *key,
                                  struct lfds711_list_asu_element **lasue )
 {
   int
@@ -30,4 +30,3 @@ int lfds711_list_asu_get_by_key( struct lfds711_list_asu_state *lasus,
 
   return rv;
 }
-

@@ -23,7 +23,7 @@
 ##     callers fail UFCS lookup for `retireOnCAS` / `retireOnPublish`
 ##     — verified via the `compiles()` negative control below.
 ##
-## 
+##
 
 import unittest2
 import std/options

@@ -83,4 +83,3 @@
   #error No matching porting abstraction layer in lfds711_porting_abstraction_layer_operating_system.h
 
 #endif
-

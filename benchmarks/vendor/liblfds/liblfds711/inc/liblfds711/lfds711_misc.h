@@ -230,4 +230,3 @@ static LFDS711_PAL_INLINE void lfds711_misc_force_store()
 
   return;
 }
-

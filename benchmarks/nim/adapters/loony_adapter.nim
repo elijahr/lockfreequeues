@@ -91,8 +91,8 @@ when defined(adapter_loony_available):
     # binaries use), so there is zero overhead in measurement runs while
     # development builds still catch encoding misuse loudly.
     assert uint64(item) <= LoonyMaxValue,
-      "value " & $uint64(item) & " exceeds Loony adapter encoding range " &
-      "(0 .. " & $LoonyMaxValue & "); see module docstring."
+      "value " & $uint64(item) & " exceeds Loony adapter encoding range " & "(0 .. " &
+        $LoonyMaxValue & "); see module docstring."
     a.queue.push((uint64(item) + 1'u64) shl LoonyTagShift)
     prSuccess
 

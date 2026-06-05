@@ -67,4 +67,3 @@ void lfds711_freelist_query( struct lfds711_freelist_state *fs,
                              enum lfds711_freelist_query query_type,
                              void *query_input,
                              void *query_output );
-

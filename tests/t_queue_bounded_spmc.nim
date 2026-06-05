@@ -123,9 +123,11 @@ suite "push(Queue SPMC, T)":
     for i in 1 .. 8:
       discard q.push(i)
     for i in 1 .. 4:
-      discard (block:
-      var lfqT = q.getConsumerHere(0)
-      lfqT.pop())
+      discard (
+        block:
+          var lfqT = q.getConsumerHere(0)
+          lfqT.pop()
+      )
     for i in 9 .. 12:
       check(q.push(i) == true)
     q.checkState(head = 4'u64, tail = 12'u64, data = (@[9, 10, 11, 12, 5, 6, 7, 8]))
@@ -146,9 +148,11 @@ suite "push(Queue SPMC, seq[T])":
   test "wrap":
     discard q.push(@[1, 2, 3, 4, 5, 6, 7, 8])
     for i in 1 .. 4:
-      discard (block:
-      var lfqT = q.getConsumerHere(0)
-      lfqT.pop())
+      discard (
+        block:
+          var lfqT = q.getConsumerHere(0)
+          lfqT.pop()
+      )
     check(q.push(@[9, 10, 11, 12]).isNone)
     q.checkState(head = 4'u64, tail = 12'u64, data = (@[9, 10, 11, 12, 5, 6, 7, 8]))
 

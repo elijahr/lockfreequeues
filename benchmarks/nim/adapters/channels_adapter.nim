@@ -9,9 +9,8 @@ from ../bench_common import Topology, tMpmc
 
 const topologiesSupported*: set[Topology] = {tMpmc}
 
-type
-  ChannelsAdapter*[T] = object
-    chan: ptr Channel[T]
+type ChannelsAdapter*[T] = object
+  chan: ptr Channel[T]
 
 proc initChannelsAdapter*[T](capacity: int): ChannelsAdapter[T] =
   result.chan = create(Channel[T])
@@ -30,10 +29,7 @@ proc cleanup*[T](a: var ChannelsAdapter[T]) =
   deinitChannelsAdapter(a)
 
 proc push*[T](a: var ChannelsAdapter[T], item: T): PushResult =
-  if a.chan[].trySend(item):
-    prSuccess
-  else:
-    prFull
+  if a.chan[].trySend(item): prSuccess else: prFull
 
 proc pop*[T](a: var ChannelsAdapter[T]): PopResult[T] =
   let res = a.chan[].tryRecv()

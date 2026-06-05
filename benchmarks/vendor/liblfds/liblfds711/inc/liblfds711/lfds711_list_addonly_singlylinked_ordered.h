@@ -84,4 +84,3 @@ void lfds711_list_aso_query( struct lfds711_list_aso_state *lasos,
                              enum lfds711_list_aso_query query_type,
                              void *query_input,
                              void *query_output );
-

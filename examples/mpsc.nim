@@ -30,14 +30,17 @@ proc producerFunc() {.thread, gcsafe.} =
   # Get a per-thread Bound producer endpoint.
   var producer = q.getProducerHere()
   let item = rand(100)
-  echo "[producer ", producer.idx, "] pushed item: ", item, "? ",
-    producer.push(item)
+  echo "[producer ", producer.idx, "] pushed item: ", item, "? ", producer.push(item)
   let items = @[rand(100), rand(100), rand(100), rand(100)]
   let remainder = producer.push(items)
     # v5.0.0: returns Option[HSlice[int,int]] (unpushed-slice).
   if remainder.isSome:
-    echo "[producer ", producer.idx, "] pushed ",
-      items[0 ..< remainder.get.a], "; unpushed: ", items[remainder.get]
+    echo "[producer ",
+      producer.idx,
+      "] pushed ",
+      items[0 ..< remainder.get.a],
+      "; unpushed: ",
+      items[remainder.get]
   else:
     echo "[producer ", producer.idx, "] pushed all: ", items
 

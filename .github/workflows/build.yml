@@ -82,13 +82,13 @@ jobs:
             nim-version: 'stable'
             sanitize-threads: 'yes'
             sanitize-address: 'yes'
-            timeout: 25
+            timeout: 45
           # ---- devel (informational, non-gating via continue-on-error) ----
           - runs-on: ubuntu-latest
             nim-version: 'devel'
             sanitize-threads: 'yes'
             sanitize-address: 'yes'
-            timeout: 25
+            timeout: 45
           - runs-on: ubuntu-24.04-arm
             nim-version: 'devel'
             sanitize-threads: 'yes'
@@ -98,7 +98,7 @@ jobs:
             nim-version: 'devel'
             sanitize-threads: 'yes'
             sanitize-address: 'yes'
-            timeout: 25
+            timeout: 45
 
     steps:
       - name: Restore cache
