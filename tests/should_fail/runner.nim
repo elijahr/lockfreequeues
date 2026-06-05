@@ -181,6 +181,25 @@ const cases = @[
     outcome: eoCompileFails,
     substring: "top level",
   ),
+  Case(
+    name:
+      "Phase B T13 (design §9.3 / SCOPE-7) — unbounded MPMC Queue rejects sizeof(T) > 8",
+    file: "tests/should_fail/unbounded_mpmc_wide_T_rejected.nim",
+    outcome: eoCompileFails,
+    # Two layered guards reject wide T on the ccMulti × ccMulti arm:
+    #   1. debra's `enforceDwcasConstraints` static assertion (fires at
+    #      construction-time via `Atomic[Pair[uint64, T]].store` in
+    #      `newSegment`): "sizeof(B) <= 8 Pair half-type ... must be
+    #      <= 8 bytes (DWCAS pairs two 64-bit registers)".
+    #   2. The v5.0.0 `{.error.}` in `proc push` (queue.nim L1136-L1145):
+    #      "requires sizeof(T) <= 8".
+    # Construction trips (1) before `push` is expanded, so we pin
+    # against debra's substring — the OUTER enforcement layer. If the
+    # narrowing is ever removed from the unbounded MPMC arm, BOTH
+    # layers stop firing and the test fails — the tripwire is sound
+    # either way.
+    substring: "Pair half-type",
+  ),
 ]
 
 proc runCase(c: Case): bool =

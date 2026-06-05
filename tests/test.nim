@@ -38,6 +38,7 @@ import ./t_lcrq_pop_single
 import ./t_lcrq_pop_race
 import ./t_lcrq_pop_slowpath
 import ./t_lcrq_push_close_race
+import ./t_bqueue_mpmc_wide_T_accepted
 
 import ./t_wraparound
 
@@ -52,4 +53,4 @@ export
   t_unbounded_spsc_threaded, t_unbounded_auto_create, t_queue_strategy_phantom,
   t_lcrq_cell_alias, t_lcrq_cell_primitives, t_lcrq_init, t_lcrq_push_single,
   t_lcrq_pop_single, t_lcrq_pop_race, t_lcrq_pop_slowpath, t_lcrq_push_close_race,
-  t_wraparound
+  t_bqueue_mpmc_wide_T_accepted, t_wraparound
