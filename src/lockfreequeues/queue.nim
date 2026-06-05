@@ -79,6 +79,20 @@ static:
   assert LockFreeQueuesAdvanceEvery > 0,
     "LockFreeQueuesAdvanceEvery must be a positive integer"
 
+const LockFreeQueuesMaxWaitForPublishSpins* {.intdefine.}: int = 1024
+  ## Bounded-spin budget for an MPMC consumer waiting on a stalled
+  ## producer that won the tail-CAS but has not yet `tryPublish`'d
+  ## (LCRQ §4 / CRIT-1). After this many spins the consumer drives
+  ## `tryCloseOnEmpty` on its reserved cell, surrendering the slot
+  ## and falling through to the slow-path-style skip. Override at
+  ## compile time with `-d:LockFreeQueuesMaxWaitForPublishSpins=N`.
+  ## Smaller = faster forward progress under producer stalls but more
+  ## close-on-empty traffic; larger = better steady-state throughput
+  ## but worse tail latency when producers stall.
+static:
+  assert LockFreeQueuesMaxWaitForPublishSpins > 0,
+    "LockFreeQueuesMaxWaitForPublishSpins must be a positive integer"
+
 # ----------------------------------------------------------------------
 # Strict-LCRQ cell alias + close sentinel (Phase B / §2.1, §4).
 #
@@ -1667,7 +1681,7 @@ proc pop*[
         # escalation. A producer that won the tail-CAS but stalls
         # before tryPublish would otherwise leave us spinning
         # forever on `inner.first == 0`. After
-        # `MaxWaitForPublishSpins` iterations (~ms on modern
+        # `LockFreeQueuesMaxWaitForPublishSpins` iterations (~ms on modern
         # hardware with backoff), the consumer drives
         # `tryCloseOnEmpty` on its reserved cell:
         #   * close-success → treat the cell as closed (see below);
@@ -1675,7 +1689,6 @@ proc pop*[
         #     fail and it will escalate to nextSeg per T9.
         #   * close-fail (producer raced and published during our
         #     budget) → retry tryClaim and exit.
-        const MaxWaitForPublishSpins = 1024
         var fellThroughOnClose = false
         block waitForPublish:
           var waitSpins = 0
@@ -1705,7 +1718,7 @@ proc pop*[
               continue
             # Still empty. Bounded-spin budget for stalled producer.
             inc waitSpins
-            if waitSpins >= MaxWaitForPublishSpins:
+            if waitSpins >= LockFreeQueuesMaxWaitForPublishSpins:
               # CRIT-1: producer reserved tail but never published.
               # Drive close-on-empty on our reserved cell.
               if tryCloseOnEmpty[T](seg.cells[mySlot], 0'u):

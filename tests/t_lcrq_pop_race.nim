@@ -124,8 +124,11 @@ proc consumerProc(ctx: ptr CCtx) {.thread.} =
         if ctx.consumedCount[].fetchAdd(1, moRelaxed) + 1 >= TotalItems:
           break
       elif ctx.producersDone[].load(moAcquire) >= ProducerCount:
-        if ctx.consumedCount[].load(moRelaxed) >= TotalItems:
-          break
+        # All producers done and the queue currently shows empty.
+        # Always exit so missing items surface as a clean assertion
+        # failure post-join rather than as a silent hang in the
+        # consumer loop. consumedCount is asserted outside.
+        break
 
 suite "T6.C3: MPMC pop case-(b) race — no orphaned values under stress":
   var

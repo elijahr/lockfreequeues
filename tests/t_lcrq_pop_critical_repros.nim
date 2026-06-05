@@ -258,9 +258,11 @@ suite "Cycle 4 — Gemini critical-finding deterministic repros":
     let r2 = consumer.pop()
     let r3 = consumer.pop()
     let r4 = consumer.pop()
+    let r5 = consumer.pop()
 
-    # Strongest assertion: full sequence.
+    # Strongest assertion: full sequence then queue empty.
     check r1 == some(42)
     check r2 == some(43)
     check r3 == some(44)
     check r4 == some(99)
+    check r5.isNone
