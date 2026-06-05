@@ -221,7 +221,7 @@ proc getProducer*[T; ccCons: static PinScopeCardinality, N, P, C: static int](
   for i in 0 ..< P:
     var expected = 0
     if self.producerThreadIds[i].compareExchangeWeak(
-      expected, threadId, moRelease, moAcquire
+      expected, threadId, moAcquireRelease, moAcquire
     ):
       result.idx = i
       return
@@ -256,7 +256,7 @@ proc getConsumer*[T; ccProd: static PinScopeCardinality, N, P, C: static int](
   for i in 0 ..< C:
     var expected = 0
     if self.consumerThreadIds[i].compareExchangeWeak(
-      expected, threadId, moRelease, moAcquire
+      expected, threadId, moAcquireRelease, moAcquire
     ):
       result.idx = i
       return
