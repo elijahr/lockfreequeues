@@ -277,7 +277,10 @@ type
     ## matches its per-family analogue.
     ##
     ## Field set:
-    ##   - `data: array[S, T]` — slot storage (all variants).
+    ##   - `data: array[S, T]` — slot storage (non-MPMC variants).
+    ##   - `cells: array[S, LCRQCell[T]]` — strict-LCRQ cells (MPMC only,
+    ##     Phase B migration target). Replaces `committed + data` on the
+    ##     `ccMulti × ccMulti` arm.
     ##   - `next: Atomic[ptr Segment[...]]` — linked-list pointer.
     ##   - `tail: Atomic[int]` — producer write index. Atomic for
     ##     multi-producer coordination and for spsc-equiv (publish
@@ -287,18 +290,30 @@ type
     ##     the absorbed spsc-equiv). Only the single consumer ever
     ##     writes it.
     ##   - `committed: array[S, Atomic[bool]]` — multi-producer
-    ##     publication flags. Present on `ccProd == ccMulti`.
+    ##     publication flags. Present on `ccProd == ccMulti and
+    ##     ccCons == ccSingle` (MPSC only — MPMC migrated to `cells`).
     ##   - `prevConsumerIdx: Atomic[int]` — multi-consumer CAS slot.
     ##     Present on `ccCons == ccMulti`.
-    data*: array[S, T]
+    when ccProd == ccMulti and ccCons == ccMulti:
+      # MPMC: strict-LCRQ cells (Phase B). Replaces committed+data.
+      cells* {.align: CacheLineBytes.}: array[S, LCRQCell[T]]
+    elif ccProd == ccMulti:
+      # MPSC (ccMulti × ccSingle): legacy committed+data overlay
+      # preserved verbatim (NOT migrating in Phase B; symmetric with
+      # BQueue staying unchanged).
+      data*: array[S, T]
+    else:
+      # SPSC + SPMC: data only.
+      data*: array[S, T]
     next* {.align: CacheLineBytes.}: Atomic[ptr Segment[T, ccProd, ccCons, S]]
     tail* {.align: CacheLineBytes.}: Atomic[int]
     when ccCons == ccSingle:
       # mpsc-equiv + absorbed spsc-equiv: single-consumer
       # non-atomic read position.
       head* {.align: CacheLineBytes.}: int
-    when ccProd == ccMulti:
-      # mpsc-equiv + mpmc-equiv: multi-producer publication flags.
+    when ccProd == ccMulti and ccCons == ccSingle:
+      # MPSC-only multi-producer publication flags. MPMC migrated to
+      # `cells` (above) where the seq counter subsumes commit-bit.
       committed* {.align: CacheLineBytes.}: array[S, Atomic[bool]]
     when ccCons == ccMulti:
       # spmc-equiv + mpmc-equiv: multi-consumer CAS coordination.
@@ -411,7 +426,15 @@ proc newSegment[T; ccProd, ccCons: static PinScopeCardinality, S: static int]():
   when ccCons == ccSingle:
     # mpsc-equiv + absorbed spsc-equiv carry a `head: int` field.
     result.head = 0
-  when ccProd == ccMulti:
+  when ccProd == ccMulti and ccCons == ccMulti:
+    # STRICT-LCRQ-PARTIAL: MPMC cells live-zero init. The seq counter
+    # for slot i has empty-sentinel value `i` (LCRQ paper §3); T4-T8
+    # will wire publish/claim against this layout. For now, cells are
+    # zero-initialized (allocAligned zeroes the page), which gives
+    # seq=0 for every slot. The empty-sentinel reseed happens in T4.
+    discard
+  elif ccProd == ccMulti:
+    # MPSC: legacy committed flags init (unchanged).
     for i in 0 ..< S:
       result.committed[i].store(false, moRelaxed)
   when ccCons == ccMulti:
@@ -484,8 +507,20 @@ proc segmentDestructor[T; ccProd, ccCons: static PinScopeCardinality, S: static 
 ) {.nimcall, raises: [].} =
   when not supportsCopyMem(T):
     let seg = cast[ptr Segment[T, ccProd, ccCons, S]](p)
-    for i in 0 ..< S:
-      reset(seg.data[i])
+    when ccProd == ccMulti and ccCons == ccMulti:
+      # STRICT-LCRQ-PARTIAL: MPMC payload lives inside `cells[i]` as
+      # `Pair[uint64, T].value`. T4-T8 will reset embedded T's via
+      # the cell's value field. For T3, the reset is intentionally
+      # elided — MPMC suite is expected red across T3..T7.
+      discard
+    elif ccProd == ccMulti:
+      # MPSC: legacy data array.
+      for i in 0 ..< S:
+        reset(seg.data[i])
+    else:
+      # SPSC + SPMC.
+      for i in 0 ..< S:
+        reset(seg.data[i])
   freeAligned(p)
 
 ## ----------------------------------------------------------------------
@@ -938,8 +973,18 @@ proc `=destroy`*[
   while seg != nil:
     let nextSeg = seg.next.load(moRelaxed)
     when not supportsCopyMem(T):
-      for i in 0 ..< S:
-        reset(seg.data[i])
+      when ccProd == ccMulti and ccCons == ccMulti:
+        # STRICT-LCRQ-PARTIAL: MPMC payload lives in `cells[i].value`.
+        # T4-T8 will reset embedded T's via the cell's value field.
+        discard
+      elif ccProd == ccMulti:
+        # MPSC: legacy data array.
+        for i in 0 ..< S:
+          reset(seg.data[i])
+      else:
+        # SPSC + SPMC.
+        for i in 0 ..< S:
+          reset(seg.data[i])
     freeAligned(seg)
     seg = nextSeg
 
@@ -1134,8 +1179,17 @@ proc push*[
             continue
         var expected = tail
         if seg.tail.compareExchange(expected, tail + 1, moAcquire, moRelaxed):
-          seg.data[tail] = item
-          seg.committed[tail].store(true, moRelease)
+          when ccCons == ccMulti:
+            # STRICT-LCRQ-PARTIAL: MPMC publish. T4 will replace this with
+            # `tryPublish(seg.cells[tail], expectedSeq, item)` keyed on the
+            # cell's seq counter. For T3, the slot reservation succeeds
+            # but no value is stored (item drops via sink destructor) —
+            # MPMC suite is expected red across T3..T7.
+            wasMoved(item)
+          else:
+            # MPSC: legacy committed+data publish (unchanged).
+            seg.data[tail] = item
+            seg.committed[tail].store(true, moRelease)
           discard self.queue.itemCount.fetchAdd(1, moRelaxed)
           break
 
@@ -1341,10 +1395,13 @@ proc pop*[
       let mySlot = prevIdx + 1
       if mySlot >= tail:
         if mySlot < S and seg.tail.load(moAcquire) > mySlot:
-          if not seg.committed[mySlot].load(moAcquire):
-            break
-          backoffOnRetry(spins)
-          continue
+          # STRICT-LCRQ-PARTIAL: was the published-bit check
+          # `if not seg.committed[mySlot].load(moAcquire): break;
+          # backoff; continue`. T4-T8 will replace with `tryClaim(
+          # seg.cells[mySlot], expectedSeq)`. For T3 the slot is
+          # never published (push stubs `wasMoved(item)`), so we
+          # break out as if uncommitted — MPMC suite expected red.
+          break
         let nextSeg = seg.next.load(moAcquire)
         if nextSeg == nil:
           break
@@ -1362,12 +1419,18 @@ proc pop*[
           seg = self.queue.headSegment.load(moAcquire)
         backoffOnRetry(spins)
         continue
-      if not seg.committed[mySlot].load(moAcquire):
-        break
-      if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
-        result = some(move(seg.data[mySlot]))
-        discard self.queue.itemCount.fetchSub(1, moRelaxed)
-        break
+      # STRICT-LCRQ-PARTIAL: was the published-bit gate + CAS-claim path:
+      #   if not seg.committed[mySlot].load(moAcquire): break
+      #   if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, ...):
+      #     result = some(move(seg.data[mySlot]))
+      #     discard self.queue.itemCount.fetchSub(1, moRelaxed)
+      #     break
+      # T4-T8 will replace with `tryClaim(seg.cells[mySlot], expectedSeq)`
+      # which subsumes both the publish-bit check and the value move.
+      # For T3 the slot is never published, so we break out empty —
+      # MPMC suite expected red.
+      discard prevIdx
+      break
 
   when ST == stEager:
     if h.advanceEvery(LockFreeQueuesAdvanceEvery):
@@ -1436,7 +1499,10 @@ when defined(testing):
       T; ccProd, ccCons: static PinScopeCardinality, S: static int
   ](_: typedesc[Segment[T, ccProd, ccCons, S]]): int =
     ## Test-only accessor: returns offset of `committed` for cardinality
-    ## combos that carry it (`ccProd == ccMulti`).
+    ## combos that carry it (`ccProd == ccMulti and ccCons == ccSingle`,
+    ## i.e. MPSC only). MPMC migrated to `cells` in Phase B and will
+    ## expose `segmentCellsOffsetForTest` in T10. Calling this with an
+    ## MPMC cardinality fails at the `offsetOf` site (field absent).
     offsetOf(Segment[T, ccProd, ccCons, S], committed)
 
   proc segmentPrevConsumerIdxOffsetForTest*[
