@@ -49,7 +49,11 @@ type
     priority: Priority
     workMs: int # Simulated work duration
 
-  JobQueue = Queue[Job, ccMulti, ccMulti, stEager, SegmentSize, MaxThreads]
+  # v5.0.0 strict-LCRQ MPMC requires `sizeof(T) <= 8` because the
+  # publish slot is `Atomic[Pair[uint, T]]` (128-bit DWCAS, seq + T).
+  # `Job` is 32 bytes, so we push `ptr Job` (8 bytes) instead and
+  # let producers heap-allocate / consumers free.
+  JobQueue = Queue[ptr Job, ccMulti, ccMulti, stEager, SegmentSize, MaxThreads]
 
   SubmitterContext = object
     queue: ptr JobQueue
@@ -65,7 +69,7 @@ var
   # to `lockfreequeues/internal/pinscope_stub.ccMulti` when the Queue
   # type is instantiated below.
   manager = initMultiConsumerManager[MaxThreads]()
-  queue = newUnboundedMpmcQueue[Job, stEager, SegmentSize, MaxThreads](addr manager)
+  queue = newUnboundedMpmcQueue[ptr Job, stEager, SegmentSize, MaxThreads](addr manager)
   running: Atomic[bool]
   jobsSubmitted: array[NumSubmitters, Atomic[int]]
   jobsCompleted: array[NumWorkers, Atomic[int]]
@@ -98,7 +102,12 @@ proc submitterThread(ctx: ptr SubmitterContext) {.thread.} =
         of pLow:
           rand(10 .. 30)
 
-      let job =
+      # Allocate Job on the heap; the consumer frees after work completes.
+      # `create` returns a non-nil `ptr Job`; `Option[ptr Job]` cannot
+      # transport nil through pop (design §11.2 guard), so we never push
+      # a nil pointer here.
+      let job = create(Job)
+      job[] =
         Job(id: jobId, submitterId: ctx.submitterId, priority: priority, workMs: workMs)
 
       producer.push(job)
@@ -122,13 +131,15 @@ proc workerThread(ctx: ptr WorkerContext) {.thread.} =
       let job = consumer.pop()
 
       if job.isSome:
-        let j = job.get
+        let jp = job.get
 
         # Simulate work
         let start = getMonoTime()
-        sleep(j.workMs)
+        sleep(jp.workMs)
         workTime += (getMonoTime() - start).inMilliseconds
 
+        # Free the producer-allocated Job now that work is done.
+        dealloc(jp)
         inc completed
       else:
         sleep(1)
