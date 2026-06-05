@@ -1657,8 +1657,24 @@ proc pop*[
         # == our reserved mySlot), advancing the consumer PAST the
         # reservation and orphaning the value the producer eventually
         # publishes — a latent data-loss bug fixed by this inner spin.
+        # Cycle-4 CRIT-1 fix: bounded spin + close-on-empty
+        # escalation. A producer that won the tail-CAS but stalls
+        # before tryPublish would otherwise leave us spinning
+        # forever on `inner.first == 0`. After
+        # `MaxWaitForPublishSpins` iterations (~ms on modern
+        # hardware with backoff), the consumer drives
+        # `tryCloseOnEmpty` on its reserved cell:
+        #   * close-success → treat the cell as closed (see below);
+        #     the stalled producer's eventual `tryPublish` will
+        #     fail and it will escalate to nextSeg per T9.
+        #   * close-fail (producer raced and published during our
+        #     budget) → retry tryClaim and exit.
+        const MaxWaitForPublishSpins = 1024
+        var noNextOnClose = false
         var fellThroughOnClose = false
+        var publishedDuringEscalation = false
         block waitForPublish:
+          var waitSpins = 0
           while true:
             backoffOnRetry(spins)
             let inner = load(seg.cells[mySlot], moAcquire)
@@ -1683,7 +1699,35 @@ proc pop*[
               # reservation makes peer-consumer interference
               # impossible). Re-inspect on next iteration.
               continue
-            # Still empty — keep spinning on this slot.
+            # Still empty. Bounded-spin budget for stalled producer.
+            inc waitSpins
+            if waitSpins >= MaxWaitForPublishSpins:
+              # CRIT-1: producer reserved tail but never published.
+              # Drive close-on-empty on our reserved cell.
+              if tryCloseOnEmpty[T](seg.cells[mySlot], 0'u):
+                # Successfully closed. The producer (if it resumes)
+                # will tryPublish-fail on this cell and escalate to
+                # nextSeg per T9. We treat this as case-(a) for our
+                # own escalation.
+                let nextSeg = seg.next.load(moAcquire)
+                if nextSeg == nil:
+                  noNextOnClose = true
+                  break waitForPublish
+                fellThroughOnClose = true
+                break waitForPublish
+              # tryCloseOnEmpty failed — producer published during
+              # our budget exhaustion. Loop iterates and the
+              # `inner.first != 0'u` branch above will claim the
+              # value on the next acquire-load.
+              publishedDuringEscalation = true
+              continue
+        if noNextOnClose:
+          # Closed cell with no successor segment: caller will retry,
+          # and the next pop's fast-path will see CLOSED at mySlot and
+          # route through the cycle-4 CRIT-2-fixed §5.3 fall-through,
+          # which handles the closed slot gracefully (skip-and-scan).
+          # For THIS call, queue is functionally drained from our PoV.
+          break
         if fellThroughOnClose:
           # Cycle-4 CRIT-2: cell at mySlot is closed; advance via
           # slow-path-style skip rather than retiring the segment.
@@ -1711,6 +1755,9 @@ proc pop*[
               closesSeenThisSegment = 0
           backoffOnRetry(spins)
           continue
+        # Suppress unused-warning paths.
+        discard publishedDuringEscalation
+        continue
       # prevConsumerIdx CAS lost to a peer consumer. Retry the outer
       # loop to re-read prevIdx and recompute mySlot.
       backoffOnRetry(spins)
