@@ -97,10 +97,34 @@ nim c -r --mm:orc  tests/mytest.nim
     the expected generation, which makes generation-rollover races
     structurally impossible (a stale claimant from a previous generation
     cannot win the CAS against a current-generation slot).
-  - **Unbounded multi-cardinality shapes** (SPMC, MPSC, MPMC) retain the
+  - **Unbounded multi-cardinality shapes** (SPMC, MPSC) retain the
     per-slot `committed` flag inside each segment. Segments are single-use
     linked nodes (no generation rollover), so the simpler one-shot committed
     flag is sufficient.
+  - **Unbounded MPMC** (v5.0.0 Phase B) is the exception: each cell is a
+    strict-LCRQ `(seq, payload)` pair manipulated via DWCAS, per the LCRQ
+    paper §4 close-CAS-on-empty progress rule. A consumer that observes an
+    empty cell can race to publish a `closed` sentinel, which resolves the
+    case-(b) consumer-reservation race in the pop fast-path. The `T`
+    constraint (`supportsCopyMem(T) AND sizeof(T) <= sizeof(uint)`) is what
+    keeps the cell single-DWCAS-word wide; see the Queue API page and the
+    v5.0.0 migration doc Phase B section for details.
+
+### Progress guarantees against stalled producers (unbounded MPMC)
+
+The unbounded MPMC consumer makes **bounded** progress even when a producer
+that has already reserved its tail slot is preempted (or dies) before it
+publishes. The consumer's wait for an unpublished cell is bounded by
+`MaxWaitForPublishSpins = 1024`; on budget exhaustion the consumer
+escalates via `tryCloseOnEmpty`, which either closes the cell (consumer
+moves on to the next claim) or accepts a just-in-time publish (consumer
+completes its original claim). The §5.3 CLOSED-detection branch falls
+through to the §5.2 slow-path inline-skip rather than short-circuiting to
+eager segment retirement, so a segment with one closed cell and one
+in-flight publish is never retired prematurely — `prevConsumerIdx`
+advances on both successful claims AND skipped-closed cells, and retirement
+is gated on full drain. The lock-free progress claim from the LCRQ paper
+§4 is enforced, not aspirational.
 
 ## Test matrix
 

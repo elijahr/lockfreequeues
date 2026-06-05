@@ -214,3 +214,13 @@ The green-gate commits are T8 (`33b8d49f`) and T9 (`cd8b27a1`); the
 CHANGELOG.md v5.0.0 has the full migration notes (BREAKING /
 Added / Removed / Fixed / Dependencies / Bisect-notes) under the
 "Phase B: strict-LCRQ migration on unbounded MPMC" subsection.
+
+Cycle-4 (post-T16) gemini fixes landed two correctness changes worth
+knowing when touching MPMC pop:
+- **CR-1**: `waitForPublish` is bounded by `MaxWaitForPublishSpins =
+  1024`, with escalation to `tryCloseOnEmpty` on budget exhaustion
+  (defends LCRQ §4 progress against stalled producers).
+- **CR-2**: the §5.3 CLOSED-detection branch falls through to the §5.2
+  slow-path inline-skip rather than short-circuiting to eager
+  retirement. Invariant change: `prevConsumerIdx` advances on **both**
+  successful claims AND skipped-closed cells (previously claim-count-only).

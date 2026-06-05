@@ -1276,6 +1276,38 @@ guarantee. The migration landed atomically across commits T0..T9 on
   argument is now well-formed under C11.
 - Case-(b) consumer-reservation race in the pop fast-path (the inner-
   spin pattern documented in Phase B design §5.3).
+- **CR-2 — premature segment retirement on CLOSED cells at low
+  index.** In the §5.3 CLOSED-detection branch, the consumer
+  previously short-circuited to the eager-retire path the moment it
+  observed a CLOSED cell, even when other live (or claimable) cells
+  remained in the segment. Under contention this could trigger
+  segment retirement while the producer for a higher-indexed cell
+  was still mid-publish, dropping the in-flight item. The CLOSED
+  branch now falls through to the §5.2 slow-path inline-skip, which
+  scans across closed cells without retiring; the invariant on
+  `prevConsumerIdx` is correspondingly broadened: **it advances on
+  both successful claims AND skipped-closed cells** (previously
+  documented as claim-count-only). Repro: `t_pop_cr2_premature_retire`
+  (committed in cycle-4).
+- **CR-1 — unbounded spin in `waitForPublish` when a producer
+  stalls.** A producer preempted (or killed) between its tail-CAS
+  reservation and its `tryPublish` left consumers spinning in
+  `waitForPublish` indefinitely, violating the lock-free progress
+  argument from LCRQ paper §4. The wait loop is now bounded by
+  `MaxWaitForPublishSpins = 1024`; when the budget is exhausted the
+  consumer escalates to `tryCloseOnEmpty` on the contested cell,
+  which either lets the consumer move on (cell closed) or restarts
+  the claim path (the late producer published just-in-time). Repro:
+  `t_pop_cr1_producer_stall` (committed in cycle-4). Lock-free
+  progress is now actually enforced, not merely asserted.
+- **32-bit cleanliness.** Test infrastructure that previously
+  hardcoded 8-byte assumptions has been rewritten in terms of
+  `sizeof(uint)`: `t_lcrq_cell_alias` asserts on `sizeof(uint) * 2`
+  (the cell width), the compile-time T-constraint error message is
+  generated dynamically rather than literal `"> 8 bytes"`, and the
+  unbounded MPMC stress-test uses `Atomic[int64]` for cross-thread
+  sums so 32-bit hosts do not overflow during the validation
+  reduction.
 
 #### Dependencies (Phase B)
 
