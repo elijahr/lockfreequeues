@@ -1433,18 +1433,117 @@ proc pop*[
           seg = self.queue.headSegment.load(moAcquire)
         backoffOnRetry(spins)
         continue
-      # STRICT-LCRQ-PARTIAL: was the published-bit gate + CAS-claim path:
-      #   if not seg.committed[mySlot].load(moAcquire): break
-      #   if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, ...):
-      #     result = some(move(seg.data[mySlot]))
-      #     discard self.queue.itemCount.fetchSub(1, moRelaxed)
-      #     break
-      # T4-T8 will replace with `tryClaim(seg.cells[mySlot], expectedSeq)`
-      # which subsumes both the publish-bit check and the value move.
-      # For T3 the slot is never published, so we break out empty —
-      # MPMC suite expected red.
-      discard prevIdx
-      break
+      # Strict-LCRQ MPMC fast-path consumer claim (design §5.3).
+      # Two-tier coordination:
+      #   1. `prevConsumerIdx.compareExchange` reserves ownership of
+      #      `mySlot` against peer consumers.
+      #   2. `tryClaim(seg.cells[mySlot], expectedSeq=0)` extracts the
+      #      value via DWCAS (subsumes the legacy published-bit gate
+      #      and the `move(seg.data[mySlot])` of the pre-strict-LCRQ
+      #      code path).
+      # Both layers are required: the cell DWCAS extracts the value
+      # but does not coordinate ownership; the prevConsumerIdx CAS
+      # coordinates ownership but does not extract the value.
+      if seg.prevConsumerIdx.compareExchange(prevIdx, mySlot, moAcquire, moRelaxed):
+        let claimed = tryClaim[T](seg.cells[mySlot], 0'u64)
+        if claimed.isSome:
+          result = claimed
+          discard self.queue.itemCount.fetchSub(1, moRelaxed)
+          break
+        # tryClaim returned none. Distinguish via fresh acquire-load:
+        #   (a) CLOSED_BIT set — a peer consumer drove close-on-empty
+        #       on our reserved slot between the prevConsumerIdx-CAS
+        #       and the tryClaim. The cell is PERMANENTLY closed;
+        #       spinning on it is a livelock. Escalate to nextSeg
+        #       (HIGH-3 remediation, design §5.3). The reservation in
+        #       prevConsumerIdx is left in place: it does not "free
+        #       up" mySlot for another consumer because a closed cell
+        #       cannot be claimed by anyone, so the reservation is
+        #       functionally moot.
+        #   (b) cell empty (seq == 0) — producer raced our tail-load
+        #       and has not yet published. Retry on the next outer
+        #       loop iteration.
+        let recheck = load(seg.cells[mySlot], moAcquire)
+        if (recheck.first and CLOSED_BIT) != 0'u64:
+          let nextSeg = seg.next.load(moAcquire)
+          if nextSeg == nil:
+            break
+          if self.queue[].retireOnCAS(
+            scope,
+            self.queue.headSegment,
+            seg,
+            nextSeg,
+            segmentDestructor[T, ccMulti, ccMulti, S],
+          ):
+            when ST != stManual:
+              discard self.queue.segments.fetchSub(1, moRelaxed)
+            seg = nextSeg
+          else:
+            seg = self.queue.headSegment.load(moAcquire)
+          backoffOnRetry(spins)
+          continue
+        # Case (b): producer mid-publish. We have already reserved
+        # `mySlot` via the prevConsumerIdx CAS; that reservation is
+        # ours until the producer publishes (or the cell is closed).
+        # Spin on the SAME mySlot until publication. Returning to the
+        # outer loop would re-derive mySlot from prevConsumerIdx (now
+        # == our reserved mySlot), advancing the consumer PAST the
+        # reservation and orphaning the value the producer eventually
+        # publishes — a latent data-loss bug fixed by this inner spin.
+        var closedEscalated = false
+        var noNextOnClose = false
+        block waitForPublish:
+          while true:
+            backoffOnRetry(spins)
+            let inner = load(seg.cells[mySlot], moAcquire)
+            if (inner.first and CLOSED_BIT) != 0'u64:
+              # Cell was closed while we waited (close-on-empty raced
+              # the producer). Escalate to nextSeg, same as case (a).
+              let nextSeg = seg.next.load(moAcquire)
+              if nextSeg == nil:
+                noNextOnClose = true
+                break waitForPublish
+              if self.queue[].retireOnCAS(
+                scope,
+                self.queue.headSegment,
+                seg,
+                nextSeg,
+                segmentDestructor[T, ccMulti, ccMulti, S],
+              ):
+                when ST != stManual:
+                  discard self.queue.segments.fetchSub(1, moRelaxed)
+                seg = nextSeg
+              else:
+                seg = self.queue.headSegment.load(moAcquire)
+              closedEscalated = true
+              break waitForPublish
+            if inner.first != 0'u64:
+              # Producer published. Claim the value.
+              let claimed = tryClaim[T](seg.cells[mySlot], 0'u64)
+              if claimed.isSome:
+                result = claimed
+                discard self.queue.itemCount.fetchSub(1, moRelaxed)
+                when ST == stEager:
+                  if h.advanceEvery(LockFreeQueuesAdvanceEvery):
+                    discard reclaimNow(h)
+                return
+              # tryClaim raced a CLOSED transition (defensive — the
+              # reservation makes peer-consumer interference
+              # impossible). Re-inspect on next iteration.
+              continue
+            # Still empty — keep spinning on this slot.
+        if noNextOnClose:
+          # Closed cell with no successor segment: queue is drained.
+          # Matches the case (a) `nextSeg == nil: break` exit.
+          break
+        # Otherwise closedEscalated is true: seg has been advanced;
+        # retry the outer loop on the new segment.
+        discard closedEscalated
+        continue
+      # prevConsumerIdx CAS lost to a peer consumer. Retry the outer
+      # loop to re-read prevIdx and recompute mySlot.
+      backoffOnRetry(spins)
+      continue
 
   when ST == stEager:
     if h.advanceEvery(LockFreeQueuesAdvanceEvery):
