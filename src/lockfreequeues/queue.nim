@@ -1187,12 +1187,19 @@ proc push*[
         var expected = tail
         if seg.tail.compareExchange(expected, tail + 1, moAcquire, moRelaxed):
           when ccCons == ccMulti:
-            # STRICT-LCRQ-PARTIAL: MPMC publish. T4 will replace this with
-            # `tryPublish(seg.cells[tail], expectedSeq, item)` keyed on the
-            # cell's seq counter. For T3, the slot reservation succeeds
-            # but no value is stored (item drops via sink destructor) —
-            # MPMC suite is expected red across T3..T7.
-            wasMoved(item)
+            # Strict-LCRQ MPMC publish via DWCAS into `cells[tail]`.
+            # `expectedSeq = 0` is the invariant at v5.0.0 call sites
+            # (linked-segment specialization, R degenerate per design
+            # §2.5 / §2.5.3). On CAS failure the cell was unexpectedly
+            # filled or closed — escalate via outer-loop retry; the
+            # close-on-empty arbitration that motivates this escalation
+            # lands with T9.
+            if not tryPublish[T](seg.cells[tail], 0'u64, item):
+              # STRICT-LCRQ-PARTIAL: T9 wires close-CAS-on-empty here — on
+              # closed cell, must escalate to seg.next (not just bump tail).
+              # Currently behaves correctly for non-closed failure (tail-CAS
+              # rolls).
+              continue
           else:
             # MPSC: legacy committed+data publish (unchanged).
             seg.data[tail] = item

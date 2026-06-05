@@ -33,6 +33,7 @@ import ./t_queue_strategy_phantom
 import ./t_lcrq_cell_alias
 import ./t_lcrq_cell_primitives
 import ./t_lcrq_init
+import ./t_lcrq_push_single
 
 import ./t_wraparound
 
@@ -45,4 +46,5 @@ export
   t_unbounded_mpmc_threaded, t_unbounded_mpsc, t_unbounded_mpsc_threaded,
   t_unbounded_padding, t_unbounded_spmc, t_unbounded_spmc_threaded, t_unbounded_spsc,
   t_unbounded_spsc_threaded, t_unbounded_auto_create, t_queue_strategy_phantom,
-  t_lcrq_cell_alias, t_lcrq_cell_primitives, t_lcrq_init, t_wraparound
+  t_lcrq_cell_alias, t_lcrq_cell_primitives, t_lcrq_init, t_lcrq_push_single,
+  t_wraparound
