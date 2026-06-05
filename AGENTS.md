@@ -191,7 +191,7 @@ If a doc isn't reachable from one of those, it shouldn't be tracked.
 
 - Bot username: `gemini-code-assist`
 - Re-review comment: `/gemini review`
-- Auto-reviews on PR creation: yes (also fires on each push)
+- Auto-reviews on PR creation: no — manual `/gemini review` comment required every cycle (including the first)
 - Parallel bot: `axiomantic-momus` (fires automatically via
   `.github/workflows/momus.yml`)
 - Gating priority: gemini gates the PR; momus is informational unless
