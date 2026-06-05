@@ -1676,7 +1676,6 @@ proc pop*[
         #   * close-fail (producer raced and published during our
         #     budget) → retry tryClaim and exit.
         const MaxWaitForPublishSpins = 1024
-        var noNextOnClose = false
         var fellThroughOnClose = false
         block waitForPublish:
           var waitSpins = 0
@@ -1710,14 +1709,17 @@ proc pop*[
               # CRIT-1: producer reserved tail but never published.
               # Drive close-on-empty on our reserved cell.
               if tryCloseOnEmpty[T](seg.cells[mySlot], 0'u):
-                # Successfully closed. The producer (if it resumes)
-                # will tryPublish-fail on this cell and escalate to
-                # nextSeg per T9. We treat this as case-(a) for our
-                # own escalation.
-                let nextSeg = seg.next.load(moAcquire)
-                if nextSeg == nil:
-                  noNextOnClose = true
-                  break waitForPublish
+                # Successfully closed. Treat identically to "cell was
+                # already closed when we observed it" (the L1686 branch
+                # above): fall through to the slow-path-style skip so
+                # the outer loop scans the rest of the segment. Items
+                # published at indices > mySlot must not be orphaned
+                # regardless of whether `seg.next == nil` at this
+                # moment — if scanning past tail eventually finds the
+                # segment truly empty, the slow path returns `none(T)`
+                # cleanly. The producer (if it resumes) will
+                # tryPublish-fail on the closed cell and escalate to
+                # nextSeg per T9.
                 fellThroughOnClose = true
                 break waitForPublish
               # tryCloseOnEmpty failed — producer published during
@@ -1725,13 +1727,6 @@ proc pop*[
               # `inner.first != 0'u` branch above will claim the
               # value on the next acquire-load.
               continue
-        if noNextOnClose:
-          # Closed cell with no successor segment: caller will retry,
-          # and the next pop's fast-path will see CLOSED at mySlot and
-          # route through the cycle-4 CRIT-2-fixed §5.3 fall-through,
-          # which handles the closed slot gracefully (skip-and-scan).
-          # For THIS call, queue is functionally drained from our PoV.
-          break
         if fellThroughOnClose:
           # Cycle-4 CRIT-2: cell at mySlot is closed; advance via
           # slow-path-style skip rather than retiring the segment.
