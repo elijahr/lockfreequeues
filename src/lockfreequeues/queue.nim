@@ -1144,9 +1144,11 @@ proc push*[
       when sizeof(T) > sizeof(uint):
         {.
           error: """
-Queue[T, ccMulti, ccMulti, ...] requires sizeof(T) <= 8 starting in v5.0.0.
-The strict-LCRQ migration uses 128-bit DWCAS (Atomic[Pair[uint, T]]),
-which constrains T to fit in 8 bytes alongside the seq counter.
+Queue[T, ccMulti, ccMulti, ...] requires sizeof(T) <= sizeof(uint) starting
+in v5.0.0 (8 bytes on 64-bit targets, 4 bytes on 32-bit). The strict-LCRQ
+migration uses double-word CAS (Atomic[Pair[uint, T]]); on 64-bit hardware
+this is 128-bit DWCAS, on 32-bit it is 64-bit. T must fit alongside the
+platform-native seq counter.
 For wide T payloads, use BQueue[T] (bounded MPMC, Vyukov per-slot seq)
 which preserves move-only T support. See CHANGELOG.md v5.0.0 BREAKING.
 """

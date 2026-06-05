@@ -19,11 +19,13 @@
 ##    intended downstream entry point; spelling out the payload pair
 ##    is only used here to prove the alias is transparent.
 ##
-## 3. `sizeof(LCRQCell[int]) == 16` — the DWCAS-width invariant that
-##    the entire strict-LCRQ progress argument (design §2.1, §4)
-##    rests on. A pessimization that widened the cell (e.g. an extra
-##    flag field) would break 128-bit atomicity and would silently
-##    degrade to a non-lock-free path.
+## 3. `sizeof(LCRQCell[int]) == sizeof(uint) * 2` — the DWCAS-width
+##    invariant that the entire strict-LCRQ progress argument
+##    (design §2.1, §4) rests on. On 64-bit targets this is 16 bytes
+##    (128-bit DWCAS); on 32-bit targets it is 8 bytes (64-bit DWCAS).
+##    A pessimization that widened the cell (e.g. an extra flag field)
+##    would break double-word atomicity and would silently degrade to
+##    a non-lock-free path.
 ##
 ## 4. `CLOSED_BIT == 1'u shl (sizeof(uint)*8 - 1)` — the §4 close
 ##    sentinel must occupy the high bit so the empty/filled epoch
@@ -71,19 +73,22 @@ suite "LCRQCell[T] alias + CLOSED_BIT + Pair re-export (T1 smoke)":
     check p.first == 7'u
     check p.second == 42
 
-  test "3. sizeof(LCRQCell[int]) == 16 (DWCAS width invariant)":
+  test "3. sizeof(LCRQCell[int]) == sizeof(uint) * 2 (DWCAS width invariant)":
     # The strict-LCRQ progress argument (design §2.1, §4) requires
-    # that each cell fit in a single 128-bit DWCAS operand. A widened
-    # cell would silently lose lock-freedom by falling back to the
-    # libatomic path or by splitting the operation. Pin the width.
-    check sizeof(LCRQCell[int]) == 16
+    # that each cell fit in a single double-word CAS operand. On
+    # 64-bit targets (sizeof(uint)==8) that is 16 bytes / 128-bit
+    # DWCAS; on 32-bit targets (sizeof(uint)==4) that is 8 bytes /
+    # 64-bit DWCAS. A widened cell would silently lose lock-freedom
+    # by falling back to the libatomic path or by splitting the
+    # operation. Pin the width relative to sizeof(uint).
+    check sizeof(LCRQCell[int]) == sizeof(uint) * 2
     static:
-      doAssert sizeof(LCRQCell[int]) == 16,
-        "LCRQCell[int] must be exactly 16 bytes for 128-bit DWCAS"
-      doAssert sizeof(LCRQCell[uint64]) == 16,
-        "LCRQCell[uint64] must be exactly 16 bytes for 128-bit DWCAS"
-      doAssert sizeof(LCRQCell[pointer]) == 16,
-        "LCRQCell[pointer] must be exactly 16 bytes for 128-bit DWCAS"
+      doAssert sizeof(LCRQCell[int]) == sizeof(uint) * 2,
+        "LCRQCell[int] must be sizeof(uint)*2 bytes for DWCAS"
+      doAssert sizeof(LCRQCell[uint]) == sizeof(uint) * 2,
+        "LCRQCell[uint] must be sizeof(uint)*2 bytes for DWCAS"
+      doAssert sizeof(LCRQCell[pointer]) == sizeof(uint) * 2,
+        "LCRQCell[pointer] must be sizeof(uint)*2 bytes for DWCAS"
 
   test "4. CLOSED_BIT == 1'u shl (sizeof(uint)*8 - 1) (close sentinel bit position)":
     # The §4 close-on-empty progress argument requires the close

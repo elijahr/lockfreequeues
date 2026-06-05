@@ -98,7 +98,7 @@ type
     queue: ptr Queue[int, ccMulti, ccMulti, stEager, SegmentSize, MaxThreads]
     producersDone: ptr Atomic[int]
     consumedCount: ptr Atomic[int]
-    consumedSum: ptr Atomic[int]
+    consumedSum: ptr Atomic[int64]
     duplicateFound: ptr Atomic[bool]
     received: ptr array[TotalItems, Atomic[bool]]
 
@@ -120,7 +120,7 @@ proc consumerProc(ctx: ptr CCtx) {.thread.} =
         let idx = v - 1 # values are 1..TotalItems (1-indexed)
         if ctx.received[idx].exchange(true, moRelaxed):
           ctx.duplicateFound[].store(true, moRelaxed)
-        discard ctx.consumedSum[].fetchAdd(v, moRelaxed)
+        discard ctx.consumedSum[].fetchAdd(v.int64, moRelaxed)
         if ctx.consumedCount[].fetchAdd(1, moRelaxed) + 1 >= TotalItems:
           break
       elif ctx.producersDone[].load(moAcquire) >= ProducerCount:
@@ -131,14 +131,14 @@ suite "T6.C3: MPMC pop case-(b) race — no orphaned values under stress":
   var
     producersDone: Atomic[int]
     consumedCount: Atomic[int]
-    consumedSum: Atomic[int]
+    consumedSum: Atomic[int64]
     duplicateFound: Atomic[bool]
     received: array[TotalItems, Atomic[bool]]
 
   setup:
     producersDone.store(0, moRelaxed)
     consumedCount.store(0, moRelaxed)
-    consumedSum.store(0, moRelaxed)
+    consumedSum.store(0'i64, moRelaxed)
     duplicateFound.store(false, moRelaxed)
     for i in 0 ..< TotalItems:
       received[i].store(false, moRelaxed)
@@ -183,7 +183,7 @@ suite "T6.C3: MPMC pop case-(b) race — no orphaned values under stress":
     let expectedSum = (TotalItems.int64 * (TotalItems.int64 + 1)) div 2
     check(consumedCount.load(moRelaxed) == TotalItems)
     check(not duplicateFound.load(moRelaxed))
-    check(consumedSum.load(moRelaxed).int64 == expectedSum)
+    check(consumedSum.load(moRelaxed) == expectedSum)
     # Every value [1..TotalItems] must have been consumed exactly once.
     for i in 0 ..< TotalItems:
       check(received[i].load(moRelaxed))
