@@ -427,12 +427,19 @@ proc newSegment[T; ccProd, ccCons: static PinScopeCardinality, S: static int]():
     # mpsc-equiv + absorbed spsc-equiv carry a `head: int` field.
     result.head = 0
   when ccProd == ccMulti and ccCons == ccMulti:
-    # STRICT-LCRQ-PARTIAL: MPMC cells live-zero init. The seq counter
-    # for slot i has empty-sentinel value `i` (LCRQ paper §3); T4-T8
-    # will wire publish/claim against this layout. For now, cells are
-    # zero-initialized (allocAligned zeroes the page), which gives
-    # seq=0 for every slot. The empty-sentinel reseed happens in T4.
-    discard
+    # MPMC strict-LCRQ: each cell starts in the §2.5.1 empty state
+    # `(seq=0, default(T))`. While `allocAligned` already returns
+    # zero-initialized memory (so this loop is observationally a
+    # no-op for the cell-shape we ship), the explicit relaxed store
+    # is the correct-by-construction publication of the design's
+    # empty-cell encoding and pins the invariant against any future
+    # change to the allocator or to `default(T)` for non-trivial T.
+    # Synchronization: relaxed is sufficient — the segment is not
+    # visible to other threads until the producer/consumer link it
+    # into the queue chain via a release-store.
+    let zero = Pair[uint64, T](first: 0'u64, second: default(T))
+    for i in 0 ..< S:
+      store(result.cells[i], zero, moRelaxed)
   elif ccProd == ccMulti:
     # MPSC: legacy committed flags init (unchanged).
     for i in 0 ..< S:
