@@ -1216,6 +1216,83 @@ v4.3-no-post-release-deferral rule's spirit because the work is not
 silently dropped — it is explicitly tracked here as orphan with a named
 destination subsystem.
 
+### Phase B: strict-LCRQ migration on unbounded MPMC
+
+Late in the v5.0.0 cycle, the unbounded `Queue[T, ccMulti, ccMulti, ...]`
+arm was migrated from a `committed: array[S, Atomic[bool]]` overlay onto
+strict-LCRQ cells per the LCRQ paper §4 close-CAS-on-empty progress
+guarantee. The migration landed atomically across commits T0..T9 on
+`feat/v5.0.0-strict-lcrq` (T10..T16 are follow-on cleanup + docs).
+
+#### 🚨 BREAKING CHANGES (Phase B)
+
+- **`Queue[T, ccMulti, ccMulti, ...]` (unbounded MPMC) now requires
+  `supportsCopyMem(T) AND sizeof(T) <= 8`.** The strict-LCRQ cell layout
+  is a packed 128-bit DWCAS word; T must fit in the 8-byte value lane and
+  must be trivially copyable. Wider T or non-trivially-copyable T is
+  rejected at compile time with a `{.error.}` overload that cites the
+  migration path below.
+- **Migration:** for wider T (anything larger than 8 bytes, or move-only /
+  ref-type / non-`supportsCopyMem` T), use `BQueue[T, ccMulti, ccMulti,
+  N, P, C]` (bounded MPMC, Vyukov per-slot seq). `BQueue` is unchanged
+  in v5.0.0 and preserves general T support including move-only types.
+  For T that fits in 8 bytes and is trivially copyable (integers,
+  pointers, small `distinct` integer types, etc.), no source change is
+  required.
+
+#### Added (Phase B)
+
+- Strict-LCRQ migration on unbounded MPMC queue per the LCRQ paper §4
+  close-CAS-on-empty progress guarantee. Resolves the case-(b)
+  consumer-reservation race in the pop fast-path via an inner-spin
+  pattern (Phase B design §5.3).
+- New cell primitives on `LCRQCell[T]`: `tryPublish`, `tryClaim`, and
+  `tryCloseOnEmpty`. These wrap the DWCAS operations on the packed
+  128-bit cell word and form the strict-LCRQ surface used by the MPMC
+  arm.
+- Compile-time `{.error.}` guards on T-constraint violation with
+  migration guidance pointing at `BQueue[T]`.
+- Test infrastructure: `t_lcrq_cell_*`, `t_lcrq_init`,
+  `t_lcrq_push_single`, `t_lcrq_pop_single`, `t_lcrq_pop_race`,
+  `t_lcrq_pop_slowpath`, `t_lcrq_push_close_race`,
+  `t_bqueue_mpmc_wide_T_accepted`, and the
+  `should_fail/unbounded_mpmc_wide_T_rejected` negative control.
+
+#### Removed (Phase B)
+
+- Internal `committed: array[S, Atomic[bool]]` + `data: array[S, T]`
+  overlay on the MPMC arm. Replaced by `cells: array[S, LCRQCell[T]]`.
+- `t_queue_unbounded_mpmc_move_analyzer.nim` — the capability it covered
+  (move-only T on unbounded MPMC) was removed by the T narrowing above.
+  Coverage is preserved on the BQueue twin
+  (`t_bqueue_mpmc_wide_T_accepted` plus the move-only test that already
+  exercises `BQueue`).
+
+#### Fixed (Phase B)
+
+- C11-incorrect CAS ordering pairs at `typestates/cas.nim:54` and
+  `endpoint.nim:223` / `endpoint.nim:258`. Forced-fallout from debra
+  v0.10.0's `validCasFailureOrder` strictening; the failure-order
+  argument is now well-formed under C11.
+- Case-(b) consumer-reservation race in the pop fast-path (the inner-
+  spin pattern documented in Phase B design §5.3).
+
+#### Dependencies (Phase B)
+
+- `debra` bumped to `>= 0.10.0` for the DWCAS surface used by the
+  strict-LCRQ cell primitives.
+
+#### Bisect notes (Phase B)
+
+The T3..T7 commit range (`77c7f20c..51f10b63` on
+`feat/v5.0.0-strict-lcrq`) intentionally contains partial-migration
+states marked with `STRICT-LCRQ-PARTIAL` sentinels in source. These
+commits do NOT pass the full test suite by design — they are interior
+points in the atomic migration. When bisecting through this range, use
+`git bisect skip` for SHAs in `77c7f20c..51f10b63`. The green-gate
+commits are T8 (`33b8d49f`) and T9 (`cd8b27a1`); STRICT-LCRQ-PARTIAL
+marker count is 0 at T9 and at all post-T9 commits.
+
 ### References
 
 - [Migration guide](docs/migration.md) — full migration table from
