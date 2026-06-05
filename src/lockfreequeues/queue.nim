@@ -165,16 +165,18 @@ proc tryPublish*[T](
   ## Returns false if the cell is already filled, closed, or at a
   ## different epoch.
   ##
-  ## Precondition for `T is ptr|ref`: `value` MUST NOT be nil. The
-  ## std/options transport used by `tryClaim` (`some(val: ptr X)`)
-  ## asserts `not val.isNil` at runtime; forbidding nil here surfaces
-  ## the contract violation at the producer rather than as a delayed
+  ## Precondition for nullable T (`ptr`, `ref`, `pointer`, `cstring`,
+  ## `proc`, closures): `value` MUST NOT be nil. The std/options
+  ## transport used by `tryClaim` (`some(val)`) asserts `not val.isNil`
+  ## at runtime for nullable types; forbidding nil here surfaces the
+  ## contract violation at the producer rather than as a delayed
   ## AssertionDefect inside an unrelated consumer's `tryClaim` call.
   ## See design §2.5.2 / §11. `doAssert` (not `assert`) so the guard
-  ## survives `-d:danger` builds.
-  when T is ptr or T is ref:
-    doAssert value != nil,
-      "Queue: cannot push nil for ptr/ref T (Option transport restriction)"
+  ## survives `-d:danger` builds. `when compiles(value.isNil)` covers
+  ## every nullable type Nim exposes (broader than `T is ptr or ref`).
+  when compiles(value.isNil):
+    doAssert not value.isNil,
+      "Queue: cannot push nil for nullable T (Option transport restriction)"
   let expected = Pair[uint, T](first: expectedSeq, second: default(T))
   let desired = Pair[uint, T](first: expectedSeq + 1, second: value)
   var prev = expected
