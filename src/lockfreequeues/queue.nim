@@ -515,10 +515,13 @@ proc segmentDestructor[T; ccProd, ccCons: static PinScopeCardinality, S: static 
   when not supportsCopyMem(T):
     let seg = cast[ptr Segment[T, ccProd, ccCons, S]](p)
     when ccProd == ccMulti and ccCons == ccMulti:
-      # STRICT-LCRQ-PARTIAL: MPMC payload lives inside `cells[i]` as
-      # `Pair[uint64, T].value`. T4-T8 will reset embedded T's via
-      # the cell's value field. For T3, the reset is intentionally
-      # elided — MPMC suite is expected red across T3..T7.
+      # Strict-LCRQ cells contain `Pair[uint64, T]` where T is constrained
+      # to `supportsCopyMem(T) and sizeof(T) <= 8` (design §11.2). Cells
+      # are therefore trivially destructible — no per-cell finalization
+      # is required. This arm is statically unreachable for valid MPMC
+      # instantiations (gated by the outer `when not supportsCopyMem(T)`)
+      # and is retained only to document the contract. The cell storage
+      # itself is reclaimed by the `freeAligned(p)` call below.
       discard
     elif ccProd == ccMulti:
       # MPSC: legacy data array.
@@ -981,8 +984,14 @@ proc `=destroy`*[
     let nextSeg = seg.next.load(moRelaxed)
     when not supportsCopyMem(T):
       when ccProd == ccMulti and ccCons == ccMulti:
-        # STRICT-LCRQ-PARTIAL: MPMC payload lives in `cells[i].value`.
-        # T4-T8 will reset embedded T's via the cell's value field.
+        # Strict-LCRQ cells contain `Pair[uint64, T]` where T is
+        # constrained to `supportsCopyMem(T) and sizeof(T) <= 8`
+        # (design §11.2). Cells are therefore trivially destructible
+        # and require no per-cell finalization at queue teardown. This
+        # arm is statically unreachable for valid MPMC instantiations
+        # (gated by the outer `when not supportsCopyMem(T)`) and is
+        # retained only to document the contract. Segment storage is
+        # reclaimed by `freeAligned(seg)` below.
         discard
       elif ccProd == ccMulti:
         # MPSC: legacy data array.
