@@ -117,6 +117,93 @@ type LCRQCell*[T] = Atomic[Pair[uint64, T]]
   ## from the spelled-out type requires no conversion. See design
   ## §2.1 (cell shape) and §4 (close-on-empty progress argument).
 
+# ----------------------------------------------------------------------
+# Strict-LCRQ cell primitives (Phase B / §2.3, §2.3.1, §8).
+#
+# Three pure DWCAS primitives on `LCRQCell[T]`. Each is a single
+# `compareExchangeStrong` wrapped in `dwcasOrderRelaxedCAS` to silence
+# the nim-debra `validCasFailureOrder` warning that fires for the
+# `success=moRelease, failure=moRelaxed` pair on DWCAS sites where the
+# seq_cst-upgrade would be a perf footgun (design §8 closing
+# paragraphs).
+#
+# Memory ordering per design §8 / §8.1 (C11-strict, no upgrades):
+#   tryPublish:        success = moRelease,        failure = moRelaxed
+#   tryClaim:          success = moAcquireRelease, failure = moRelaxed
+#   tryCloseOnEmpty:   success = moRelease,        failure = moRelaxed
+#
+# `tryClaim`'s seq-load uses `moAcquire` to synchronise-with the
+# producer's `moRelease` publish — the CAS-failure ordering only
+# governs the failure-path re-read, which we discard.
+#
+# CRITICAL contract correction over the Phase A.5 spike (design §2.3.1
+# / CRITICAL-1): `tryClaim` NEVER inspects `observed.second`. The CAS
+# on the seq encoding is the SOLE authority on cell state. The spike's
+# `if observed.second == default(T): return none(T)` short-circuit
+# silently dropped legitimate `q.push(0)` / `q.push(nil)` publishes;
+# the production primitive does not.
+#
+# `expectedSeq` is invariantly `0` at v5.0.0 call sites (linked-segment
+# specialization, R degenerate per design §2.5 / §2.5.3); the parameter
+# is retained on the primitive signatures with a documented roadmap
+# trigger for a future ring-segment variant.
+# ----------------------------------------------------------------------
+
+proc tryPublish*[T](cell: var LCRQCell[T], expectedSeq: uint64, value: T): bool =
+  ## §2.3 / §4. Producer publish via DWCAS into an empty cell.
+  ## Returns true on success (cell now `(expectedSeq+1, value)`).
+  ## Returns false if the cell is already filled, closed, or at a
+  ## different epoch.
+  ##
+  ## Precondition for `T is ptr|ref`: `value` MUST NOT be nil. The
+  ## std/options transport used by `tryClaim` (`some(val: ptr X)`)
+  ## asserts `not val.isNil` at runtime; forbidding nil here surfaces
+  ## the contract violation at the producer rather than as a delayed
+  ## AssertionDefect inside an unrelated consumer's `tryClaim` call.
+  ## See design §2.5.2 / §11. `doAssert` (not `assert`) so the guard
+  ## survives `-d:danger` builds.
+  when T is ptr or T is ref:
+    doAssert value != nil,
+      "Queue: cannot push nil for ptr/ref T (Option transport restriction)"
+  let expected = Pair[uint64, T](first: expectedSeq, second: default(T))
+  let desired = Pair[uint64, T](first: expectedSeq + 1, second: value)
+  var prev = expected
+  # On CAS failure, debra writes the observed pair into `prev`; we don't
+  # re-read it — escalation re-loads via fresh cell.load at the call site
+  # (queue.nim push/pop). Required for the degenerate-R encoding (design §2.5.2).
+  dwcasOrderRelaxedCAS:
+    result = compareExchangeStrong(cell, prev, desired, moRelease, moRelaxed)
+
+proc tryClaim*[T](cell: var LCRQCell[T], expectedSeq: uint64): Option[T] =
+  ## §2.3 / §2.3.1 (CRITICAL-1). Consumer claim via DWCAS.
+  ##
+  ## CONTRACT: NEVER inspect `observed.second`. The CAS on the seq
+  ## encoding is the sole authority on cell state. A filled cell with
+  ## payload `default(T)` (e.g. `q.push(0)`, `q.push(nil)`) is a
+  ## legitimate publish and MUST be returned via `some(observed.second)`.
+  let observed = load(cell, moAcquire)
+  if observed.first != expectedSeq + 1:
+    return none(T)
+  let desired = Pair[uint64, T](first: observed.first, second: default(T))
+  var prev = observed
+  dwcasOrderRelaxedCAS:
+    if compareExchangeStrong(cell, prev, desired, moAcquireRelease, moRelaxed):
+      return some(observed.second)
+  return none(T)
+
+proc tryCloseOnEmpty*[T](cell: var LCRQCell[T], expectedSeq: uint64): bool =
+  ## §2.3 / §4. Consumer close-on-empty via DWCAS. Atomically sets
+  ## `CLOSED_BIT` on an empty cell so no producer can later publish
+  ## into it. Returns false if the cell is already filled or closed.
+  let expected = Pair[uint64, T](first: expectedSeq, second: default(T))
+  let desired = Pair[uint64, T](first: expectedSeq or CLOSED_BIT, second: default(T))
+  var prev = expected
+  # On CAS failure, debra writes the observed pair into `prev`; we don't
+  # re-read it — escalation re-loads via fresh cell.load at the call site
+  # (queue.nim push/pop). Required for the degenerate-R encoding (design §2.5.2).
+  dwcasOrderRelaxedCAS:
+    result = compareExchangeStrong(cell, prev, desired, moRelease, moRelaxed)
+
 ## ----------------------------------------------------------------------
 ## Middle-axis Lifecycle typestate.
 ##
