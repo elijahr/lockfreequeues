@@ -82,7 +82,7 @@ jobs:
             nim-version: 'stable'
             sanitize-threads: 'yes'
             sanitize-address: 'yes'
-            timeout: 25
+            timeout: 45
           # ---- devel (informational, non-gating via continue-on-error) ----
           - runs-on: ubuntu-latest
             nim-version: 'devel'
