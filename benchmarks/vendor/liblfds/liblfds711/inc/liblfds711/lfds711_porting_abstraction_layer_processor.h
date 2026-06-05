@@ -102,11 +102,11 @@
   #define LFDS711_PAL_ATOMIC_ISOLATION_IN_BYTES   2048
 
 #endif
-  
-  
-  
-  
-  
+
+
+
+
+
 /****************************************************************************/
 #if( defined __GNUC__ && defined __arm__ )
 
@@ -456,4 +456,3 @@
   #error No matching porting abstraction layer in "lfds711_porting_abstraction_layer_processor.h".
 
 #endif
-

@@ -22,7 +22,6 @@ var
   # with 32 producer & 32 consumer workers
   q = newMpmcQueue[int, 8, 32, 32]()
 
-
 proc consumerFunc() {.thread.} =
   # Get a unique consumer for this thread
   var consumer = q.getConsumerHere()
@@ -37,7 +36,6 @@ proc consumerFunc() {.thread.} =
 
   echo "[consumer ", consumer.idx, "] popped items: ", items
 
-
 proc producerFunc() {.thread.} =
   # Get a unique producer for this thread
   var producer = q.getProducerHere()
@@ -47,29 +45,27 @@ proc producerFunc() {.thread.} =
   # Try to push a single item; push will return false when queue is full
   echo "[producer ", producer.idx, "] pushed item: ", item, "? ", producer.push(item)
 
-  let items = @[
-    rand(100),
-    rand(100),
-    rand(100),
-    rand(100),
-  ]
+  let items = @[rand(100), rand(100), rand(100), rand(100)]
 
   # v5.0.0: batch push returns Option[HSlice[int, int]] — none if all
   # items pushed, some(slice) for unpushed indices.
   let remainder = producer.push(items)
   if remainder.isSome:
-    echo "[producer ", producer.idx, "] pushed items ",
-      items[0 ..< remainder.get.a], "; unpushed: ", items[remainder.get]
+    echo "[producer ",
+      producer.idx,
+      "] pushed items ",
+      items[0 ..< remainder.get.a],
+      "; unpushed: ",
+      items[remainder.get]
   else:
     echo "[producer ", producer.idx, "] pushed all items: ", items
 
-
 var threads: array[64, Thread[void]]
 
-for p in 0..<32:
+for p in 0 ..< 32:
   threads[p].createThread(producerFunc)
 
-for c in 32..<64:
+for c in 32 ..< 64:
   threads[c].createThread(consumerFunc)
 
 joinThreads(threads)

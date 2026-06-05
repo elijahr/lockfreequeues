@@ -36,8 +36,8 @@ when defined(adapter_atomic_queue_available):
   import ../bench_common
   import ../adapter
 
-  const VendorDir = currentSourcePath().parentDir.parentDir.parentDir &
-    "/vendor/atomic_queue"
+  const VendorDir =
+    currentSourcePath().parentDir.parentDir.parentDir & "/vendor/atomic_queue"
     ## Resolved at compile time: `benchmarks/vendor/atomic_queue` under
     ## the repo root regardless of where the bench binary is invoked
     ## from. `parentDir` walks `adapters/` -> `nim/` -> `benchmarks/`.
@@ -46,8 +46,8 @@ when defined(adapter_atomic_queue_available):
   {.compile: VendorDir & "/atomic_queue_wrapper.cpp".}
 
   proc aq_init(capacity: culonglong): pointer {.importc, cdecl.}
-  proc aq_push(q: pointer; item: culonglong): cint {.importc, cdecl.}
-  proc aq_pop(q: pointer; outVal: ptr culonglong): cint {.importc, cdecl.}
+  proc aq_push(q: pointer, item: culonglong): cint {.importc, cdecl.}
+  proc aq_pop(q: pointer, outVal: ptr culonglong): cint {.importc, cdecl.}
   proc aq_destroy(q: pointer) {.importc, cdecl.}
 
   const topologiesSupported* = {tSpsc, tMpmc}
@@ -63,13 +63,13 @@ when defined(adapter_atomic_queue_available):
     static:
       assert sizeof(T) == 8,
         "AtomicQueueAdapter requires sizeof(T) == 8 (the wrapper " &
-        "stores `uint64_t`); got sizeof(" & $T & ") = " & $sizeof(T)
+          "stores `uint64_t`); got sizeof(" & $T & ") = " & $sizeof(T)
       assert supportsCopyMem(T),
         "AtomicQueueAdapter requires a type that supports copyMem " &
-        "(no managed heap resources like string, seq, ref, or types " &
-        "with custom destructors): the C++ queue bypasses Nim's GC, " &
-        "so any managed resources wouldn't be maintained across the " &
-        "boundary. Use a non-ref 64-bit payload (uint64, ptr, etc)."
+          "(no managed heap resources like string, seq, ref, or types " &
+          "with custom destructors): the C++ queue bypasses Nim's GC, " &
+          "so any managed resources wouldn't be maintained across the " &
+          "boundary. Use a non-ref 64-bit payload (uint64, ptr, etc)."
     doAssert capacity > 0, "AtomicQueue requires capacity > 0"
     result.capacity = capacity
     result.queue = aq_init(culonglong(capacity))
@@ -77,7 +77,7 @@ when defined(adapter_atomic_queue_available):
       raise newException(
         OutOfMemDefect,
         "aq_init returned nullptr (atomic_queue::AtomicQueueB " &
-        "construction failed; capacity = " & $capacity & ")"
+          "construction failed; capacity = " & $capacity & ")",
       )
 
   proc cleanup*[T](a: var AtomicQueueAdapter[T]) =
@@ -95,8 +95,8 @@ when defined(adapter_atomic_queue_available):
     # `[1, UINT64_MAX-1]`.
     doAssert cast[uint64](item) != high(uint64),
       "AtomicQueueAdapter cannot transport high(uint64): the C++ wrapper " &
-      "offsets every push by +1 to avoid the 0 NIL sentinel, and high(uint64)+1 " &
-      "overflows to 0 (a collision-free range of [1, UINT64_MAX-1] is required)."
+        "offsets every push by +1 to avoid the 0 NIL sentinel, and high(uint64)+1 " &
+        "overflows to 0 (a collision-free range of [1, UINT64_MAX-1] is required)."
     if a.queue == nil:
       return prFull
     if aq_push(a.queue, culonglong(cast[uint64](item))) != cint(0):

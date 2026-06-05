@@ -24,7 +24,8 @@ proc main() =
 
   block:
     var a = makeAtomicQueueAdapter[uint64](capacity = 64)
-    defer: cleanup(a)
+    defer:
+      cleanup(a)
     for i in 0'u64 ..< 32'u64:
       let r = a.push(i)
       doAssert r == prSuccess, "atomic_queue push failed at i=" & $i

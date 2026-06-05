@@ -89,4 +89,3 @@ static void lfds711_ringbuffer_internal_freelist_element_cleanup_callback( struc
 }
 
 #pragma warning( default : 4100 )
-

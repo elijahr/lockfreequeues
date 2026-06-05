@@ -27,45 +27,46 @@ import lockfreequeues/endpoint
 import lockfreequeues/role_tags
 import ../bench_common
 
-type
-  QueueBoundedAdapter*[
-      ccProd, ccCons: static PinScopeCardinality;
-      ST: static DeallocationStrategy;
-      N, P, C: static int;
-      T] = object
-    ## `ST` is a tag-only phantom retained for call-site compatibility
-    ## with the pre-B.2.5 adapter shape.
-    queue*: ptr BQueue[T, ccProd, ccCons, N, P, C]
-    when ccProd == ccMulti:
-      producer: Bound[T, AnyThreadTag, BQueue[T, ccProd, ccCons, N, P, C]]
-    when ccCons == ccMulti:
-      consumer: Bound[T, AnyThreadTag, BQueue[T, ccProd, ccCons, N, P, C]]
+type QueueBoundedAdapter*[
+  ccProd, ccCons: static PinScopeCardinality,
+  ST: static DeallocationStrategy,
+  N, P, C: static int,
+  T;
+] = object
+  ## `ST` is a tag-only phantom retained for call-site compatibility
+  ## with the pre-B.2.5 adapter shape.
+  queue*: ptr BQueue[T, ccProd, ccCons, N, P, C]
+  when ccProd == ccMulti:
+    producer: Bound[T, AnyThreadTag, BQueue[T, ccProd, ccCons, N, P, C]]
+  when ccCons == ccMulti:
+    consumer: Bound[T, AnyThreadTag, BQueue[T, ccProd, ccCons, N, P, C]]
 
 proc getProducer*[
-    ccProd, ccCons: static PinScopeCardinality;
-    ST: static DeallocationStrategy;
-    N, P, C: static int;
-    T](
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    N, P, C: static int,
+    T;
+](
     a: var QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T], idx: int
 ): Bound[T, AnyThreadTag, BQueue[T, ccProd, ccCons, N, P, C]] =
   a.queue[].getProducerHere(idx = idx)
 
 proc getConsumer*[
-    ccProd, ccCons: static PinScopeCardinality;
-    ST: static DeallocationStrategy;
-    N, P, C: static int;
-    T](
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    N, P, C: static int,
+    T;
+](
     a: var QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T], idx: int
 ): Bound[T, AnyThreadTag, BQueue[T, ccProd, ccCons, N, P, C]] =
   a.queue[].getConsumerHere(idx = idx)
 
 proc makeQueueBoundedAdapter*[
-    ccProd, ccCons: static PinScopeCardinality;
-    ST: static DeallocationStrategy;
-    N, P, C: static int;
-    T](
-    capacity: int = N
-): QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T] =
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    N, P, C: static int,
+    T;
+](capacity: int = N): QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T] =
   doAssert capacity == N, "capacity must equal static N"
   result.queue = create(BQueue[T, ccProd, ccCons, N, P, C])
   # wasMoved before the deref-assign: `create` zero-fills but the BQueue
@@ -80,12 +81,11 @@ proc makeQueueBoundedAdapter*[
     result.consumer = result.queue[].getConsumerHere(idx = 0)
 
 proc cleanup*[
-    ccProd, ccCons: static PinScopeCardinality;
-    ST: static DeallocationStrategy;
-    N, P, C: static int;
-    T](
-    a: var QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T]
-) =
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    N, P, C: static int,
+    T;
+](a: var QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T]) =
   # Reset the cached producer/consumer views BEFORE deallocating the queue
   # they borrow from. Each view holds a pointer into `a.queue[]` and has a
   # typestate `=destroy` that runs at adapter scope exit (after this proc
@@ -103,24 +103,22 @@ proc cleanup*[
     a.queue = nil
 
 proc push*[
-    ccProd, ccCons: static PinScopeCardinality;
-    ST: static DeallocationStrategy;
-    N, P, C: static int;
-    T](
-    a: var QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T], item: T
-): PushResult =
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    N, P, C: static int,
+    T;
+](a: var QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T], item: T): PushResult =
   when ccProd == ccSingle:
     if a.queue[].push(item): prSuccess else: prFull
   else:
     if a.producer.push(item): prSuccess else: prFull
 
 proc pop*[
-    ccProd, ccCons: static PinScopeCardinality;
-    ST: static DeallocationStrategy;
-    N, P, C: static int;
-    T](
-    a: var QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T]
-): PopResult[T] =
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    N, P, C: static int,
+    T;
+](a: var QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T]): PopResult[T] =
   when ccCons == ccSingle:
     let r = a.queue[].pop()
   else:
@@ -131,11 +129,10 @@ proc pop*[
     PopResult[T](success: false)
 
 proc name*[
-    ccProd, ccCons: static PinScopeCardinality;
-    ST: static DeallocationStrategy;
-    N, P, C: static int;
-    T](
-    a: QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T]
-): string =
-  "lockfreequeues/BQueue[" & $ccProd & "," & $ccCons & "," &
-    $N & "," & $P & "," & $C & "]"
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    N, P, C: static int,
+    T;
+](a: QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T]): string =
+  "lockfreequeues/BQueue[" & $ccProd & "," & $ccCons & "," & $N & "," & $P & "," & $C &
+    "]"

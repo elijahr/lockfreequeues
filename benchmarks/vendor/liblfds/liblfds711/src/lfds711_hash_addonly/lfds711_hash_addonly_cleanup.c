@@ -60,4 +60,3 @@ static void btree_au_element_cleanup_function( struct lfds711_btree_au_state *ba
 }
 
 #pragma warning( default : 4100 )
-

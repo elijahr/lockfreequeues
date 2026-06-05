@@ -48,8 +48,8 @@ when defined(BenchMpscTestCompileTime):
     doAssert BenchMpscRuns == 33,
       "BenchMpscRuns default must be 33 (got " & $BenchMpscRuns & ")"
     doAssert BenchMpscMessageCount == 1_000_000,
-      "BenchMpscMessageCount default must be 1_000_000 (got " &
-      $BenchMpscMessageCount & ")"
+      "BenchMpscMessageCount default must be 1_000_000 (got " & $BenchMpscMessageCount &
+        ")"
     doAssert BenchMpscWarmup == 3,
       "BenchMpscWarmup default must be 3 (got " & $BenchMpscWarmup & ")"
 
@@ -70,28 +70,27 @@ const
 type
   # Unified BQueue[T, ccMulti, ccSingle, N, P, 0]
   # instantiation alias — replaces legacy `Mpsc[N, P, T]`.
-  MpscQueueT[N, P: static int; T] =
-    BQueue[T, ccMulti, ccSingle, N, P, 0]
-  MpscProducerT[N, P: static int; T] =
+  MpscQueueT[N, P: static int, T] = BQueue[T, ccMulti, ccSingle, N, P, 0]
+  MpscProducerT[N, P: static int, T] =
     Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccSingle, N, P, 0]]
 
-  MpscProducerCtx[N, P: static int; T] = object
+  MpscProducerCtx[N, P: static int, T] = object
     producer: MpscProducerT[N, P, T]
     startIdx: int
     count: int
 
-  MpscConsumerCtx[N, P: static int; T] = object
+  MpscConsumerCtx[N, P: static int, T] = object
     queue: ptr MpscQueueT[N, P, T]
     count: int
 
-proc mpscProducerThread[N, P: static int; T](
+proc mpscProducerThread[N, P: static int, T](
     ctx: ptr MpscProducerCtx[N, P, T]
 ) {.thread.} =
   for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
     while not ctx.producer.push(T(i)):
       benchBackoffOnPeerWait()
 
-proc mpscConsumerThread[N, P: static int; T](
+proc mpscConsumerThread[N, P: static int, T](
     ctx: ptr MpscConsumerCtx[N, P, T]
 ) {.thread.} =
   var local = 0
@@ -102,7 +101,7 @@ proc mpscConsumerThread[N, P: static int; T](
     else:
       benchBackoffOnPeerWait()
 
-proc runOneMpscRun[N, P: static int; T](
+proc runOneMpscRun[N, P: static int, T](
     queue: var MpscQueueT[N, P, T], messageCount: int
 ): float =
   ## One run; returns ops/ms. Spread `messageCount mod P` over the first
@@ -113,30 +112,18 @@ proc runOneMpscRun[N, P: static int; T](
   var producerThreads: array[P, Thread[ptr MpscProducerCtx[N, P, T]]]
   var producerCtxs: array[P, MpscProducerCtx[N, P, T]]
   var consumerThread: Thread[ptr MpscConsumerCtx[N, P, T]]
-  var consumerCtx = MpscConsumerCtx[N, P, T](
-    queue: addr queue, count: messageCount,
-  )
+  var consumerCtx = MpscConsumerCtx[N, P, T](queue: addr queue, count: messageCount)
   var nextStart = 0
   for i in 0 ..< P:
     let count = baseP + (if i < remP: 1 else: 0)
     producerCtxs[i] = MpscProducerCtx[N, P, T](
-      producer: queue.getProducerHere(idx = i),
-      startIdx: nextStart,
-      count: count,
+      producer: queue.getProducerHere(idx = i), startIdx: nextStart, count: count
     )
     nextStart += count
   let startTime = getMonoTime()
   for i in 0 ..< P:
-    createThread(
-      producerThreads[i],
-      mpscProducerThread[N, P, T],
-      addr producerCtxs[i],
-    )
-  createThread(
-    consumerThread,
-    mpscConsumerThread[N, P, T],
-    addr consumerCtx,
-  )
+    createThread(producerThreads[i], mpscProducerThread[N, P, T], addr producerCtxs[i])
+  createThread(consumerThread, mpscConsumerThread[N, P, T], addr consumerCtx)
   for i in 0 ..< P:
     joinThread(producerThreads[i])
   joinThread(consumerThread)
@@ -145,9 +132,8 @@ proc runOneMpscRun[N, P: static int; T](
     return 0.0
   result = float(messageCount) * 1_000_000.0 / elapsedNs
 
-proc runMpscShape[N, P: static int; T](
-    em: var BMFEmitter,
-    runs, warmup, messageCount: int,
+proc runMpscShape[N, P: static int, T](
+    em: var BMFEmitter, runs, warmup, messageCount: int
 ) =
   let slug = "lockfreequeues_mpsc/mpsc/" & $P & "p1c"
   echo fmt"Mpsc {P}p1c ({slug}):"
@@ -175,23 +161,23 @@ proc runMpscShape[N, P: static int; T](
 # so B3 can compute a per-shape % delta.
 
 type
-  QMpscProducerCtx[N, P: static int; T] = object
+  QMpscProducerCtx[N, P: static int, T] = object
     producer: Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccSingle, N, P, 0]]
     startIdx: int
     count: int
 
-  QMpscConsumerCtx[N, P: static int; T] = object
+  QMpscConsumerCtx[N, P: static int, T] = object
     queue: ptr BQueue[T, ccMulti, ccSingle, N, P, 0]
     count: int
 
-proc qMpscProducerThread[N, P: static int; T](
+proc qMpscProducerThread[N, P: static int, T](
     ctx: ptr QMpscProducerCtx[N, P, T]
 ) {.thread.} =
   for i in ctx.startIdx ..< ctx.startIdx + ctx.count:
     while not ctx.producer.push(T(i)):
       benchBackoffOnPeerWait()
 
-proc qMpscConsumerThread[N, P: static int; T](
+proc qMpscConsumerThread[N, P: static int, T](
     ctx: ptr QMpscConsumerCtx[N, P, T]
 ) {.thread.} =
   var local = 0
@@ -202,39 +188,26 @@ proc qMpscConsumerThread[N, P: static int; T](
     else:
       benchBackoffOnPeerWait()
 
-proc runOneQMpscRun[N, P: static int; T](
-    queue: var BQueue[T, ccMulti, ccSingle, N, P, 0],
-    messageCount: int,
+proc runOneQMpscRun[N, P: static int, T](
+    queue: var BQueue[T, ccMulti, ccSingle, N, P, 0], messageCount: int
 ): float =
   let baseP = messageCount div P
   let remP = messageCount mod P
   var producerThreads: array[P, Thread[ptr QMpscProducerCtx[N, P, T]]]
   var producerCtxs: array[P, QMpscProducerCtx[N, P, T]]
   var consumerThread: Thread[ptr QMpscConsumerCtx[N, P, T]]
-  var consumerCtx = QMpscConsumerCtx[N, P, T](
-    queue: addr queue, count: messageCount,
-  )
+  var consumerCtx = QMpscConsumerCtx[N, P, T](queue: addr queue, count: messageCount)
   var nextStart = 0
   for i in 0 ..< P:
     let count = baseP + (if i < remP: 1 else: 0)
     producerCtxs[i] = QMpscProducerCtx[N, P, T](
-      producer: queue.getProducerHere(idx = i),
-      startIdx: nextStart,
-      count: count,
+      producer: queue.getProducerHere(idx = i), startIdx: nextStart, count: count
     )
     nextStart += count
   let startTime = getMonoTime()
   for i in 0 ..< P:
-    createThread(
-      producerThreads[i],
-      qMpscProducerThread[N, P, T],
-      addr producerCtxs[i],
-    )
-  createThread(
-    consumerThread,
-    qMpscConsumerThread[N, P, T],
-    addr consumerCtx,
-  )
+    createThread(producerThreads[i], qMpscProducerThread[N, P, T], addr producerCtxs[i])
+  createThread(consumerThread, qMpscConsumerThread[N, P, T], addr consumerCtx)
   for i in 0 ..< P:
     joinThread(producerThreads[i])
   joinThread(consumerThread)
@@ -243,9 +216,8 @@ proc runOneQMpscRun[N, P: static int; T](
     return 0.0
   result = float(messageCount) * 1_000_000.0 / elapsedNs
 
-proc runQMpscShape[N, P: static int; T](
-    em: var BMFEmitter,
-    runs, warmup, messageCount: int,
+proc runQMpscShape[N, P: static int, T](
+    em: var BMFEmitter, runs, warmup, messageCount: int
 ) =
   let slug = "lockfreequeues_queue_bounded_mpsc/mpsc/" & $P & "p1c"
   echo fmt"QueueBoundedMpsc {P}p1c ({slug}):"
@@ -274,11 +246,7 @@ when defined(adapter_nim_channel_available):
   proc initNimChannelQ(capacity: int): NimChannelAdapter[uint64] =
     makeNimChannelAdapter[uint64](capacity)
 
-  proc runNimChannelShape(
-      em: var BMFEmitter,
-      p: int,
-      runs, warmup, messageCount: int,
-  ) =
+  proc runNimChannelShape(em: var BMFEmitter, p: int, runs, warmup, messageCount: int) =
     let slug = "nim_channel/mpsc/" & $p & "p1c"
     echo fmt"NimChannel {p}p1c ({slug}):"
     let metrics = runThroughputHarness[NimChannelAdapter[uint64]](
@@ -295,7 +263,8 @@ when defined(adapter_nim_channel_available):
     echo fmt"  runs: {metrics.runs}"
     echo ""
     em.addMeasure(
-      slug, "throughput_ops_ms",
+      slug,
+      "throughput_ops_ms",
       metrics.ops_ms_mean,
       metrics.ops_ms_mean - metrics.ops_ms_stddev,
       metrics.ops_ms_mean + metrics.ops_ms_stddev,
@@ -314,24 +283,31 @@ proc runVariant(variant: string, em: var BMFEmitter) =
   case variant
   of "mpsc":
     runMpscShape[MpscCapacity, 1, uint64](
-      em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount)
+      em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount
+    )
     runMpscShape[MpscCapacity, 2, uint64](
-      em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount)
+      em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount
+    )
     runMpscShape[MpscCapacity, 4, uint64](
-      em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount)
+      em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount
+    )
   of "queue_bounded_mpsc":
     runQMpscShape[MpscCapacity, 1, uint64](
-      em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount)
+      em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount
+    )
     runQMpscShape[MpscCapacity, 2, uint64](
-      em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount)
+      em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount
+    )
     runQMpscShape[MpscCapacity, 4, uint64](
-      em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount)
+      em, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount
+    )
   else:
     when declared(initNimChannelQ):
       if variant == "nim_channel":
         for p in [1, 2, 4]:
-          runNimChannelShape(em, p, BenchMpscRuns, BenchMpscWarmup,
-                             BenchMpscMessageCount)
+          runNimChannelShape(
+            em, p, BenchMpscRuns, BenchMpscWarmup, BenchMpscMessageCount
+          )
         return
     raise newException(ValueError, "unknown variant: " & variant)
 
@@ -345,7 +321,8 @@ when isMainModule:
     while true:
       p.next()
       case p.kind
-      of cmdEnd: break
+      of cmdEnd:
+        break
       of cmdLongOption, cmdShortOption:
         case p.key
         of "bmf-out":

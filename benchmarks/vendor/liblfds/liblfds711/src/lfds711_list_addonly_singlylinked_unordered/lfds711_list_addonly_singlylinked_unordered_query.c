@@ -125,4 +125,3 @@ static void lfds711_list_asu_internal_validate( struct lfds711_list_asu_state *l
 
   return;
 }
-

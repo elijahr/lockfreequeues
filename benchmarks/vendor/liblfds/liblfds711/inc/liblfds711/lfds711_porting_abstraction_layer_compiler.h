@@ -313,7 +313,7 @@
   }
 
   #if( defined __x86_64__ )
-    /* TRD : On 64 bit platforms, unsigned long long int is 64 bit, so we must manually use cmpxchg16b, 
+    /* TRD : On 64 bit platforms, unsigned long long int is 64 bit, so we must manually use cmpxchg16b,
              as the atomic intrinsics will only emit cmpxchg8b
     */
 
@@ -422,7 +422,7 @@
   #endif
 
   #if( defined __x86_64__ )
-    /* TRD : On 64 bit platforms, unsigned long long int is 64 bit, so we must manually use cmpxchg16b, 
+    /* TRD : On 64 bit platforms, unsigned long long int is 64 bit, so we must manually use cmpxchg16b,
              as __sync_val_compare_and_swap() will only emit cmpxchg8b
     */
 
@@ -472,4 +472,3 @@
   #error No matching porting abstraction layer in lfds711_porting_abstraction_layer_compiler.h
 
 #endif
-

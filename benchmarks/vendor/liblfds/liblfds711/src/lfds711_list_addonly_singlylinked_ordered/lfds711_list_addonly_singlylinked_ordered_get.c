@@ -26,4 +26,3 @@ int lfds711_list_aso_get_by_key( struct lfds711_list_aso_state *lasos,
 
   return rv;
 }
-

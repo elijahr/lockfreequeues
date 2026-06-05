@@ -34,28 +34,24 @@ when defined(adapter_flume_available):
 
   # Bounded
   proc flume_init(capacity: csize_t): pointer {.importc, cdecl.}
-  proc flume_push(q: pointer; item: uint64): bool {.importc, cdecl.}
-  proc flume_pop(q: pointer; outVal: ptr uint64): bool {.importc, cdecl.}
+  proc flume_push(q: pointer, item: uint64): bool {.importc, cdecl.}
+  proc flume_pop(q: pointer, outVal: ptr uint64): bool {.importc, cdecl.}
   proc flume_destroy(q: pointer) {.importc, cdecl.}
 
   # Unbounded
   proc flume_unbounded_init(): pointer {.importc, cdecl.}
-  proc flume_unbounded_push(q: pointer; item: uint64): bool
-    {.importc, cdecl.}
-  proc flume_unbounded_pop(q: pointer; outVal: ptr uint64): bool
-    {.importc, cdecl.}
+  proc flume_unbounded_push(q: pointer, item: uint64): bool {.importc, cdecl.}
+  proc flume_unbounded_pop(q: pointer, outVal: ptr uint64): bool {.importc, cdecl.}
   proc flume_unbounded_destroy(q: pointer) {.importc, cdecl.}
 
   const topologiesSupported* = {tMpmc, tMpmcUnbounded}
 
   type
-    FlumeAdapter*[T] = object
-      ## Bounded flume MPMC channel handle.
+    FlumeAdapter*[T] = object ## Bounded flume MPMC channel handle.
       queue*: pointer
       capacity*: int
 
-    FlumeUnboundedAdapter*[T] = object
-      ## Unbounded flume MPMC channel handle.
+    FlumeUnboundedAdapter*[T] = object ## Unbounded flume MPMC channel handle.
       queue*: pointer
 
   proc makeFlumeAdapter*[T](capacity: int = 1024): FlumeAdapter[T] =
@@ -66,16 +62,16 @@ when defined(adapter_flume_available):
     static:
       assert sizeof(T) == 8,
         "FlumeAdapter requires sizeof(T) == 8 (the FFI shim transports " &
-        "a uint64 payload); got sizeof(" & $T & ") = " & $sizeof(T)
+          "a uint64 payload); got sizeof(" & $T & ") = " & $sizeof(T)
       assert supportsCopyMem(T),
         "FlumeAdapter requires a type that supports copyMem (no managed " &
-        "heap resources like string, seq, ref, or types with custom " &
-        "destructors): the Rust channel bypasses Nim's GC, so any " &
-        "managed resources wouldn't be maintained across the boundary. " &
-        "Use a non-ref 64-bit payload (uint64, ptr, etc)."
+          "heap resources like string, seq, ref, or types with custom " &
+          "destructors): the Rust channel bypasses Nim's GC, so any " &
+          "managed resources wouldn't be maintained across the boundary. " &
+          "Use a non-ref 64-bit payload (uint64, ptr, etc)."
     doAssert capacity > 0,
       "FlumeAdapter (bounded) requires capacity > 0 " &
-      "(zero would null-init at the FFI boundary)"
+        "(zero would null-init at the FFI boundary)"
     result.capacity = capacity
     result.queue = flume_init(csize_t(capacity))
     doAssert result.queue != nil, "flume_init returned null"
@@ -88,10 +84,7 @@ when defined(adapter_flume_available):
   proc push*[T](a: var FlumeAdapter[T], item: T): PushResult =
     if a.queue == nil:
       return prFull
-    if flume_push(a.queue, cast[uint64](item)):
-      prSuccess
-    else:
-      prFull
+    if flume_push(a.queue, cast[uint64](item)): prSuccess else: prFull
 
   proc pop*[T](a: var FlumeAdapter[T]): PopResult[T] =
     if a.queue == nil:
@@ -105,8 +98,7 @@ when defined(adapter_flume_available):
   proc name*[T](a: FlumeAdapter[T]): string =
     "flume/bounded[u64]"
 
-  proc makeFlumeUnboundedAdapter*[T](
-      capacity: int = 0): FlumeUnboundedAdapter[T] =
+  proc makeFlumeUnboundedAdapter*[T](capacity: int = 0): FlumeUnboundedAdapter[T] =
     ## `capacity` is ignored — flume's unbounded variant grows on demand.
     ## Default arg matches the other adapters' shape so the wire-up
     ## sites can pass the same `capacity` uniformly without conditionals.
@@ -116,14 +108,13 @@ when defined(adapter_flume_available):
     static:
       assert sizeof(T) == 8,
         "FlumeUnboundedAdapter requires sizeof(T) == 8 (the FFI shim " &
-        "transports a uint64 payload); got sizeof(" & $T & ") = " &
-        $sizeof(T)
+          "transports a uint64 payload); got sizeof(" & $T & ") = " & $sizeof(T)
       assert supportsCopyMem(T),
         "FlumeUnboundedAdapter requires a type that supports copyMem " &
-        "(no managed heap resources like string, seq, ref, or types " &
-        "with custom destructors): the Rust channel bypasses Nim's GC, " &
-        "so any managed resources wouldn't be maintained across the " &
-        "boundary. Use a non-ref 64-bit payload (uint64, ptr)."
+          "(no managed heap resources like string, seq, ref, or types " &
+          "with custom destructors): the Rust channel bypasses Nim's GC, " &
+          "so any managed resources wouldn't be maintained across the " &
+          "boundary. Use a non-ref 64-bit payload (uint64, ptr)."
     discard capacity
     result.queue = flume_unbounded_init()
     doAssert result.queue != nil, "flume_unbounded_init returned null"

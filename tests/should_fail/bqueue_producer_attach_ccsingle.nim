@@ -1,4 +1,3 @@
-
 ## ccSingle BQueueProducer cannot call `attach()`.
 ##
 ## Claim-state typestate uses a single user-facing object
@@ -21,6 +20,6 @@ proc main() =
   # first param matches `var BQueueProducer[int, ccSingle, ...]`.
   var p: BQueueProducer[int, ccSingle, ccSingle, 8, 0, 0]
   p.queue = addr q
-  p.attach()  # EXPECTED COMPILE ERROR
+  p.attach() # EXPECTED COMPILE ERROR
 
 main()

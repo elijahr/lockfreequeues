@@ -19,4 +19,3 @@ void lfds711_misc_internal_backoff_init( struct lfds711_misc_backoff_state *bs )
 
   return;
 }
-

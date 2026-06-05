@@ -40,13 +40,11 @@ import lockfreequeues/typestates/mpsc_pop
 import lockfreequeues/endpoint
 import lockfreequeues/role_tags
 
-
 # ---------------------------------------------------------------------------
 # Mpmc walkthrough
 # ---------------------------------------------------------------------------
 
 suite "slot-seq generation rollover - Mpmc":
-
   test "preempted consumer cannot be re-claimed by wrap-around consumer (Mpmc)":
     # N=4 is the smallest capacity that exercises the wrap. P/C are arbitrary
     # for this single-threaded drive; we never call getProducer/getConsumer.
@@ -171,13 +169,11 @@ suite "slot-seq generation rollover - Mpmc":
     check(q.head.load(moRelaxed) == 8'u64)
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 11'u64) # 7 + N
 
-
 # ---------------------------------------------------------------------------
 # Spmc walkthrough (single producer, multi-consumer)
 # ---------------------------------------------------------------------------
 
 suite "slot-seq generation rollover - Spmc":
-
   test "preempted consumer cannot be re-claimed by wrap-around consumer (Spmc)":
     # Same trace structure as Mpmc, but the producer side uses the
     # spmc_push (defensive-CAS) verb. The bug shape is identical - the
@@ -263,13 +259,11 @@ suite "slot-seq generation rollover - Spmc":
     check(q.head.load(moRelaxed) == 8'u64)
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 11'u64)
 
-
 # ---------------------------------------------------------------------------
 # Mpsc walkthrough (multi-producer, single consumer)
 # ---------------------------------------------------------------------------
 
 suite "slot-seq generation rollover - Mpsc":
-
   test "preempted consumer cannot be re-claimed by wrap-around consumer (Mpsc)":
     # Same trace structure. Producer side uses mpsc_push; consumer side
     # uses mpsc_pop (defensive-CAS form per design §10.9).

@@ -26,32 +26,34 @@ proc main() =
 
   block bss:
     var a = makeLiblfdsAdapter[uint64](kind = lkBss, capacity = 64)
-    defer: cleanup(a)
+    defer:
+      cleanup(a)
     for i in 0'u64 ..< 32'u64:
       let r = a.push(i)
       doAssert r == prSuccess, "liblfds bss push failed at i=" & $i
     var seen = 0
     while true:
       let r = a.pop()
-      if not r.success: break
+      if not r.success:
+        break
       inc seen
-    doAssert seen == 32,
-      "liblfds bss popped " & $seen & " (expected 32)"
+    doAssert seen == 32, "liblfds bss popped " & $seen & " (expected 32)"
     echo "liblfds/queue_bss: 32 push/pop ok"
 
   block bmm:
     var a = makeLiblfdsAdapter[uint64](kind = lkBmm, capacity = 64)
-    defer: cleanup(a)
+    defer:
+      cleanup(a)
     for i in 0'u64 ..< 32'u64:
       let r = a.push(i)
       doAssert r == prSuccess, "liblfds bmm push failed at i=" & $i
     var seen = 0
     while true:
       let r = a.pop()
-      if not r.success: break
+      if not r.success:
+        break
       inc seen
-    doAssert seen == 32,
-      "liblfds bmm popped " & $seen & " (expected 32)"
+    doAssert seen == 32, "liblfds bmm popped " & $seen & " (expected 32)"
     echo "liblfds/queue_bmm: 32 push/pop ok"
 
   echo "liblfds smoke: ok"

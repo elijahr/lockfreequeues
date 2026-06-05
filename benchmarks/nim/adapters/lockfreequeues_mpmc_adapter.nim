@@ -23,8 +23,7 @@ import ../bench_common
 const topologiesSupported*: set[Topology] = {tMpmc}
 
 type
-  MpmcAdapterQueue[N: static int, T] =
-    BQueue[T, ccMulti, ccMulti, N, 1, 1]
+  MpmcAdapterQueue[N: static int, T] = BQueue[T, ccMulti, ccMulti, N, 1, 1]
   MpmcAdapterProducer[N: static int, T] =
     Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccMulti, N, 1, 1]]
   MpmcAdapterConsumer[N: static int, T] =

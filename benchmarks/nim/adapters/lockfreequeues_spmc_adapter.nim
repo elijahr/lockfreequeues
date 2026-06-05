@@ -31,8 +31,7 @@ const topologiesSupported* = {tMpmc}
   ## `1p<C>c`. Exported here for the bench-driver registry.
 
 type
-  SpmcQueue*[N, C: static int, T] =
-    BQueue[T, ccSingle, ccMulti, N, 0, C]
+  SpmcQueue*[N, C: static int, T] = BQueue[T, ccSingle, ccMulti, N, 0, C]
   SpmcConsumerView*[N, C: static int, T] =
     Bound[T, AnyThreadTag, BQueue[T, ccSingle, ccMulti, N, 0, C]]
 
@@ -73,9 +72,7 @@ proc makeLockfreequeuesSpmcAdapter*[N, C: static int, T](
   # registers its own per-thread Consumer via getConsumer(idx = i).
   result.consumer = result.queue[].getConsumerHere(idx = 0)
 
-proc cleanup*[N, C: static int, T](
-    a: var LockfreequeuesSpmcAdapter[N, C, T]
-) =
+proc cleanup*[N, C: static int, T](a: var LockfreequeuesSpmcAdapter[N, C, T]) =
   # Reset the cached consumer view BEFORE deallocating the queue it borrows
   # from. The view holds a pointer into `a.queue[]` and carries a typestate
   # `=destroy` that would otherwise run at adapter scope exit (after this

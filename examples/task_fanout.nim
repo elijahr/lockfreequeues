@@ -34,9 +34,9 @@ const
 
 type
   TaskKind = enum
-    tkCompute    # CPU-bound work
-    tkIO         # Simulated I/O
-    tkFast       # Quick task
+    tkCompute # CPU-bound work
+    tkIO # Simulated I/O
+    tkFast # Quick task
 
   Task = object
     id: int
@@ -49,14 +49,13 @@ var
   tasksCompleted: array[NumWorkers, Atomic[int]]
   totalLatency: array[NumWorkers, Atomic[int64]]
 
-
 proc simulateWork(task: Task) =
   ## Simulate different types of work
   case task.kind
   of tkCompute:
     # Simulate CPU work with busy loop
     var sum = 0
-    for i in 0..<task.payload:
+    for i in 0 ..< task.payload:
       sum += i
     discard sum
   of tkIO:
@@ -65,7 +64,6 @@ proc simulateWork(task: Task) =
   of tkFast:
     # Minimal work
     discard
-
 
 proc workerThread(idx: int) {.thread.} =
   ## Worker consumes tasks from the queue until shutdown.
@@ -91,22 +89,26 @@ proc workerThread(idx: int) {.thread.} =
   tasksCompleted[idx].store(completed, moRelease)
   totalLatency[idx].store(latencySum, moRelease)
 
-
 proc dispatcherThread() {.thread.} =
   ## Dispatcher generates and distributes tasks.
   var taskId = 0
 
-  for i in 0..<NumTasks:
+  for i in 0 ..< NumTasks:
     # Create varied task mix
-    let kind = case i mod 10
-      of 0..2: tkFast
-      of 3..6: tkCompute
+    let kind =
+      case i mod 10
+      of 0 .. 2: tkFast
+      of 3 .. 6: tkCompute
       else: tkIO
 
-    let payload = case kind
-      of tkFast: 0
-      of tkCompute: 1000 + (i mod 500)
-      of tkIO: 1 + (i mod 3)
+    let payload =
+      case kind
+      of tkFast:
+        0
+      of tkCompute:
+        1000 + (i mod 500)
+      of tkIO:
+        1 + (i mod 3)
 
     let task = Task(id: taskId, kind: kind, payload: payload)
     inc taskId
@@ -117,7 +119,6 @@ proc dispatcherThread() {.thread.} =
 
   done.store(true, moRelease)
 
-
 when isMainModule:
   echo "Task Fan-Out Example"
   echo "===================="
@@ -127,7 +128,7 @@ when isMainModule:
   echo ""
 
   done.store(false, moRelaxed)
-  for i in 0..<NumWorkers:
+  for i in 0 ..< NumWorkers:
     tasksCompleted[i].store(0, moRelaxed)
     totalLatency[i].store(0, moRelaxed)
 
@@ -135,7 +136,7 @@ when isMainModule:
 
   # Start workers
   var workers: array[NumWorkers, Thread[int]]
-  for i in 0..<NumWorkers:
+  for i in 0 ..< NumWorkers:
     createThread(workers[i], workerThread, i)
 
   # Start dispatcher
@@ -144,8 +145,8 @@ when isMainModule:
 
   # Wait for completion
   joinThread(dispatcher)
-  sleep(50)  # Let workers drain queue
-  for i in 0..<NumWorkers:
+  sleep(50) # Let workers drain queue
+  for i in 0 ..< NumWorkers:
     joinThread(workers[i])
 
   let totalTime = (getMonoTime() - startTime).inMilliseconds
@@ -153,10 +154,14 @@ when isMainModule:
   # Report results
   echo "Results:"
   var totalCompleted = 0
-  for i in 0..<NumWorkers:
+  for i in 0 ..< NumWorkers:
     let completed = tasksCompleted[i].load(moAcquire)
     let latency = totalLatency[i].load(moAcquire)
-    let avgLatency = if completed > 0: latency div completed else: 0
+    let avgLatency =
+      if completed > 0:
+        latency div completed
+      else:
+        0
     echo "  Worker ", i, ": ", completed, " tasks, avg ", avgLatency, "us/task"
     totalCompleted += completed
 

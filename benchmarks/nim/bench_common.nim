@@ -19,8 +19,11 @@
 ## "not implemented" so downstream work can be written and reviewed
 ## in parallel while the implementation lands behind them.
 
-import std/[algorithm, atomics, heapqueue, json, math, monotimes, options,
-            os, random, tables, times]
+import
+  std/[
+    algorithm, atomics, heapqueue, json, math, monotimes, options, os, random, tables,
+    times,
+  ]
 import ./adapter_versions
 import lockfreequeues/backoff as queue_backoff
 
@@ -48,19 +51,19 @@ proc benchBackoffOnPeerWait*() {.inline.} =
   ## Bench drivers call this instead of `backoffOnPeerWait` directly so
   ## the toggle only affects harness call sites, never the queue-internal
   ## peer-flag spins inside `src/lockfreequeues/`.
-  if disableHarnessBackoff: return
+  if disableHarnessBackoff:
+    return
   queue_backoff.backoffOnPeerWait()
 
 # ---------- Topology ----------
 
-type
-  Topology* = enum
-    tSpsc
-    tMpsc
-    tMpmc
-    tSpscUnbounded
-    tMpscUnbounded
-    tMpmcUnbounded
+type Topology* = enum
+  tSpsc
+  tMpsc
+  tMpmc
+  tSpscUnbounded
+  tMpscUnbounded
+  tMpmcUnbounded
 
 # ---------- Adapter primitives ----------
 
@@ -95,8 +98,10 @@ proc toBound(v: float): Option[float] =
   ## time and would fail CI on the whole bench rather than just this
   ## measure.
   case v.classify
-  of fcNaN, fcInf, fcNegInf: none(float)
-  else: some(v)
+  of fcNaN, fcInf, fcNegInf:
+    none(float)
+  else:
+    some(v)
 
 proc addMeasure*(
     em: var BMFEmitter,
@@ -119,15 +124,14 @@ proc addMeasure*(
   ## emitter's stdout (no row appended) so the operator can still see
   ## the gap.
   case value.classify
-  of fcNaN, fcInf, fcNegInf: return
-  else: discard
+  of fcNaN, fcInf, fcNegInf:
+    return
+  else:
+    discard
   if slug notin em.data:
     em.data[slug] = initTable[string, MeasureValue]()
-  em.data[slug][measure] = MeasureValue(
-    value: value,
-    lower: toBound(lower),
-    upper: toBound(upper),
-  )
+  em.data[slug][measure] =
+    MeasureValue(value: value, lower: toBound(lower), upper: toBound(upper))
 
 proc emit*(em: BMFEmitter, path: string) =
   ## Write the accumulated BMF data to `path`. Slugs alpha-sorted; within
@@ -173,15 +177,18 @@ proc emit*(em: BMFEmitter, path: string) =
 proc mean*(data: openArray[float]): float =
   ## Arithmetic mean. Empty input returns 0.0 (matches the legacy
   ## `benchmarks/nim/stats.nim` contract that this module replaces).
-  if data.len == 0: return 0.0
+  if data.len == 0:
+    return 0.0
   var s = 0.0
-  for x in data: s += x
+  for x in data:
+    s += x
   s / float(data.len)
 
 proc stddev*(data: openArray[float]): float =
   ## Sample standard deviation (ddof = 1, matches numpy default for
   ## `np.std(..., ddof=1)`). Singleton or empty input returns 0.0.
-  if data.len < 2: return 0.0
+  if data.len < 2:
+    return 0.0
   let m = mean(data)
   var sumSq = 0.0
   for x in data:
@@ -190,22 +197,27 @@ proc stddev*(data: openArray[float]): float =
   sqrt(sumSq / float(data.len - 1))
 
 proc minVal*(data: openArray[float]): float =
-  if data.len == 0: return 0.0
+  if data.len == 0:
+    return 0.0
   result = data[0]
   for x in data:
-    if x < result: result = x
+    if x < result:
+      result = x
 
 proc maxVal*(data: openArray[float]): float =
-  if data.len == 0: return 0.0
+  if data.len == 0:
+    return 0.0
   result = data[0]
   for x in data:
-    if x > result: result = x
+    if x > result:
+      result = x
 
 proc percentileSorted*(sorted: openArray[float], p: float): float =
   ## Linear-interpolation percentile from `sorted` (caller-sorted ascending).
   ## `p` clamped to [0, 1]. Empty input returns 0.0. Use this when computing
   ## multiple percentiles over the same dataset to amortize the sort cost.
-  if sorted.len == 0: return 0.0
+  if sorted.len == 0:
+    return 0.0
   let pc = max(0.0, min(1.0, p))
   let pos = pc * float(sorted.len - 1)
   let lo = int(pos)
@@ -219,7 +231,8 @@ proc percentile*(data: openArray[float], p: float): float =
   ##
   ## Allocates and sorts on every call. For multiple percentiles over the
   ## same dataset, sort once and call `percentileSorted` instead.
-  if data.len == 0: return 0.0
+  if data.len == 0:
+    return 0.0
   var sorted = @data
   sorted.sort()
   percentileSorted(sorted, p)
@@ -227,36 +240,37 @@ proc percentile*(data: openArray[float], p: float): float =
 # ---------- Histogram (top-K min-heap + uniform reservoir) ----------
 
 const
-  HistogramTopK* = 5000        ## exact top-K largest samples seen.
-                               ## `runLatencyHarness` builds a fresh
-                               ## Histogram per run and averages
-                               ## per-run percentiles (design 2.5);
-                               ## each histogram only sees
-                               ## `BenchLatencyMessageCount` samples
-                               ## (default 100K). K=5000 sizes the
-                               ## exact-top-K stratum with headroom
-                               ## for `BenchLatencyMessageCount`
-                               ## overrides up to ~5M before p999
-                               ## starts spilling into the rescaled
-                               ## reservoir. At the default 100K, K
-                               ## was already big enough at 1K (p999
-                               ## tail = 100); the bump is anticipatory.
-                               ## Memory cost is 5000 × 8B = 40KB per
-                               ## histogram, negligible vs the 99K
-                               ## reservoir.
+  HistogramTopK* = 5000
+    ## exact top-K largest samples seen.
+    ## `runLatencyHarness` builds a fresh
+    ## Histogram per run and averages
+    ## per-run percentiles (design 2.5);
+    ## each histogram only sees
+    ## `BenchLatencyMessageCount` samples
+    ## (default 100K). K=5000 sizes the
+    ## exact-top-K stratum with headroom
+    ## for `BenchLatencyMessageCount`
+    ## overrides up to ~5M before p999
+    ## starts spilling into the rescaled
+    ## reservoir. At the default 100K, K
+    ## was already big enough at 1K (p999
+    ## tail = 100); the bump is anticipatory.
+    ## Memory cost is 5000 × 8B = 40KB per
+    ## histogram, negligible vs the 99K
+    ## reservoir.
   HistogramReservoir* = 99_000 ## uniform sample of the body distribution
 
-type
-  Histogram* = object
-    topKHeap*: HeapQueue[float]
-    reservoir*: seq[float]
-    seenAll*: int
-    seenBody*: int
-    rng*: Rand
-    debugMode*: bool       ## when true, every `record` also appends
-                           ## the value to `debugAll` and `percentile`
-                           ## reads from there for an exact answer.
-    debugAll*: seq[float]
+type Histogram* = object
+  topKHeap*: HeapQueue[float]
+  reservoir*: seq[float]
+  seenAll*: int
+  seenBody*: int
+  rng*: Rand
+  debugMode*: bool
+    ## when true, every `record` also appends
+    ## the value to `debugAll` and `percentile`
+    ## reads from there for an exact answer.
+  debugAll*: seq[float]
 
 proc initHistogram*(debug: bool = false): Histogram =
   ## Construct an empty Histogram. `debug=true` puts the histogram in
@@ -319,7 +333,7 @@ proc topK*(h: Histogram): seq[float] =
   var copy = h.topKHeap
   result = newSeqOfCap[float](copy.len)
   while copy.len > 0:
-    result.add(copy.pop())  # min-heap pop -> ascending order
+    result.add(copy.pop()) # min-heap pop -> ascending order
 
 proc percentile*(h: Histogram, p: float): float =
   ## Estimate the p-th percentile.
@@ -349,7 +363,8 @@ proc percentile*(h: Histogram, p: float): float =
   let topkLen = h.topKHeap.len
 
   if pc == 1.0:
-    if topkLen == 0: return 0.0
+    if topkLen == 0:
+      return 0.0
     let topk = h.topK()
     return topk[^1]
 
@@ -376,7 +391,8 @@ proc percentile*(h: Histogram, p: float): float =
   if bodySize <= 0 or h.reservoir.len == 0:
     # All samples ended up in top-K. Fall back to top-K percentile.
     let topk = h.topK()
-    if topk.len == 0: return 0.0
+    if topk.len == 0:
+      return 0.0
     return percentile(topk, pc)
   let pBody = (pc * float(h.seenAll)) / float(bodySize)
   let pBodyClamped = max(0.0, min(1.0, pBody))
@@ -389,23 +405,27 @@ proc percentiles*(h: Histogram, ps: openArray[float]): seq[float] =
   ## than O(len(ps) * R log R) for repeated single-percentile calls.
   ## Same lookup rules as `percentile(h, p)`.
   result = newSeq[float](ps.len)
-  if ps.len == 0: return
+  if ps.len == 0:
+    return
   if h.debugMode:
     var sorted = @(h.debugAll)
     sorted.sort()
     for i, p in ps:
       result[i] = percentileSorted(sorted, p)
     return
-  if h.seenAll == 0: return  # already zero-initialised
+  if h.seenAll == 0:
+    return # already zero-initialised
   let topkLen = h.topKHeap.len
-  let topkSnap = h.topK()  # ascending; <= K elements
+  let topkSnap = h.topK() # ascending; <= K elements
   var reservoirSorted = @(h.reservoir)
   reservoirSorted.sort()
   for i, p in ps:
     let pc = max(0.0, min(1.0, p))
     if pc == 1.0:
-      if topkLen == 0: result[i] = 0.0
-      else: result[i] = topkSnap[^1]
+      if topkLen == 0:
+        result[i] = 0.0
+      else:
+        result[i] = topkSnap[^1]
       continue
     let tailCount = float(h.seenAll) * (1.0 - pc)
     if tailCount <= float(topkLen):
@@ -417,8 +437,10 @@ proc percentiles*(h: Histogram, ps: openArray[float]): seq[float] =
       continue
     let bodySize = h.seenAll - topkLen
     if bodySize <= 0 or reservoirSorted.len == 0:
-      if topkSnap.len == 0: result[i] = 0.0
-      else: result[i] = percentileSorted(topkSnap, pc)
+      if topkSnap.len == 0:
+        result[i] = 0.0
+      else:
+        result[i] = percentileSorted(topkSnap, pc)
       continue
     let pBody = (pc * float(h.seenAll)) / float(bodySize)
     let pBodyClamped = max(0.0, min(1.0, pBody))
@@ -426,14 +448,13 @@ proc percentiles*(h: Histogram, ps: openArray[float]): seq[float] =
 
 # ---------- Latency harness ----------
 
-type
-  LatencyMetrics* = object
-    p50_ns*: float
-    p95_ns*: float
-    p99_ns*: float
-    p999_ns*: float
-    max_ns*: float
-    samples*: int
+type LatencyMetrics* = object
+  p50_ns*: float
+  p95_ns*: float
+  p99_ns*: float
+  p999_ns*: float
+  max_ns*: float
+  samples*: int
 
 type
   PingerCtx[Q] = object
@@ -478,10 +499,7 @@ proc pongerThreadBody[Q](ctx: ptr PongerCtx[Q]) {.thread.} =
     while push(ctx.rev[], v) == prFull:
       discard
 
-proc runOneLatencyRun[Q](
-    queueInit: proc(): Q,
-    messageCount: int,
-): LatencyMetrics =
+proc runOneLatencyRun[Q](queueInit: proc(): Q, messageCount: int): LatencyMetrics =
   ## One ping-pong RTT run. Allocates fwd + rev queues of type Q,
   ## spawns 1 pinger and 1 ponger, records RTT samples, returns
   ## LatencyMetrics{p50, p95, p99, p999, max, samples}.
@@ -497,14 +515,9 @@ proc runOneLatencyRun[Q](
   var hist = initHistogram()
 
   var pingerCtx = PingerCtx[Q](
-    fwd: addr fwd, rev: addr rev,
-    count: messageCount,
-    histogram: addr hist,
+    fwd: addr fwd, rev: addr rev, count: messageCount, histogram: addr hist
   )
-  var pongerCtx = PongerCtx[Q](
-    fwd: addr fwd, rev: addr rev,
-    count: messageCount,
-  )
+  var pongerCtx = PongerCtx[Q](fwd: addr fwd, rev: addr rev, count: messageCount)
 
   var pingerThread: Thread[ptr PingerCtx[Q]]
   var pongerThread: Thread[ptr PongerCtx[Q]]
@@ -540,10 +553,7 @@ proc runOneLatencyRun[Q](
     cleanup(rev)
 
 proc runLatencyHarness*[Q](
-    queueInit: proc(): Q,
-    messageCount: int,
-    runCount: int,
-    warmupCount: int,
+    queueInit: proc(): Q, messageCount: int, runCount: int, warmupCount: int
 ): LatencyMetrics =
   ## Ping-pong RTT runner. Allocates two queues of type Q (forward +
   ## reverse). Records per-run RTT into a Histogram; reported metrics
@@ -578,11 +588,10 @@ proc runLatencyHarness*[Q](
 
 # ---------- Throughput harness ----------
 
-type
-  ThroughputMetrics* = object
-    ops_ms_mean*: float
-    ops_ms_stddev*: float
-    runs*: int
+type ThroughputMetrics* = object
+  ops_ms_mean*: float
+  ops_ms_stddev*: float
+  runs*: int
 
 type
   ProducerCtx[Q] = object
@@ -637,14 +646,11 @@ proc runOneThroughputRun[Q](
   ## a degenerate but valid shape. Fail fast with a clear message
   ## instead of letting div/mod crash the worker thread.
   doAssert numProducers > 0,
-    "runThroughputHarness requires numProducers > 0 (got " &
-    $numProducers & ")"
+    "runThroughputHarness requires numProducers > 0 (got " & $numProducers & ")"
   doAssert numConsumers > 0,
-    "runThroughputHarness requires numConsumers > 0 (got " &
-    $numConsumers & ")"
+    "runThroughputHarness requires numConsumers > 0 (got " & $numConsumers & ")"
   doAssert messageCount >= 0,
-    "runThroughputHarness requires messageCount >= 0 (got " &
-    $messageCount & ")"
+    "runThroughputHarness requires messageCount >= 0 (got " & $messageCount & ")"
   var queue = queueInit(capacity)
   let baseP = messageCount div numProducers
   let remP = messageCount mod numProducers
@@ -659,19 +665,13 @@ proc runOneThroughputRun[Q](
   var nextStart = 0
   for i in 0 ..< numProducers:
     let count = baseP + (if i < remP: 1 else: 0)
-    producerCtxs[i] = ProducerCtx[Q](
-      queue: addr queue,
-      startIdx: nextStart,
-      count: count,
-    )
+    producerCtxs[i] =
+      ProducerCtx[Q](queue: addr queue, startIdx: nextStart, count: count)
     nextStart += count
 
   for i in 0 ..< numConsumers:
     let count = baseC + (if i < remC: 1 else: 0)
-    consumerCtxs[i] = ConsumerCtx[Q](
-      queue: addr queue,
-      count: count,
-    )
+    consumerCtxs[i] = ConsumerCtx[Q](queue: addr queue, count: count)
 
   # Monotonic clock — `epochTime` (wall clock) can step backward across
   # NTP adjustments and skew throughput numbers. Nanosecond precision:
@@ -681,11 +681,9 @@ proc runOneThroughputRun[Q](
   let startTime = getMonoTime()
 
   for i in 0 ..< numProducers:
-    createThread(producerThreads[i], producerThreadBody[Q],
-                 addr producerCtxs[i])
+    createThread(producerThreads[i], producerThreadBody[Q], addr producerCtxs[i])
   for i in 0 ..< numConsumers:
-    createThread(consumerThreads[i], consumerThreadBody[Q],
-                 addr consumerCtxs[i])
+    createThread(consumerThreads[i], consumerThreadBody[Q], addr consumerCtxs[i])
 
   for i in 0 ..< numProducers:
     joinThread(producerThreads[i])
@@ -726,13 +724,15 @@ proc runThroughputHarness*[Q](
   ## convention.
   for _ in 0 ..< warmupCount:
     discard runOneThroughputRun[Q](
-      queueInit, capacity, numProducers, numConsumers, messageCount)
+      queueInit, capacity, numProducers, numConsumers, messageCount
+    )
   var samples: seq[float] = @[]
   for _ in 0 ..< runCount:
-    samples.add(runOneThroughputRun[Q](
-      queueInit, capacity, numProducers, numConsumers, messageCount))
+    samples.add(
+      runOneThroughputRun[Q](
+        queueInit, capacity, numProducers, numConsumers, messageCount
+      )
+    )
   result = ThroughputMetrics(
-    ops_ms_mean: mean(samples),
-    ops_ms_stddev: stddev(samples),
-    runs: runCount,
+    ops_ms_mean: mean(samples), ops_ms_stddev: stddev(samples), runs: runCount
   )

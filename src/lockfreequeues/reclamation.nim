@@ -14,5 +14,5 @@
 ## dial.
 
 type ReclamationKind* = enum
-  rkNone   ## Bounded queues: no reclamation machinery (Vyukov seqlocks).
-  rkEbr    ## Unbounded queues: EBR via nim-debra.
+  rkNone ## Bounded queues: no reclamation machinery (Vyukov seqlocks).
+  rkEbr ## Unbounded queues: EBR via nim-debra.

@@ -28,28 +28,24 @@ when defined(adapter_kanal_available):
 
   # Bounded
   proc kanal_init(capacity: csize_t): pointer {.importc, cdecl.}
-  proc kanal_push(q: pointer; item: uint64): bool {.importc, cdecl.}
-  proc kanal_pop(q: pointer; outVal: ptr uint64): bool {.importc, cdecl.}
+  proc kanal_push(q: pointer, item: uint64): bool {.importc, cdecl.}
+  proc kanal_pop(q: pointer, outVal: ptr uint64): bool {.importc, cdecl.}
   proc kanal_destroy(q: pointer) {.importc, cdecl.}
 
   # Unbounded
   proc kanal_unbounded_init(): pointer {.importc, cdecl.}
-  proc kanal_unbounded_push(q: pointer; item: uint64): bool
-    {.importc, cdecl.}
-  proc kanal_unbounded_pop(q: pointer; outVal: ptr uint64): bool
-    {.importc, cdecl.}
+  proc kanal_unbounded_push(q: pointer, item: uint64): bool {.importc, cdecl.}
+  proc kanal_unbounded_pop(q: pointer, outVal: ptr uint64): bool {.importc, cdecl.}
   proc kanal_unbounded_destroy(q: pointer) {.importc, cdecl.}
 
   const topologiesSupported* = {tSpsc, tMpmc, tMpmcUnbounded}
 
   type
-    KanalAdapter*[T] = object
-      ## Bounded kanal MPMC channel handle.
+    KanalAdapter*[T] = object ## Bounded kanal MPMC channel handle.
       queue*: pointer
       capacity*: int
 
-    KanalUnboundedAdapter*[T] = object
-      ## Unbounded kanal MPMC channel handle.
+    KanalUnboundedAdapter*[T] = object ## Unbounded kanal MPMC channel handle.
       queue*: pointer
 
   proc makeKanalAdapter*[T](capacity: int = 1024): KanalAdapter[T] =
@@ -60,16 +56,16 @@ when defined(adapter_kanal_available):
     static:
       assert sizeof(T) == 8,
         "KanalAdapter requires sizeof(T) == 8 (the FFI shim transports " &
-        "a uint64 payload); got sizeof(" & $T & ") = " & $sizeof(T)
+          "a uint64 payload); got sizeof(" & $T & ") = " & $sizeof(T)
       assert supportsCopyMem(T),
         "KanalAdapter requires a type that supports copyMem (no managed " &
-        "heap resources like string, seq, ref, or types with custom " &
-        "destructors): the Rust channel bypasses Nim's GC, so any " &
-        "managed resources wouldn't be maintained across the boundary. " &
-        "Use a non-ref 64-bit payload (uint64, ptr, etc)."
+          "heap resources like string, seq, ref, or types with custom " &
+          "destructors): the Rust channel bypasses Nim's GC, so any " &
+          "managed resources wouldn't be maintained across the boundary. " &
+          "Use a non-ref 64-bit payload (uint64, ptr, etc)."
     doAssert capacity > 0,
       "KanalAdapter (bounded) requires capacity > 0 " &
-      "(zero would null-init at the FFI boundary)"
+        "(zero would null-init at the FFI boundary)"
     result.capacity = capacity
     result.queue = kanal_init(csize_t(capacity))
     doAssert result.queue != nil, "kanal_init returned null"
@@ -82,10 +78,7 @@ when defined(adapter_kanal_available):
   proc push*[T](a: var KanalAdapter[T], item: T): PushResult =
     if a.queue == nil:
       return prFull
-    if kanal_push(a.queue, cast[uint64](item)):
-      prSuccess
-    else:
-      prFull
+    if kanal_push(a.queue, cast[uint64](item)): prSuccess else: prFull
 
   proc pop*[T](a: var KanalAdapter[T]): PopResult[T] =
     if a.queue == nil:
@@ -99,8 +92,7 @@ when defined(adapter_kanal_available):
   proc name*[T](a: KanalAdapter[T]): string =
     "kanal/bounded[u64]"
 
-  proc makeKanalUnboundedAdapter*[T](
-      capacity: int = 0): KanalUnboundedAdapter[T] =
+  proc makeKanalUnboundedAdapter*[T](capacity: int = 0): KanalUnboundedAdapter[T] =
     ## `capacity` is ignored — kanal's unbounded variant grows on demand.
     ## Default arg matches the other adapters' shape so wire-up sites
     ## can pass the same `capacity` uniformly without conditionals.
@@ -110,14 +102,13 @@ when defined(adapter_kanal_available):
     static:
       assert sizeof(T) == 8,
         "KanalUnboundedAdapter requires sizeof(T) == 8 (the FFI shim " &
-        "transports a uint64 payload); got sizeof(" & $T & ") = " &
-        $sizeof(T)
+          "transports a uint64 payload); got sizeof(" & $T & ") = " & $sizeof(T)
       assert supportsCopyMem(T),
         "KanalUnboundedAdapter requires a type that supports copyMem " &
-        "(no managed heap resources like string, seq, ref, or types " &
-        "with custom destructors): the Rust channel bypasses Nim's GC, " &
-        "so any managed resources wouldn't be maintained across the " &
-        "boundary. Use a non-ref 64-bit payload (uint64, ptr)."
+          "(no managed heap resources like string, seq, ref, or types " &
+          "with custom destructors): the Rust channel bypasses Nim's GC, " &
+          "so any managed resources wouldn't be maintained across the " &
+          "boundary. Use a non-ref 64-bit payload (uint64, ptr)."
     discard capacity
     result.queue = kanal_unbounded_init()
     doAssert result.queue != nil, "kanal_unbounded_init returned null"

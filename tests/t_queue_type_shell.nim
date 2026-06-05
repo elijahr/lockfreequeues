@@ -26,7 +26,6 @@ import lockfreequeues/endpoint
 import lockfreequeues/role_tags
 
 suite "BQueue type shell — positive instantiations":
-
   test "bounded mpsc-equivalent shape compiles and validates":
     var q: BQueue[int, ccMulti, ccSingle, 16, 4, 0]
     discard addr q
@@ -48,7 +47,6 @@ suite "BQueue type shell — positive instantiations":
     validateBQueueParams(BQueue[int, ccSingle, ccSingle, 16, 0, 0])
 
 suite "Queue type shell — positive instantiations (unbounded)":
-
   test "unbounded spsc-absorbed shape compiles and validates":
     var q: Queue[int, ccSingle, ccSingle, stEager, 16, 4]
     discard addr q
@@ -70,33 +68,28 @@ suite "Queue type shell — positive instantiations (unbounded)":
     validateQueueParams(Queue[int, ccMulti, ccMulti, stEager, 16, 4])
 
 suite "BQueue type shell — guard reachability (negative controls)":
-
   test "BQueue requires N > 0":
-    check not compiles(
-      validateBQueueParams(BQueue[int, ccMulti, ccSingle, 0, 4, 0]))
+    check not compiles(validateBQueueParams(BQueue[int, ccMulti, ccSingle, 0, 4, 0]))
 
   test "BQueue + ccProd=ccMulti requires P > 0":
-    check not compiles(
-      validateBQueueParams(BQueue[int, ccMulti, ccSingle, 16, 0, 0]))
+    check not compiles(validateBQueueParams(BQueue[int, ccMulti, ccSingle, 16, 0, 0]))
 
   test "BQueue + ccProd=ccSingle must have P == 0":
-    check not compiles(
-      validateBQueueParams(BQueue[int, ccSingle, ccSingle, 16, 4, 0]))
+    check not compiles(validateBQueueParams(BQueue[int, ccSingle, ccSingle, 16, 4, 0]))
 
   test "BQueue + ccCons=ccMulti requires C > 0":
-    check not compiles(
-      validateBQueueParams(BQueue[int, ccSingle, ccMulti, 16, 0, 0]))
+    check not compiles(validateBQueueParams(BQueue[int, ccSingle, ccMulti, 16, 0, 0]))
 
   test "BQueue + ccCons=ccSingle must have C == 0":
-    check not compiles(
-      validateBQueueParams(BQueue[int, ccMulti, ccSingle, 16, 4, 4]))
+    check not compiles(validateBQueueParams(BQueue[int, ccMulti, ccSingle, 16, 4, 4]))
 
 suite "Queue type shell — guard reachability (negative controls)":
-
   test "Queue requires S > 0":
     check not compiles(
-      validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, 0, 4]))
+      validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, 0, 4])
+    )
 
   test "Queue requires MaxThreads > 0":
     check not compiles(
-      validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, 16, 0]))
+      validateQueueParams(Queue[int, ccMulti, ccSingle, stEager, 16, 0])
+    )

@@ -21,7 +21,7 @@
 ## observable state (`len`, `segmentCount`) instead of round-tripping
 ## items.
 ##
-## 
+##
 
 import unittest2
 

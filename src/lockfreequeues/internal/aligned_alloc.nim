@@ -37,15 +37,18 @@
 
 when defined(windows):
   proc aligned_malloc(
-      size: csize_t, alignment: csize_t
+    size: csize_t, alignment: csize_t
   ): pointer {.importc: "_aligned_malloc", header: "<malloc.h>".}
+
   proc aligned_free(
-      memblock: pointer
+    memblock: pointer
   ) {.importc: "_aligned_free", header: "<malloc.h>".}
+
 else:
   proc posix_memalign(
-      memptr: ptr pointer, alignment: csize_t, size: csize_t
+    memptr: ptr pointer, alignment: csize_t, size: csize_t
   ): cint {.importc, header: "<stdlib.h>".}
+
   from system/ansi_c import c_free
 
 import debra/atomics
@@ -90,7 +93,8 @@ proc freeAligned*(p: pointer) {.inline.} =
   ## Takes ``pointer`` (not ``ptr T``) so callers in untyped destructor
   ## hooks (where the segment type has been erased to ``pointer``) can
   ## use the same call site as typed callers.
-  if p == nil: return
+  if p == nil:
+    return
   when defined(windows):
     aligned_free(p)
   else:
@@ -106,8 +110,10 @@ when isMainModule:
   type Probe = object
     a: int
     b: array[128, byte]
+
   let p = allocAligned[Probe]()
   doAssert p != nil
   doAssert (cast[uint](p) mod CacheLineBytes.uint) == 0
-  echo "allocAligned[Probe] -> ", cast[uint](p), " (mod 64 = ", cast[uint](p) mod 64'u, ")"
+  echo "allocAligned[Probe] -> ",
+    cast[uint](p), " (mod 64 = ", cast[uint](p) mod 64'u, ")"
   freeAligned(p)

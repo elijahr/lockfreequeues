@@ -82,7 +82,8 @@ suite "Queue MPMC threaded":
     totalConsumed.store(0, moRelaxed)
 
   test "high contention":
-    var queue = q_mod.newBQueue[int, ccMulti, ccMulti, 16, ProducerCount, ConsumerCount]()
+    var queue =
+      q_mod.newBQueue[int, ccMulti, ccMulti, 16, ProducerCount, ConsumerCount]()
 
     var prodContexts: array[ProducerCount, ProducerContext[16]]
     for i in 0 ..< ProducerCount:
@@ -118,7 +119,8 @@ suite "Queue MPMC threaded":
       check(received[i].load(moRelaxed))
 
   test "normal capacity":
-    var queue = q_mod.newBQueue[int, ccMulti, ccMulti, 64, ProducerCount, ConsumerCount]()
+    var queue =
+      q_mod.newBQueue[int, ccMulti, ccMulti, 64, ProducerCount, ConsumerCount]()
 
     var prodContexts: array[ProducerCount, ProducerContext[64]]
     for i in 0 ..< ProducerCount:

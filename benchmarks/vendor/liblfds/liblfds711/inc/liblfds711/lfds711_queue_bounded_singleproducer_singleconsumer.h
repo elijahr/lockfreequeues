@@ -34,7 +34,7 @@ struct lfds711_queue_bss_state
 };
 
 /***** public prototypes *****/
-void lfds711_queue_bss_init_valid_on_current_logical_core( struct lfds711_queue_bss_state *qbsss, 
+void lfds711_queue_bss_init_valid_on_current_logical_core( struct lfds711_queue_bss_state *qbsss,
                                                            struct lfds711_queue_bss_element *element_array,
                                                            lfds711_pal_uint_t number_elements,
                                                            void *user_state );
@@ -56,4 +56,3 @@ void lfds711_queue_bss_query( struct lfds711_queue_bss_state *qbsss,
                               enum lfds711_queue_bss_query query_type,
                               void *query_input,
                               void *query_output );
-

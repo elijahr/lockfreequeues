@@ -34,4 +34,3 @@ void lfds711_list_asu_cleanup( struct lfds711_list_asu_state *lasus,
 
   return;
 }
-

@@ -28,4 +28,3 @@ void lfds711_stack_init_valid_on_current_logical_core( struct lfds711_stack_stat
 
   return;
 }
-

@@ -39,4 +39,3 @@ void lfds711_ringbuffer_init_valid_on_current_logical_core( struct lfds711_ringb
 
   return;
 }
-

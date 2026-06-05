@@ -28,8 +28,7 @@ const LockfreequeuesVersion* {.strdefine.} = "5.0.0"
 when compileOption("threads"):
   import debra/atomics
   import debra/atomics/dsl
-  import
-    ./lockfreequeues/[bqueue, exceptions, queue, reclamation, strategy]
+  import ./lockfreequeues/[bqueue, exceptions, queue, reclamation, strategy]
   import ./lockfreequeues/internal/pinscope_stub
 
   export atomics, dsl

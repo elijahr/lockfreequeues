@@ -27,16 +27,15 @@ when defined(adapter_rigtorp_mpmc_available):
   import ../bench_common
   import ../adapter
 
-  const VendorDir = currentSourcePath().parentDir.parentDir.parentDir &
-    "/vendor/rigtorp_mpmc"
+  const VendorDir =
+    currentSourcePath().parentDir.parentDir.parentDir & "/vendor/rigtorp_mpmc"
 
   {.passC: "-I" & VendorDir & "/include".}
   {.compile: VendorDir & "/rigtorp_mpmc_wrapper.cpp".}
 
   proc rigtorp_mpmc_init(capacity: culonglong): pointer {.importc, cdecl.}
-  proc rigtorp_mpmc_push(q: pointer; item: culonglong): cint {.importc, cdecl.}
-  proc rigtorp_mpmc_pop(q: pointer; outVal: ptr culonglong): cint
-    {.importc, cdecl.}
+  proc rigtorp_mpmc_push(q: pointer, item: culonglong): cint {.importc, cdecl.}
+  proc rigtorp_mpmc_pop(q: pointer, outVal: ptr culonglong): cint {.importc, cdecl.}
   proc rigtorp_mpmc_destroy(q: pointer) {.importc, cdecl.}
 
   const topologiesSupported* = {tMpmc}
@@ -49,14 +48,13 @@ when defined(adapter_rigtorp_mpmc_available):
     static:
       assert sizeof(T) == 8,
         "RigtorpMpmcAdapter requires sizeof(T) == 8 (the wrapper " &
-        "stores `uint64_t`); got sizeof(" & $T & ") = " & $sizeof(T)
+          "stores `uint64_t`); got sizeof(" & $T & ") = " & $sizeof(T)
       assert supportsCopyMem(T),
         "RigtorpMpmcAdapter requires a type that supports copyMem (no " &
-        "managed heap resources like string, seq, ref, or types with " &
-        "custom destructors): the C++ queue bypasses Nim's GC. Use a " &
-        "non-ref 64-bit payload."
-    doAssert capacity > 0,
-      "rigtorp::mpmc::Queue (MPMCQueue) requires capacity > 0"
+          "managed heap resources like string, seq, ref, or types with " &
+          "custom destructors): the C++ queue bypasses Nim's GC. Use a " &
+          "non-ref 64-bit payload."
+    doAssert capacity > 0, "rigtorp::mpmc::Queue (MPMCQueue) requires capacity > 0"
     # Bench-harness policy: require power-of-2 capacity. Upstream
     # rigtorp::mpmc::Queue uses `i % capacity_` and accepts any positive
     # capacity, but our bench shapes are all pow-2, so this asserts the
@@ -69,7 +67,7 @@ when defined(adapter_rigtorp_mpmc_available):
       raise newException(
         OutOfMemDefect,
         "rigtorp_mpmc_init returned nullptr (rigtorp::mpmc::Queue " &
-        "construction failed; capacity = " & $capacity & ")"
+          "construction failed; capacity = " & $capacity & ")",
       )
 
   proc cleanup*[T](a: var RigtorpMpmcAdapter[T]) =

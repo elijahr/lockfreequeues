@@ -15,12 +15,10 @@ import lockfreequeues/role_tags
 
 const
   ItemCount = 10000
-  MT = 4
-    ## Type-uniform MaxThreads phantom for the spsc-absorbed branch.
+  MT = 4 ## Type-uniform MaxThreads phantom for the spsc-absorbed branch.
 
 type
-  SpscQ[S: static int] =
-    Queue[int, ccSingle, ccSingle, stEager, S, MT]
+  SpscQ[S: static int] = Queue[int, ccSingle, ccSingle, stEager, S, MT]
 
   TestContext[S: static int] = object
     queue: ptr SpscQ[S]

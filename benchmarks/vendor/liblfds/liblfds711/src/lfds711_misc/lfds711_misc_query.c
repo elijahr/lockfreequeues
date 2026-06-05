@@ -35,4 +35,3 @@ void lfds711_misc_query( enum lfds711_misc_query query_type,
 }
 
 #pragma warning( default : 4100 )
-

@@ -130,4 +130,3 @@ int lfds711_queue_umm_dequeue( struct lfds711_queue_umm_state *qumms,
 
   return rv;
 }
-

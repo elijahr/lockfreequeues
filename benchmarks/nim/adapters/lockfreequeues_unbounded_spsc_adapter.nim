@@ -58,7 +58,7 @@ type
       ## for every `push` and avoids recreating the view per call.
 
 proc makeLockfreequeuesUnboundedSpscAdapter*[S: static int, T](
-    capacity: int = 0   # ignored for unbounded
+    capacity: int = 0, # ignored for unbounded
 ): LockfreequeuesUnboundedSpscAdapter[S, T] =
   # OOM safety: `create(...)`, `newUnboundedSpscQueue()`, and
   # `getProducer()` can each raise. The queue value owns segment memory
@@ -76,8 +76,7 @@ proc makeLockfreequeuesUnboundedSpscAdapter*[S: static int, T](
     # typestate `=destroy` on uninitialized storage. Mark the slot moved-from
     # first.
     wasMoved(result.queue[])
-    result.queue[] =
-      newUnboundedSpscQueue[T, stEager, S, SpscMaxThreads]()
+    result.queue[] = newUnboundedSpscQueue[T, stEager, S, SpscMaxThreads]()
     queueValueInitOk = true
     result.producer0 = result.queue[].getProducerHere()
     queueInitOk = true
@@ -101,9 +100,7 @@ proc makeLockfreequeuesUnboundedSpscAdapter*[S: static int, T](
       # safe no-op.
       reset(result.producer0)
 
-proc cleanup*[S: static int, T](
-    a: var LockfreequeuesUnboundedSpscAdapter[S, T]
-) =
+proc cleanup*[S: static int, T](a: var LockfreequeuesUnboundedSpscAdapter[S, T]) =
   ## Order matters: the cached `producer0` view borrows a `ptr Queue`
   ## into the heap-allocated queue and carries a typestate `=destroy`.
   ## It must be reset BEFORE the queue is reset, else its scope-exit

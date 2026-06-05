@@ -4,7 +4,7 @@
 
 Lock-free queues for Nim. Bounded queues are ring buffers; unbounded queues are
 linked segments reclaimed via [DEBRA](https://github.com/elijahr/nim-debra).
-All variants cover SPSC, SPMC, MPSC, and MPMC. 
+All variants cover SPSC, SPMC, MPSC, and MPMC.
 
 API documentation: <https://elijahr.github.io/lockfreequeues>
 

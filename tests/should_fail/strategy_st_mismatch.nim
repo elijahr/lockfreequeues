@@ -15,14 +15,8 @@ import lockfreequeues/role_tags
 # A proc that only accepts a stManual endpoint. Calling this with the
 # result of `q.getConsumer()` from a stEager queue must fail at type-check.
 proc requireManualConsumer[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    S, MaxThreads: static int,
-](
-    _: Unbound[
-      T, AnyThreadTag, Queue[T, ccProd, ccCons, stManual, S, MaxThreads]
-    ]
-) =
+    T; ccProd, ccCons: static PinScopeCardinality, S, MaxThreads: static int
+](_: Unbound[T, AnyThreadTag, Queue[T, ccProd, ccCons, stManual, S, MaxThreads]]) =
   discard
 
 proc main() =

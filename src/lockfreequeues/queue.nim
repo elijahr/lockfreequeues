@@ -101,36 +101,35 @@ static:
 
 type
   QueueLifecycleCtx*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      ST: static DeallocationStrategy,
-      S, MaxThreads: static int,
-  ] = object of RootObj
-    ## Phantom context type for the Queue Lifecycle typestate.
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+  ] = object of RootObj ## Phantom context type for the Queue Lifecycle typestate.
 
   QueueInit*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      ST: static DeallocationStrategy,
-      S, MaxThreads: static int,
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
   ] = distinct QueueLifecycleCtx[T, ccProd, ccCons, ST, S, MaxThreads]
     ## Initial Lifecycle state for an unbounded Queue.
 
   QueueDestroyed*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      ST: static DeallocationStrategy,
-      S, MaxThreads: static int,
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
   ] = distinct QueueLifecycleCtx[T, ccProd, ccCons, ST, S, MaxThreads]
     ## Terminal Lifecycle state for an unbounded Queue.
 
 typestate QueueLifecycle[
-    T,
-    ccProd: static PinScopeCardinality,
-    ccCons: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S: static int,
-    MaxThreads: static int,
+  T,
+  ccProd: static PinScopeCardinality,
+  ccCons: static PinScopeCardinality,
+  ST: static DeallocationStrategy,
+  S: static int,
+  MaxThreads: static int,
 ]:
   inheritsFromRootObj = true
   consumeOnTransition = false
@@ -181,10 +180,10 @@ type
       prevConsumerIdx* {.align: CacheLineBytes.}: Atomic[int]
 
   Queue*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      ST: static DeallocationStrategy,
-      S, MaxThreads: static int,
+    T;
+    ccProd, ccCons: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
   ] {.QueueLifecycle: QueueInit.} = object
     ## Unbounded lock-free queue, parameterized by producer/consumer
     ## cardinality, deallocation strategy `ST`, segment size `S`, and
@@ -240,7 +239,7 @@ type
           attachedTid*: ThreadId
 
 ## ----------------------------------------------------------------------
-## Param-coherence guards — unbounded subset of legacy 
+## Param-coherence guards — unbounded subset of legacy
 ##
 ## The legacy 9 guards covered both rkNone (6 guards) and rkEbr (3
 ## guards). The 6 rkNone guards moved to `bqueue.nim`
@@ -269,7 +268,6 @@ proc validateQueueParams*[
   ## runtime cost.
   assertQueueParams[T, ccProd, ccCons, ST, S, MaxThreads]()
   discard
-
 
 ## ----------------------------------------------------------------------
 ## Unbounded-queue body — absorbed spsc
@@ -522,10 +520,12 @@ proc newQueue*[
     _: typedesc[Queue[T, ccSingle, ccSingle, ST, S, MaxThreads]],
     manager: ptr DebraManager[MaxThreads, CC],
     handle: ThreadHandle[MaxThreads, CC],
-): Queue[T, ccSingle, ccSingle, ST, S, MaxThreads] {.error:
-    "Spsc-absorbed Queue (ccSingle × ccSingle) is debra-free. " &
-    "Use the typedesc-only newQueue(Queue[..., ccSingle, ccSingle, ST, S, MaxThreads]) " &
-    "overload instead.".} =
+): Queue[T, ccSingle, ccSingle, ST, S, MaxThreads] {.
+    error:
+      "Spsc-absorbed Queue (ccSingle × ccSingle) is debra-free. " &
+      "Use the typedesc-only newQueue(Queue[..., ccSingle, ccSingle, ST, S, MaxThreads]) " &
+      "overload instead."
+.} =
   discard
 
 proc newQueue*[
@@ -536,10 +536,12 @@ proc newQueue*[
 ](
     _: typedesc[Queue[T, ccSingle, ccSingle, ST, S, MaxThreads]],
     manager: ptr DebraManager[MaxThreads, CC],
-): Queue[T, ccSingle, ccSingle, ST, S, MaxThreads] {.error:
-    "Spsc-absorbed Queue (ccSingle × ccSingle) is debra-free. " &
-    "Use the typedesc-only newQueue(Queue[..., ccSingle, ccSingle, ST, S, MaxThreads]) " &
-    "overload instead.".} =
+): Queue[T, ccSingle, ccSingle, ST, S, MaxThreads] {.
+    error:
+      "Spsc-absorbed Queue (ccSingle × ccSingle) is debra-free. " &
+      "Use the typedesc-only newQueue(Queue[..., ccSingle, ccSingle, ST, S, MaxThreads]) " &
+      "overload instead."
+.} =
   discard
 
 proc newQueue*[
@@ -637,7 +639,6 @@ proc segmentCount*[
 ##     growth on full.
 ## ----------------------------------------------------------------------
 
-
 ## ----------------------------------------------------------------------
 ## Pop body — single-item.
 ##
@@ -703,9 +704,7 @@ proc pop*[
     ccProd: static PinScopeCardinality,
     ST: static DeallocationStrategy,
     S, MaxThreads: static int,
-](
-    self: var Queue[T, ccProd, ccSingle, ST, S, MaxThreads], count: int
-): Option[seq[T]] =
+](self: var Queue[T, ccProd, ccSingle, ST, S, MaxThreads], count: int): Option[seq[T]] =
   ## Batch pop for ccCons == ccSingle. Thin loop over single-item pop.
   if unlikely(count <= 0):
     return none(seq[T])
@@ -727,10 +726,14 @@ proc pop*[
     ccProd: static PinScopeCardinality,
     ST: static DeallocationStrategy,
     S, MaxThreads: static int,
-](self: var Queue[T, ccProd, ccMulti, ST, S, MaxThreads]): Option[T] {.error:
-    "Direct pop on a multi-consumer Queue is not allowed. " &
-    "Use q.getConsumerHere().pop() (same-thread sugar) or q.bindConsumer().pop() (one-shot SC consumer) to obtain a per-thread " &
-    "Bound[T, Tag, Queue[...]] and pop through it.".} =
+](
+    self: var Queue[T, ccProd, ccMulti, ST, S, MaxThreads]
+): Option[T] {.
+    error:
+      "Direct pop on a multi-consumer Queue is not allowed. " &
+      "Use q.getConsumerHere().pop() (same-thread sugar) or q.bindConsumer().pop() (one-shot SC consumer) to obtain a per-thread " &
+      "Bound[T, Tag, Queue[...]] and pop through it."
+.} =
   discard
 
 # --- ccMulti-consumer compile-time gate on bare Queue batch pop ----------
@@ -741,10 +744,12 @@ proc pop*[
     S, MaxThreads: static int,
 ](
     self: var Queue[T, ccProd, ccMulti, ST, S, MaxThreads], count: int
-): Option[seq[T]] {.error:
-    "Direct batch pop on a multi-consumer Queue is not allowed. " &
-    "Use q.getConsumerHere().pop(count) (same-thread sugar) or q.bindConsumer().pop(count) (one-shot SC consumer) to obtain a per-thread " &
-    "Bound[T, Tag, Queue[...]] and batch-pop through it.".} =
+): Option[seq[T]] {.
+    error:
+      "Direct batch pop on a multi-consumer Queue is not allowed. " &
+      "Use q.getConsumerHere().pop(count) (same-thread sugar) or q.bindConsumer().pop(count) (one-shot SC consumer) to obtain a per-thread " &
+      "Bound[T, Tag, Queue[...]] and batch-pop through it."
+.} =
   discard
 
 ## ----------------------------------------------------------------------
@@ -754,19 +759,21 @@ proc pop*[
 ## ----------------------------------------------------------------------
 
 proc `=copy`*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    ST: static DeallocationStrategy,
-    S, MaxThreads: static int,
+  T;
+  ccProd, ccCons: static PinScopeCardinality,
+  ST: static DeallocationStrategy,
+  S, MaxThreads: static int,
 ](
-    dst: var Queue[T, ccProd, ccCons, ST, S, MaxThreads],
-    src: Queue[T, ccProd, ccCons, ST, S, MaxThreads],
-) {.error:
+  dst: var Queue[T, ccProd, ccCons, ST, S, MaxThreads],
+  src: Queue[T, ccProd, ccCons, ST, S, MaxThreads],
+) {.
+  error:
     "Queue is non-copyable: it owns a `ptr Segment` chain and (for " &
     "non-spsc cardinalities) a `ptr DebraManager`. Copying would " &
     "alias these owned pointers and double-free / use-after-free at " &
     "`=destroy`. Move the Queue (it has `=destroy` move semantics) or " &
-    "share it by `ptr`/`var` parameter instead.".}
+    "share it by `ptr`/`var` parameter instead."
+.}
   ## Compile-time copy ban. A Queue owns heap state (segment chain +
   ## optionally the debra manager, recorded by `ownsManager`) that is
   ## reclaimed exactly once in `=destroy`. A field-wise copy would
@@ -779,11 +786,13 @@ proc `=destroy`*[
     ccProd, ccCons: static PinScopeCardinality,
     ST: static DeallocationStrategy,
     S, MaxThreads: static int,
-](self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]) {.
+](
+    self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
+) {.
     destructorTransition: QueueInit -> QueueDestroyed,
     transitionError:
       "Queue used after =destroy (lifecycle: QueueInit -> QueueDestroyed).",
-    raises: [],
+    raises: []
 .} =
   ## Destructor. Walks `headSegment` → `next` → ... freeing each
   ## segment. For non-spsc cardinalities, additionally unbinds the
@@ -815,7 +824,6 @@ proc `=destroy`*[
       if self.ownsManager:
         reset(self.manager[])
         freeAligned(self.manager)
-
 
 ## ----------------------------------------------------------------------
 ## Family-named unbounded smart constructors — kept as thin wrappers.
@@ -921,13 +929,12 @@ proc newUnboundedMpmcQueue*[
 
 proc push*[
     T;
-    Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag;
+    Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag,
     ccProd, ccCons: static PinScopeCardinality,
     ST: static DeallocationStrategy,
     S, MaxThreads: static int,
 ](
-    self: Bound[T, Tag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]],
-    item: sink T,
+    self: Bound[T, Tag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]], item: sink T
 ) {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## Push a single item onto the unbounded queue (cardinality-dispatched).
   when not defined(allowNonLockFreeQueueItems):
@@ -1009,7 +1016,7 @@ proc push*[
 
 proc push*[
     T;
-    Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag;
+    Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag,
     ccProd, ccCons: static PinScopeCardinality,
     ST: static DeallocationStrategy,
     S, MaxThreads: static int,
@@ -1022,7 +1029,13 @@ proc push*[
     self.push(item)
 
 # --- SPSC / MPSC pop on Bound (ccCons == ccSingle: no pin) ----------------
-proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ccProd: static PinScopeCardinality, ST: static DeallocationStrategy, S, MaxThreads: static int](
+proc pop*[
+    T;
+    Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag,
+    ccProd: static PinScopeCardinality,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
     self: Bound[T, Tag, Queue[T, ccProd, ccSingle, ST, S, MaxThreads]]
 ): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## Pop for `ccCons == ccSingle` (SPSC + MPSC). Single consumer thread,
@@ -1076,7 +1089,9 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ccProd: stat
         if nextSeg == nil:
           break
         self.queue[].retireOnPublish(
-          scope, self.queue.headSegment, nextSeg,
+          scope,
+          self.queue.headSegment,
+          nextSeg,
           segmentDestructor[T, ccMulti, ccSingle, S],
         )
         when ST != stManual:
@@ -1089,7 +1104,7 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ccProd: stat
 # --- Batch pop on Bound for ccCons == ccSingle (SPSC + MPSC) -------------
 proc pop*[
     T;
-    Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag;
+    Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag,
     ccProd: static PinScopeCardinality,
     ST: static DeallocationStrategy,
     S, MaxThreads: static int,
@@ -1111,7 +1126,12 @@ proc pop*[
     some(items)
 
 # --- SPMC pop on Bound (ccSingle producer × ccMulti consumer) ------------
-proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ST: static DeallocationStrategy, S, MaxThreads: static int](
+proc pop*[
+    T;
+    Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
     self: Bound[T, Tag, Queue[T, ccSingle, ccMulti, ST, S, MaxThreads]]
 ): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## SPMC pop — retire-bearing site. Pin claim via reconstructed
@@ -1165,7 +1185,12 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ST: static D
       discard reclaimNow(h)
 
 # --- MPMC pop on Bound (ccMulti producer × ccMulti consumer) --------------
-proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ST: static DeallocationStrategy, S, MaxThreads: static int](
+proc pop*[
+    T;
+    Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag,
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](
     self: Bound[T, Tag, Queue[T, ccMulti, ccMulti, ST, S, MaxThreads]]
 ): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## MPMC pop — retire-bearing site.
@@ -1226,7 +1251,7 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; ST: static D
 # --- Batch pop on Bound for ccCons == ccMulti ----------------------------
 proc pop*[
     T;
-    Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag;
+    Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag,
     ccProd: static PinScopeCardinality,
     ST: static DeallocationStrategy,
     S, MaxThreads: static int,

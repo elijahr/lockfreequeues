@@ -57,16 +57,15 @@ macro defineProducerWorker*(workerName, queueType, body: untyped): untyped =
   ## **MUST be invoked at module scope.**
   let workArgIdent = ident($workerName & "Arg")
   let producerSym = ident("producer")
-  result = quote do:
-    type `workArgIdent`* = Unbound[
-      typeof(`queueType`).T, MpmcProducerTag, `queueType`
-    ]
+  result = quote:
+    type `workArgIdent`* = Unbound[typeof(`queueType`).T, MpmcProducerTag, `queueType`]
     proc `workerName`*(
         arg: `workArgIdent`
     ) {.thread, nimcall, tags: [MpmcProducerTag, TypestateOp, RootEffect], gcsafe.} =
       var u = arg
       var `producerSym` {.inject.} = u.bindToThread()
       `body`
+
     # Compile-time module-scope guard: `export` is rejected by Nim outside
     # top-level scope (`Error: 'export' is only allowed at top level`).
     # The emitted thread proc is silently downgraded to a closure in
@@ -80,16 +79,15 @@ macro defineConsumerWorker*(workerName, queueType, body: untyped): untyped =
   ## `Bound[T, MpmcConsumerTag, queueType]`. MUST be at module scope.
   let workArgIdent = ident($workerName & "Arg")
   let consumerSym = ident("consumer")
-  result = quote do:
-    type `workArgIdent`* = Unbound[
-      typeof(`queueType`).T, MpmcConsumerTag, `queueType`
-    ]
+  result = quote:
+    type `workArgIdent`* = Unbound[typeof(`queueType`).T, MpmcConsumerTag, `queueType`]
     proc `workerName`*(
         arg: `workArgIdent`
     ) {.thread, nimcall, tags: [MpmcConsumerTag, TypestateOp, RootEffect], gcsafe.} =
       var u = arg
       var `consumerSym` {.inject.} = u.bindToThread()
       `body`
+
     export `workerName`
 
 proc spawnDefinedProducerImpl*[ArgT](
@@ -106,8 +104,7 @@ template spawnDefinedProducer*(workerProc: untyped, q: untyped): untyped =
   let u_lfq_spawn = q.getProducer()
   type ArgT_lfq_spawn = `workerProc Arg`
   spawnDefinedProducerImpl[ArgT_lfq_spawn](
-    workerProc,
-    ArgT_lfq_spawn(queue: u_lfq_spawn.queue, idx: u_lfq_spawn.idx),
+    workerProc, ArgT_lfq_spawn(queue: u_lfq_spawn.queue, idx: u_lfq_spawn.idx)
   )
 
 proc spawnDefinedConsumerImpl*[ArgT](
@@ -121,6 +118,5 @@ template spawnDefinedConsumer*(workerProc: untyped, q: untyped): untyped =
   let u_lfq_spawn = q.getConsumer()
   type ArgT_lfq_spawn = `workerProc Arg`
   spawnDefinedConsumerImpl[ArgT_lfq_spawn](
-    workerProc,
-    ArgT_lfq_spawn(queue: u_lfq_spawn.queue, idx: u_lfq_spawn.idx),
+    workerProc, ArgT_lfq_spawn(queue: u_lfq_spawn.queue, idx: u_lfq_spawn.idx)
   )

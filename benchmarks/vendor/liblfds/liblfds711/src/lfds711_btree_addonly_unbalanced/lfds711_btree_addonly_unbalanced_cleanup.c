@@ -114,4 +114,3 @@ void lfds711_btree_au_cleanup( struct lfds711_btree_au_state *baus,
 
   return;
 }
-

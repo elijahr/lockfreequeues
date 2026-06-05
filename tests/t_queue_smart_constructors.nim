@@ -15,7 +15,7 @@
 ## `Queue.pop` for `ccCons == ccSingle` and through
 ## `QueueConsumer.pop` (via `getConsumer`) for `ccCons == ccMulti`.
 ##
-## 
+##
 
 import std/options
 import unittest2

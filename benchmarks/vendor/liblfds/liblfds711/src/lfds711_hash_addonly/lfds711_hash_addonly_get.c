@@ -44,4 +44,3 @@ int lfds711_hash_a_get_by_key( struct lfds711_hash_a_state *has,
 
   return rv;
 }
-

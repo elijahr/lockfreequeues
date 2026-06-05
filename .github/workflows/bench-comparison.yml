@@ -650,4 +650,3 @@ jobs:
           # kanal, liblfds), not crossbeam alone.
           name: bench-comparison-external-bmf
           path: merged.json
-

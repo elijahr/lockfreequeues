@@ -52,12 +52,10 @@ from ../bench_common import Topology, tMpscUnbounded
 const topologiesSupported*: set[Topology] = {tMpscUnbounded}
 
 type
-  UnboundedMpscAdapterQueue*[S: static int, T;
-                               MaxThreads: static int] =
+  UnboundedMpscAdapterQueue*[S: static int, T; MaxThreads: static int] =
     Queue[T, ccMulti, ccSingle, stEager, S, MaxThreads]
 
-  UnboundedMpscAdapter*[S: static int, T;
-                          MaxThreads: static int] = object
+  UnboundedMpscAdapter*[S: static int, T; MaxThreads: static int] = object
     ## Owns the heap-allocated queue and DebraManager. NO thread is
     ## registered at init time (registration is thread-affine). The
     ## consumer thread registers itself via `adapter.queue[].
@@ -68,8 +66,9 @@ type
     queue*: ptr UnboundedMpscAdapterQueue[S, T, MaxThreads]
     manager*: ptr DebraManager[MaxThreads, debra.ccSingle]
 
-proc initUnboundedMpscAdapter*[S: static int, T; MaxThreads: static int](
-    ): UnboundedMpscAdapter[S, T, MaxThreads] =
+proc initUnboundedMpscAdapter*[S: static int, T; MaxThreads: static int](): UnboundedMpscAdapter[
+    S, T, MaxThreads
+] =
   ## Allocate manager and queue on the heap. Does NOT register any
   ## thread: the consumer thread calls `queue.attachConsumer()` and
   ## producer threads call `getProducer().attach()` on their own
@@ -109,8 +108,7 @@ proc initUnboundedMpscAdapter*[S: static int, T; MaxThreads: static int](
     # Same rationale for the queue: the unified Queue carries a typestate
     # `=destroy`, so mark the created slot moved-from before assigning into it.
     wasMoved(result.queue[])
-    result.queue[] =
-      newUnboundedMpscQueue[T, stEager, S, MaxThreads](result.manager)
+    result.queue[] = newUnboundedMpscQueue[T, stEager, S, MaxThreads](result.manager)
     queueInitOk = true
   finally:
     if not queueInitOk:

@@ -66,8 +66,8 @@ when defined(BenchSpscTestCompileTime):
     doAssert BenchSpscRuns == 33,
       "BenchSpscRuns default must be 33 (got " & $BenchSpscRuns & ")"
     doAssert BenchSpscMessageCount == 1_000_000,
-      "BenchSpscMessageCount default must be 1_000_000 (got " &
-      $BenchSpscMessageCount & ")"
+      "BenchSpscMessageCount default must be 1_000_000 (got " & $BenchSpscMessageCount &
+        ")"
     doAssert BenchSpscWarmup == 3,
       "BenchSpscWarmup default must be 3 (got " & $BenchSpscWarmup & ")"
 
@@ -85,12 +85,13 @@ proc initSpscQ(capacity: int): SpscAdapter[SpscCapacity, uint64] =
 # `lockfreequeues_queue_bounded_spsc/spsc/1p1c`. Output metric +
 # units (throughput_ops_ms) identical to the legacy spsc baseline
 # so parity tooling can compute a % delta directly.
-proc initQueueBoundedSpscQ(capacity: int):
-    QueueBoundedAdapter[ccSingle, ccSingle, stEager,
-                        SpscCapacity, 0, 0, uint64] =
+proc initQueueBoundedSpscQ(
+    capacity: int
+): QueueBoundedAdapter[ccSingle, ccSingle, stEager, SpscCapacity, 0, 0, uint64] =
   doAssert capacity == SpscCapacity, "capacity must equal SpscCapacity"
-  makeQueueBoundedAdapter[ccSingle, ccSingle, stEager,
-                          SpscCapacity, 0, 0, uint64](SpscCapacity)
+  makeQueueBoundedAdapter[ccSingle, ccSingle, stEager, SpscCapacity, 0, 0, uint64](
+    SpscCapacity
+  )
 
 when defined(adapter_boost_lockfree_spsc_available):
   proc initBoostSpscQ(capacity: int): BoostLockfreeSpscAdapter[uint64] =
@@ -133,10 +134,7 @@ proc supportedVariantsList(): seq[string] {.compileTime.} =
 const SupportedVariants = supportedVariantsList()
 
 proc runMvpVariant[A](
-    em: var BMFEmitter,
-    slug: string,
-    queueInit: proc(capacity: int): A,
-    capacity: int,
+    em: var BMFEmitter, slug: string, queueInit: proc(capacity: int): A, capacity: int
 ) =
   ## Generic emitter for MVP comparison adapters: 1p1c throughput at
   ## the same shape as the in-tree spsc baseline so Bencher can compare
@@ -156,7 +154,8 @@ proc runMvpVariant[A](
   echo fmt"  runs: {metrics.runs}"
   echo ""
   em.addMeasure(
-    slug, "throughput_ops_ms",
+    slug,
+    "throughput_ops_ms",
     metrics.ops_ms_mean,
     metrics.ops_ms_mean - metrics.ops_ms_stddev,
     metrics.ops_ms_mean + metrics.ops_ms_stddev,
@@ -181,7 +180,8 @@ proc runVariant(variant: string, em: var BMFEmitter) =
     echo fmt"  runs: {metrics.runs}"
     echo ""
     em.addMeasure(
-      slug, "throughput_ops_ms",
+      slug,
+      "throughput_ops_ms",
       metrics.ops_ms_mean,
       metrics.ops_ms_mean - metrics.ops_ms_stddev,
       metrics.ops_ms_mean + metrics.ops_ms_stddev,
@@ -195,8 +195,8 @@ proc runVariant(variant: string, em: var BMFEmitter) =
     let slug = "lockfreequeues_queue_bounded_spsc/spsc/1p1c"
     echo fmt"{variant} ({slug}):"
     let metrics = runThroughputHarness[
-        QueueBoundedAdapter[ccSingle, ccSingle, stEager,
-                            SpscCapacity, 0, 0, uint64]](
+      QueueBoundedAdapter[ccSingle, ccSingle, stEager, SpscCapacity, 0, 0, uint64]
+    ](
       queueInit = initQueueBoundedSpscQ,
       capacity = SpscCapacity,
       numProducers = 1,
@@ -210,7 +210,8 @@ proc runVariant(variant: string, em: var BMFEmitter) =
     echo fmt"  runs: {metrics.runs}"
     echo ""
     em.addMeasure(
-      slug, "throughput_ops_ms",
+      slug,
+      "throughput_ops_ms",
       metrics.ops_ms_mean,
       metrics.ops_ms_mean - metrics.ops_ms_stddev,
       metrics.ops_ms_mean + metrics.ops_ms_stddev,
@@ -276,7 +277,8 @@ when isMainModule:
     while true:
       p.next()
       case p.kind
-      of cmdEnd: break
+      of cmdEnd:
+        break
       of cmdLongOption, cmdShortOption:
         case p.key
         of "bmf-out":

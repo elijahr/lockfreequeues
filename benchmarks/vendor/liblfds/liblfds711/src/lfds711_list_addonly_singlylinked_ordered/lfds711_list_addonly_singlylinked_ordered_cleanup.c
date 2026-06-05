@@ -34,4 +34,3 @@ void lfds711_list_aso_cleanup( struct lfds711_list_aso_state *lasos,
 
   return;
 }
-

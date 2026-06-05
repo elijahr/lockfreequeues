@@ -8,7 +8,7 @@
 ## (ReclamationKind), §3.1 (DeallocationStrategy), §5
 ## (verbatim source).
 ##
-## 
+##
 
 import unittest2
 
@@ -16,7 +16,6 @@ import lockfreequeues/strategy
 import lockfreequeues/reclamation
 
 suite "v5.0.0 enum modules":
-
   test "DeallocationStrategy has stManual + stEager with documented ords":
     # Two members, distinct, in source order (stManual=0, stEager=1).
     check stManual.ord == 0

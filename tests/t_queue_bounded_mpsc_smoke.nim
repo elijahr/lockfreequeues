@@ -26,8 +26,9 @@ suite "bounded mpsc-equiv push/pop smoke":
   test "push fills, push-overfull returns false":
     var q = newBQueue[int, ccMulti, ccSingle, 4, 4, 0]()
     var producer = q.getProducerHere(0)
-    for i in 0 ..< 4: check producer.push(i)
-    check not producer.push(99)  # full
+    for i in 0 ..< 4:
+      check producer.push(i)
+    check not producer.push(99) # full
 
   test "pop on empty returns none":
     var q = newBQueue[int, ccMulti, ccSingle, 16, 4, 0]()

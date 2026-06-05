@@ -40,18 +40,16 @@ import ../bench_common
 const topologiesSupported* = {tMpmcUnbounded}
 
 type
-  UnboundedSpmcAdapterQueue[S: static int, T;
-                              MaxThreads: static int] =
+  UnboundedSpmcAdapterQueue[S: static int, T; MaxThreads: static int] =
     Queue[T, ccSingle, ccMulti, stEager, S, MaxThreads]
-  UnboundedSpmcAdapterProducer[S: static int, T;
-                                 MaxThreads: static int] =
-    Bound[T, AnyThreadTag, Queue[T, ccSingle, ccMulti, stEager, S, MaxThreads]]
-  UnboundedSpmcAdapterConsumer[S: static int, T;
-                                 MaxThreads: static int] =
+
+  UnboundedSpmcAdapterProducer[S: static int, T; MaxThreads: static int] =
     Bound[T, AnyThreadTag, Queue[T, ccSingle, ccMulti, stEager, S, MaxThreads]]
 
-  LockfreequeuesUnboundedSpmcAdapter*[S: static int, T;
-                                        MaxThreads: static int] = object
+  UnboundedSpmcAdapterConsumer[S: static int, T; MaxThreads: static int] =
+    Bound[T, AnyThreadTag, Queue[T, ccSingle, ccMulti, stEager, S, MaxThreads]]
+
+  LockfreequeuesUnboundedSpmcAdapter*[S: static int, T; MaxThreads: static int] = object
     ## Manager and queue are BOTH heap-allocated. The manager is
     ## heap-pointer because the unified Queue rkEbr borrow
     ## smart-constructor takes a `ptr DebraManager`. The queue is
@@ -75,9 +73,8 @@ type
     producer0*: UnboundedSpmcAdapterProducer[S, T, MaxThreads]
     consumer0*: UnboundedSpmcAdapterConsumer[S, T, MaxThreads]
 
-proc makeLockfreequeuesUnboundedSpmcAdapter*[S: static int, T;
-                                                MaxThreads: static int](
-    capacity: int = 0    # ignored for unbounded
+proc makeLockfreequeuesUnboundedSpmcAdapter*[S: static int, T; MaxThreads: static int](
+    capacity: int = 0, # ignored for unbounded
 ): LockfreequeuesUnboundedSpmcAdapter[S, T, MaxThreads] =
   result.manager = create(DebraManager[MaxThreads, debra.ccMulti])
   # wasMoved before the deref-assign: `create`'s zero-fill is not tracked by
@@ -108,8 +105,7 @@ proc makeLockfreequeuesUnboundedSpmcAdapter*[S: static int, T;
     # Same rationale for the queue: the unified Queue carries a typestate
     # `=destroy`, so mark the created slot moved-from before assigning into it.
     wasMoved(result.queue[])
-    result.queue[] =
-      newUnboundedSpmcQueue[T, stEager, S, MaxThreads](result.manager)
+    result.queue[] = newUnboundedSpmcQueue[T, stEager, S, MaxThreads](result.manager)
     queueValueInitOk = true
     # producer0 / consumer0 are the cached views for the smoke / 1p1c
     # round-trip path, where the init thread IS the operating thread.

@@ -12,5 +12,4 @@ import lockfreequeues/role_tags
 var q: BQueue[int, ccMulti, ccMulti, 64, 4, 4]
 var wrongTagBound: Bound[int, MpmcConsumerTag, typeof(q)]
 wrongTagBound.queue = addr q
-discard wrongTagBound.push(1)
-  # MUST FAIL: MpmcConsumerTag != producer-side tag.
+discard wrongTagBound.push(1) # MUST FAIL: MpmcConsumerTag != producer-side tag.

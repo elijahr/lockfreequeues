@@ -103,32 +103,27 @@ const FingerprintPrefix = "sha1:"
 # the bytes themselves are still frozen at compile time, so the result
 # is deterministic per build.)
 const AtomicQueueHeaderBytes: array[5, (string, string)] = [
-  ("atomic_queue.h",
-    staticRead("../vendor/atomic_queue/include/atomic_queue/atomic_queue.h")),
-  ("atomic_queue_mutex.h",
-    staticRead("../vendor/atomic_queue/include/atomic_queue/atomic_queue_mutex.h")),
-  ("barrier.h",
-    staticRead("../vendor/atomic_queue/include/atomic_queue/barrier.h")),
-  ("defs.h",
-    staticRead("../vendor/atomic_queue/include/atomic_queue/defs.h")),
-  ("spinlock.h",
-    staticRead("../vendor/atomic_queue/include/atomic_queue/spinlock.h")),
+  (
+    "atomic_queue.h",
+    staticRead("../vendor/atomic_queue/include/atomic_queue/atomic_queue.h"),
+  ),
+  (
+    "atomic_queue_mutex.h",
+    staticRead("../vendor/atomic_queue/include/atomic_queue/atomic_queue_mutex.h"),
+  ),
+  ("barrier.h", staticRead("../vendor/atomic_queue/include/atomic_queue/barrier.h")),
+  ("defs.h", staticRead("../vendor/atomic_queue/include/atomic_queue/defs.h")),
+  ("spinlock.h", staticRead("../vendor/atomic_queue/include/atomic_queue/spinlock.h")),
 ]
 
-const ConcurrentQueueHeaderBytes: array[1, (string, string)] = [
-  ("concurrentqueue.h",
-    staticRead("../vendor/concurrentqueue/concurrentqueue.h")),
-]
+const ConcurrentQueueHeaderBytes: array[1, (string, string)] =
+  [("concurrentqueue.h", staticRead("../vendor/concurrentqueue/concurrentqueue.h"))]
 
-const RigtorpMpmcHeaderBytes: array[1, (string, string)] = [
-  ("MPMCQueue.h",
-    staticRead("../vendor/rigtorp_mpmc/include/rigtorp/MPMCQueue.h")),
-]
+const RigtorpMpmcHeaderBytes: array[1, (string, string)] =
+  [("MPMCQueue.h", staticRead("../vendor/rigtorp_mpmc/include/rigtorp/MPMCQueue.h"))]
 
-const RigtorpSpscHeaderBytes: array[1, (string, string)] = [
-  ("SPSCQueue.h",
-    staticRead("../vendor/rigtorp_spsc/include/rigtorp/SPSCQueue.h")),
-]
+const RigtorpSpscHeaderBytes: array[1, (string, string)] =
+  [("SPSCQueue.h", staticRead("../vendor/rigtorp_spsc/include/rigtorp/SPSCQueue.h"))]
 
 proc concatWithSeparators(parts: openArray[(string, string)]): string =
   ## Concatenate `(filename, contents)` pairs into a single string with a
@@ -192,9 +187,11 @@ when defined(adapter_liblfds_available):
   # `LFDS711_MISC_VERSION_STRING` is defined transitively via this
   # include. Path is relative to the `-I<vendor>/liblfds` flag emitted
   # by `liblfds_adapter.nim`.
-  {.emit: """/*INCLUDESECTION*/
+  {.
+    emit: """/*INCLUDESECTION*/
 #include "liblfds711/inc/liblfds711.h"
-""".}
+"""
+  .}
 
   # Imported as a variable, not a proc: LFDS711_MISC_VERSION_STRING is a
   # C preprocessor macro that expands to a string literal, so calling it
@@ -203,8 +200,11 @@ when defined(adapter_liblfds_available):
   let liblfdsVersionMacro {.
     importc: "LFDS711_MISC_VERSION_STRING",
     header: "liblfds711/inc/liblfds711.h",
-    nodecl.}: cstring
-  template getLiblfdsVersionMacro(): cstring = liblfdsVersionMacro
+    nodecl
+  .}: cstring
+  template getLiblfdsVersionMacro(): cstring =
+    liblfdsVersionMacro
+
 else:
   const LiblfdsAdapterPresent = false
 
@@ -214,16 +214,20 @@ else:
 # gate is enabled; `BOOST_LIB_VERSION` expands to a literal string like
 # "1_74".
 when defined(adapter_boost_lockfree_queue_available) or
-     defined(adapter_boost_lockfree_spsc_available):
-  {.emit: """/*INCLUDESECTION*/
+    defined(adapter_boost_lockfree_spsc_available):
+  {.
+    emit: """/*INCLUDESECTION*/
 #include <boost/version.hpp>
-""".}
+"""
+  .}
   # Imported as a variable, not a proc: BOOST_LIB_VERSION is a C
   # preprocessor macro that expands to a string literal (e.g. "1_74"),
   # so calling it with `()` would emit `"1_74"()` and fail C compilation.
   let boostLibVersionMacro {.
-    importc: "BOOST_LIB_VERSION", header: "boost/version.hpp", nodecl.}: cstring
-  template getBoostLibVersionMacro(): cstring = boostLibVersionMacro
+    importc: "BOOST_LIB_VERSION", header: "boost/version.hpp", nodecl
+  .}: cstring
+  template getBoostLibVersionMacro(): cstring =
+    boostLibVersionMacro
 
   proc getBoostVersion(): string =
     ## Returns the Boost.LockFree version string captured at compile time
@@ -243,7 +247,7 @@ when defined(adapter_boost_lockfree_queue_available) or
 # adapters will pull that in transitively, providing `-lbench_ffi_crossbeam`).
 
 when defined(adapter_crossbeam_array_queue_available) or
-     defined(adapter_crossbeam_seg_queue_available):
+    defined(adapter_crossbeam_seg_queue_available):
   # Defensive import: pulls in the shared `{.passL.}` link directives
   # for `-lbench_ffi_crossbeam` so the `importc` getter below resolves
   # even when this module is the ONLY consumer of the crossbeam gate
@@ -290,8 +294,7 @@ proc getNimbleResolvedVersion(pkgName: string): string =
     # the helper against any caller passing a dynamic or unusual package
     # name without re-validating this site.
     let (output, exitCode) = execCmdEx(
-      "nimble path " & quoteShell(pkgName),
-      options = {poUsePath, poStdErrToStdOut},
+      "nimble path " & quoteShell(pkgName), options = {poUsePath, poStdErrToStdOut}
     )
     if exitCode != 0:
       return ""
@@ -319,7 +322,10 @@ proc getNimbleResolvedVersion(pkgName: string): string =
         continue
       let lastSlash = max(stripped.rfind('/'), stripped.rfind('\\'))
       let basename =
-        if lastSlash >= 0: stripped[lastSlash + 1 .. ^1] else: stripped
+        if lastSlash >= 0:
+          stripped[lastSlash + 1 .. ^1]
+        else:
+          stripped
       if basename.startsWith(prefix):
         path = stripped
         break
@@ -341,7 +347,7 @@ proc getNimbleResolvedVersion(pkgName: string): string =
       var hexLike = tail.len >= 8
       if hexLike:
         for ch in tail:
-          if ch notin {'0'..'9', 'a'..'f', 'A'..'F'}:
+          if ch notin {'0' .. '9', 'a' .. 'f', 'A' .. 'F'}:
             hexLike = false
             break
       if hexLike:
@@ -352,8 +358,9 @@ proc getNimbleResolvedVersion(pkgName: string): string =
 
 # ---------- meta builder ----------
 
-proc fingerprintEntry(fingerprint: string, kind: string,
-                      pinnedSha: string = ""): JsonNode =
+proc fingerprintEntry(
+    fingerprint: string, kind: string, pinnedSha: string = ""
+): JsonNode =
   ## Build a `meta.adapters.<slug>` entry for a vendored-content-hash
   ## library: `version` is null (no upstream version exists), `fingerprint`
   ## is the compile-time SHA-1 of the vendored bytes, `kind` is
@@ -366,8 +373,9 @@ proc fingerprintEntry(fingerprint: string, kind: string,
   if pinnedSha.len > 0:
     result["pinned_sha_per_readme"] = newJString(pinnedSha)
 
-proc adapterEntry(version: string, kind: string,
-                  extra: openArray[(string, JsonNode)] = []): JsonNode =
+proc adapterEntry(
+    version: string, kind: string, extra: openArray[(string, JsonNode)] = []
+): JsonNode =
   ## Build one `meta.adapters.<slug>` JsonNode. Empty `version` records
   ## `{"version": null, "fingerprint": null, "kind": kind, "status": "absent"}`
   ## so downstream consumers can distinguish "we couldn't resolve it"
@@ -403,13 +411,11 @@ proc rustCrateEntry(linked: bool, version: string, slug: string): JsonNode =
     result["version"] = newJNull()
     result["fingerprint"] = newJNull()
     result["status"] = newJString("unknown")
-    result["captured_from"] = newJString(
-      "bench_ffi_crossbeam_" & slug & "_version()")
+    result["captured_from"] = newJString("bench_ffi_crossbeam_" & slug & "_version()")
   else:
     result["version"] = newJString(version)
     result["fingerprint"] = newJNull()
-    result["captured_from"] = newJString(
-      "bench_ffi_crossbeam_" & slug & "_version()")
+    result["captured_from"] = newJString("bench_ffi_crossbeam_" & slug & "_version()")
 
 proc getAdapterVersions*(): JsonNode =
   ## Build the `meta` JsonNode injected at the top of every BMF JSON
@@ -422,8 +428,7 @@ proc getAdapterVersions*(): JsonNode =
   # `now()` is local-time and converting to UTC depends on the system
   # timezone configuration; `getTime()` returns a Time object directly
   # so the ISO-8601 output is timezone-independent.
-  result["generated_at"] = newJString(
-    getTime().utc.format("yyyy-MM-dd'T'HH:mm:ss'Z'"))
+  result["generated_at"] = newJString(getTime().utc.format("yyyy-MM-dd'T'HH:mm:ss'Z'"))
 
   let host = newJObject()
   host["os"] = newJString(hostOS)
@@ -444,17 +449,20 @@ proc getAdapterVersions*(): JsonNode =
   let rigtorpMpmcFingerprint = fingerprintOf(RigtorpMpmcHeaderBytes)
   let rigtorpSpscFingerprint = fingerprintOf(RigtorpSpscHeaderBytes)
   adapters["atomic_queue"] = fingerprintEntry(
-    atomicQueueFingerprint, "vendored-content-hash", AtomicQueueReadmeSha)
+    atomicQueueFingerprint, "vendored-content-hash", AtomicQueueReadmeSha
+  )
   adapters["concurrentqueue"] = fingerprintEntry(
-    concurrentQueueFingerprint, "vendored-content-hash",
-    ConcurrentQueueReadmeSha)
+    concurrentQueueFingerprint, "vendored-content-hash", ConcurrentQueueReadmeSha
+  )
   adapters["moodycamel"] = fingerprintEntry(
-    concurrentQueueFingerprint, "vendored-content-hash",
-    ConcurrentQueueReadmeSha)
+    concurrentQueueFingerprint, "vendored-content-hash", ConcurrentQueueReadmeSha
+  )
   adapters["rigtorp_mpmc"] = fingerprintEntry(
-    rigtorpMpmcFingerprint, "vendored-content-hash", RigtorpMpmcReadmeSha)
+    rigtorpMpmcFingerprint, "vendored-content-hash", RigtorpMpmcReadmeSha
+  )
   adapters["rigtorp_spsc"] = fingerprintEntry(
-    rigtorpSpscFingerprint, "vendored-content-hash", RigtorpSpscReadmeSha)
+    rigtorpSpscFingerprint, "vendored-content-hash", RigtorpSpscReadmeSha
+  )
 
   # ---- liblfds: vendored-version-macro ----
   # The `LFDS711_MISC_VERSION_STRING` macro is only reachable if a
@@ -467,8 +475,8 @@ proc getAdapterVersions*(): JsonNode =
     liblfdsEntry["version"] = newJString(liblfdsVer)
     liblfdsEntry["fingerprint"] = newJNull()
     liblfdsEntry["kind"] = newJString("vendored-version-macro")
-    liblfdsEntry["captured_from"] = newJString(
-      "liblfds711/inc/liblfds711.h@LFDS711_MISC_VERSION_STRING")
+    liblfdsEntry["captured_from"] =
+      newJString("liblfds711/inc/liblfds711.h@LFDS711_MISC_VERSION_STRING")
     adapters["liblfds"] = liblfdsEntry
   else:
     let liblfdsEntry = newJObject()
@@ -487,8 +495,8 @@ proc getAdapterVersions*(): JsonNode =
         version = $bench_ffi_crossbeam_queue_version()
       except CatchableError:
         version = ""
-    adapters["crossbeam_queue"] = rustCrateEntry(
-      CrossbeamCdylibLinked, version, "crossbeam_queue")
+    adapters["crossbeam_queue"] =
+      rustCrateEntry(CrossbeamCdylibLinked, version, "crossbeam_queue")
     if CrossbeamCdylibLinked and version.strip().len == 0:
       absent.add("crossbeam_queue")
     elif not CrossbeamCdylibLinked:
@@ -537,11 +545,13 @@ proc getAdapterVersions*(): JsonNode =
   # consumers can distinguish "this run did not build Boost" from "this
   # run built Boost but failed to capture the version".
   when defined(adapter_boost_lockfree_queue_available) or
-       defined(adapter_boost_lockfree_spsc_available):
+      defined(adapter_boost_lockfree_spsc_available):
     let boostVer = getBoostVersion()
     adapters["boost_lockfree"] = adapterEntry(
-      boostVer, "system-package",
-      [("captured_from", newJString("boost/version.hpp@BOOST_LIB_VERSION"))])
+      boostVer,
+      "system-package",
+      [("captured_from", newJString("boost/version.hpp@BOOST_LIB_VERSION"))],
+    )
     if boostVer.len == 0:
       absent.add("boost_lockfree")
   else:
@@ -557,8 +567,7 @@ proc getAdapterVersions*(): JsonNode =
   adapters["nim_channel"] = adapterEntry(NimVersion, "compiler-builtin")
 
   # ---- In-tree ----
-  adapters["lockfreequeues"] = adapterEntry(
-    LockfreequeuesVersion, "in-tree")
+  adapters["lockfreequeues"] = adapterEntry(LockfreequeuesVersion, "in-tree")
 
   result["adapters"] = adapters
   let absentNode = newJArray()

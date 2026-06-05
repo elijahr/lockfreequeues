@@ -47,4 +47,3 @@ void lfds711_queue_umm_init_valid_on_current_logical_core( struct lfds711_queue_
 
   return;
 }
-

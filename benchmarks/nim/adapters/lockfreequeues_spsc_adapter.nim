@@ -16,9 +16,8 @@ from ../bench_common import Topology, tSpsc
 
 const topologiesSupported*: set[Topology] = {tSpsc}
 
-type
-  SpscAdapter*[N: static int, T] = object
-    queue: BQueue[T, ccSingle, ccSingle, N, 0, 0]
+type SpscAdapter*[N: static int, T] = object
+  queue: BQueue[T, ccSingle, ccSingle, N, 0, 0]
 
 proc initSpscAdapter*[N: static int, T](): SpscAdapter[N, T] =
   result.queue = newBQueue[T, ccSingle, ccSingle, N, 0, 0]()

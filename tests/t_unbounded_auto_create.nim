@@ -140,8 +140,7 @@ suite "Existing borrow-manager API still works":
 
   test "borrow: Mpsc with shared manager":
     var manager = initDebraManager[4]()
-    var queue =
-      newUnboundedMpscQueue[int, stEager, 16, 4](addr manager)
+    var queue = newUnboundedMpscQueue[int, stEager, 16, 4](addr manager)
     # v5.0.0: consumer handle is owned by Bound (opaque storage);
     # bindConsumer wraps registration + binding in one call on the
     # calling thread. The pre-v5.0.0 (manager, consumerHandle) borrow

@@ -22,8 +22,8 @@ when defined(adapter_crossbeam_seg_queue_available):
   import ./crossbeam_link
 
   proc cb_seg_init(): pointer {.importc, cdecl.}
-  proc cb_seg_push(q: pointer; item: uint64): bool {.importc, cdecl.}
-  proc cb_seg_pop(q: pointer; outVal: ptr uint64): bool {.importc, cdecl.}
+  proc cb_seg_push(q: pointer, item: uint64): bool {.importc, cdecl.}
+  proc cb_seg_pop(q: pointer, outVal: ptr uint64): bool {.importc, cdecl.}
   proc cb_seg_destroy(q: pointer) {.importc, cdecl.}
 
   const topologiesSupported* = {tMpmcUnbounded}
@@ -31,7 +31,9 @@ when defined(adapter_crossbeam_seg_queue_available):
   type CrossbeamSegQueueAdapter*[T] = object
     queue*: pointer
 
-  proc makeCrossbeamSegQueueAdapter*[T](capacity: int = 0): CrossbeamSegQueueAdapter[T] =
+  proc makeCrossbeamSegQueueAdapter*[T](
+      capacity: int = 0
+  ): CrossbeamSegQueueAdapter[T] =
     ## ``capacity`` is ignored — SegQueue is unbounded. Default arg matches
     ## the other adapters' shape so the wire-up sites can pass the same
     ## ``capacity`` uniformly without conditionals.

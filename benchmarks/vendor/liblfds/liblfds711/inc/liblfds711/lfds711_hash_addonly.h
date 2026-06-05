@@ -133,4 +133,3 @@ void lfds711_hash_a_query( struct lfds711_hash_a_state *has,
                            enum lfds711_hash_a_query query_type,
                            void *query_input,
                            void *query_output );
-

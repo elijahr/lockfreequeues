@@ -45,4 +45,3 @@ void lfds711_queue_umm_cleanup( struct lfds711_queue_umm_state *qumms,
 
   return;
 }
-

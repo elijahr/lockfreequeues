@@ -52,8 +52,7 @@ import ./role_tags
 import ./exceptions
 import std/typetraits
 import debra/atomics
-from debra import
-  registerThread, unregisterThread, DebraRegistrationError, DebraManager
+from debra import registerThread, unregisterThread, DebraRegistrationError, DebraManager
 from debra/types import ThreadHandle
 
 type
@@ -146,7 +145,9 @@ proc onClose[T; Tag; queueT: QueueType](
 
 proc bindToThread*[T; Tag; queueT](
     u: sink Unbound[T, Tag, queueT]
-): Bound[T, Tag, queueT] {.transition, tags: [Tag, TypestateOp, RootEffect], gcsafe, raises: [].} =
+): Bound[T, Tag, queueT] {.
+    transition, tags: [Tag, TypestateOp, RootEffect], gcsafe, raises: []
+.} =
   ## Bind the endpoint to the calling thread. See design §3.3.2.
   ##
   ## The sugar pragma `{.transition(tag: ...).}` was withdrawn 2026-05-28
@@ -163,7 +164,9 @@ proc bindToThread*[T; Tag; queueT](
 
 proc close*[T; Tag; queueT](
     b: sink Bound[T, Tag, queueT]
-): EndpointClosed[T, Tag, queueT] {.transition, tags: [Tag, TypestateOp, RootEffect], gcsafe, raises: [].} =
+): EndpointClosed[T, Tag, queueT] {.
+    transition, tags: [Tag, TypestateOp, RootEffect], gcsafe, raises: []
+.} =
   ## Release the endpoint. Queue endpoints call `unregisterThread`;
   ## BQueue endpoints are a no-op. See design §3.3.2.
   when defined(debug):
@@ -189,11 +192,7 @@ proc close*[T; Tag; queueT](
 # `bindToThread()` before any `push`/`pop` (lifecycle FSM above).
 # ---------------------------------------------------------------------------
 
-proc getProducer*[
-    T;
-    ccCons: static PinScopeCardinality,
-    N, P, C: static int,
-](
+proc getProducer*[T; ccCons: static PinScopeCardinality, N, P, C: static int](
     self: var BQueue[T, ccMulti, ccCons, N, P, C], idx: int = -1
 ): Unbound[T, AnyThreadTag, BQueue[T, ccMulti, ccCons, N, P, C]] {.
     raises: [NoProducersAvailableError]
@@ -208,8 +207,7 @@ proc getProducer*[
   result.queue = addr(self)
 
   if idx >= 0:
-    assert idx < P,
-      "getProducer(idx) out of range: idx must be < P (producer count)"
+    assert idx < P, "getProducer(idx) out of range: idx must be < P (producer count)"
     result.idx = idx
     return
 
@@ -234,11 +232,7 @@ proc getProducer*[
       "Increase your producer count (P) or setMaxPoolSize(P).",
   )
 
-proc getConsumer*[
-    T;
-    ccProd: static PinScopeCardinality,
-    N, P, C: static int,
-](
+proc getConsumer*[T; ccProd: static PinScopeCardinality, N, P, C: static int](
     self: var BQueue[T, ccProd, ccMulti, N, P, C], idx: int = -1
 ): Unbound[T, AnyThreadTag, BQueue[T, ccProd, ccMulti, N, P, C]] {.
     raises: [NoConsumersAvailableError]
@@ -276,9 +270,7 @@ proc getProducer*[
     S, MaxThreads: static int,
 ](
     self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
-): Unbound[T, AnyThreadTag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]] {.
-    raises: []
-.} =
+): Unbound[T, AnyThreadTag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]] {.raises: [].} =
   ## Queue-flavour producer factory. For `ccProd == ccMulti` the
   ## endpoint reserves a producer index against the queue's
   ## `producerCount` atomic; debra registration happens later at
@@ -301,9 +293,7 @@ proc getConsumer*[
     S, MaxThreads: static int,
 ](
     self: var Queue[T, ccProd, ccCons, ST, S, MaxThreads]
-): Unbound[T, AnyThreadTag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]] {.
-    raises: []
-.} =
+): Unbound[T, AnyThreadTag, Queue[T, ccProd, ccCons, ST, S, MaxThreads]] {.raises: [].} =
   ## Queue-flavour consumer factory. Symmetric to `getProducer`; for
   ## `ccCons == ccMulti` reserves a slot via `consumerCount`; for
   ## `ccCons == ccSingle` the endpoint carries no meaningful index.
@@ -324,22 +314,14 @@ proc getConsumer*[
 ## returning adapter-local view types).
 ## ----------------------------------------------------------------------
 
-template getProducerHere*[
-    T;
-    ccCons: static PinScopeCardinality,
-    N, P, C: static int,
-](
+template getProducerHere*[T; ccCons: static PinScopeCardinality, N, P, C: static int](
     self: var BQueue[T, ccMulti, ccCons, N, P, C], idx: int = -1
 ): Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccCons, N, P, C]] =
   ## BQueue producer same-thread shortcut.
   var u = self.getProducer(idx)
   u.bindToThread()
 
-template getConsumerHere*[
-    T;
-    ccProd: static PinScopeCardinality,
-    N, P, C: static int,
-](
+template getConsumerHere*[T; ccProd: static PinScopeCardinality, N, P, C: static int](
     self: var BQueue[T, ccProd, ccMulti, N, P, C], idx: int = -1
 ): Bound[T, AnyThreadTag, BQueue[T, ccProd, ccMulti, N, P, C]] =
   ## BQueue consumer same-thread shortcut.
@@ -377,9 +359,7 @@ proc bindConsumer*[
     S, MaxThreads: static int,
 ](
     self: var Queue[T, ccProd, ccSingle, ST, S, MaxThreads]
-): Bound[T, AnyThreadTag, Queue[T, ccProd, ccSingle, ST, S, MaxThreads]] {.
-    raises: []
-.} =
+): Bound[T, AnyThreadTag, Queue[T, ccProd, ccSingle, ST, S, MaxThreads]] {.raises: [].} =
   ## One-shot bind for the SC consumer of an MPSC-style Queue.
   ## Replaces the deleted v4.x `attachConsumer`.
   var u = self.getConsumer()
@@ -398,11 +378,11 @@ static:
     Unbound[int, AnyThreadTag, BQueue[int, ccMulti, ccMulti, 64, 4, 4]]
   ),
     "Unbound[..., BQueue[...]] must not contain a ref subgraph; " &
-    "see design R3 + Nim Issue #19013"
+      "see design R3 + Nim Issue #19013"
   doAssert supportsCopyMem(
     Unbound[int, AnyThreadTag, Queue[int, ccMulti, ccSingle, stEager, 16, 4]]
   ),
     "Unbound[..., Queue[...]] must not contain a ref subgraph; " &
-    "see design R3 + Nim Issue #19013"
+      "see design R3 + Nim Issue #19013"
 
 verifyTypestates()

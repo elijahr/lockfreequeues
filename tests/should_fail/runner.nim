@@ -21,7 +21,7 @@
 ##   5. (γ) bounded-asymmetry: retireOnPublish on
 ##      Queue[..., ccCons=ccMulti, rkEbr, ...].
 ##
-## 
+##
 
 import std/[osproc, strformat, strutils]
 
@@ -38,31 +38,36 @@ type
 
 const cases = @[
   Case(
-    name: "t_queue_cardinality_mismatch §6.3 (1) — Consumer ST=stManual vs Queue ST=stEager",
+    name:
+      "t_queue_cardinality_mismatch §6.3 (1) — Consumer ST=stManual vs Queue ST=stEager",
     file: "tests/should_fail/strategy_st_mismatch.nim",
     outcome: eoCompileFails,
     substring: "stManual",
   ),
   Case(
-    name: "t_queue_cardinality_mismatch §6.3 (2) — ccCons=ccSingle queue rejects ccMulti handle",
+    name:
+      "t_queue_cardinality_mismatch §6.3 (2) — ccCons=ccSingle queue rejects ccMulti handle",
     file: "tests/should_fail/cc_consumer_single_rejects_multi.nim",
     outcome: eoCompileFails,
     substring: "newUnboundedMpscQueue",
   ),
   Case(
-    name: "t_queue_cardinality_mismatch §6.3 (3) — ccCons=ccMulti queue rejects ccSingle manager",
+    name:
+      "t_queue_cardinality_mismatch §6.3 (3) — ccCons=ccMulti queue rejects ccSingle manager",
     file: "tests/should_fail/cc_consumer_multi_rejects_single.nim",
     outcome: eoCompileFails,
     substring: "newUnboundedMpmcQueue",
   ),
   Case(
-    name: "t_queue_bounded_no_retire §6.3 (4) — retireOnCAS on Queue[..., rkNone, ...] (γ guard)",
+    name:
+      "t_queue_bounded_no_retire §6.3 (4) — retireOnCAS on Queue[..., rkNone, ...] (γ guard)",
     file: "tests/should_fail/bounded_no_retire_on_cas.nim",
     outcome: eoCompileFails,
     substring: "retireOnCAS",
   ),
   Case(
-    name: "t_queue_bounded_no_retire §6.3 (5) — retireOnPublish on Queue[..., ccCons=ccMulti, rkEbr, ...] (γ guard)",
+    name:
+      "t_queue_bounded_no_retire §6.3 (5) — retireOnPublish on Queue[..., ccCons=ccMulti, rkEbr, ...] (γ guard)",
     file: "tests/should_fail/bounded_no_retire_on_publish_mc.nim",
     outcome: eoCompileFails,
     substring: "retireOnPublish",
@@ -74,25 +79,29 @@ const cases = @[
   # `newUnboundedSpmcQueue`). Family-level rather than per-individual-
   # wrapper.
   Case(
-    name: "t_bqueue_cardinality §6.3 (6) — direct push on ccProd=ccMulti BQueue is forbidden",
+    name:
+      "t_bqueue_cardinality §6.3 (6) — direct push on ccProd=ccMulti BQueue is forbidden",
     file: "tests/should_fail/bqueue_multi_producer_direct_push.nim",
     outcome: eoCompileFails,
     substring: "multi-producer BQueue",
   ),
   Case(
-    name: "t_bqueue_cardinality §6.3 (7) — direct pop on ccCons=ccMulti BQueue is forbidden",
+    name:
+      "t_bqueue_cardinality §6.3 (7) — direct pop on ccCons=ccMulti BQueue is forbidden",
     file: "tests/should_fail/bqueue_multi_consumer_direct_pop.nim",
     outcome: eoCompileFails,
     substring: "multi-consumer BQueue",
   ),
   Case(
-    name: "t_queue_cardinality §6.3 (8) — direct pop on ccCons=ccMulti Queue is forbidden",
+    name:
+      "t_queue_cardinality §6.3 (8) — direct pop on ccCons=ccMulti Queue is forbidden",
     file: "tests/should_fail/queue_multi_consumer_direct_pop.nim",
     outcome: eoCompileFails,
     substring: "multi-consumer Queue",
   ),
   Case(
-    name: "t_bqueue_cardinality §6.3 (9) — direct batch push on ccProd=ccMulti BQueue is forbidden",
+    name:
+      "t_bqueue_cardinality §6.3 (9) — direct batch push on ccProd=ccMulti BQueue is forbidden",
     file: "tests/should_fail/bqueue_multi_producer_batch_push.nim",
     outcome: eoCompileFails,
     substring: "batch push on a multi-producer BQueue",
@@ -129,7 +138,8 @@ const cases = @[
     substring: "QueueConsumer",
   ),
   Case(
-    name: "t_bqueue_lifecycle §6.3 (14) — F.3.5 cross-module state-preserving op requires {.notATransition.}",
+    name:
+      "t_bqueue_lifecycle §6.3 (14) — F.3.5 cross-module state-preserving op requires {.notATransition.}",
     file: "tests/should_fail/bqueue_cross_module_no_notATransition.nim",
     outcome: eoCompileFails,
     substring: "notATransition",
@@ -165,7 +175,8 @@ const cases = @[
     substring: "MpmcConsumerTag",
   ),
   Case(
-    name: "spawn C14.5 — defineProducerWorker inside proc body must compile-fail (module-scope guard)",
+    name:
+      "spawn C14.5 — defineProducerWorker inside proc body must compile-fail (module-scope guard)",
     file: "tests/should_fail/spawn_nested_scope.nim",
     outcome: eoCompileFails,
     substring: "top level",

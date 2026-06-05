@@ -102,38 +102,30 @@ export PinScopeCardinality, NoSlice
 
 type
   BQueueLifecycleCtx*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      N, P, C: static int,
+    T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int
   ] = object of RootObj
     ## Phantom context type for the BQueue Lifecycle typestate. Never
     ## instantiated at runtime; carries the generic param shape so the
     ## state types below can `distinct` from it.
 
-  BQueueInit*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      N, P, C: static int,
-  ] = distinct BQueueLifecycleCtx[T, ccProd, ccCons, N, P, C]
+  BQueueInit*[T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int] =
+    distinct BQueueLifecycleCtx[T, ccProd, ccCons, N, P, C]
     ## Initial Lifecycle state for a BQueue. Every newly constructed
     ## BQueue enters this state via the `{.BQueueLifecycle: BQueueInit.}`
     ## attachment pragma on the BQueue object below.
 
-  BQueueDestroyed*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      N, P, C: static int,
-  ] = distinct BQueueLifecycleCtx[T, ccProd, ccCons, N, P, C]
+  BQueueDestroyed*[T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int] =
+    distinct BQueueLifecycleCtx[T, ccProd, ccCons, N, P, C]
     ## Terminal Lifecycle state for a BQueue. Reached exclusively via
     ## the BQueue `=destroy` destructor's `destructorTransition`.
 
 typestate BQueueLifecycle[
-    T,
-    ccProd: static PinScopeCardinality,
-    ccCons: static PinScopeCardinality,
-    N: static int,
-    P: static int,
-    C: static int,
+  T,
+  ccProd: static PinScopeCardinality,
+  ccCons: static PinScopeCardinality,
+  N: static int,
+  P: static int,
+  C: static int,
 ]:
   inheritsFromRootObj = true
   consumeOnTransition = false
@@ -146,44 +138,41 @@ typestate BQueueLifecycle[
   terminal:
     BQueueDestroyed[T, ccProd, ccCons, N, P, C]
   transitions:
-    BQueueInit[T, ccProd, ccCons, N, P, C] ->
-      BQueueDestroyed[T, ccProd, ccCons, N, P, C]
+    BQueueInit[T, ccProd, ccCons, N, P, C] -> BQueueDestroyed[
+      T, ccProd, ccCons, N, P, C
+    ]
 
-
-type
-  BQueue*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      N, P, C: static int,
-  ] {.BQueueLifecycle: BQueueInit.} = object
-    ## Bounded lock-free queue with cardinality-dispatched Vyukov /
-    ## Spsc internals. No debra integration; the bounded body owns no
-    ## heap state and the default destructor is sufficient.
-    ##
-    ## Field-layout split by cardinality matches the unified
-    ## `Queue[..., rkNone, ...]` bounded body verbatim (lifted from
-    ## `queue.nim` L170-194 at HEAD 2ddca6a, with `ST` and `RK`
-    ## phantom-params dropped):
-    ##   - SPSC (`ccSingle × ccSingle`): `StorageN1[N, T]` (N+1 slots,
-    ##     no per-slot seq counter); head/tail are `Atomic[int]`.
-    ##   - All other bounded shapes (MPSC / SPMC / MPMC):
-    ##     `MPMCCellArrayN[N, T]` (Vyukov per-slot seq counters);
-    ##     head/tail are `Atomic[uint64]`.
-    when ccProd == ccSingle and ccCons == ccSingle:
-      head* {.align: CacheLineBytes.}: Atomic[int]
-      tail* {.align: CacheLineBytes.}: Atomic[int]
-      storage*: StorageN1[N, T]
-    else:
-      head* {.align: CacheLineBytes.}: Atomic[uint64]
-      tail* {.align: CacheLineBytes.}: Atomic[uint64]
-      cells*: MPMCCellArrayN[N, T]
-      when ccProd == ccMulti:
-        producerThreadIds*: array[P, Atomic[int]]
-      when ccCons == ccMulti:
-        consumerThreadIds*: array[C, Atomic[int]]
+type BQueue*[T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int] {.
+  BQueueLifecycle: BQueueInit
+.} = object
+  ## Bounded lock-free queue with cardinality-dispatched Vyukov /
+  ## Spsc internals. No debra integration; the bounded body owns no
+  ## heap state and the default destructor is sufficient.
+  ##
+  ## Field-layout split by cardinality matches the unified
+  ## `Queue[..., rkNone, ...]` bounded body verbatim (lifted from
+  ## `queue.nim` L170-194 at HEAD 2ddca6a, with `ST` and `RK`
+  ## phantom-params dropped):
+  ##   - SPSC (`ccSingle × ccSingle`): `StorageN1[N, T]` (N+1 slots,
+  ##     no per-slot seq counter); head/tail are `Atomic[int]`.
+  ##   - All other bounded shapes (MPSC / SPMC / MPMC):
+  ##     `MPMCCellArrayN[N, T]` (Vyukov per-slot seq counters);
+  ##     head/tail are `Atomic[uint64]`.
+  when ccProd == ccSingle and ccCons == ccSingle:
+    head* {.align: CacheLineBytes.}: Atomic[int]
+    tail* {.align: CacheLineBytes.}: Atomic[int]
+    storage*: StorageN1[N, T]
+  else:
+    head* {.align: CacheLineBytes.}: Atomic[uint64]
+    tail* {.align: CacheLineBytes.}: Atomic[uint64]
+    cells*: MPMCCellArrayN[N, T]
+    when ccProd == ccMulti:
+      producerThreadIds*: array[P, Atomic[int]]
+    when ccCons == ccMulti:
+      consumerThreadIds*: array[C, Atomic[int]]
 
 ## ----------------------------------------------------------------------
-## Param-coherence guards — bounded subset of 
+## Param-coherence guards — bounded subset of
 ##
 ## The 6 rkNone-side guards from the legacy `assertQueueParams`
 ## (queue.nim L274-297 at HEAD 2ddca6a). The unbounded-side guards
@@ -193,33 +182,27 @@ type
 ## ----------------------------------------------------------------------
 
 template assertBQueueParams*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    N, P, C: static int,
+    T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int
 ]() =
   static:
     assert N > 0, "BQueue requires N > 0 (bounded slot count)"
   when ccProd == ccMulti:
     static:
       assert P > 0,
-        "BQueue[..., ccProd=ccMulti] requires P > 0 " &
-          "(per-producer state count)"
+        "BQueue[..., ccProd=ccMulti] requires P > 0 " & "(per-producer state count)"
   when ccProd == ccSingle:
     static:
       assert P == 0, "BQueue[..., ccProd=ccSingle] must have P == 0"
   when ccCons == ccMulti:
     static:
       assert C > 0,
-        "BQueue[..., ccCons=ccMulti] requires C > 0 " &
-          "(per-consumer state count)"
+        "BQueue[..., ccCons=ccMulti] requires C > 0 " & "(per-consumer state count)"
   when ccCons == ccSingle:
     static:
       assert C == 0, "BQueue[..., ccCons=ccSingle] must have C == 0"
 
 proc validateBQueueParams*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    N, P, C: static int,
+    T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int
 ](_: typedesc[BQueue[T, ccProd, ccCons, N, P, C]]) =
   ## Compile-time entry point for BQueue's 4-5 param-coherence guards
   ## (subset of ). Invoked implicitly by `initBQueue`;
@@ -295,7 +278,6 @@ static:
   doAssert offsetOf(BQueue[int, ccMulti, ccMulti, 8, 4, 4], cells) ==
     offsetOf(MpmcBase[8, 4, 4, int], cells)
 
-
 ## ----------------------------------------------------------------------
 ## Constructor / accessors — bounded subset.
 ##
@@ -303,11 +285,9 @@ static:
 ## signature replaced by BQueue's 6-param form (ST dropped).
 ## ----------------------------------------------------------------------
 
-proc clear[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    N, P, C: static int,
-](self: var BQueue[T, ccProd, ccCons, N, P, C]) =
+proc clear[T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int](
+    self: var BQueue[T, ccProd, ccCons, N, P, C]
+) =
   when ccProd == ccSingle and ccCons == ccSingle:
     self.head.store(0, moRelaxed)
     self.tail.store(0, moRelaxed)
@@ -323,11 +303,9 @@ proc clear[
       for c in 0 ..< C:
         self.consumerThreadIds[c].store(0, moRelaxed)
 
-proc initBQueue*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    N, P, C: static int,
-](): BQueue[T, ccProd, ccCons, N, P, C] =
+proc initBQueue*[T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int](): BQueue[
+    T, ccProd, ccCons, N, P, C
+] =
   ## Bounded-queue constructor. Initializes the slot storage, zeroes
   ## head/tail, and clears any producer/consumer thread-id registry
   ## tables (multi-cardinality only).
@@ -338,11 +316,9 @@ proc initBQueue*[
   validateBQueueParams(BQueue[T, ccProd, ccCons, N, P, C])
   result.clear()
 
-proc newBQueue*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    N, P, C: static int,
-](): BQueue[T, ccProd, ccCons, N, P, C] {.inline.} =
+proc newBQueue*[T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int](): BQueue[
+    T, ccProd, ccCons, N, P, C
+] {.inline.} =
   ## Canonical bounded-queue smart constructor (M4 alias-return lock —
   ## returns the user-visible `BQueue` alias, never a backing type).
   ##
@@ -365,48 +341,50 @@ proc newBQueue*[
 ## would be a large mechanical change with no semantic benefit.
 ## ----------------------------------------------------------------------
 
-proc newSpscQueue*[T; N: static int](): BQueue[T, ccSingle, ccSingle, N, 0, 0] {.inline.} =
+proc newSpscQueue*[T; N: static int](): BQueue[T, ccSingle, ccSingle, N, 0, 0] {.
+    inline
+.} =
   ## Bounded spsc-equivalent (`ccSingle × ccSingle`) smart-constructor.
   newBQueue[T, ccSingle, ccSingle, N, 0, 0]()
 
-proc newMpscQueue*[T; N, P: static int](): BQueue[T, ccMulti, ccSingle, N, P, 0] {.inline.} =
+proc newMpscQueue*[T; N, P: static int](): BQueue[T, ccMulti, ccSingle, N, P, 0] {.
+    inline
+.} =
   ## Bounded mpsc-equivalent (`ccMulti × ccSingle`) smart-constructor.
   ## `P` is the producer-registry capacity.
   newBQueue[T, ccMulti, ccSingle, N, P, 0]()
 
-proc newSpmcQueue*[T; N, C: static int](): BQueue[T, ccSingle, ccMulti, N, 0, C] {.inline.} =
+proc newSpmcQueue*[T; N, C: static int](): BQueue[T, ccSingle, ccMulti, N, 0, C] {.
+    inline
+.} =
   ## Bounded spmc-equivalent (`ccSingle × ccMulti`) smart-constructor.
   ## `C` is the consumer-registry capacity.
   newBQueue[T, ccSingle, ccMulti, N, 0, C]()
 
-proc newMpmcQueue*[T; N, P, C: static int](): BQueue[T, ccMulti, ccMulti, N, P, C] {.inline.} =
+proc newMpmcQueue*[T; N, P, C: static int](): BQueue[T, ccMulti, ccMulti, N, P, C] {.
+    inline
+.} =
   ## Bounded mpmc-equivalent (`ccMulti × ccMulti`) smart-constructor.
   ## `P` is the producer-registry capacity, `C` is the consumer-registry
   ## capacity.
   newBQueue[T, ccMulti, ccMulti, N, P, C]()
 
-proc capacity*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    N, P, C: static int,
-](self: var BQueue[T, ccProd, ccCons, N, P, C]): int {.inline.} =
+proc capacity*[T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int](
+    self: var BQueue[T, ccProd, ccCons, N, P, C]
+): int {.inline.} =
   ## Returns the queue's storage capacity (`N`).
   result = N
 
-proc producerCount*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    N, P, C: static int,
-](self: var BQueue[T, ccProd, ccCons, N, P, C]): int {.inline.} =
+proc producerCount*[T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int](
+    self: var BQueue[T, ccProd, ccCons, N, P, C]
+): int {.inline.} =
   ## Returns the queue's producer-registry capacity (`P`).
   ## Single-producer shapes report 0.
   result = P
 
-proc consumerCount*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    N, P, C: static int,
-](self: var BQueue[T, ccProd, ccCons, N, P, C]): int {.inline.} =
+proc consumerCount*[T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int](
+    self: var BQueue[T, ccProd, ccCons, N, P, C]
+): int {.inline.} =
   ## Returns the queue's consumer-registry capacity (`C`).
   ## Single-consumer shapes report 0.
   result = C
@@ -419,7 +397,6 @@ proc consumerCount*[
 ## `BQueue.pop` (no handshake required). Lifted from queue.nim
 ## L557-632 with the bounded-only `RK == rkNone` arm extracted.
 ## ----------------------------------------------------------------------
-
 
 # --- SPSC push (direct on BQueue) ----------------------------------------
 proc push*[T; N: static int](
@@ -488,14 +465,14 @@ proc push*[T; N, C: static int](
         continue
 
 # illegal call at compile time instead of at the first call site.
-proc push*[
-    T;
-    ccCons: static PinScopeCardinality,
-    N, P, C: static int,
-](self: var BQueue[T, ccMulti, ccCons, N, P, C], item: T): bool {.error:
-    "Direct push on a multi-producer BQueue is not allowed. " &
-    "Use q.getProducerHere(idx).push(item) (same-thread sugar) or q.getProducer(idx).bindToThread().push(item) (cross-thread) to obtain a per-thread " &
-    "Bound[T, Tag, BQueue[...]] and push through it.".} =
+proc push*[T; ccCons: static PinScopeCardinality, N, P, C: static int](
+    self: var BQueue[T, ccMulti, ccCons, N, P, C], item: T
+): bool {.
+    error:
+      "Direct push on a multi-producer BQueue is not allowed. " &
+      "Use q.getProducerHere(idx).push(item) (same-thread sugar) or q.getProducer(idx).bindToThread().push(item) (cross-thread) to obtain a per-thread " &
+      "Bound[T, Tag, BQueue[...]] and push through it."
+.} =
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
       when T is ref:
@@ -577,16 +554,15 @@ proc pop*[T; N, P: static int](
         backoffOnRetry(spins)
         continue
 
-
 # alias name `BQueueConsumer`.
-proc pop*[
-    T;
-    ccProd: static PinScopeCardinality,
-    N, P, C: static int,
-](self: var BQueue[T, ccProd, ccMulti, N, P, C]): Option[T] {.error:
-    "Direct pop on a multi-consumer BQueue is not allowed. " &
-    "Use q.getConsumerHere(idx).pop() (same-thread sugar) or q.getConsumer(idx).bindToThread().pop() (cross-thread) to obtain a per-thread " &
-    "Bound[T, Tag, BQueue[...]] and pop through it.".} =
+proc pop*[T; ccProd: static PinScopeCardinality, N, P, C: static int](
+    self: var BQueue[T, ccProd, ccMulti, N, P, C]
+): Option[T] {.
+    error:
+      "Direct pop on a multi-consumer BQueue is not allowed. " &
+      "Use q.getConsumerHere(idx).pop() (same-thread sugar) or q.getConsumer(idx).bindToThread().pop() (cross-thread) to obtain a per-thread " &
+      "Bound[T, Tag, BQueue[...]] and pop through it."
+.} =
   when not defined(allowNonLockFreeQueueItems):
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
       when T is ref:
@@ -612,8 +588,7 @@ proc pop*[
 
 # --- SPSC batch push (direct on BQueue) ----------------------------------
 proc push*[T; N: static int](
-    self: var BQueue[T, ccSingle, ccSingle, N, 0, 0],
-    items: openArray[T],
+    self: var BQueue[T, ccSingle, ccSingle, N, 0, 0], items: openArray[T]
 ): Option[HSlice[int, int]] =
   ## SPSC batch push.
   if unlikely(items.len == 0):
@@ -644,8 +619,7 @@ proc push*[T; N: static int](
 
 # --- SPMC batch push (direct on BQueue) ----------------------------------
 proc push*[T; N, C: static int](
-    self: var BQueue[T, ccSingle, ccMulti, N, 0, C],
-    items: openArray[T],
+    self: var BQueue[T, ccSingle, ccMulti, N, 0, C], items: openArray[T]
 ): Option[HSlice[int, int]] =
   ## SPMC batch push (loop of single-item pushes).
   if unlikely(items.len == 0):
@@ -656,16 +630,14 @@ proc push*[T; N, C: static int](
   NoSlice
 
 # alias name `BQueueProducer`.
-proc push*[
-    T;
-    ccCons: static PinScopeCardinality,
-    N, P, C: static int,
-](
+proc push*[T; ccCons: static PinScopeCardinality, N, P, C: static int](
     self: var BQueue[T, ccMulti, ccCons, N, P, C], items: openArray[T]
-): Option[HSlice[int, int]] {.error:
-    "Direct batch push on a multi-producer BQueue is not allowed. " &
-    "Use q.getProducerHere(idx).push(items) (same-thread sugar) or q.getProducer(idx).bindToThread().push(items) (cross-thread) to obtain a per-thread " &
-    "Bound[T, Tag, BQueue[...]] and batch-push through it.".} =
+): Option[HSlice[int, int]] {.
+    error:
+      "Direct batch push on a multi-producer BQueue is not allowed. " &
+      "Use q.getProducerHere(idx).push(items) (same-thread sugar) or q.getProducer(idx).bindToThread().push(items) (cross-thread) to obtain a per-thread " &
+      "Bound[T, Tag, BQueue[...]] and batch-push through it."
+.} =
   discard
 
 # --- SPSC batch pop (direct on BQueue) -----------------------------------
@@ -714,20 +686,16 @@ proc pop*[T; N, P: static int](
   else:
     some(items)
 
-
 # alias name `BQueueConsumer`.
-proc pop*[
-    T;
-    ccProd: static PinScopeCardinality,
-    N, P, C: static int,
-](
+proc pop*[T; ccProd: static PinScopeCardinality, N, P, C: static int](
     self: var BQueue[T, ccProd, ccMulti, N, P, C], count: int
-): Option[seq[T]] {.error:
-    "Direct batch pop on a multi-consumer BQueue is not allowed. " &
-    "Use q.getConsumerHere(idx).pop(count) (same-thread sugar) or q.getConsumer(idx).bindToThread().pop(count) (cross-thread) to obtain a per-thread " &
-    "Bound[T, Tag, BQueue[...]] and batch-pop through it.".} =
+): Option[seq[T]] {.
+    error:
+      "Direct batch pop on a multi-consumer BQueue is not allowed. " &
+      "Use q.getConsumerHere(idx).pop(count) (same-thread sugar) or q.getConsumer(idx).bindToThread().pop(count) (cross-thread) to obtain a per-thread " &
+      "Bound[T, Tag, BQueue[...]] and batch-pop through it."
+.} =
   discard
-
 
 ## ----------------------------------------------------------------------
 ## Destructors driving Lifecycle / Claim-state terminal transitions
@@ -757,15 +725,13 @@ proc pop*[
 ## state." Documented in CHANGELOG v5.0.0.
 ## ----------------------------------------------------------------------
 
-proc `=destroy`*[
-    T;
-    ccProd, ccCons: static PinScopeCardinality,
-    N, P, C: static int,
-](self: var BQueue[T, ccProd, ccCons, N, P, C]) {.
+proc `=destroy`*[T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int](
+    self: var BQueue[T, ccProd, ccCons, N, P, C]
+) {.
     destructorTransition: BQueueInit -> BQueueDestroyed,
     transitionError:
       "BQueue used after =destroy (lifecycle: BQueueInit -> BQueueDestroyed).",
-    raises: [],
+    raises: []
 .} =
   ## BQueue destructor — drives the Lifecycle terminal transition.
   ##
@@ -776,7 +742,6 @@ proc `=destroy`*[
   ## for the Lifecycle typestate via the `destructorTransition`
   ## pragma.
   discard
-
 
 ## ----------------------------------------------------------------------
 ## Push / pop on Bound endpoints — Track C v5.0.0 re-typing.
@@ -798,7 +763,7 @@ proc `=destroy`*[
 ## ----------------------------------------------------------------------
 
 # --- MPSC push (via Bound) -----------------------------------------------
-proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: static int](
+proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag, N, P: static int](
     self: Bound[T, Tag, BQueue[T, ccMulti, ccSingle, N, P, 0]], item: sink T
 ): bool {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## MPSC single-item push on a Bound producer endpoint.
@@ -824,7 +789,9 @@ proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: stati
         continue
 
 # --- MPMC push (via Bound) -----------------------------------------------
-proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P, C: static int](
+proc push*[
+    T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag, N, P, C: static int
+](
     self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]], item: sink T
 ): bool {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## MPMC single-item push on a Bound producer endpoint.
@@ -850,7 +817,7 @@ proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P, C: st
         continue
 
 # --- SPMC pop (via Bound) ------------------------------------------------
-proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, C: static int](
+proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag, N, C: static int](
     self: Bound[T, Tag, BQueue[T, ccSingle, ccMulti, N, 0, C]]
 ): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## SPMC single-item pop on a Bound consumer endpoint.
@@ -876,7 +843,7 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, C: static
         continue
 
 # --- MPMC pop (via Bound) ------------------------------------------------
-proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, P, C: static int](
+proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag, N, P, C: static int](
     self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]]
 ): Option[T] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## MPMC single-item pop on a Bound consumer endpoint.
@@ -903,10 +870,11 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, P, C: sta
 
 # --- Batch push / pop overloads on Bound ---------------------------------
 
-proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: static int](
-    self: Bound[T, Tag, BQueue[T, ccMulti, ccSingle, N, P, 0]],
-    items: openArray[T],
-): Option[HSlice[int, int]] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
+proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag, N, P: static int](
+    self: Bound[T, Tag, BQueue[T, ccMulti, ccSingle, N, P, 0]], items: openArray[T]
+): Option[HSlice[int, int]] {.
+    tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition
+.} =
   ## MPSC batch push. Returns `none` if all items pushed; `some(slice)`
   ## of unpushed indices otherwise.
   for i in 0 ..< items.len:
@@ -914,17 +882,20 @@ proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P: stati
       return some(i .. items.high)
   return none(HSlice[int, int])
 
-proc push*[T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag; N, P, C: static int](
-    self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]],
-    items: openArray[T],
-): Option[HSlice[int, int]] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
+proc push*[
+    T; Tag: SpscProducerTag | MpmcProducerTag | AnyThreadTag, N, P, C: static int
+](
+    self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]], items: openArray[T]
+): Option[HSlice[int, int]] {.
+    tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition
+.} =
   ## MPMC batch push. Same semantics as MPSC variant.
   for i in 0 ..< items.len:
     if not self.push(items[i]):
       return some(i .. items.high)
   return none(HSlice[int, int])
 
-proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, C: static int](
+proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag, N, C: static int](
     self: Bound[T, Tag, BQueue[T, ccSingle, ccMulti, N, 0, C]], count: int
 ): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## SPMC batch pop.
@@ -934,9 +905,12 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, C: static
     if it.isNone:
       break
     collected.add(it.get())
-  if collected.len == 0: none(seq[T]) else: some(collected)
+  if collected.len == 0:
+    none(seq[T])
+  else:
+    some(collected)
 
-proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, P, C: static int](
+proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag, N, P, C: static int](
     self: Bound[T, Tag, BQueue[T, ccMulti, ccMulti, N, P, C]], count: int
 ): Option[seq[T]] {.tags: [Tag, TypestateOp, RootEffect], raises: [], notATransition.} =
   ## MPMC batch pop.
@@ -946,7 +920,10 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, P, C: sta
     if it.isNone:
       break
     collected.add(it.get())
-  if collected.len == 0: none(seq[T]) else: some(collected)
+  if collected.len == 0:
+    none(seq[T])
+  else:
+    some(collected)
 
 ## Same-thread shortcut helpers (`getProducerHere` / `getConsumerHere`)
 ## live in `endpoint.nim` next to `getProducer` / `getConsumer` so the
@@ -961,11 +938,9 @@ proc pop*[T; Tag: SpscConsumerTag | MpmcConsumerTag | AnyThreadTag; N, P, C: sta
 when defined(testing):
   from unittest import check
 
-  proc reset*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      N, P, C: static int,
-  ](self: var BQueue[T, ccProd, ccCons, N, P, C]) =
+  proc reset*[T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int](
+      self: var BQueue[T, ccProd, ccCons, N, P, C]
+  ) =
     ## Resets the queue to its default state. For single-threaded unit
     ## tests only.
     self.clear()
@@ -988,31 +963,20 @@ when defined(testing):
         let actual = self.storage.data[i]
         check(actual == storage[i] or actual == default(T))
 
-  proc checkState*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      N, P, C: static int,
-  ](
-      self: var BQueue[T, ccProd, ccCons, N, P, C],
-      head: uint64,
-      tail: uint64,
+  proc checkState*[T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int](
+      self: var BQueue[T, ccProd, ccCons, N, P, C], head: uint64, tail: uint64
   ) =
     ## Non-SPSC head+tail-only `checkState`.
     when ccProd == ccSingle and ccCons == ccSingle:
       {.
         error:
-          "checkState(uint64) not applicable to SPSC; use the int " &
-          "+ seq[T] overload"
+          "checkState(uint64) not applicable to SPSC; use the int " & "+ seq[T] overload"
       .}
     else:
       check(self.head.load(moRelaxed) == head)
       check(self.tail.load(moRelaxed) == tail)
 
-  proc checkState*[
-      T;
-      ccProd, ccCons: static PinScopeCardinality,
-      N, P, C: static int,
-  ](
+  proc checkState*[T; ccProd, ccCons: static PinScopeCardinality, N, P, C: static int](
       self: var BQueue[T, ccProd, ccCons, N, P, C],
       head: uint64,
       tail: uint64,

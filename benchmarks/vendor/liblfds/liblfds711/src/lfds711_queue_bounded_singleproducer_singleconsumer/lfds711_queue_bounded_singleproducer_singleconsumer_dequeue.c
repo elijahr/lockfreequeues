@@ -38,4 +38,3 @@ int lfds711_queue_bss_dequeue( struct lfds711_queue_bss_state *qbsss,
 
   return 0;
 }
-

@@ -30,8 +30,7 @@ proc main() =
   # in this module since both are imported).
   var bq = newMpmcQueue[int, 16, 4, 4]()
   var dummyAtomic: Atomic[pointer]
-  discard bq.retireOnCAS(
-    scope, dummyAtomic, pointer(nil), pointer(nil), Destructor(nil)
-  )
+  discard
+    bq.retireOnCAS(scope, dummyAtomic, pointer(nil), pointer(nil), Destructor(nil))
 
 main()

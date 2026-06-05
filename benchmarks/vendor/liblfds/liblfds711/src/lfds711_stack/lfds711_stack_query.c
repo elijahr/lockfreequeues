@@ -127,4 +127,3 @@ static void lfds711_stack_internal_stack_validate( struct lfds711_stack_state *s
 
   return;
 }
-

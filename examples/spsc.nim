@@ -17,9 +17,8 @@ var
   # Queue that can hold 8 ints at a time
   q = newSpscQueue[int, 8]()
 
-
 proc consumerFunc() {.thread.} =
-  for i in 0..32:
+  for i in 0 .. 32:
     # Try to pop a single item from the queue; pop() returns Option[int]
     let item = q.pop()
 
@@ -30,21 +29,14 @@ proc consumerFunc() {.thread.} =
 
     echo "[consumer] popped items: ", items
 
-
 proc producerFunc() {.thread.} =
-
-  for i in 0..32:
+  for i in 0 .. 32:
     let item = rand(100)
 
     # Try to push a single item; push will return false when queue is full
     echo "[producer] pushed item: ", item, "? ", q.push(item)
 
-    let items = @[
-      rand(100),
-      rand(100),
-      rand(100),
-      rand(100),
-    ]
+    let items = @[rand(100), rand(100), rand(100), rand(100)]
 
     # Try to push the items. If not all items could be pushed,
     # the remainder is returned as an Option[HSlice[int, int]] suitable for
@@ -52,11 +44,10 @@ proc producerFunc() {.thread.} =
     let remainder = q.push(items)
 
     if remainder.isSome:
-      echo "[producer] pushed items: ", items[0..<remainder.get.a],
-          ", unpushed items: ", items[remainder.get]
+      echo "[producer] pushed items: ",
+        items[0 ..< remainder.get.a], ", unpushed items: ", items[remainder.get]
     else:
       echo "[producer] pushed all items: ", items
-
 
 var threads: array[2, Thread[void]]
 

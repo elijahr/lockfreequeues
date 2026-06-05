@@ -57,4 +57,3 @@ enum lfds711_hash_a_insert_result lfds711_hash_a_insert( struct lfds711_hash_a_s
 
   return apr;
 }
-

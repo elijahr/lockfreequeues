@@ -33,4 +33,3 @@ void lfds711_stack_cleanup( struct lfds711_stack_state *ss,
 
   return;
 }
-
