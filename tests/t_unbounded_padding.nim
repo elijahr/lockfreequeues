@@ -66,28 +66,19 @@ suite "Unbounded queue Segment cache-line padding":
     check segmentHeadOffsetForTest(Seg) mod Cl == 0
     check segmentCommittedOffsetForTest(Seg) mod Cl == 0
 
-  when compiles(
-    segmentCommittedOffsetForTest(q_mod.Segment[uint64, ccMulti, ccMulti, 64])
-  ):
-    test "Segment field offsets are CacheLineBytes-aligned (mpmc)":
-      # Queue[T, ccMulti, ccMulti, _, rkEbr, ...] — Segment for the
-      # mpmc-equiv shape carries `tail`, `prevConsumerIdx`, and
-      # `committed` as cache-line-padded fields. `head` is not present on
-      # the ccProd==ccMulti × ccCons==ccMulti shape (only on
-      # ccProd==ccMulti × ccCons==ccSingle).
-      type Seg = q_mod.Segment[uint64, ccMulti, ccMulti, 64]
-      check segmentTailOffsetForTest(Seg) mod Cl == 0
-      check segmentPrevConsumerIdxOffsetForTest(Seg) mod Cl == 0
-      check segmentCommittedOffsetForTest(Seg) mod Cl == 0
-  else:
-    # STRICT-LCRQ-PARTIAL: T3 split the Segment on the MPMC arm to cells;
-    # `committed` no longer exists on that shape, so the MPMC padding
-    # subtest's helper call would compile-fail (breaking the entire file).
-    # T10 will replace `segmentCommittedOffsetForTest` with
-    # `segmentCellsOffsetForTest` on the MPMC arm; the `when compiles`
-    # guard re-activates this subtest naturally at that point. See impl
-    # plan T10.
-    discard
+  test "Segment field offsets are CacheLineBytes-aligned (mpmc)":
+    # Queue[T, ccMulti, ccMulti, _, rkEbr, ...] — Segment for the
+    # mpmc-equiv shape (strict-LCRQ post-T3) carries `tail`,
+    # `prevConsumerIdx`, and `cells` as cache-line-padded fields.
+    # `head` is not present on the ccProd==ccMulti × ccCons==ccMulti
+    # shape (only on ccProd==ccMulti × ccCons==ccSingle). `committed`
+    # was removed in T3 (strict-LCRQ migration); the per-cell seq
+    # counter now lives inside each `Atomic[Pair[uint64, T]]` entry of
+    # `cells`.
+    type Seg = q_mod.Segment[uint64, ccMulti, ccMulti, 64]
+    check segmentTailOffsetForTest(Seg) mod Cl == 0
+    check segmentPrevConsumerIdxOffsetForTest(Seg) mod Cl == 0
+    check segmentCellsOffsetForTest(Seg) mod Cl == 0
 
   test "freshly-allocated Segment base is CacheLineBytes-aligned (spsc)":
     var q = newUnboundedSpscQueue[uint64, stEager, 64, 4]()

@@ -1127,6 +1127,24 @@ proc push*[
     when defined(gcArc) or defined(gcOrc) or defined(gcAtomicArc):
       when T is ref:
         {.error: "Queue item is ref; recompile with -d:allowNonLockFreeQueueItems.".}
+  when ccProd == ccMulti and ccCons == ccMulti:
+    # Strict-LCRQ T-constraint enforcement (design §11.2). Starting in
+    # v5.0.0, unbounded MPMC publishes via 128-bit DWCAS into
+    # `Atomic[Pair[uint64, T]]`, which requires T to be trivially
+    # copyable and fit alongside the 64-bit seq counter.
+    static:
+      when sizeof(T) > 8:
+        {.
+          error: """
+Queue[T, ccMulti, ccMulti, ...] requires sizeof(T) <= 8 starting in v5.0.0.
+The strict-LCRQ migration uses 128-bit DWCAS (Atomic[Pair[uint64, T]]),
+which constrains T to fit in 8 bytes alongside the seq counter.
+For wide T payloads, use BQueue[T] (bounded MPMC, Vyukov per-slot seq)
+which preserves move-only T support. See CHANGELOG.md v5.0.0 BREAKING.
+"""
+        .}
+      when not supportsCopyMem(T):
+        {.error: "Queue[T, ccMulti, ccMulti, ...] requires supportsCopyMem(T).".}
   when defined(debug):
     assert self.attachedTid == getThreadId(),
       "push from wrong thread (must match bindToThread thread)"
@@ -1738,10 +1756,19 @@ when defined(testing):
   ](_: typedesc[Segment[T, ccProd, ccCons, S]]): int =
     ## Test-only accessor: returns offset of `committed` for cardinality
     ## combos that carry it (`ccProd == ccMulti and ccCons == ccSingle`,
-    ## i.e. MPSC only). MPMC migrated to `cells` in Phase B and will
-    ## expose `segmentCellsOffsetForTest` in T10. Calling this with an
+    ## i.e. MPSC only). MPMC migrated to `cells` in Phase B; use
+    ## `segmentCellsOffsetForTest` on the MPMC arm. Calling this with an
     ## MPMC cardinality fails at the `offsetOf` site (field absent).
     offsetOf(Segment[T, ccProd, ccCons, S], committed)
+
+  proc segmentCellsOffsetForTest*[
+      T; ccProd, ccCons: static PinScopeCardinality, S: static int
+  ](_: typedesc[Segment[T, ccProd, ccCons, S]]): int =
+    ## Test-only accessor: returns offset of the strict-LCRQ `cells` array
+    ## for the MPMC arm (`ccProd == ccMulti and ccCons == ccMulti`). Other
+    ## cardinality combos lack the field; calling there compile-fails at
+    ## the `offsetOf` site.
+    offsetOf(Segment[T, ccProd, ccCons, S], cells)
 
   proc segmentPrevConsumerIdxOffsetForTest*[
       T; ccProd, ccCons: static PinScopeCardinality, S: static int
