@@ -1600,35 +1600,53 @@ proc pop*[
         # tryClaim returned none. Distinguish via fresh acquire-load:
         #   (a) CLOSED_BIT set — a peer consumer drove close-on-empty
         #       on our reserved slot between the prevConsumerIdx-CAS
-        #       and the tryClaim. The cell is PERMANENTLY closed;
-        #       spinning on it is a livelock. Escalate to nextSeg
-        #       (HIGH-3 remediation, design §5.3). The reservation in
-        #       prevConsumerIdx is left in place: it does not "free
-        #       up" mySlot for another consumer because a closed cell
-        #       cannot be claimed by anyone, so the reservation is
-        #       functionally moot.
+        #       and the tryClaim. The cell is PERMANENTLY closed.
+        #       Cycle-4 / CRIT-2: a prior implementation retired the
+        #       whole segment here, which orphaned filled cells at
+        #       indices > mySlot inside the retired segment. The fix
+        #       is to fall through to the §5.2 slow-path semantics:
+        #       count this as a skipped-closed cell, advance past it,
+        #       and retire only when `closesSeenThisSegment >= S`
+        #       (T8 starvation threshold, design §7.1) or when we run
+        #       past the segment tail with nothing publishable.
+        #
+        #       Invariant change (cycle-4): `prevConsumerIdx` now
+        #       advances monotonically on BOTH successful claims AND
+        #       skipped-closed cells. Reading code that reasons about
+        #       `prevConsumerIdx == claim_count` must instead read
+        #       `prevConsumerIdx == claim_count + close_count` within
+        #       the segment.
         #   (b) cell empty (seq == 0) — producer raced our tail-load
         #       and has not yet published. Retry on the next outer
         #       loop iteration.
         let recheck = load(seg.cells[mySlot], moAcquire)
         if (recheck.first and CLOSED_BIT) != 0'u:
-          let nextSeg = seg.next.load(moAcquire)
-          if nextSeg == nil:
-            break
-          if self.queue[].retireOnCAS(
-            scope,
-            self.queue.headSegment,
-            seg,
-            nextSeg,
-            segmentDestructor[T, ccMulti, ccMulti, S],
-          ):
-            when ST != stManual:
-              discard self.queue.segments.fetchSub(1, moRelaxed)
-            seg = nextSeg
-            closesSeenThisSegment = 0
-          else:
-            seg = self.queue.headSegment.load(moAcquire)
-            closesSeenThisSegment = 0
+          # Cycle-4 CRIT-2 fix: fall through to slow-path-style skip.
+          # `prevConsumerIdx` is already advanced to `mySlot` by the
+          # successful CAS above; the next outer iteration will see
+          # mySlot' = mySlot+1 and route to whichever path applies
+          # (fast-path claim if slot+1 is filled; slow-path scanner
+          # if past tail).
+          inc closesSeenThisSegment
+          if closesSeenThisSegment >= S:
+            # Starvation threshold reached. Retire the segment.
+            let nextSeg = seg.next.load(moAcquire)
+            if nextSeg == nil:
+              break
+            if self.queue[].retireOnCAS(
+              scope,
+              self.queue.headSegment,
+              seg,
+              nextSeg,
+              segmentDestructor[T, ccMulti, ccMulti, S],
+            ):
+              when ST != stManual:
+                discard self.queue.segments.fetchSub(1, moRelaxed)
+              seg = nextSeg
+              closesSeenThisSegment = 0
+            else:
+              seg = self.queue.headSegment.load(moAcquire)
+              closesSeenThisSegment = 0
           backoffOnRetry(spins)
           continue
         # Case (b): producer mid-publish. We have already reserved
@@ -1639,34 +1657,17 @@ proc pop*[
         # == our reserved mySlot), advancing the consumer PAST the
         # reservation and orphaning the value the producer eventually
         # publishes — a latent data-loss bug fixed by this inner spin.
-        var closedEscalated = false
-        var noNextOnClose = false
+        var fellThroughOnClose = false
         block waitForPublish:
           while true:
             backoffOnRetry(spins)
             let inner = load(seg.cells[mySlot], moAcquire)
             if (inner.first and CLOSED_BIT) != 0'u:
               # Cell was closed while we waited (close-on-empty raced
-              # the producer). Escalate to nextSeg, same as case (a).
-              let nextSeg = seg.next.load(moAcquire)
-              if nextSeg == nil:
-                noNextOnClose = true
-                break waitForPublish
-              if self.queue[].retireOnCAS(
-                scope,
-                self.queue.headSegment,
-                seg,
-                nextSeg,
-                segmentDestructor[T, ccMulti, ccMulti, S],
-              ):
-                when ST != stManual:
-                  discard self.queue.segments.fetchSub(1, moRelaxed)
-                seg = nextSeg
-                closesSeenThisSegment = 0
-              else:
-                seg = self.queue.headSegment.load(moAcquire)
-                closesSeenThisSegment = 0
-              closedEscalated = true
+              # the producer). Cycle-4 CRIT-2: do NOT retire the
+              # segment here — fall through to slow-path-style skip
+              # so filled cells at indices > mySlot are not orphaned.
+              fellThroughOnClose = true
               break waitForPublish
             if inner.first != 0'u:
               # Producer published. Claim the value.
@@ -1683,14 +1684,33 @@ proc pop*[
               # impossible). Re-inspect on next iteration.
               continue
             # Still empty — keep spinning on this slot.
-        if noNextOnClose:
-          # Closed cell with no successor segment: queue is drained.
-          # Matches the case (a) `nextSeg == nil: break` exit.
-          break
-        # Otherwise closedEscalated is true: seg has been advanced;
-        # retry the outer loop on the new segment.
-        discard closedEscalated
-        continue
+        if fellThroughOnClose:
+          # Cycle-4 CRIT-2: cell at mySlot is closed; advance via
+          # slow-path-style skip rather than retiring the segment.
+          # `prevConsumerIdx` is already at `mySlot`; next outer
+          # iteration reads mySlot' = mySlot+1.
+          inc closesSeenThisSegment
+          if closesSeenThisSegment >= S:
+            # Starvation threshold reached. Retire the segment.
+            let nextSeg = seg.next.load(moAcquire)
+            if nextSeg == nil:
+              break
+            if self.queue[].retireOnCAS(
+              scope,
+              self.queue.headSegment,
+              seg,
+              nextSeg,
+              segmentDestructor[T, ccMulti, ccMulti, S],
+            ):
+              when ST != stManual:
+                discard self.queue.segments.fetchSub(1, moRelaxed)
+              seg = nextSeg
+              closesSeenThisSegment = 0
+            else:
+              seg = self.queue.headSegment.load(moAcquire)
+              closesSeenThisSegment = 0
+          backoffOnRetry(spins)
+          continue
       # prevConsumerIdx CAS lost to a peer consumer. Retry the outer
       # loop to re-read prevIdx and recompute mySlot.
       backoffOnRetry(spins)
