@@ -37,6 +37,7 @@ import ./t_lcrq_push_single
 import ./t_lcrq_pop_single
 import ./t_lcrq_pop_race
 import ./t_lcrq_pop_slowpath
+import ./t_lcrq_push_close_race
 
 import ./t_wraparound
 
@@ -50,4 +51,5 @@ export
   t_unbounded_padding, t_unbounded_spmc, t_unbounded_spmc_threaded, t_unbounded_spsc,
   t_unbounded_spsc_threaded, t_unbounded_auto_create, t_queue_strategy_phantom,
   t_lcrq_cell_alias, t_lcrq_cell_primitives, t_lcrq_init, t_lcrq_push_single,
-  t_lcrq_pop_single, t_lcrq_pop_race, t_lcrq_pop_slowpath, t_wraparound
+  t_lcrq_pop_single, t_lcrq_pop_race, t_lcrq_pop_slowpath, t_lcrq_push_close_race,
+  t_wraparound

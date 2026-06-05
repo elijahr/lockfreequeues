@@ -1199,15 +1199,63 @@ proc push*[
             # Strict-LCRQ MPMC publish via DWCAS into `cells[tail]`.
             # `expectedSeq = 0` is the invariant at v5.0.0 call sites
             # (linked-segment specialization, R degenerate per design
-            # §2.5 / §2.5.3). On CAS failure the cell was unexpectedly
-            # filled or closed — escalate via outer-loop retry; the
-            # close-on-empty arbitration that motivates this escalation
-            # lands with T9.
+            # §2.5 / §2.5.3).
             if not tryPublish[T](seg.cells[tail], 0'u64, item):
-              # STRICT-LCRQ-PARTIAL: T9 wires close-CAS-on-empty here — on
-              # closed cell, must escalate to seg.next (not just bump tail).
-              # Currently behaves correctly for non-closed failure (tail-CAS
-              # rolls).
+              # T9 / design §4.2 + §6.4: close-CAS-on-empty arbitration.
+              # tryPublish failed: the cell either holds `CLOSED_BIT`
+              # (a peer consumer's slow-path `tryCloseOnEmpty` won the
+              # DWCAS in the gap between our tail-CAS reservation and
+              # this publish), or — defensively — is at some other
+              # unexpected seq value. Re-load with moAcquire to
+              # discriminate.
+              let observed = load(seg.cells[tail], moAcquire)
+              if (observed.first and CLOSED_BIT) != 0'u64:
+                # Cell closed by consumer. Per design §4.2 + §6.4,
+                # the close is a §4 contract (permanent), not a
+                # transient failure: the producer MUST escalate to
+                # `seg.next`, allocating + linking if not yet
+                # present. Re-uses the existing alloc-and-link
+                # pattern from the `tail >= S` branch above. Tail
+                # reservation stands as a skip-marker for any
+                # consumer that visits this slot — they observe
+                # CLOSED_BIT and inline-skip past it (T8).
+                let nextSeg = seg.next.load(moAcquire)
+                if nextSeg == nil:
+                  let newSeg = newSegment[T, ccProd, ccCons, S]()
+                  var expectedNext: ptr Segment[T, ccProd, ccCons, S] = nil
+                  if seg.next.compareExchange(
+                    expectedNext, newSeg, moRelease, moRelaxed
+                  ):
+                    var expectedSeg = seg
+                    discard self.queue.tailSegment.compareExchange(
+                      expectedSeg, newSeg, moRelease, moRelaxed
+                    )
+                    discard self.queue.segments.fetchAdd(1, moRelaxed)
+                    seg = newSeg
+                    continue
+                  else:
+                    # A peer linked seg.next first; free our
+                    # speculative allocation and use what's there.
+                    freeAligned(newSeg)
+                    let linkedNext = seg.next.load(moAcquire)
+                    var expectedSeg = seg
+                    discard self.queue.tailSegment.compareExchange(
+                      expectedSeg, linkedNext, moRelease, moRelaxed
+                    )
+                    seg = linkedNext
+                    continue
+                else:
+                  var expectedSeg = seg
+                  discard self.queue.tailSegment.compareExchange(
+                    expectedSeg, nextSeg, moRelease, moRelaxed
+                  )
+                  seg = nextSeg
+                  continue
+              # Not CLOSED_BIT — should not occur given tail-CAS
+              # reservation discipline (we hold the reservation;
+              # only `tryCloseOnEmpty` competes for the DWCAS-empty
+              # transition). Defensive fall-through: retry outer
+              # loop.
               continue
           else:
             # MPSC: legacy committed+data publish (unchanged).
