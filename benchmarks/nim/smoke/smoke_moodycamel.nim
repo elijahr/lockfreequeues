@@ -1,9 +1,9 @@
 ## Compile-and-run smoke for the MoodyCamel adapter.
 ##
-## Used by ``bench.yml`` (Track 4 §4.7) as a sanity check that the
-## vendored ``concurrentqueue.h`` is present and the
-## ``moodycamel_wrapper.cpp`` shim builds cleanly with ``nim cpp``,
-## before the full bench binaries run with the same define.
+## Used by ``bench.yml`` as a sanity check that the vendored
+## ``concurrentqueue.h`` is present and the ``moodycamel_wrapper.cpp``
+## shim builds cleanly with ``nim cpp``, before the full bench
+## binaries run with the same define.
 ##
 ## Build:
 ##   nim cpp -d:adapter_moodycamel_available --threads:on \
@@ -24,7 +24,8 @@ proc main() =
 
   block:
     var a = makeMoodycamelAdapter[uint64](capacity = 64)
-    defer: cleanup(a)
+    defer:
+      cleanup(a)
     for i in 0'u64 ..< 32'u64:
       let r = a.push(i)
       doAssert r == prSuccess, "moodycamel push failed at i=" & $i

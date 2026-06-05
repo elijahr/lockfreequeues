@@ -7,9 +7,9 @@ on:
   # Only fire on PRs that actually target an integration branch. Stacked
   # feature-to-feature PRs (`feat/foo` -> `feat/bar`) used to be in this
   # allowlist; they have been removed because cascade-rebases would
-  # otherwise burn Bencher quota uploading near-identical reports for
+  # otherwise burn CI time re-running near-identical bench matrices for
   # every intermediate stack PR. The topmost PR (base=devel) still gets
-  # PR-time bench treatment, gated further by the `bench` label below.
+  # PR-time bench treatment.
   pull_request:
     branches: [main, devel]
     paths-ignore:
@@ -57,12 +57,18 @@ on:
         default: false
 # yamllint enable rule:truthy
 
+# Cancel superseded PR runs on the same ref so a force-push doesn't
+# burn the bench matrix on a stale revision. `cancel-in-progress` is
+# gated on PR events only: cancelling a `push: devel` run mid-flight
+# would orphan the snapshot-push retry loop, and `workflow_dispatch`
+# operator runs should never be silently cancelled by a subsequent
+# dispatch. Scoped per (workflow, ref).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  # Exposed at job env so step-level `if:` expressions can gate on
-  # presence via `env.BENCHER_API_TOKEN`. GitHub Actions does not allow
-  # `secrets.*` directly in `if:`, so the env-var indirection is required.
-  BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
   # Track 3 §2.6 + Track 4 §4.7 soft-skip overrides. Empty string when
   # the workflow_dispatch input is unset (the default), '1' when the
   # operator forces a skip. Step-level `if:` clauses gate on these.
@@ -90,8 +96,13 @@ jobs:
     # (not `main`) for deterministic CI; bump in lockstep with
     # build.yml/bench.yml's `benchmark` job and lockfreequeues.nimble's
     # `requires`.
-    name: bench-tests (ubuntu-latest)
-    runs-on: ubuntu-latest
+    name: bench-tests (ubuntu-22.04)
+    # Pinned to ubuntu-22.04 (not ubuntu-latest) so bench wall-clock
+    # numbers stay reproducible across runs. The GitHub-hosted
+    # `ubuntu-latest` pointer rolls forward and the resulting kernel /
+    # glibc / scheduler delta produces apparent throughput shifts that
+    # have no relationship to a code change.
+    runs-on: ubuntu-22.04
     if: github.actor != 'github-actions[bot]'
     timeout-minutes: 10
 
@@ -109,36 +120,42 @@ jobs:
           sudo apt-get update -q -y
           sudo apt-get -qq install -y clang
 
-      - name: Clone and install sibling Nim deps (nim-debra, nim-typestates)
+      - name: Install dependencies from nimble registry
+        # Uses lockfreequeues.nimble `requires` + nimble.lock SHAs
+        # for deterministic dep resolution from registry/git.
         run: |
-          set -e
-          cd ..
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
-          (cd nim-typestates && nimble install -y)
-          (cd nim-debra && nimble install -y)
-
-      - name: Vendor unittest2
-        run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
+          nimble install -dy
+          nimble setup
+          # Hand-fix typestates v0.12.0 srcDir flattening: nimble setup
+          # writes nimble.paths with a trailing /src component but the
+          # typestates v0.12.0 pkg ships flat. Create a self-referential
+          # src symlink inside each pkg dir so both layouts resolve.
+          for d in $(find ~/.nimble/pkgs2 -maxdepth 1 -type d -name "typestates-0.12.0-*" 2>/dev/null); do
+            [ -e "$d/src" ] || ln -s . "$d/src"
+          done
 
       - name: Run bench harness tests
         run: nimble benchtests
 
   bench:
-    # Track 2 PR 2: matrix over the 5 topology-split binaries. Each
-    # matrix entry is its own GitHub Actions job with an independent
-    # `timeout-minutes: 18` budget so a hang in one binary cannot burn
-    # the entire workflow's clock — the surviving binaries finish, the
-    # bench-upload job merges what arrived, and the operator gets
-    # partial Bencher coverage rather than no coverage. Per-binary
-    # `-d:` overrides are tuned to fit each variant's CI budget; see
-    # design 2.5 for the override table.
-    name: ${{ matrix.binary }} (ubuntu-latest)
-    runs-on: ubuntu-latest
+    # Track 2 PR 2 +: matrix over the topology-split
+    # binaries. the original `bench_mpmc` into a
+    # per-family pair (bench_mpmc_bounded + bench_spmc_bounded) to
+    # eliminate cross-family iCache contention; see the bench_mpmc_*.nim
+    # headers for the diagnostic. Each matrix entry is its own GitHub
+    # Actions job with an independent `timeout-minutes: 18` budget so a
+    # hang in one binary cannot burn the entire workflow's clock — the
+    # surviving binaries finish, the bench-upload job merges what
+    # arrived, and the docs charts get partial coverage rather than no
+    # coverage. Per-binary `-d:` overrides are tuned to fit each
+    # variant's CI budget; see design 2.5 for the override table.
+    name: ${{ matrix.binary }} (ubuntu-22.04)
+    # Pinned to ubuntu-22.04 for bench-result reproducibility (see the
+    # bench-tests job above for the rationale).
+    runs-on: ubuntu-22.04
     # Two combined gates:
-    #   1. PRs from forks cannot read BENCHER_API_TOKEN. Skip rather
-    #      than fail noisily; maintainer pushes / merges still record
-    #      the baseline.
+    #   1. Same-repo only — fork PRs are skipped to keep the bench
+    #      surface contained to maintainer pushes / merges.
     #   2. Loop-prevention layer 2 of 2 (design §5.X): the snapshot
     #      push step (Task 5.5.b) commits as `github-actions[bot]`.
     #      Even if paths-ignore is ever loosened, the bot-actor guard
@@ -153,8 +170,12 @@ jobs:
         binary:
           - bench_spsc
           - bench_mpsc
-          - bench_mpmc
-          - bench_unbounded
+          - bench_mpmc_bounded
+          - bench_spmc_bounded
+          - bench_unbounded_spsc
+          - bench_unbounded_spmc
+          - bench_unbounded_mpsc
+          - bench_unbounded_mpmc
           - bench_latency
     timeout-minutes: 18
 
@@ -163,7 +184,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${HOME}/.cache
-          key: cache-${{ matrix.binary }}-${{ runner.os }}
+          # Include the nimble manifest + lockfile in the cache key so a
+          # dep bump invalidates the cache instead of silently reusing a
+          # stale entry. Mirrors build.yml.
+          key: cache-${{ matrix.binary }}-${{ runner.os }}-${{ hashFiles('lockfreequeues.nimble', 'nimble.lock') }}
 
       - name: Checkout project
         uses: actions/checkout@v4
@@ -178,22 +202,19 @@ jobs:
           sudo apt-get update -q -y
           sudo apt-get -qq install -y clang
 
-      - name: Clone and install sibling Nim deps (nim-debra, nim-typestates)
-        # Mirrors build.yml: nim.cfg uses --path:"../nim-debra/src" and
-        # --path:"../nim-typestates/src", and nimble's resolver runs before
-        # the compiler so we must install matching branches locally. Tracks
-        # `main` until nimble.directory picks up the relevant tags; bump in
-        # lockstep with build.yml and lockfreequeues.nimble's `requires`.
+      - name: Install dependencies from nimble registry
+        # Uses lockfreequeues.nimble `requires` + nimble.lock SHAs
+        # for deterministic dep resolution from registry/git.
         run: |
-          set -e
-          cd ..
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
-          (cd nim-typestates && nimble install -y)
-          (cd nim-debra && nimble install -y)
-
-      - name: Vendor unittest2
-        run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
+          nimble install -dy
+          nimble setup
+          # Hand-fix typestates v0.12.0 srcDir flattening: nimble setup
+          # writes nimble.paths with a trailing /src component but the
+          # typestates v0.12.0 pkg ships flat. Create a self-referential
+          # src symlink inside each pkg dir so both layouts resolve.
+          for d in $(find ~/.nimble/pkgs2 -maxdepth 1 -type d -name "typestates-0.12.0-*" 2>/dev/null); do
+            [ -e "$d/src" ] || ln -s . "$d/src"
+          done
 
       # ---------- Track 3 MVP adapter installs (soft-skip) ----------
       #
@@ -210,7 +231,7 @@ jobs:
         id: install-boost
         if: |
           env.FORCE_SKIP_BOOST != '1' &&
-          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc')
+          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc_bounded')
         continue-on-error: true
         run: |
           sudo apt-get install -qq -y libboost-dev
@@ -220,7 +241,7 @@ jobs:
         if: |
           env.FORCE_SKIP_BOOST != '1' &&
           steps.install-boost.outcome == 'success' &&
-          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc')
+          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc_bounded')
         continue-on-error: true
         run: |
           set -eu
@@ -247,7 +268,7 @@ jobs:
 
       - name: Annotate boost skipped
         if: |
-          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc') &&
+          (matrix.binary == 'bench_spsc' || matrix.binary == 'bench_mpmc_bounded') &&
           (env.FORCE_SKIP_BOOST == '1' ||
            steps.install-boost.outcome != 'success' ||
            steps.smoke-boost.outcome != 'success')
@@ -256,11 +277,12 @@ jobs:
 
       - name: Install loony (nimble)
         # Loony is a Nim-only unbounded MPMC queue; nimble pulls it from
-        # the registry. Only bench_unbounded uses it.
+        # the registry. Only bench_unbounded_mpmc uses it (matches the
+        # mpmc unbounded MVP-adapter slot split).
         id: install-loony
         if: |
           env.FORCE_SKIP_LOONY != '1' &&
-          matrix.binary == 'bench_unbounded'
+          matrix.binary == 'bench_unbounded_mpmc'
         continue-on-error: true
         run: |
           nimble install -y loony
@@ -270,7 +292,7 @@ jobs:
         if: |
           env.FORCE_SKIP_LOONY != '1' &&
           steps.install-loony.outcome == 'success' &&
-          matrix.binary == 'bench_unbounded'
+          matrix.binary == 'bench_unbounded_mpmc'
         continue-on-error: true
         run: |
           # The smoke is the round-trip test in tests/t_bench_adapters.nim.
@@ -290,7 +312,7 @@ jobs:
 
       - name: Annotate loony skipped
         if: |
-          matrix.binary == 'bench_unbounded' &&
+          matrix.binary == 'bench_unbounded_mpmc' &&
           (env.FORCE_SKIP_LOONY == '1' ||
            steps.install-loony.outcome != 'success' ||
            steps.smoke-loony.outcome != 'success')
@@ -303,12 +325,14 @@ jobs:
       # benchmarks/vendor/concurrentqueue/concurrentqueue.h. The
       # "install" step is therefore a `test -f` rather than a fetch, so
       # the bench is reproducible without network egress. Only
-      # bench_unbounded wires the moodycamel adapter (mpmc_unbounded).
+      # bench_unbounded_mpmc wires the moodycamel adapter
+      # (mpmc_unbounded; matches the mpmc unbounded MVP-adapter slot
+      # split).
       - name: Install MoodyCamel (vendored header presence check)
         id: install-moodycamel
         if: |
           env.FORCE_SKIP_MOODYCAMEL != '1' &&
-          matrix.binary == 'bench_unbounded'
+          matrix.binary == 'bench_unbounded_mpmc'
         continue-on-error: true
         run: |
           test -f benchmarks/vendor/concurrentqueue/concurrentqueue.h
@@ -319,7 +343,7 @@ jobs:
         if: |
           env.FORCE_SKIP_MOODYCAMEL != '1' &&
           steps.install-moodycamel.outcome == 'success' &&
-          matrix.binary == 'bench_unbounded'
+          matrix.binary == 'bench_unbounded_mpmc'
         continue-on-error: true
         run: |
           set -eu
@@ -340,19 +364,20 @@ jobs:
 
       - name: Annotate MoodyCamel skipped
         if: |
-          matrix.binary == 'bench_unbounded' &&
+          matrix.binary == 'bench_unbounded_mpmc' &&
           (env.FORCE_SKIP_MOODYCAMEL == '1' ||
            steps.install-moodycamel.outcome != 'success' ||
            steps.smoke-moodycamel.outcome != 'success')
         run: |
           echo "::warning title=Adapter skipped::moodycamel install or smoke failed; bench will omit moodycamel slugs."
 
-      # threading.Chan (nimble package): only used by bench_mpmc.
+      # threading.Chan (nimble package): only used by bench_mpmc_bounded
+      # (matches the channels/MVP-adapter slot post-B3 split).
       - name: Install threading (nimble)
         id: install-threading-channels
         if: |
           env.FORCE_SKIP_THREADING_CHANNELS != '1' &&
-          matrix.binary == 'bench_mpmc'
+          matrix.binary == 'bench_mpmc_bounded'
         continue-on-error: true
         run: |
           nimble install -y threading
@@ -362,7 +387,7 @@ jobs:
         if: |
           env.FORCE_SKIP_THREADING_CHANNELS != '1' &&
           steps.install-threading-channels.outcome == 'success' &&
-          matrix.binary == 'bench_mpmc'
+          matrix.binary == 'bench_mpmc_bounded'
         continue-on-error: true
         run: |
           set -eu
@@ -381,7 +406,7 @@ jobs:
 
       - name: Annotate threading.Chan skipped
         if: |
-          matrix.binary == 'bench_mpmc' &&
+          matrix.binary == 'bench_mpmc_bounded' &&
           (env.FORCE_SKIP_THREADING_CHANNELS == '1' ||
            steps.install-threading-channels.outcome != 'success' ||
            steps.smoke-threading-channels.outcome != 'success')
@@ -462,15 +487,16 @@ jobs:
       - name: Compile ${{ matrix.binary }} (CI-tuned run shape)
         # Per-binary -d: overrides mirror the design 2.5 CI override
         # column. Bounded throughput binaries: 1M messages × 5 runs ×
-        # 2 warmup; cheap, single-digit seconds total. bench_unbounded
-        # uses a tighter shape — sipsic 200K×3, sipmuc/mupsic 100K×2,
-        # mupmuc 50K×2 — because the 16-shape total (1+3+3+9) plus
-        # oversubscribed shapes like 1p4c on 4-vCPU runners exhausts
-        # the budget at higher N. The mupmuc 9-shape grid dominates
-        # the wall clock so it gets the deepest cut. bench_latency
-        # keeps PR 1's tighter shape (50K × 11 × 2) because each
-        # ping-pong RTT records exactly one sample, so 1M messages
-        # would never fit.
+        # 2 warmup; cheap, single-digit seconds total. The four
+        # bench_unbounded_* binaries each carry
+        # only their own family's overrides — spsc 200K×3, spmc/
+        # mpsc 100K×2, mpmc 50K×2 — because the previously-monolithic
+        # 16-shape total (1+3+3+9) plus oversubscribed shapes like 1p4c
+        # on 4-vCPU runners exhausted the budget at higher N. The
+        # mpmc 9-shape grid still dominates its own job's wall clock
+        # so it gets the deepest cut. bench_latency keeps PR 1's
+        # tighter shape (50K × 11 × 2) because each ping-pong RTT
+        # records exactly one sample, so 1M messages would never fit.
         #
         # ${{ steps.adapter-flags.outputs.flags }} is the space-separated
         # set of -d:adapter_*_available defines that survived install +
@@ -503,32 +529,88 @@ jobs:
                 $ADAPTER_FLAGS \
                 benchmarks/nim/bench_mpsc.nim
               ;;
-            bench_mpmc)
+            bench_mpmc_bounded)
+              #: this binary owns the Mpmc grid +
+              # Queue-bounded-mpmc parity + nim_channels grid + MVP
+              # comparison adapters (boost.lockfree, crossbeam ArrayQueue,
+              # threading.Chan). Shares the BenchMpmc* intdefines with
+              # bench_spmc_bounded so existing CI overrides apply unchanged.
               nim "$NIM_MODE" -d:release -d:danger --threads:on \
                 -d:BenchMpmcMessageCount=1000000 \
                 -d:BenchMpmcRuns=5 \
                 -d:BenchMpmcWarmup=2 \
                 $ADAPTER_FLAGS \
-                benchmarks/nim/bench_mpmc.nim
+                benchmarks/nim/bench_mpmc_bounded.nim
               ;;
-            bench_unbounded)
-              # bench_unbounded supports loony (Nim, plain `nim c`) and
-              # PR 4's MoodyCamel (C++ vendored header, requires `nim
-              # cpp`). NIM_MODE is "cpp" iff ADAPTER_MOODYCAMEL was
-              # set; otherwise it stays "c". loony is mode-neutral.
-              nim "$NIM_MODE" -d:release -d:danger --threads:on \
-                -d:UnboundedSipsicMessageCount=200000 \
-                -d:UnboundedSipsicRuns=3 \
-                -d:UnboundedSipmucMessageCount=100000 \
-                -d:UnboundedSipmucRuns=2 \
-                -d:UnboundedMupsicMessageCount=100000 \
-                -d:UnboundedMupsicRuns=2 \
-                -d:UnboundedMupmucMessageCount=50000 \
-                -d:UnboundedMupmucRuns=2 \
+            bench_spmc_bounded)
+              #: this binary owns the Spmc 1p{1,2,4}c
+              # set + Queue-bounded-spmc parity. No MVP adapters live
+              # here (spmc-shape MVP adapters do not exist), so
+              # ADAPTER_FLAGS is ignored; stay on `nim c` because none
+              # of the imported types require C++.
+              nim c -d:release -d:danger --threads:on \
+                -d:BenchMpmcMessageCount=1000000 \
+                -d:BenchMpmcRuns=5 \
+                -d:BenchMpmcWarmup=2 \
+                benchmarks/nim/bench_spmc_bounded.nim
+              ;;
+            bench_unbounded_spsc)
+              # split: this binary owns UnboundedSpsc
+              # at 1p1c. No MVP adapters live here (spsc is SPSC only
+              # and has no Loony/Crossbeam-SegQueue/MoodyCamel analog).
+              # -d:benchProgress enables per-10k progress prints in the
+              # producer/consumer workers so an intermittent hang shows
+              # which thread stalled (CI-only; local-dev stays clean).
+              nim c -d:release -d:danger --threads:on \
+                -d:UnboundedSpscMessageCount=200000 \
+                -d:UnboundedSpscRuns=3 \
+                -d:BenchUnboundedWarmup=1 \
+                -d:benchProgress \
+                benchmarks/nim/bench_unbounded_spsc.nim
+              ;;
+            bench_unbounded_spmc)
+              # split: this binary owns UnboundedSpmc
+              # at 1p{1,2,4}c. No MVP adapters live here. Stays on `nim
+              # c` because no imported types require C++.
+              # See bench_unbounded_spsc above for -d:benchProgress.
+              nim c -d:release -d:danger --threads:on \
+                -d:UnboundedSpmcMessageCount=100000 \
+                -d:UnboundedSpmcRuns=2 \
                 -d:BenchUnboundedWarmup=1 \
                 -d:BenchSkipOversubscribed \
+                -d:benchProgress \
+                benchmarks/nim/bench_unbounded_spmc.nim
+              ;;
+            bench_unbounded_mpsc)
+              # split: this binary owns UnboundedMpsc
+              # at {1,2,4}p1c. No MVP adapters live here.
+              # See bench_unbounded_spsc above for -d:benchProgress.
+              nim c -d:release -d:danger --threads:on \
+                -d:UnboundedMpscMessageCount=100000 \
+                -d:UnboundedMpscRuns=2 \
+                -d:BenchUnboundedWarmup=1 \
+                -d:benchProgress \
+                benchmarks/nim/bench_unbounded_mpsc.nim
+              ;;
+            bench_unbounded_mpmc)
+              # split: this binary owns UnboundedMpmc
+              # at the full {1,2,4}p{1,2,4}c grid PLUS the MVP
+              # comparison adapters whose slug shape matches the mpmc
+              # unbounded grid: loony (Nim, plain `nim c`), Crossbeam
+              # SegQueue (Rust/cdylib via the existing link wrapper),
+              # and PR 4's MoodyCamel (C++ vendored header, requires
+              # `nim cpp`). NIM_MODE is "cpp" iff ADAPTER_MOODYCAMEL was
+              # set; otherwise it stays "c". loony and Crossbeam
+              # SegQueue are mode-neutral.
+              # See bench_unbounded_spsc above for -d:benchProgress.
+              nim "$NIM_MODE" -d:release -d:danger --threads:on \
+                -d:UnboundedMpmcMessageCount=50000 \
+                -d:UnboundedMpmcRuns=2 \
+                -d:BenchUnboundedWarmup=1 \
+                -d:BenchSkipOversubscribed \
+                -d:benchProgress \
                 $ADAPTER_FLAGS \
-                benchmarks/nim/bench_unbounded.nim
+                benchmarks/nim/bench_unbounded_mpmc.nim
               ;;
             bench_latency)
               nim c -d:release -d:danger --threads:on \
@@ -543,15 +625,64 @@ jobs:
               ;;
           esac
 
-      - name: Run ${{ matrix.binary }}
+      - name: Run ${{ matrix.binary }} (bounded / latency, no retry)
         # Step-level timeout: a runtime hang in one variant (lost
         # message, missed wakeup, livelock regression) would otherwise
         # spin until the job-level 18-min budget expired. Fail fast at
         # 10 min so the upload step still records the partial result.
+        # Bounded throughput + latency benches do NOT exhibit the
+        # intermittent ubuntu-latest scheduler-hang behavior seen on
+        # the four unbounded legs, so they keep the single-attempt
+        # invocation. The unbounded variants get a separate retried
+        # step below.
+        if: |
+          matrix.binary != 'bench_unbounded_spsc' &&
+          matrix.binary != 'bench_unbounded_spmc' &&
+          matrix.binary != 'bench_unbounded_mpsc' &&
+          matrix.binary != 'bench_unbounded_mpmc'
         timeout-minutes: 10
         run: |
+          set -euo pipefail
+          # pipefail makes `tee` propagate the bench binary's non-zero
+          # exit (timeout, crash) instead of swallowing it under tee's 0.
           ./.tmp/${{ matrix.binary }} --bmf-out=${{ matrix.binary }}.json \
             | tee ${{ matrix.binary }}_output.txt
+
+      - name: Run ${{ matrix.binary }} (unbounded, with 1 retry on flake)
+        # The four unbounded bench binaries have shown an intermittent
+        # ubuntu-latest scheduler-hang on a random 1p1c/1p2c shape:
+        # the binary prints only the shape header and then sits silent
+        # until the step-level timeout fires. Empirically the hang is
+        # not reproducible on a re-run of the same revision, so wrap a
+        # single retry around the invocation: `timeout 540` (9 min)
+        # bounds each attempt; on failure we sleep briefly and try
+        # once more. Step-level `timeout-minutes: 20` is sized to fit
+        # two 9-min attempts plus the 5s sleep + overhead so both
+        # attempts always complete before the harness kills the step.
+        # NOT a third-party action so the retry stays auditable and
+        # the workflow keeps zero new dependencies.
+        if: |
+          matrix.binary == 'bench_unbounded_spsc' ||
+          matrix.binary == 'bench_unbounded_spmc' ||
+          matrix.binary == 'bench_unbounded_mpsc' ||
+          matrix.binary == 'bench_unbounded_mpmc'
+        timeout-minutes: 20
+        run: |
+          set -eo pipefail
+          # pipefail makes `tee` not swallow the bench binary's
+          # non-zero exit (timeout, crash). Without it the pipeline's
+          # exit status would always be `tee`'s 0 and the retry would
+          # never fire.
+          attempt() {
+            timeout 540 ./.tmp/${{ matrix.binary }} \
+              --bmf-out=${{ matrix.binary }}.json \
+              | tee ${{ matrix.binary }}_output.txt
+          }
+          if ! attempt; then
+            echo "::warning::${{ matrix.binary }} flaked on first attempt; retrying once"
+            sleep 5
+            attempt
+          fi
 
       - name: Upload ${{ matrix.binary }} BMF artifact
         # `if: always()` so a step-level timeout in `Run ${{ matrix.binary }}`
@@ -568,23 +699,19 @@ jobs:
           if-no-files-found: ignore
 
   bench-upload:
-    # Merges per-binary BMF artifacts into a single JSON before a single
-    # `bencher run` invocation. Bencher creates a separate Report per
-    # invocation; multiple uploads would NOT co-locate measures on a
-    # single per-slug history (design 1 / Track 1 Task 1.4).
-    name: Merge BMF + Bencher upload (ubuntu-latest)
+    # Merges per-binary BMF artifacts into a single JSON and snapshots
+    # the result into docs/assets/bench-results/ so the docs charts
+    # always point at the most recent run.
+    name: Merge BMF + docs snapshot (ubuntu-latest)
     runs-on: ubuntu-latest
-    # Three combined gates:
+    # Two combined gates:
     #   1. `always()` — a single matrix-leg failure (e.g. one binary
-    #      timed out) must not skip the merge+upload; the operator
-    #      still gets partial Bencher coverage from the surviving
-    #      binaries (design's partial-coverage tolerance).
+    #      timed out) must not skip the merge+snapshot; the docs still
+    #      get partial coverage from the surviving binaries.
     #   2. Bot-actor guard (loop-prevention layer 3 of 3): the
     #      snapshot push step commits as `github-actions[bot]`. Skip
     #      the upload when the actor is the bot so a snapshot push
     #      cannot trigger another bench run.
-    #   3. Fork-PR token guard: PRs from forks cannot read
-    #      BENCHER_API_TOKEN; skip rather than fail noisily.
     if: |
       always() &&
       github.actor != 'github-actions[bot]' &&
@@ -620,7 +747,11 @@ jobs:
       - name: Download BMF artifacts
         # Pattern matches every per-binary artifact uploaded by the
         # bench matrix (`bench-bench_spsc-bmf`, `bench-bench_mpsc-bmf`,
-        # `bench-bench_mpmc-bmf`, `bench-bench_unbounded-bmf`,
+        # `bench-bench_mpmc_bounded-bmf`, `bench-bench_spmc_bounded-bmf`,
+        # `bench-bench_unbounded_spsc-bmf`,
+        # `bench-bench_unbounded_spmc-bmf`,
+        # `bench-bench_unbounded_mpsc-bmf`,
+        # `bench-bench_unbounded_mpmc-bmf`,
         # `bench-bench_latency-bmf`). Each artifact lands in its own
         # subdir under `bmf-inputs/` (no `merge-multiple`) so any future
         # filename overlap between binaries cannot silently overwrite.
@@ -692,137 +823,7 @@ jobs:
       - name: Show BMF JSON (debug)
         run: cat merged.json
 
-      - name: Install Bencher CLI
-        uses: bencherdev/bencher@main
-
-      - name: Bencher upload preflight
-        # Always runs. Surfaces a yellow PR-check warning whenever the
-        # downstream `bencher run` would be skipped, so the reason is
-        # obvious from the check summary rather than the bench silently
-        # appearing to "do nothing" with the data. Skip reasons:
-        #   1. BENCHER_API_TOKEN secret unset (any event)
-        #   2. PR event without the `bench` label (cost gate — Bencher
-        #      ingest charges per metric, so PR comparisons are opt-in
-        #      via label rather than firing on every cascade-rebase push)
-        # Push to main/devel and workflow_dispatch never need the label.
-        run: |
-          if [ -z "$BENCHER_API_TOKEN" ]; then
-            echo "::warning title=Bencher upload skipped::BENCHER_API_TOKEN secret is not set on this repo. The bench ran successfully and produced merged.json (visible in the 'Show BMF JSON (debug)' step), but no data is being uploaded to Bencher.dev. Set up the project at bencher.dev with slug 'lockfreequeues' and add BENCHER_API_TOKEN as a repo secret to enable upload."
-            exit 0
-          fi
-          if [ "${{ github.event_name }}" = "pull_request" ] \
-             && ! ${{ contains(github.event.pull_request.labels.*.name, 'bench') }}; then
-            echo "::warning title=Bencher upload skipped::This is a pull_request event but the PR does not carry the 'bench' label. PR-time Bencher uploads are opt-in to control metric-ingest costs. Add the 'bench' label to the PR and re-run this workflow if you want a Bencher comparison report on this revision."
-            exit 0
-          fi
-          echo "Bencher upload preconditions met; proceeding."
-
-      # PR runs: compare against base branch and post a comment.
-      # Gated on the `bench` PR label so cascade-rebases of stacked PRs
-      # do not burn Bencher quota; add the label deliberately when you
-      # want a comparison report.
-      - name: Track PR benchmarks with Bencher
-        if: |
-          github.event_name == 'pull_request'
-          && env.BENCHER_API_TOKEN != ''
-          && contains(github.event.pull_request.labels.*.name, 'bench')
-        run: |
-          bencher run \
-            --project lockfreequeues \
-            --token '${{ secrets.BENCHER_API_TOKEN }}' \
-            --branch "$GITHUB_HEAD_REF" \
-            --start-point "$GITHUB_BASE_REF" \
-            --start-point-hash '${{ github.event.pull_request.base.sha }}' \
-            --start-point-clone-thresholds \
-            --start-point-reset \
-            --testbed ubuntu-latest \
-            --adapter json \
-            --file merged.json \
-            --github-actions '${{ secrets.GITHUB_TOKEN }}' \
-            --err
-
-      # Push to main/devel: record the baseline for that branch.
-      #
-      # Track 6 Task 6.3: per-measure thresholds. We gate on BOTH
-      #   - latency_p99_ns (upper boundary: regression = latency increase)
-      #   - throughput_ops_ms (lower boundary: regression = throughput drop)
-      # in a single `bencher run` invocation by repeating the
-      # `--threshold-measure / --threshold-test / --threshold-max-sample-size
-      # / --threshold-{upper,lower}-boundary` block per measure (Bencher CLI
-      # convention; design §3 PR 6). End with `--thresholds-reset` so only
-      # the explicitly-listed thresholds remain active going forward.
-      #
-      # NOTE on activation: per Track 6 Task 6.4, the latency threshold
-      # requires ≥ 10 prior runs accumulated in Bencher to calibrate the
-      # t-test baseline. Until that soak completes (post-merge), the
-      # threshold is effectively dormant — Bencher will not emit alerts on
-      # measures that have insufficient sample history. The configuration
-      # is in place so activation is purely a function of run count, not
-      # workflow edits.
-      #
-      # NOTE on previous measure name: the prior config used
-      # `--threshold-measure throughput`; the actual measure key emitted by
-      # bench_{spsc,mpsc,mpmc,unbounded}.nim is `throughput_ops_ms`, so the
-      # earlier threshold never matched any measure. Track 6 corrects this.
-      #
-      # NOTE on continue-on-error (v4.2.0): the Bencher CLI is currently
-      # rejecting the multi-measure threshold configuration with
-      # "Failed to validate the model for the throughput_ops_ms Measure
-      # Threshold: Invalid threshold model: Invalid model, no boundary
-      # provided" even though the invocation matches the documented
-      # bencher.dev pattern (see https://bencher.dev/docs/explanation/thresholds/
-      # "Two-Measure Example"). The failing step short-circuits the job
-      # before `Snapshot to docs assets` runs, leaving the chart on
-      # docs/benchmarks.md without fresh data. As a release-day band-aid
-      # we mark this step continue-on-error so the snapshot path keeps
-      # flowing; the threshold gating itself remains dormant until
-      # Task 6.4's 10-run soak completes anyway, so functionally nothing
-      # is lost in the short term.
-      #
-      # TODO(post-v4.2.0): diagnose the boundary-flag binding issue.
-      # Hypothesis: clap absorbs the trailing `--threshold-lower-boundary`
-      # into the first measure block (latency) instead of the second
-      # (throughput), so throughput's model has no boundary. Try giving
-      # each measure both boundaries explicitly, splitting into two
-      # `bencher run` invocations, or pinning the bencherdev/bencher
-      # action to a specific tag once Bencher confirms the bug/expected
-      # syntax.
-      - name: Track base branch benchmarks with Bencher
-        if: github.event_name == 'push' && env.BENCHER_API_TOKEN != ''
-        continue-on-error: true
-        run: |
-          bencher run \
-            --project lockfreequeues \
-            --token '${{ secrets.BENCHER_API_TOKEN }}' \
-            --branch "${GITHUB_REF##*/}" \
-            --testbed ubuntu-latest \
-            --threshold-measure latency_p99_ns \
-            --threshold-test t_test \
-            --threshold-max-sample-size 64 \
-            --threshold-upper-boundary 0.99 \
-            --threshold-measure throughput_ops_ms \
-            --threshold-test t_test \
-            --threshold-max-sample-size 64 \
-            --threshold-lower-boundary 0.99 \
-            --thresholds-reset \
-            --adapter json \
-            --file merged.json \
-            --github-actions '${{ secrets.GITHUB_TOKEN }}' \
-            --err
-
-      # workflow_dispatch: just upload, no comparison.
-      - name: Track manual benchmarks with Bencher
-        if: github.event_name == 'workflow_dispatch' && env.BENCHER_API_TOKEN != ''
-        run: |
-          bencher run \
-            --project lockfreequeues \
-            --token '${{ secrets.BENCHER_API_TOKEN }}' \
-            --branch "${GITHUB_REF##*/}" \
-            --testbed ubuntu-latest \
-            --adapter json \
-            --file merged.json
-
-      # Track 5 PR 5 Task 5.5.b: snapshot the merged BMF into the docs
+      # snapshot the merged BMF into the docs
       # assets tree so the chart on `docs/benchmarks.md` always points
       # at the most recent devel run. Loop-prevention against bench.yml
       # itself relies on three defensive layers:
@@ -855,6 +856,10 @@ jobs:
           SHA=$(git rev-parse --short HEAD)
           cp merged.json "docs/assets/bench-results/${SHA}.json"
           cp merged.json docs/assets/bench-results/latest.json
+          # Auto-refresh example.json (the README's pinned source) on
+          # every devel push so it tracks the latest measured snapshot
+          # without requiring hand-curation between releases.
+          cp merged.json docs/assets/bench-results/example.json
           git add docs/assets/bench-results/
           # Nothing to commit if merged.json is byte-identical to the
           # currently-checked-in latest.json (rare but possible on a
@@ -883,10 +888,73 @@ jobs:
             # commits that landed since checkout. Conflict on the
             # snapshot files themselves is impossible (no other workflow
             # writes to docs/assets/bench-results/), so a clean rebase
-            # is the expected outcome.
-            git rebase origin/devel
+            # is the expected outcome. Abort on rebase failure so the
+            # next iteration starts from a clean working tree (an
+            # in-progress rebase would leave HEAD detached and the next
+            # `git push` would push the partial rebase rather than the
+            # snapshot commit).
+            if ! git rebase origin/devel; then
+              git rebase --abort || true
+              echo "::warning::rebase attempt $attempt failed; aborted and continuing retry loop."
+            fi
           done
           echo "::error::Snapshot push failed after 3 retries; aborting." >&2
+          exit 1
+
+      # PR-branch snapshot push: mirror the devel-snapshot writes back
+      # to the PR head ref so the PR carries its own fresh bench output.
+      # Skipped on:
+      #   - fork PRs (GITHUB_TOKEN cannot write across-repo; the
+      #     `head.repo.full_name == github.repository` gate on the job-
+      #     level `if:` already covers same-repo-only, but we re-assert
+      #     `!fork` here for defense-in-depth).
+      #   - bot-actor runs (the snapshot push commits as
+      #     `github-actions[bot]`; the actor guard prevents a snapshot-
+      #     push from re-triggering itself, mirroring the devel path).
+      # Loop-safety: the existing `paths-ignore: docs/assets/bench-
+      # results/**` block on `pull_request` plus `[skip ci]` in the
+      # commit message provide the same two-layer loop guard the devel
+      # path uses.
+      - name: Snapshot to docs assets (PR branch push)
+        if: |
+          github.event_name == 'pull_request' &&
+          github.actor != 'github-actions[bot]' &&
+          github.event.pull_request.head.repo.fork == false
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          # actions/checkout above ran with `ref: ''` for PR events
+          # (detached HEAD on the PR merge commit). Fetch and check out
+          # the PR head ref so the snapshot commit lands on the PR
+          # branch tip, not on the detached merge commit.
+          git fetch origin "${{ github.head_ref }}":"refs/remotes/origin/${{ github.head_ref }}"
+          git checkout -B "${{ github.head_ref }}" "refs/remotes/origin/${{ github.head_ref }}"
+          mkdir -p docs/assets/bench-results
+          SHA=$(git rev-parse --short HEAD)
+          cp merged.json "docs/assets/bench-results/${SHA}.json"
+          cp merged.json docs/assets/bench-results/latest.json
+          cp merged.json docs/assets/bench-results/example.json
+          git add docs/assets/bench-results/
+          if git diff --cached --quiet; then
+            echo "::notice::PR-branch snapshot identical to current checked-in copy; skipping commit."
+            exit 0
+          fi
+          git commit -m "chore(bench): refresh snapshot for PR [skip ci]"
+          # Same retry loop as the devel path: fetch + rebase + push up
+          # to 3 times to survive concurrent advances of the PR branch.
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:${{ github.head_ref }}"; then
+              exit 0
+            fi
+            echo "::notice::PR-branch push attempt $attempt rejected; rebasing onto origin/${{ github.head_ref }} and retrying."
+            git fetch origin "${{ github.head_ref }}"
+            if ! git rebase "origin/${{ github.head_ref }}"; then
+              git rebase --abort || true
+              echo "::warning::PR-branch rebase attempt $attempt failed; aborted and continuing retry loop."
+            fi
+          done
+          echo "::error::PR-branch snapshot push failed after 3 retries; aborting." >&2
           exit 1
 
       # v4.2.0 thread D1: defensive fallback snapshot.
@@ -902,10 +970,7 @@ jobs:
       #
       # Loop-safety: same three layers as the regular snapshot
       # (paths-ignore + bot-actor guard + `[skip ci]` in the commit
-      # message). The fallback is positioned AFTER the cost-gate-
-      # guarded Bencher upload steps so a missing `bench` PR label
-      # still permits this gh-pages-side snapshot path; the fallback
-      # does not consume Bencher quota.
+      # message).
       #
       # `if:` scoping (IMP-5): only fires when `merge` outcome is
       # `failure` or `cancelled`. We deliberately do NOT fire on
@@ -952,7 +1017,13 @@ jobs:
             fi
             echo "::notice::fallback push attempt $attempt rejected; rebasing onto origin/devel and retrying."
             git fetch origin devel
-            git rebase origin/devel
+            # Same rationale as the regular snapshot step above: abort on
+            # rebase failure so the next iteration starts from a clean
+            # working tree rather than mid-rebase HEAD-detached state.
+            if ! git rebase origin/devel; then
+              git rebase --abort || true
+              echo "::warning::fallback rebase attempt $attempt failed; aborted and continuing retry loop."
+            fi
           done
           echo "::error::Fallback snapshot push failed after 3 retries; aborting." >&2
           exit 1

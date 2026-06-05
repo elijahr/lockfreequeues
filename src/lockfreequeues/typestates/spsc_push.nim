@@ -7,7 +7,7 @@
 ##
 ## Uses N+1 slot arithmetic (no committed flags needed for SPSC).
 
-import ../atomic_dsl
+import debra/atomics
 import typestates
 
 import ./virtual_values_n1
@@ -52,8 +52,8 @@ typestate SPSCPushOp[N: static int]:
     ]
     SPSCPushNotFull[N] -> SPSCPushDataWritten[N]
 
-# Forward declaration for Sipsic (avoid circular import)
-type SipsicBase*[N: static int, T] = object
+# Forward declaration for Spsc (avoid circular import)
+type SpscBase*[N: static int, T] = object
   head* {.align: 64.}: Atomic[int]
   tail* {.align: 64.}: Atomic[int]
   storage*: StorageN1[N, T]
@@ -63,7 +63,7 @@ proc start*[N: static int](): SPSCPushStart[N] {.inline.} =
   SPSCPushStart[N]()
 
 proc loadPointers*[N: static int, T](
-    op: SPSCPushStart[N], queue: var SipsicBase[N, T]
+    op: SPSCPushStart[N], queue: var SpscBase[N, T]
 ): SPSCPushPointersLoaded[N] {.inline, transition.} =
   ## Load head and tail atomically.
   let tail = loadAcquireN1[N](queue.tail).validate()
@@ -81,7 +81,7 @@ proc checkFull*[N: static int](
     SPSCFullCheck[N] -> SPSCPushNotFull[N](tail: op.tail, slot: slot)
 
 proc writeData*[N: static int, T](
-    op: SPSCPushNotFull[N], queue: var SipsicBase[N, T], item: T
+    op: SPSCPushNotFull[N], queue: var SpscBase[N, T], item: sink T
 ): SPSCPushDataWritten[N] {.inline, transition.} =
   ## Write item to the slot.
   queue.storage[op.slot] = item
@@ -89,8 +89,8 @@ proc writeData*[N: static int, T](
   SPSCPushDataWritten[N](newTail: newTail)
 
 proc complete*[N: static int, T](
-    op: SPSCPushDataWritten[N], queue: var SipsicBase[N, T]
-): bool {.inline.} =
+    op: SPSCPushDataWritten[N], queue: var SpscBase[N, T]
+): bool {.inline, notATransition.} =
   ## Advance tail and return success.
   queue.tail.storeReleaseN1(op.newTail)
   true

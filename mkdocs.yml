@@ -1,5 +1,5 @@
 site_name: lockfreequeues
-site_description: Lock-free queues for Nim, implemented as ring buffers
+site_description: Lock-free queues for Nim
 site_url: https://elijahr.github.io/lockfreequeues/
 
 repo_name: elijahr/lockfreequeues
@@ -28,9 +28,6 @@ theme:
     - navigation.sections
     - navigation.expand
     - toc.follow
-
-exclude_docs: |
-  plans/
 
 plugins:
   - search
@@ -69,7 +66,11 @@ plugins:
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.inlinehilite
   - pymdownx.snippets:
       base_path: ["."]
@@ -94,16 +95,9 @@ nav:
     - Examples: guide/examples.md
   - API Reference:
     - Overview: api/index.md
-    - Bounded Queues:
-      - Sipsic: api/sipsic.md
-      - Sipmuc: api/sipmuc.md
-      - Mupsic: api/mupsic.md
-      - Mupmuc: api/mupmuc.md
-    - Unbounded Queues:
-      - UnboundedSipsic: api/unbounded_sipsic.md
-      - UnboundedSipmuc: api/unbounded_sipmuc.md
-      - UnboundedMupsic: api/unbounded_mupsic.md
-      - UnboundedMupmuc: api/unbounded_mupmuc.md
+    - Bounded Queue (BQueue): api/bqueue.md
+    - Unbounded Queue (Queue): api/queue.md
+  - Migration: migration.md
   - Benchmarks: benchmarks.md
   - Contributing: contributing.md
 
@@ -125,4 +119,3 @@ extra:
 extra_css:
   - css/custom.css
   - assets/bench-charts.css
-  - assets/uplot-1.6.27.min.css

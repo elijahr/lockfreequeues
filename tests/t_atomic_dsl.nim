@@ -1,7 +1,10 @@
-import lockfreequeues/atomic_dsl
+import debra/atomics
+import debra/atomics/dsl
 import unittest2
 
 import lockfreequeues
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 suite "atomic_dsl":
   var atom: Atomic[int]

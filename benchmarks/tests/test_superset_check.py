@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for benchmarks/scripts/superset_check.py.
 
-Covers the deletion-safety contract from PR 2 Task 2.7:
+Covers the deletion-safety contract:
 
   - exit 0 when post-split slug set is a superset of pre-split.
   - exit 1 when one or more pre-split slugs are missing from post; stderr
@@ -51,10 +51,10 @@ class SupersetCheckTests(unittest.TestCase):
         pre = self.dir / "pre.json"
         post = self.dir / "post.json"
         slugs = {
-            "lockfreequeues_sipsic/spsc/1p1c": {
+            "lockfreequeues_spsc/spsc/1p1c": {
                 "throughput_ops_ms": {"value": 1000.0},
             },
-            "lockfreequeues_mupmuc/mpmc/4p4c": {
+            "lockfreequeues_mpmc/mpmc/4p4c": {
                 "throughput_ops_ms": {"value": 800.0},
             },
         }
@@ -69,18 +69,18 @@ class SupersetCheckTests(unittest.TestCase):
         pre = self.dir / "pre.json"
         post = self.dir / "post.json"
         write_json(pre, {
-            "lockfreequeues_sipsic/spsc/1p1c": {
+            "lockfreequeues_spsc/spsc/1p1c": {
                 "throughput_ops_ms": {"value": 1000.0},
             },
         })
         write_json(post, {
-            "lockfreequeues_sipsic/spsc/1p1c": {
+            "lockfreequeues_spsc/spsc/1p1c": {
                 "throughput_ops_ms": {"value": 1100.0},
             },
-            "lockfreequeues_mupmuc/mpmc/2p2c": {
+            "lockfreequeues_mpmc/mpmc/2p2c": {
                 "throughput_ops_ms": {"value": 800.0},
             },
-            "lockfreequeues_unbounded_sipsic/spsc_unbounded/1p1c": {
+            "lockfreequeues_unbounded_spsc/spsc_unbounded/1p1c": {
                 "throughput_ops_ms": {"value": 600.0},
             },
         })
@@ -92,10 +92,10 @@ class SupersetCheckTests(unittest.TestCase):
         pre = self.dir / "pre.json"
         post = self.dir / "post.json"
         write_json(pre, {
-            "lockfreequeues_sipsic/spsc/1p1c": {
+            "lockfreequeues_spsc/spsc/1p1c": {
                 "throughput_ops_ms": {"value": 1000.0},
             },
-            "lockfreequeues_mupmuc/mpmc/8p8c": {
+            "lockfreequeues_mpmc/mpmc/8p8c": {
                 "throughput_ops_ms": {"value": 200.0},
             },
             "nim_channels/mpmc/4p4c": {
@@ -105,7 +105,7 @@ class SupersetCheckTests(unittest.TestCase):
         # post is missing the 8p8c oversubscription slug AND the
         # nim_channels 4p4c slug — both should appear in stderr.
         write_json(post, {
-            "lockfreequeues_sipsic/spsc/1p1c": {
+            "lockfreequeues_spsc/spsc/1p1c": {
                 "throughput_ops_ms": {"value": 1100.0},
             },
         })
@@ -113,14 +113,14 @@ class SupersetCheckTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("missing", result.stderr.lower())
         # Both missing slugs must surface so the failure is actionable.
-        self.assertIn("lockfreequeues_mupmuc/mpmc/8p8c", result.stderr)
+        self.assertIn("lockfreequeues_mpmc/mpmc/8p8c", result.stderr)
         self.assertIn("nim_channels/mpmc/4p4c", result.stderr)
         # Slugs should appear in alphabetical order.
-        idx_mupmuc = result.stderr.find("lockfreequeues_mupmuc/mpmc/8p8c")
+        idx_mpmc = result.stderr.find("lockfreequeues_mpmc/mpmc/8p8c")
         idx_channels = result.stderr.find("nim_channels/mpmc/4p4c")
-        self.assertGreaterEqual(idx_mupmuc, 0)
+        self.assertGreaterEqual(idx_mpmc, 0)
         self.assertGreaterEqual(idx_channels, 0)
-        self.assertLess(idx_mupmuc, idx_channels)
+        self.assertLess(idx_mpmc, idx_channels)
 
     # 4. Empty pre is trivially a subset of anything -> exit 0.
     def test_empty_pre_exit_0(self) -> None:
@@ -128,7 +128,7 @@ class SupersetCheckTests(unittest.TestCase):
         post = self.dir / "post.json"
         write_json(pre, {})
         write_json(post, {
-            "lockfreequeues_sipsic/spsc/1p1c": {
+            "lockfreequeues_spsc/spsc/1p1c": {
                 "throughput_ops_ms": {"value": 1000.0},
             },
         })

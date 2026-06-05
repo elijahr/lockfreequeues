@@ -12,6 +12,13 @@ on:
       - '*.md'
 # yamllint enable rule:truthy
 
+# Cancel superseded runs on the same ref so a force-push or rapid
+# successive pushes don't burn matrix-minutes on stale revisions.
+# Scoped per (workflow, ref) so unrelated branches stay isolated.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -29,8 +36,19 @@ jobs:
         with:
           nim-version: 'stable'
 
-      - name: Install typestates
-        run: nimble install -y "typestates@0.7.2"
+      - name: Install dependencies from nimble registry
+        run: |
+          nimble install -dy
+          nimble setup
+          # Hand-fix typestates v0.12.0 srcDir flattening: nimble setup
+          # writes nimble.paths with a trailing /src component pointing
+          # inside the typestates pkg dir, but typestates v0.12.0
+          # ships its sources flat (no src/ subdir). Create a self-
+          # referential `src` symlink inside the pkg so both layouts
+          # resolve.
+          for d in $(find ~/.nimble/pkgs2 -maxdepth 1 -type d -name "typestates-0.12.0-*" 2>/dev/null); do
+            [ -e "$d/src" ] || ln -s . "$d/src"
+          done
 
       - name: Typestates verify
         run: typestates verify -W --format=github src/
@@ -38,31 +56,60 @@ jobs:
   test:
     name: Test nim-${{ matrix.nim-version }} / ${{ matrix.runs-on }}
     runs-on: ${{ matrix.runs-on }}
-    timeout-minutes: 25
+    timeout-minutes: ${{ matrix.timeout }}
+    # Nim devel is informational — it surfaces upstream breakage before
+    # it lands in stable but does NOT gate merge. Combined with
+    # fail-fast: false, a devel-leg failure stays visible in the Checks
+    # UI without blocking PRs.
+    continue-on-error: ${{ matrix.nim-version == 'devel' }}
 
     strategy:
       fail-fast: false
       matrix:
         include:
+          # ---- stable (gating) ----
           - runs-on: ubuntu-latest
             nim-version: 'stable'
             sanitize-threads: 'yes'
             sanitize-address: 'yes'
+            timeout: 25
           - runs-on: ubuntu-24.04-arm
             nim-version: 'stable'
             sanitize-threads: 'yes'
             sanitize-address: 'yes'
+            timeout: 45
           - runs-on: macos-latest
             nim-version: 'stable'
             sanitize-threads: 'yes'
             sanitize-address: 'yes'
+            timeout: 45
+          # ---- devel (informational, non-gating via continue-on-error) ----
+          - runs-on: ubuntu-latest
+            nim-version: 'devel'
+            sanitize-threads: 'yes'
+            sanitize-address: 'yes'
+            timeout: 45
+          - runs-on: ubuntu-24.04-arm
+            nim-version: 'devel'
+            sanitize-threads: 'yes'
+            sanitize-address: 'yes'
+            timeout: 45
+          - runs-on: macos-latest
+            nim-version: 'devel'
+            sanitize-threads: 'yes'
+            sanitize-address: 'yes'
+            timeout: 45
 
     steps:
       - name: Restore cache
         uses: actions/cache@v4
         with:
           path: ${HOME}/.cache
-          key: cache-${{ matrix.runs-on }}-${{ matrix.nim-version }}
+          # Include the nimble manifest + lockfile in the cache key so a
+          # dep bump (lockfreequeues.nimble) or a lockfile resolution
+          # (nimble.lock) invalidates the cache instead of silently
+          # reusing a stale entry built against the previous resolution.
+          key: cache-${{ matrix.runs-on }}-${{ matrix.nim-version }}-${{ hashFiles('lockfreequeues.nimble', 'nimble.lock') }}
 
       - name: Checkout project
         uses: actions/checkout@v4
@@ -78,26 +125,20 @@ jobs:
           sudo apt-get update -q -y
           sudo apt-get -qq install -y clang
 
-      - name: Clone and install sibling deps (nim-debra, nim-typestates)
-        # nim.cfg uses --path:"../nim-debra/src" and --path:"../nim-typestates/src"
-        # for compiler-side resolution. Nimble's dep resolver runs BEFORE
-        # the compiler though, and `nimble test` will refuse to launch if
-        # `requires "debra >= 0.7.0"` is unsatisfiable from nimble's
-        # package store. So fetch matching branches and `nimble install`
-        # them locally to satisfy the resolver. Once nimble.directory has
-        # picked up the new tags, this whole step can be replaced with a
-        # plain `nimble install -d -y`.
+      - name: Install dependencies from nimble registry
+        # Uses lockfreequeues.nimble `requires` lines (typestates >= 0.12.0,
+        # debra >= 0.9.0, unittest2, nim >= 2.2.10) plus the pinned SHAs in
+        # nimble.lock for deterministic resolution. `nimble install -dy`
+        # fetches every dep without building the package itself; the
+        # subsequent step's `nimble test` invokes the package's test task
+        # and the deps are resolved from nimble's pkgs2 store.
         run: |
-          set -e
-          cd ..
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
-          (cd nim-typestates && nimble install -y)
-          (cd nim-debra && nimble install -y)
-
-      - name: Vendor unittest2 (nim.cfg expects deps/unittest2)
-        # deps/ is gitignored. nim.cfg has --path:"deps/unittest2".
-        run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
+          nimble install -dy
+          nimble setup
+          # Hand-fix typestates v0.12.0 srcDir flattening (same as lint job).
+          for d in $(find ~/.nimble/pkgs2 -maxdepth 1 -type d -name "typestates-0.12.0-*" 2>/dev/null); do
+            [ -e "$d/src" ] || ln -s . "$d/src"
+          done
 
       - name: Run tests
         run: |
@@ -121,11 +162,6 @@ jobs:
               return 1
             fi
           }
-          # Skip `nimble develop -y` — nim.cfg's --noNimblePath +
-          # explicit --path: directives mean nimble's package resolver is
-          # not used. The sibling-clone step above is what populates the
-          # local nimble store; going through `nimble develop` would only
-          # add a redundant dep-resolution round trip.
           echo "::group::Run test suite (includes arc, orc, refc, lock-free enforcement)"
           nimble_run nimble test
           echo "::endgroup::"

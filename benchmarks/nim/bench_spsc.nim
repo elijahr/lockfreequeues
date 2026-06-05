@@ -1,10 +1,10 @@
-## Bounded SPSC throughput bench (Track 2 PR 2 Task 2.3).
+## Bounded SPSC throughput bench.
 ##
-## Splits the SPSC slice out of the legacy bench_throughput.nim into a
-## standalone binary so CI can budget SPSC and MPMC independently
-## (design 2.5; impl plan Track 2). Covers the single Sipsic queue at
-## the canonical `1p1c` smoke shape — the Sipsic type only supports
-## one producer and one consumer by construction.
+## Standalone binary for the SPSC slice, split out of the legacy
+## bench_throughput.nim so CI can budget SPSC and MPMC independently.
+## Covers the single Spsc queue at the canonical `1p1c` smoke shape
+## — the Spsc type only supports one producer and one consumer by
+## construction.
 ##
 ## Per-binary intdefines (design §2.5):
 ##   -d:BenchSpscRuns=<N>          (default 33)
@@ -12,18 +12,45 @@
 ##   -d:BenchSpscWarmup=<N>        (default 3)
 ##
 ## Emitted measure per slug: `throughput_ops_ms` (mean, lower=mean-1σ,
-## upper=mean+1σ). Slug shape: `lockfreequeues_sipsic/spsc/1p1c`.
+## upper=mean+1σ). Slug shape: `lockfreequeues_spsc/spsc/1p1c`.
 
 import std/[options, os, parseopt, sets, strformat, syncio]
 import ./bench_common
-import ./adapters/lockfreequeues_sipsic_adapter
+import ./adapters/lockfreequeues_spsc_adapter
+# Consolidated Queue-based parity adapter.
+import ./adapters/queue_bounded_adapter
+import lockfreequeues/strategy
+import lockfreequeues/reclamation
+import lockfreequeues/internal/pinscope_stub
 
-# MVP comparison adapters (Track 3). Each is included only when its
+# Comparison adapters. Each is included only when its
 # `-d:adapter_<lib>_available` gate is set; absent gate yields no
 # symbol references and the variant is dropped from `SupportedVariants`
 # below via `when declared(...)`.
 when defined(adapter_boost_lockfree_spsc_available):
   import ./adapters/boost_lockfree_spsc_adapter
+
+# Tier 1 vendored comparison adapters (header-only C++).
+# Both `atomic_queue` (max0x7ba) and `rigtorp::SPSCQueue` are bounded
+# rings; gated by per-library defines. atomic_queue runs at SPSC here
+# (it is general MPMC, but the SPSC slot exercises its 1p1c path).
+when defined(adapter_atomic_queue_available):
+  import ./adapters/atomic_queue_adapter
+
+when defined(adapter_rigtorp_spsc_available):
+  import ./adapters/rigtorp_spsc_adapter
+
+# Tier 2 Rust comparison adapter: kanal exposes a bounded MPMC channel
+# that we exercise here at the 1p1c (SPSC) shape.
+when defined(adapter_kanal_available):
+  import ./adapters/kanal_adapter
+
+# Tier 3 vendored adapter: liblfds 7.1.1 (C library,
+# license-verified public-domain + permissive grant). The adapter
+# routes the SPSC topology to the upstream `lfds711_queue_bss_*`
+# bounded single-producer / single-consumer queue.
+when defined(adapter_liblfds_available):
+  import ./adapters/liblfds_adapter
 
 const
   ## Per-binary intdefines for SPSC wall-time control. Override at compile
@@ -39,41 +66,78 @@ when defined(BenchSpscTestCompileTime):
     doAssert BenchSpscRuns == 33,
       "BenchSpscRuns default must be 33 (got " & $BenchSpscRuns & ")"
     doAssert BenchSpscMessageCount == 1_000_000,
-      "BenchSpscMessageCount default must be 1_000_000 (got " &
-      $BenchSpscMessageCount & ")"
+      "BenchSpscMessageCount default must be 1_000_000 (got " & $BenchSpscMessageCount &
+        ")"
     doAssert BenchSpscWarmup == 3,
       "BenchSpscWarmup default must be 3 (got " & $BenchSpscWarmup & ")"
 
 const SpscCapacity = 1024
 
 # Variant queueInit closure. `runThroughputHarness` takes a
-# `proc(capacity: int): Q` factory; SipsicAdapter ignores the runtime
+# `proc(capacity: int): Q` factory; SpscAdapter ignores the runtime
 # capacity arg in favor of its static parameter.
-proc initSipsicQ(capacity: int): SipsicAdapter[SpscCapacity, uint64] =
+proc initSpscQ(capacity: int): SpscAdapter[SpscCapacity, uint64] =
   doAssert capacity == SpscCapacity, "capacity must equal SpscCapacity"
-  initSipsicAdapter[SpscCapacity, uint64]()
+  initSpscAdapter[SpscCapacity, uint64]()
+
+# Parallel factory via the consolidated
+# QueueBoundedAdapter at SPSC cardinality. Slug
+# `lockfreequeues_queue_bounded_spsc/spsc/1p1c`. Output metric +
+# units (throughput_ops_ms) identical to the legacy spsc baseline
+# so parity tooling can compute a % delta directly.
+proc initQueueBoundedSpscQ(
+    capacity: int
+): QueueBoundedAdapter[ccSingle, ccSingle, stEager, SpscCapacity, 0, 0, uint64] =
+  doAssert capacity == SpscCapacity, "capacity must equal SpscCapacity"
+  makeQueueBoundedAdapter[ccSingle, ccSingle, stEager, SpscCapacity, 0, 0, uint64](
+    SpscCapacity
+  )
 
 when defined(adapter_boost_lockfree_spsc_available):
   proc initBoostSpscQ(capacity: int): BoostLockfreeSpscAdapter[uint64] =
     makeBoostLockfreeSpscAdapter[uint64](capacity)
 
+when defined(adapter_atomic_queue_available):
+  proc initAtomicQueueQ(capacity: int): AtomicQueueAdapter[uint64] =
+    makeAtomicQueueAdapter[uint64](capacity)
+
+when defined(adapter_rigtorp_spsc_available):
+  proc initRigtorpSpscQ(capacity: int): RigtorpSpscAdapter[uint64] =
+    makeRigtorpSpscAdapter[uint64](capacity)
+
+when defined(adapter_kanal_available):
+  proc initKanalSpscQ(capacity: int): KanalAdapter[uint64] =
+    makeKanalAdapter[uint64](capacity)
+
+when defined(adapter_liblfds_available):
+  proc initLiblfdsSpscQ(capacity: int): LiblfdsAdapter[uint64] =
+    # SPSC slot uses the bounded single-producer / single-consumer queue
+    # (`lfds711_queue_bss_*`); see the adapter doc-comment for the
+    # ringbuffer-vs-bounded-queue rationale.
+    makeLiblfdsAdapter[uint64](kind = lkBss, capacity = capacity)
+
 # MVP variants are added to SupportedVariants only when the matching
 # adapter symbol is in scope (i.e. its compile-time gate is set).
 proc supportedVariantsList(): seq[string] {.compileTime.} =
-  result = @["sipsic"]
+  result = @["spsc", "queue_bounded_spsc"]
   when declared(initBoostSpscQ):
     result.add("boost_lockfree_spsc")
+  when declared(initAtomicQueueQ):
+    result.add("atomic_queue")
+  when declared(initRigtorpSpscQ):
+    result.add("rigtorp_spsc")
+  when declared(initKanalSpscQ):
+    result.add("kanal")
+  when declared(initLiblfdsSpscQ):
+    result.add("liblfds")
 
 const SupportedVariants = supportedVariantsList()
 
 proc runMvpVariant[A](
-    em: var BMFEmitter,
-    slug: string,
-    queueInit: proc(capacity: int): A,
-    capacity: int,
+    em: var BMFEmitter, slug: string, queueInit: proc(capacity: int): A, capacity: int
 ) =
   ## Generic emitter for MVP comparison adapters: 1p1c throughput at
-  ## the same shape as the in-tree sipsic baseline so Bencher can compare
+  ## the same shape as the in-tree spsc baseline so Bencher can compare
   ## across libraries on identical work.
   echo fmt"{slug}:"
   let metrics = runThroughputHarness[A](
@@ -90,7 +154,8 @@ proc runMvpVariant[A](
   echo fmt"  runs: {metrics.runs}"
   echo ""
   em.addMeasure(
-    slug, "throughput_ops_ms",
+    slug,
+    "throughput_ops_ms",
     metrics.ops_ms_mean,
     metrics.ops_ms_mean - metrics.ops_ms_stddev,
     metrics.ops_ms_mean + metrics.ops_ms_stddev,
@@ -98,11 +163,11 @@ proc runMvpVariant[A](
 
 proc runVariant(variant: string, em: var BMFEmitter) =
   case variant
-  of "sipsic":
-    let slug = "lockfreequeues_sipsic/spsc/1p1c"
+  of "spsc":
+    let slug = "lockfreequeues_spsc/spsc/1p1c"
     echo fmt"{variant} ({slug}):"
-    let metrics = runThroughputHarness[SipsicAdapter[SpscCapacity, uint64]](
-      queueInit = initSipsicQ,
+    let metrics = runThroughputHarness[SpscAdapter[SpscCapacity, uint64]](
+      queueInit = initSpscQ,
       capacity = SpscCapacity,
       numProducers = 1,
       numConsumers = 1,
@@ -115,7 +180,38 @@ proc runVariant(variant: string, em: var BMFEmitter) =
     echo fmt"  runs: {metrics.runs}"
     echo ""
     em.addMeasure(
-      slug, "throughput_ops_ms",
+      slug,
+      "throughput_ops_ms",
+      metrics.ops_ms_mean,
+      metrics.ops_ms_mean - metrics.ops_ms_stddev,
+      metrics.ops_ms_mean + metrics.ops_ms_stddev,
+    )
+  of "queue_bounded_spsc":
+    # Same shape as the `spsc` variant above, but
+    # backed by the unified `BQueue[T, ccSingle, ccSingle, stEager,
+    # rkNone, N, 0, 0, 0, 0]` generic via `QueueBoundedAdapter`. Slug +
+    # metric mirror so the parity delta is a simple per-shape division
+    # across the two emitted measures.
+    let slug = "lockfreequeues_queue_bounded_spsc/spsc/1p1c"
+    echo fmt"{variant} ({slug}):"
+    let metrics = runThroughputHarness[
+      QueueBoundedAdapter[ccSingle, ccSingle, stEager, SpscCapacity, 0, 0, uint64]
+    ](
+      queueInit = initQueueBoundedSpscQ,
+      capacity = SpscCapacity,
+      numProducers = 1,
+      numConsumers = 1,
+      messageCount = BenchSpscMessageCount,
+      runCount = BenchSpscRuns,
+      warmupCount = BenchSpscWarmup,
+    )
+    echo fmt"  mean: {metrics.ops_ms_mean:.1f} ops/ms"
+    echo fmt"  stddev: {metrics.ops_ms_stddev:.1f}"
+    echo fmt"  runs: {metrics.runs}"
+    echo ""
+    em.addMeasure(
+      slug,
+      "throughput_ops_ms",
       metrics.ops_ms_mean,
       metrics.ops_ms_mean - metrics.ops_ms_stddev,
       metrics.ops_ms_mean + metrics.ops_ms_stddev,
@@ -127,6 +223,42 @@ proc runVariant(variant: string, em: var BMFEmitter) =
           em,
           slug = "boost_lockfree_queue/spsc/1p1c",
           queueInit = initBoostSpscQ,
+          capacity = SpscCapacity,
+        )
+        return
+    when declared(initAtomicQueueQ):
+      if variant == "atomic_queue":
+        runMvpVariant[AtomicQueueAdapter[uint64]](
+          em,
+          slug = "atomic_queue/spsc/1p1c",
+          queueInit = initAtomicQueueQ,
+          capacity = SpscCapacity,
+        )
+        return
+    when declared(initRigtorpSpscQ):
+      if variant == "rigtorp_spsc":
+        runMvpVariant[RigtorpSpscAdapter[uint64]](
+          em,
+          slug = "rigtorp_spsc/spsc/1p1c",
+          queueInit = initRigtorpSpscQ,
+          capacity = SpscCapacity,
+        )
+        return
+    when declared(initKanalSpscQ):
+      if variant == "kanal":
+        runMvpVariant[KanalAdapter[uint64]](
+          em,
+          slug = "kanal/spsc/1p1c",
+          queueInit = initKanalSpscQ,
+          capacity = SpscCapacity,
+        )
+        return
+    when declared(initLiblfdsSpscQ):
+      if variant == "liblfds":
+        runMvpVariant[LiblfdsAdapter[uint64]](
+          em,
+          slug = "liblfds/spsc/1p1c",
+          queueInit = initLiblfdsSpscQ,
           capacity = SpscCapacity,
         )
         return
@@ -145,7 +277,8 @@ when isMainModule:
     while true:
       p.next()
       case p.kind
-      of cmdEnd: break
+      of cmdEnd:
+        break
       of cmdLongOption, cmdShortOption:
         case p.key
         of "bmf-out":

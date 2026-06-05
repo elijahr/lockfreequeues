@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Merge multiple BMF JSON files into one before `bencher run` upload.
+"""Merge multiple BMF JSON files into one for the docs chart snapshot.
 
-Bencher.dev creates a separate Report per `bencher run` invocation; multiple
-uploads from sibling CI jobs (bench-throughput / bench-latency / topology
-splits) would NOT co-locate measures on a single per-slug history. This
-utility unions the per-slug measure dicts from N input BMF JSONs into one
-output BMF JSON, validates the schema, and guards against collisions.
+Sibling CI jobs (bench-throughput / bench-latency / topology splits) each
+emit their own BMF JSON fragment. This utility unions the per-slug measure
+dicts from N input BMF JSONs into one output BMF JSON, validates the
+schema, and guards against collisions. The merged result is what the
+docs charts read out of `docs/assets/bench-results/latest.json`.
 
 Contract (design doc section 4.3):
     merge_bmf.py <output_path> <input1> [input2 ...]
@@ -40,6 +40,16 @@ from typing import Mapping, Tuple
 SLUG_RE = re.compile(r"^[a-z][a-z0-9_]*/[a-z][a-z0-9_]*/\d+p\d+c$")
 MEASURE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 ALLOWED_FIELDS = frozenset({"value", "lower_value", "upper_value"})
+
+# v5.0.0-wave Item 1: the bench harness now emits a top-level `meta` key
+# alongside the slug-keyed measurement entries (see
+# `benchmarks/nim/adapter_versions.nim`). The key is reserved here so the
+# slug-shape validator does not reject it, and `merge` preserves the
+# first input's value across fragment unions (every per-binary fragment
+# from a single bench run has an identical `meta` block; later fragments
+# are accepted but ignored for the union to keep the merge deterministic
+# without needing a deep-equality check on every meta sub-field).
+META_KEY = "meta"
 
 
 def _die(msg: str) -> "int":
@@ -86,6 +96,19 @@ def _validate_keys(
 ) -> str | None:
     """Walk a parsed BMF JSON; return error string or None."""
     for slug, inner in obj.items():
+        # `meta` is the reserved version-capture sibling key. Validate
+        # only that it is an object so a malformed emitter is still
+        # caught; the inner schema is intentionally not enforced here —
+        # the meta block is consumed by chart code, not by Bencher, and
+        # keeping the rules flexible avoids a tight coupling between the
+        # adapter-version capture format and the merge tool.
+        if slug == META_KEY:
+            if not isinstance(inner, dict):
+                return (
+                    f"error: '{META_KEY}' in {source} must map to an "
+                    f"object; got {type(inner).__name__}"
+                )
+            continue
         if not isinstance(slug, str) or not SLUG_RE.match(slug):
             return (
                 f"error: invalid slug shape '{slug}' in {source} "
@@ -145,6 +168,15 @@ def merge(
         if err is not None:
             return {}, err
         for slug, inner in parsed.items():
+            # `meta` key: preserve from the first input that supplies it.
+            # Every per-binary fragment in a single bench run carries the
+            # same meta block (generated_at differs by milliseconds; all
+            # other fields identical), so first-wins is deterministic and
+            # avoids a deep merge that would have to choose between
+            # nearly-equal timestamps.
+            if slug == META_KEY:
+                merged.setdefault(META_KEY, inner)  # type: ignore[arg-type]
+                continue
             slug_bucket = merged.setdefault(slug, {})
             for measure, mv in inner.items():
                 key = (slug, measure)

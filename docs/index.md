@@ -4,27 +4,61 @@ Lock-free queues for Nim, implemented as ring buffers (bounded) and linked segme
 
 ## Overview
 
-### Bounded Queues (Fixed Capacity)
+v5 exposes two unified, cardinality-parameterized queue types —
+[`BQueue`](api/bqueue.md) (bounded) and [`Queue`](api/queue.md)
+(unbounded). Each covers all four producer/consumer combinations,
+selected at compile time via the `ccProd` / `ccCons` parameters.
 
-Ring buffer implementations with compile-time capacity. Best for predictable memory usage and embedded systems.
+### Bounded `BQueue` (Fixed Capacity)
 
-| Queue | Producers | Consumers | Push | Pop |
-|-------|-----------|-----------|------|-----|
-| [Sipsic](api/sipsic.md) | Single | Single | Wait-free | Wait-free |
-| [Sipmuc](api/sipmuc.md) | Single | Multiple | Wait-free | Lock-free |
-| [Mupsic](api/mupsic.md) | Multiple | Single | Lock-free | Wait-free |
-| [Mupmuc](api/mupmuc.md) | Multiple | Multiple | Lock-free | Lock-free |
+Ring buffer with compile-time capacity. Best for predictable memory usage and embedded systems. [`BQueue`](api/bqueue.md) covers:
 
-### Unbounded Queues (Dynamic Capacity)
+| Cardinality | Producers | Consumers | Push | Pop |
+|-------------|-----------|-----------|------|-----|
+| SPSC | Single | Single | Wait-free | Wait-free |
+| SPMC | Single | Multiple | Wait-free | Lock-free |
+| MPSC | Multiple | Single | Lock-free | Wait-free |
+| MPMC | Multiple | Multiple | Lock-free | Lock-free |
 
-Linked segment implementations that grow as needed. The MP/MC variants use DEBRA+ epoch-based reclamation (via [nim-debra](https://github.com/elijahr/nim-debra)) for safe memory deallocation; the SPSC variant frees retired segments inline (no manager).
+### Unbounded `Queue` (Dynamic Capacity)
 
-| Queue | Producers | Consumers | Push | Pop |
-|-------|-----------|-----------|------|-----|
-| UnboundedSipsic | Single | Single | Wait-free | Wait-free |
-| UnboundedSipmuc | Single | Multiple | Wait-free | Lock-free |
-| UnboundedMupsic | Multiple | Single | Lock-free | Wait-free |
-| UnboundedMupmuc | Multiple | Multiple | Lock-free | Lock-free |
+Linked segments that grow as needed. The MP/MC shapes use DEBRA+ epoch-based reclamation (via [nim-debra](https://github.com/elijahr/nim-debra)) for safe memory deallocation; the SPSC shape frees retired segments inline (no manager). [`Queue`](api/queue.md) covers:
+
+| Cardinality | Producers | Consumers | Push | Pop |
+|-------------|-----------|-----------|------|-----|
+| SPSC | Single | Single | Wait-free | Wait-free |
+| SPMC | Single | Multiple | Wait-free | Lock-free |
+| MPSC | Multiple | Single | Lock-free | Wait-free |
+| MPMC | Multiple | Multiple | Lock-free | Lock-free |
+
+## Compatibility
+
+| Requirement | Supported |
+|-------------|-----------|
+| Nim         | `>= 2.2.0` |
+| Memory managers | `orc` (default), `arc`, `refc`, `atomicArc` |
+| Backends    | C, C++ |
+| Threads     | `--threads:on` required (default in Nim 2.2+) |
+| Platforms (CI-verified) | Linux x86_64, Linux arm64, macOS arm64 |
+| Sanitisers (CI-verified) | ThreadSanitizer (under `atomicArc`), AddressSanitizer |
+| Dependencies | [`debra`](https://github.com/elijahr/nim-debra) `>= 0.8.0`, [`typestates`](https://github.com/elijahr/nim-typestates) `>= 0.10.0` |
+| License     | MIT |
+
+**Item-type constraints.** Slots are shared across threads and stored in a
+plain `array[S, T]`, so the queue rejects `ref T` item types under `arc` /
+`orc` / `atomicArc` at compile time. Use a value type, a `ptr T`, or pass
+`-d:allowNonLockFreeQueueItems` to disable the check at your own risk.
+Additionally in v5.0.0, the unbounded MPMC arm
+(`Queue[T, ccMulti, ccMulti, …]`) requires
+`supportsCopyMem(T) AND sizeof(T) <= 8` (Phase B strict-LCRQ migration);
+for wider or move-only `T`, use `BQueue[T, ccMulti, ccMulti, …]` or wrap
+as `ptr T`. See
+[Phase B migration](migrations/v5.0.0.md#phase-b--strict-lcrq-migration-on-unbounded-mpmc).
+
+**Atomics.** All atomics route through `debra/atomics`, which statically
+rejects any `Atomic[T]` instantiation that would fall back to libatomic
+spinlocks. Enforcement is on by default; opt out with
+`-d:debraAllowNonLockFreeAtomics` (per-call-site warning fires).
 
 ## Installation
 
@@ -39,53 +73,59 @@ nimble install lockfreequeues
 ```nim
 import lockfreequeues
 
-# Single-producer, single-consumer queue with capacity 16
-var queue = initSipsic[16, int]()
+# Single-producer, single-consumer bounded queue with capacity 16.
+var queue = newSpscQueue[int, 16]()
 
-queue.push(42)
-queue.push(123)
+discard queue.push(42)
+discard queue.push(123)
 
 let item = queue.pop()  # some(42)
 ```
 
 ### Unbounded Queue (single-producer, single-consumer)
 
-`UnboundedSipsic` does not need DEBRA reclamation: the producer and consumer
-each hold their own segment pointer and the consumer-side advance is the only
-freer.
+The SPSC `Queue` shape does not need DEBRA reclamation: the producer and
+consumer each hold their own segment pointer and the consumer-side advance is
+the only freer.
 
 ```nim
 import lockfreequeues
 
-# Unbounded SPSC queue with segment size 64
-var queue = newUnboundedSipsic[64, int]()
+# Unbounded SPSC queue with segment size 64.
+var queue = newQueue(Queue[int, ccSingle, ccSingle, stEager, 64, 1])
 
-queue.push(42)  # Never fails - grows as needed
+var p = queue.getProducer()
+p.push(42)              # never fails — grows as needed
 let item = queue.pop()  # some(42)
 ```
 
 ### Unbounded Queue (multi-producer, multi-consumer)
 
-The MP/MC unbounded variants need a `DebraManager` for safe segment
-reclamation, plus a per-thread handle for each producer and consumer:
+The MP/MC unbounded shapes use a `DebraManager` for safe segment
+reclamation. The auto-create constructor heap-allocates a private manager;
+each operating thread then `attach()`es its view on the thread that will
+push/pop through it (DEBRA registration is thread-affine):
 
 ```nim
-import options
-import debra
 import lockfreequeues
 
-var manager = initDebraManager[4]()
-var queue = newUnboundedMupmuc[64, int, 4](addr manager)
+# Auto-create MPMC: segment size 64, registry capacity 4.
+var queue = newQueue(Queue[int, ccMulti, ccMulti, stEager, 64, 4])
 
-let producerHandle = registerThread(manager)
-let consumerHandle = registerThread(manager)
+var producer = queue.getProducerHere()  # registers this thread
+producer.push(42)                       # may raise DebraRegistrationError
 
-var producer = queue.getProducer(producerHandle)
-var consumer = queue.getConsumer(consumerHandle)
-
-producer.push(42)
-let item = consumer.pop()  # some(42)
+var consumer = queue.getConsumerHere()
+let item = consumer.pop()               # some(42)
 ```
+
+The `*Here` templates are sugar for `getProducer()` + `attach()` (and
+`getConsumer()` + `attach()`) when the calling thread is also the
+operating thread. For the producer-to-worker handoff pattern (a
+parent thread obtains the view and hands it off to a worker thread
+that does the push/pop), use the explicit `getProducer()` +
+`attach()` pair so the debra registration lands on the worker thread.
+See the [Queue API reference](api/queue.md) for details.
 
 ## Choosing a Queue
 
@@ -103,7 +143,7 @@ let item = consumer.pop()  # some(42)
 
 ## Examples
 
-Examples are in the [examples](https://github.com/elijahr/lockfreequeues/tree/master/examples) directory:
+Examples are in the [examples](https://github.com/elijahr/lockfreequeues/tree/devel/examples) directory:
 
 ```sh
 nimble examples
@@ -111,6 +151,9 @@ nimble examples
 
 ## References
 
-- Juho Snellman's ["I've been writing ring buffers wrong all these years"](https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/)
-- Mamy Ratsimbazafy's [research on SPSC channels](https://github.com/mratsim/weave/blob/master/weave/cross_thread_com/channels_spsc.md#litterature)
-- Henrique F Bucher's ["Yes, You Have Been Writing SPSC Queues Wrong Your Entire Life"](http://www.vitorian.com/x1/archives/370)
+- Juho Snellman, ["I've been writing ring buffers wrong all these years"](https://www.snellman.net/blog/archive/2016-12-13-ring-buffers/).
+- Mamy Ratsimbazafy, [research on SPSC channels](https://github.com/mratsim/weave/blob/master/weave/cross_thread_com/channels_spsc.md#litterature) for weave.
+- Henrique F. Bucher, ["Yes, You Have Been Writing SPSC Queues Wrong Your Entire Life"](http://www.vitorian.com/x1/archives/370).
+- Maged M. Michael and Michael L. Scott, "Simple, Fast, and Practical Non-Blocking and Blocking Concurrent Queue Algorithms" (PODC 1996) — the lock-free linked-list queue that the unbounded segment chain generalises.
+- Dmitry Vyukov's writings on bounded MPMC ring buffers and CAS-based coordination patterns — the per-slot sequence counter protocol used by the bounded multi-cardinality variants.
+- Trevor Brown, ["Reclaiming Memory for Lock-Free Data Structures: There has to be a Better Way"](https://www.cs.utoronto.ca/~tabrown/debra/) (DEBRA, the epoch-based reclamation scheme used by the unbounded multi-cardinality queues via [nim-debra](https://github.com/elijahr/nim-debra)).

@@ -1,12 +1,15 @@
-import lockfreequeues/atomic_dsl
+import debra/atomics
+import debra/atomics/dsl
 import options
 import unittest2
 
 import lockfreequeues
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 suite "wraparound":
   test "basic":
-    var q = initSipsic[2, string]()
+    var q = newSpscQueue[string, 2]()
     check q.head.load == 0
     check q.tail.load == 0
 

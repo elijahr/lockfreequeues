@@ -1,0 +1,243 @@
+## Driver for lockfreequeues' compile-fail test suite.
+##
+## Each entry asserts (a) the expected exit status from `nim c` (zero
+## for positive cases, non-zero for negative cases) and (b) that the
+## compiler's combined stdout+stderr contains a pinned error-message
+## substring specific to the failure mode under test.
+##
+## Pinning the substring (rather than just the exit status) guards
+## against silent regressions where the compile-fail still happens but
+## the underlying check has rotted — e.g., a future overload-set change
+## that drops the γ bounded-asymmetry guard, or a Strategy/cardinality
+## phantom-param tightening that silently widens lookup.
+##
+## Ported from nim-debra 0.8.0's `tests/should_fail/runner.nim`
+## with a project-specific case table covering the
+## 5 conditions enumerated in :
+##   1. Consumer ST=stManual vs Queue ST=stEager (Strategy phantom).
+##   2. ccCons=ccSingle queue rejects ccMulti DebraManager/handle.
+##   3. ccCons=ccMulti  queue rejects ccSingle DebraManager.
+##   4. (γ) bounded-asymmetry: retireOnCAS on Queue[..., rkNone, ...].
+##   5. (γ) bounded-asymmetry: retireOnPublish on
+##      Queue[..., ccCons=ccMulti, rkEbr, ...].
+##
+##
+
+import std/[osproc, strformat, strutils]
+
+type
+  ExpectedOutcome = enum
+    eoCompiles # `nim c` must exit 0; no substring needed.
+    eoCompileFails # `nim c` must exit non-zero; substring must appear.
+
+  Case = object
+    name: string
+    file: string
+    outcome: ExpectedOutcome
+    substring: string
+
+const cases = @[
+  Case(
+    name:
+      "t_queue_cardinality_mismatch §6.3 (1) — Consumer ST=stManual vs Queue ST=stEager",
+    file: "tests/should_fail/strategy_st_mismatch.nim",
+    outcome: eoCompileFails,
+    substring: "stManual",
+  ),
+  Case(
+    name:
+      "t_queue_cardinality_mismatch §6.3 (2) — ccCons=ccSingle queue rejects ccMulti handle",
+    file: "tests/should_fail/cc_consumer_single_rejects_multi.nim",
+    outcome: eoCompileFails,
+    substring: "newUnboundedMpscQueue",
+  ),
+  Case(
+    name:
+      "t_queue_cardinality_mismatch §6.3 (3) — ccCons=ccMulti queue rejects ccSingle manager",
+    file: "tests/should_fail/cc_consumer_multi_rejects_single.nim",
+    outcome: eoCompileFails,
+    substring: "newUnboundedMpmcQueue",
+  ),
+  Case(
+    name:
+      "t_queue_bounded_no_retire §6.3 (4) — retireOnCAS on Queue[..., rkNone, ...] (γ guard)",
+    file: "tests/should_fail/bounded_no_retire_on_cas.nim",
+    outcome: eoCompileFails,
+    substring: "retireOnCAS",
+  ),
+  Case(
+    name:
+      "t_queue_bounded_no_retire §6.3 (5) — retireOnPublish on Queue[..., ccCons=ccMulti, rkEbr, ...] (γ guard)",
+    file: "tests/should_fail/bounded_no_retire_on_publish_mc.nim",
+    outcome: eoCompileFails,
+    substring: "retireOnPublish",
+  ),
+  # Family-level coverage of `{.error.}` cardinality gates. One case per
+  # BQueue/Queue * push/pop family, exercising the cardinality
+  # `{.error.}` overload through the family-named thin-wrappers
+  # (`newMpscQueue`, `newSpmcQueue`, `newMpmcQueue`,
+  # `newUnboundedSpmcQueue`). Family-level rather than per-individual-
+  # wrapper.
+  Case(
+    name:
+      "t_bqueue_cardinality §6.3 (6) — direct push on ccProd=ccMulti BQueue is forbidden",
+    file: "tests/should_fail/bqueue_multi_producer_direct_push.nim",
+    outcome: eoCompileFails,
+    substring: "multi-producer BQueue",
+  ),
+  Case(
+    name:
+      "t_bqueue_cardinality §6.3 (7) — direct pop on ccCons=ccMulti BQueue is forbidden",
+    file: "tests/should_fail/bqueue_multi_consumer_direct_pop.nim",
+    outcome: eoCompileFails,
+    substring: "multi-consumer BQueue",
+  ),
+  Case(
+    name:
+      "t_queue_cardinality §6.3 (8) — direct pop on ccCons=ccMulti Queue is forbidden",
+    file: "tests/should_fail/queue_multi_consumer_direct_pop.nim",
+    outcome: eoCompileFails,
+    substring: "multi-consumer Queue",
+  ),
+  Case(
+    name:
+      "t_bqueue_cardinality §6.3 (9) — direct batch push on ccProd=ccMulti BQueue is forbidden",
+    file: "tests/should_fail/bqueue_multi_producer_batch_push.nim",
+    outcome: eoCompileFails,
+    substring: "batch push on a multi-producer BQueue",
+  ),
+  # Cases (10)-(14) cover the Middle-axis Claim-state typestate
+  # and the deliberate-negative cross-module containment. The
+  # ccSingle-attach cases all assert the same substring fragment
+  # `BQueueProducer` / `BQueueConsumer` / `QueueProducer` /
+  # `QueueConsumer` — these are the user-visible alias names that
+  # appear in the Nim "type mismatch" diagnostic;
+  # no `*Multi`/`*Single` backing-type leakage.
+  Case(
+    name: "t_bqueue_claimstate §6.3 (10) — ccSingle BQueueProducer cannot attach",
+    file: "tests/should_fail/bqueue_producer_attach_ccsingle.nim",
+    outcome: eoCompileFails,
+    substring: "BQueueProducer",
+  ),
+  Case(
+    name: "t_bqueue_claimstate §6.3 (11) — ccSingle BQueueConsumer cannot attach",
+    file: "tests/should_fail/bqueue_consumer_attach_ccsingle.nim",
+    outcome: eoCompileFails,
+    substring: "BQueueConsumer",
+  ),
+  Case(
+    name: "t_queue_claimstate §6.3 (12) — ccSingle QueueProducer cannot attach",
+    file: "tests/should_fail/queue_producer_attach_ccsingle.nim",
+    outcome: eoCompileFails,
+    substring: "QueueProducer",
+  ),
+  Case(
+    name: "t_queue_claimstate §6.3 (13) — ccSingle QueueConsumer cannot attach",
+    file: "tests/should_fail/queue_consumer_attach_ccsingle.nim",
+    outcome: eoCompileFails,
+    substring: "QueueConsumer",
+  ),
+  Case(
+    name:
+      "t_bqueue_lifecycle §6.3 (14) — F.3.5 cross-module state-preserving op requires {.notATransition.}",
+    file: "tests/should_fail/bqueue_cross_module_no_notATransition.nim",
+    outcome: eoCompileFails,
+    substring: "notATransition",
+  ),
+  Case(
+    name: "endpoint L1 (Task C5) — push on Unbound endpoint is a lifecycle violation",
+    file: "tests/should_fail/endpoint_push_on_unbound.nim",
+    outcome: eoCompileFails,
+    substring: "push",
+  ),
+  Case(
+    name: "endpoint L2 (Task C9, tripwire a) — SPSC push on consumer-tag endpoint",
+    file: "tests/should_fail/endpoint_push_on_consumer_tag.nim",
+    outcome: eoCompileFails,
+    substring: "SpscConsumerTag",
+  ),
+  Case(
+    name: "endpoint L2 (Task C9, tripwire b) — SPSC pop on producer-tag endpoint",
+    file: "tests/should_fail/endpoint_pop_on_producer_tag.nim",
+    outcome: eoCompileFails,
+    substring: "SpscProducerTag",
+  ),
+  Case(
+    name: "endpoint L2 (Task C9, tripwire c) — forbids-region calling tagged push",
+    file: "tests/should_fail/endpoint_forbids_region.nim",
+    outcome: eoCompileFails,
+    substring: "forbids",
+  ),
+  Case(
+    name: "endpoint L2 (Task C9, tripwire d) — MPMC push on consumer-tag endpoint",
+    file: "tests/should_fail/endpoint_mpmc_push_on_consumer_tag.nim",
+    outcome: eoCompileFails,
+    substring: "MpmcConsumerTag",
+  ),
+  Case(
+    name:
+      "spawn C14.5 — defineProducerWorker inside proc body must compile-fail (module-scope guard)",
+    file: "tests/should_fail/spawn_nested_scope.nim",
+    outcome: eoCompileFails,
+    substring: "top level",
+  ),
+  Case(
+    name:
+      "Phase B T13 (design §9.3 / SCOPE-7) — unbounded MPMC Queue rejects sizeof(T) > 8",
+    file: "tests/should_fail/unbounded_mpmc_wide_T_rejected.nim",
+    outcome: eoCompileFails,
+    # Two layered guards reject wide T on the ccMulti × ccMulti arm:
+    #   1. debra's `enforceDwcasConstraints` static assertion (fires at
+    #      construction-time via `Atomic[Pair[uint64, T]].store` in
+    #      `newSegment`): "sizeof(B) <= 8 Pair half-type ... must be
+    #      <= 8 bytes (DWCAS pairs two 64-bit registers)".
+    #   2. The v5.0.0 `{.error.}` in `proc push` (queue.nim L1136-L1145):
+    #      "requires sizeof(T) <= 8".
+    # Construction trips (1) before `push` is expanded, so we pin
+    # against debra's substring — the OUTER enforcement layer. If the
+    # narrowing is ever removed from the unbounded MPMC arm, BOTH
+    # layers stop firing and the test fails — the tripwire is sound
+    # either way.
+    substring: "Pair half-type",
+  ),
+]
+
+proc runCase(c: Case): bool =
+  # Child nim invocation uses the worktree's nimble.paths (regenerated
+  # by `nimble setup` / `nimble install -dy`) for dep resolution.
+  let cmd =
+    &"nim c --threads:on --hints:off --warnings:off --path:src --compileOnly {c.file}"
+  let (output, exitCode) = execCmdEx(cmd)
+  case c.outcome
+  of eoCompiles:
+    if exitCode != 0:
+      echo &"[FAIL] {c.name}: expected exit 0, got {exitCode}"
+      echo output
+      return false
+    echo &"[PASS] {c.name}"
+    return true
+  of eoCompileFails:
+    if exitCode == 0:
+      echo &"[FAIL] {c.name}: expected non-zero exit, got 0 (unexpected success)"
+      echo output
+      return false
+    if not output.contains(c.substring):
+      echo &"[FAIL] {c.name}: substring not found"
+      echo &"       expected substring: {c.substring}"
+      echo "       actual output:"
+      echo output
+      return false
+    echo &"[PASS] {c.name} (exit {exitCode}, substring matched)"
+    return true
+
+proc main() =
+  var failed = 0
+  for c in cases:
+    if not runCase(c):
+      inc failed
+  if failed > 0:
+    echo &"\n{failed} compile-fail case(s) failed."
+    quit(1)
+  echo &"\nAll {cases.len} compile-fail cases passed."
+
+main()

@@ -5,7 +5,8 @@ import ../adapter
 suite "ChannelsAdapter":
   test "push and pop":
     var q = initChannelsAdapter[int](16)
-    defer: q.deinitChannelsAdapter()
+    defer:
+      q.deinitChannelsAdapter()
     check q.push(42) == prSuccess
     let popResult = q.pop()
     check popResult.success
@@ -13,18 +14,21 @@ suite "ChannelsAdapter":
 
   test "empty pop":
     var q = initChannelsAdapter[int](16)
-    defer: q.deinitChannelsAdapter()
+    defer:
+      q.deinitChannelsAdapter()
     let popResult = q.pop()
     check not popResult.success
 
   test "full queue":
     var q = initChannelsAdapter[int](2)
-    defer: q.deinitChannelsAdapter()
+    defer:
+      q.deinitChannelsAdapter()
     check q.push(1) == prSuccess
     check q.push(2) == prSuccess
     check q.push(3) == prFull
 
   test "name":
     var q = initChannelsAdapter[int](16)
-    defer: q.deinitChannelsAdapter()
+    defer:
+      q.deinitChannelsAdapter()
     check q.name == "nim/channels"

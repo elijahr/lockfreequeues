@@ -12,7 +12,8 @@
 ## sufficient to keep cells on independent cache lines — see the comment on
 ## the explicit `pad` field below.
 
-import ../atomic_dsl
+import typestates
+import debra/atomics
 import ./virtual_values_n
 
 type
@@ -71,7 +72,7 @@ proc init*[N: static int, T](a: var MPMCCellArrayN[N, T]) =
 
 proc seqLoad*[N: static int, T](
     a: var MPMCCellArrayN[N, T], idx: PhysicalSlotN[N], order: static MemoryOrder
-): uint64 {.inline.} =
+): uint64 {.inline, notATransition.} =
   a.cells[idx.slotValue].payload.seq.load(order)
 
 proc seqStore*[N: static int, T](
@@ -79,12 +80,12 @@ proc seqStore*[N: static int, T](
     idx: PhysicalSlotN[N],
     val: uint64,
     order: static MemoryOrder,
-) {.inline.} =
+) {.inline, notATransition.} =
   a.cells[idx.slotValue].payload.seq.store(val, order)
 
 proc dataPtr*[N: static int, T](
     a: var MPMCCellArrayN[N, T], idx: PhysicalSlotN[N]
-): ptr T {.inline.} =
+): ptr T {.inline, notATransition.} =
   ## Plain (non-atomic) access to the payload data. Caller MUST hold slot
   ## ownership via the seq protocol before reading or writing through this
   ## pointer — the seq counter's acquire/release pairing provides the

@@ -1,0 +1,23 @@
+## Test that UnboundedSpsc rejects non-lock-free types at compile-time.
+##
+## This test should FAIL compilation on arc/orc without -d:allowNonLockFreeQueueItems.
+##
+## the standalone `UnboundedSpsc[S, T]` was absorbed
+## into `Queue[T, ccSingle, ccSingle, stEager, S, MaxThreads]`. The
+## ref-type guard now triggers on push, not on construction.
+
+import ../src/lockfreequeues/queue
+import ../src/lockfreequeues/strategy
+import ../src/lockfreequeues/internal/pinscope_stub
+
+type Node = ref object
+  value: int
+
+var queue = newUnboundedSpscQueue[Node, stEager, 64, 4]()
+var p = queue.getProducerHere()
+
+# This should error on arc/orc
+var n: Node = nil
+p.push(n)
+
+echo "If you see this, either on refc or used -d:allowNonLockFreeQueueItems"

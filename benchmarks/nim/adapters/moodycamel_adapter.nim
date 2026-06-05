@@ -32,8 +32,8 @@ when defined(adapter_moodycamel_available):
   import ../bench_common
   import ../adapter
 
-  const VendorDir = currentSourcePath().parentDir.parentDir.parentDir &
-    "/vendor/concurrentqueue"
+  const VendorDir =
+    currentSourcePath().parentDir.parentDir.parentDir & "/vendor/concurrentqueue"
     ## Resolved at compile time: ``benchmarks/vendor/concurrentqueue``
     ## under the repo root regardless of where the bench binary is
     ## invoked from. ``parentDir`` walks
@@ -43,8 +43,8 @@ when defined(adapter_moodycamel_available):
   {.compile: VendorDir & "/moodycamel_wrapper.cpp".}
 
   proc mc_init(initial_capacity: culonglong): pointer {.importc, cdecl.}
-  proc mc_push(q: pointer; item: culonglong): cint {.importc, cdecl.}
-  proc mc_pop(q: pointer; outVal: ptr culonglong): cint {.importc, cdecl.}
+  proc mc_push(q: pointer, item: culonglong): cint {.importc, cdecl.}
+  proc mc_pop(q: pointer, outVal: ptr culonglong): cint {.importc, cdecl.}
   proc mc_destroy(q: pointer) {.importc, cdecl.}
 
   const topologiesSupported* = {tMpmcUnbounded}
@@ -67,11 +67,11 @@ when defined(adapter_moodycamel_available):
     static:
       assert sizeof(T) == 8,
         "MoodycamelAdapter requires sizeof(T) == 8 (the C++ wrapper " &
-        "stores `uint64_t`); got sizeof(" & $T & ") = " & $sizeof(T)
+          "stores `uint64_t`); got sizeof(" & $T & ") = " & $sizeof(T)
       assert not (T is ref),
         "MoodycamelAdapter cannot transport ref types: the C++ queue " &
-        "bypasses Nim's GC, so refcounts wouldn't be maintained across " &
-        "the boundary. Use a non-ref 64-bit payload (uint64, ptr, etc)."
+          "bypasses Nim's GC, so refcounts wouldn't be maintained across " &
+          "the boundary. Use a non-ref 64-bit payload (uint64, ptr, etc)."
     ## ``capacity`` is an initial-block-size hint. ``0`` selects
     ## upstream's default minimum (32) — see
     ## ``moodycamel_wrapper.cpp``.
@@ -82,13 +82,17 @@ when defined(adapter_moodycamel_available):
     ## propagate as a silent ``a.queue == nil`` and the producer thread
     ## would spin-retry ``push`` returning ``prFull`` forever, masking
     ## the failure as a benchmark hang.
-    let cap = if capacity < 0: 0'u64 else: uint64(capacity)
+    let cap =
+      if capacity < 0:
+        0'u64
+      else:
+        uint64(capacity)
     result.queue = mc_init(culonglong(cap))
     if result.queue == nil:
       raise newException(
         OutOfMemDefect,
         "mc_init returned nullptr (moodycamel ConcurrentQueue " &
-        "construction failed; capacity hint = " & $cap & ")"
+          "construction failed; capacity hint = " & $cap & ")",
       )
 
   proc cleanup*[T](a: var MoodycamelAdapter[T]) =

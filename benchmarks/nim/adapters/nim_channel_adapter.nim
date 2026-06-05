@@ -45,16 +45,14 @@ when defined(adapter_nim_channel_available):
 
   const topologiesSupported*: set[Topology] = {tMpsc}
 
-  type
-    NimChannelAdapter*[T] = object
-      chan*: ptr Channel[T]
-        ## Heap-allocated so the adapter is movable without
-        ## triggering ``Channel``'s implicit copy hooks (which the
-        ## stdlib's pre-ARC channel implementation does not
-        ## support cleanly).
+  type NimChannelAdapter*[T] = object
+    chan*: ptr Channel[T]
+      ## Heap-allocated so the adapter is movable without
+      ## triggering ``Channel``'s implicit copy hooks (which the
+      ## stdlib's pre-ARC channel implementation does not
+      ## support cleanly).
 
-  proc makeNimChannelAdapter*[T](capacity: int = 1024
-  ): NimChannelAdapter[T] =
+  proc makeNimChannelAdapter*[T](capacity: int = 1024): NimChannelAdapter[T] =
     ## ``capacity`` is the maximum number of in-flight messages.
     ## ``capacity <= 0`` selects an unlimited channel (matches
     ## stdlib ``open(maxItems = 0)`` semantics) but the bench

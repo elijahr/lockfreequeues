@@ -1,17 +1,16 @@
 ## Adapter for Nim built-in channels (bounded MPMC).
 ##
 ## Uses the system's Channel[T] type which is automatically available
-## when compiling with --threads:on. `topologiesSupported` exported per
-## design 2.2 (PR 3 Task 3.11 consumes it).
+## when compiling with --threads:on. `topologiesSupported` is exported
+## for the bench-driver registry.
 
 import ../adapter
 from ../bench_common import Topology, tMpmc
 
 const topologiesSupported*: set[Topology] = {tMpmc}
 
-type
-  ChannelsAdapter*[T] = object
-    chan: ptr Channel[T]
+type ChannelsAdapter*[T] = object
+  chan: ptr Channel[T]
 
 proc initChannelsAdapter*[T](capacity: int): ChannelsAdapter[T] =
   result.chan = create(Channel[T])
@@ -30,10 +29,7 @@ proc cleanup*[T](a: var ChannelsAdapter[T]) =
   deinitChannelsAdapter(a)
 
 proc push*[T](a: var ChannelsAdapter[T], item: T): PushResult =
-  if a.chan[].trySend(item):
-    prSuccess
-  else:
-    prFull
+  if a.chan[].trySend(item): prSuccess else: prFull
 
 proc pop*[T](a: var ChannelsAdapter[T]): PopResult[T] =
   let res = a.chan[].tryRecv()

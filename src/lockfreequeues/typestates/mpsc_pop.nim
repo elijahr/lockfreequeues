@@ -9,7 +9,7 @@
 ## read and the per-slot `seq` MUST be advanced to `pos + N` (release). That
 ## release is the consumer->next-generation-producer happens-before edge.
 ##
-## Single-consumer by *contract*, but Nim's `Mupsic` facade does NOT enforce
+## Single-consumer by *contract*, but Nim's `Mpsc` facade does NOT enforce
 ## single-thread access. Per the C4 design-review decision (design doc §10.9),
 ## we keep `compareExchangeWeak` on `head` even on the single-consumer side as
 ## defense in depth: an accidental two-thread mis-use surfaces as a benign
@@ -26,7 +26,7 @@
 ##
 ## See design doc §2 (algorithm), §3 (bug walkthrough), §10.9 (recipe).
 
-import ../atomic_dsl
+import debra/atomics
 import typestates
 
 import ./virtual_values_n
@@ -52,11 +52,11 @@ typestate MPSCPopOp[N: static int]:
     MPSCPopStart[N] ->
       MPSCPopSlotClaimed[N] | MPSCPopEmpty[N] | MPSCPopStart[N] as MPSCPopClaimResult[N]
 
-# Forward declaration for Mupsic (avoid circular import).
-# Field order MUST stay in lockstep with MupsicPushBase in mpsc_push.nim
-# - the facade uses a single Mupsic object castable to either base via the
+# Forward declaration for Mpsc (avoid circular import).
+# Field order MUST stay in lockstep with MpscPushBase in mpsc_push.nim
+# - the facade uses a single Mpsc object castable to either base via the
 # offsetof asserts in design doc §10.11.
-type MupsicBase*[N, P: static int, T] = object
+type MpscBase*[N, P: static int, T] = object
   head* {.align: CacheLineBytes.}: Atomic[uint64]
   tail* {.align: CacheLineBytes.}: Atomic[uint64]
   cells*: MPMCCellArrayN[N, T]
@@ -66,7 +66,7 @@ proc start*[N: static int](): MPSCPopStart[N] {.inline.} =
   MPSCPopStart[N]()
 
 proc tryClaim*[N, P: static int, T](
-    op: MPSCPopStart[N], queue: var MupsicBase[N, P, T]
+    op: MPSCPopStart[N], queue: var MpscBase[N, P, T]
 ): MPSCPopClaimResult[N] {.inline, transition.} =
   ## Vyukov consumer claim. Returns one of:
   ## - SlotClaimed: head CAS won; caller must call `complete`.
@@ -107,12 +107,12 @@ proc tryClaim*[N, P: static int, T](
     MPSCPopClaimResult[N] -> MPSCPopStart[N]()
 
 proc complete*[N, P: static int, T](
-    op: MPSCPopSlotClaimed[N], queue: var MupsicBase[N, P, T]
-): T {.inline.} =
+    op: MPSCPopSlotClaimed[N], queue: var MpscBase[N, P, T]
+): T {.inline, notATransition.} =
   ## Read value from the claimed slot, then re-arm the seq for the next
   ## generation. The `seq.store(pos+N, moRelease)` is the consumer->next-
   ## producer edge; the next producer at virtual position `pos + N` will
   ## see this seq value via its acquire load and proceed to claim.
-  let value = queue.cells.dataPtr(op.slot)[] # C4 plain load; ordered by C2
+  let value = move(queue.cells.dataPtr(op.slot)[]) # C4 plain load; ordered by C2
   queue.cells.seqStore(op.slot, op.pos + uint64(N), moRelease) # C5 re-arm
   value

@@ -48,7 +48,8 @@ when defined(adapter_threading_channels_available):
       ## module reclaims the underlying buffer; we never call it
       ## directly.
 
-  proc makeThreadingChannelsAdapter*[T](capacity: int = 1024
+  proc makeThreadingChannelsAdapter*[T](
+      capacity: int = 1024
   ): ThreadingChannelsAdapter[T] =
     ## ``capacity`` maps to ``newChan[T]``'s ``elements`` argument.
     ## Defaulted to 1024 for parity with other bounded MPMC adapters.
@@ -66,10 +67,7 @@ when defined(adapter_threading_channels_available):
 
   proc push*[T](a: var ThreadingChannelsAdapter[T], item: T): PushResult =
     var v = item
-    if a.chan.trySend(v):
-      prSuccess
-    else:
-      prFull
+    if a.chan.trySend(v): prSuccess else: prFull
 
   proc pop*[T](a: var ThreadingChannelsAdapter[T]): PopResult[T] =
     var dst: T

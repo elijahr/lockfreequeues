@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "packages": {
+    "unittest2": {
+      "version": "0.2.5",
+      "vcsRevision": "26f2ef3ae0ec72a2a75bfe557e02e88f6a31c189",
+      "url": "https://github.com/status-im/nim-unittest2",
+      "downloadMethod": "git",
+      "dependencies": [],
+      "checksums": {
+        "sha1": "02bb3751ba9ddc3c17bfd89f2e41cb6bfb8fc0c9"
+      }
+    },
+    "typestates": {
+      "version": "0.12.0",
+      "vcsRevision": "86f55fae5cbb02bae8fba050a6293b04e0468448",
+      "url": "https://github.com/elijahr/nim-typestates",
+      "downloadMethod": "git",
+      "dependencies": [],
+      "checksums": {
+        "sha1": "421a7d735870ac5c9a2c1a57fc602cfa1e86af1d"
+      }
+    },
+    "debra": {
+      "version": "0.9.0",
+      "vcsRevision": "d6701c095b777294d151618c59948cca28a84fa7",
+      "url": "https://github.com/elijahr/nim-debra",
+      "downloadMethod": "git",
+      "dependencies": [
+        "typestates",
+        "unittest2"
+      ],
+      "checksums": {
+        "sha1": "1e94406421168ab97a4563cb4c12f74317b95a12"
+      }
+    }
+  },
+  "tasks": {}
+}

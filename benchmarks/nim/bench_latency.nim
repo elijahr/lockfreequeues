@@ -1,13 +1,13 @@
 ## Latency benchmark: ping-pong RTT between 2 threads.
 ##
-## Track 1 PR 1 — rewritten on top of `bench_common.runLatencyHarness`.
-## Mirrors the bench_throughput CLI surface:
+## Built on top of `bench_common.runLatencyHarness`. Mirrors the
+## bench_throughput CLI surface:
 ##
 ##   bench_latency [--bmf-out=<path>] [<variant>...]
 ##
 ## Positional args filter the variants to run (legacy, preserved); without
 ## any positional arg, all four bounded lockfreequeues variants run at the
-## 1p1c smoke shape (`sipsic`, `mupmuc`, `sipmuc`, `mupsic`). `--bmf-out`
+## 1p1c smoke shape (`spsc`, `mpmc`, `spmc`, `mpsc`). `--bmf-out`
 ## emits Bencher Metric Format JSON natively. Stdout text is preserved.
 ##
 ## Per-binary intdefines:
@@ -18,21 +18,25 @@
 ## Emitted measures per slug:
 ##   latency_p50_ns, latency_p95_ns, latency_p99_ns,
 ##   latency_p999_ns, latency_max_ns
-##   (Track 6 Task 6.1: full p50/p95/p99/p999/max set.)
 ##
 ## Slug shape: `<library_slug>/<topology>/1p1c` per design 2.2 / table at
 ## design line 357.
 
 import std/[options, os, parseopt, sets, strformat, syncio]
 import ./bench_common
-import ./adapters/lockfreequeues_sipsic_adapter
-import ./adapters/lockfreequeues_sipmuc_adapter
-import ./adapters/lockfreequeues_mupsic_adapter
-import ./adapters/lockfreequeues_mupmuc_adapter
+import ./adapters/lockfreequeues_spsc_adapter
+import ./adapters/lockfreequeues_spmc_adapter
+import ./adapters/lockfreequeues_mpsc_adapter
+import ./adapters/lockfreequeues_mpmc_adapter
+# Consolidated Queue-based parity adapter.
+import ./adapters/queue_bounded_adapter
+import lockfreequeues/strategy
+import lockfreequeues/reclamation
+import lockfreequeues/internal/pinscope_stub
 
 const
   ## Per-binary intdefines for latency wall-time control. Mirror the
-  ## `BenchSipsicRuns` / `MessageCount` pattern in bench_throughput.nim.
+  ## `BenchSpscRuns` / `MessageCount` pattern in bench_throughput.nim.
   ## Override at compile time with `-d:BenchLatencyRuns=N` etc.
   BenchLatencyRuns* {.intdefine.} = 33
   BenchLatencyMessageCount* {.intdefine.} = 100_000
@@ -47,87 +51,170 @@ when defined(BenchLatencyTestCompileTime):
       "BenchLatencyRuns default must be 33 (got " & $BenchLatencyRuns & ")"
     doAssert BenchLatencyMessageCount == 100_000,
       "BenchLatencyMessageCount default must be 100_000 (got " &
-      $BenchLatencyMessageCount & ")"
+        $BenchLatencyMessageCount & ")"
 
 when defined(BenchLatencyTestCompileTimeOverrides):
   static:
     doAssert BenchLatencyRuns == 2,
       "BenchLatencyRuns override must be 2 (got " & $BenchLatencyRuns & ")"
     doAssert BenchLatencyMessageCount == 1000,
-      "BenchLatencyMessageCount override must be 1000 (got " &
-      $BenchLatencyMessageCount & ")"
+      "BenchLatencyMessageCount override must be 1000 (got " & $BenchLatencyMessageCount &
+        ")"
 
 # ---------- Variant queueInit closures ----------
 #
 # `runLatencyHarness` takes a `proc(): Q` factory. The 4 bounded
-# adapters have non-uniform factory shapes (`initSipsicAdapter`
-# vs `makeLockfreequeuesSipmucAdapter(capacity = N)` etc.) so we
+# adapters have non-uniform factory shapes (`initSpscAdapter`
+# vs `makeLockfreequeuesSpmcAdapter(capacity = N)` etc.) so we
 # wrap each in a uniform `proc(): Adapter` closure. Capacity is
-# pinned to 1024 — same value used by bench_throughput's sipsic
+# pinned to 1024 — same value used by bench_throughput's spsc
 # slug — to keep latency runs comparable to throughput on the
 # shared 1p1c slug.
 
 const LatencyCapacity = 1024
 
-proc initSipsic(): SipsicAdapter[LatencyCapacity, uint64] =
-  initSipsicAdapter[LatencyCapacity, uint64]()
+proc initSpsc(): SpscAdapter[LatencyCapacity, uint64] =
+  initSpscAdapter[LatencyCapacity, uint64]()
 
-proc initSipmuc(): LockfreequeuesSipmucAdapter[LatencyCapacity, 1, uint64] =
-  makeLockfreequeuesSipmucAdapter[LatencyCapacity, 1, uint64](LatencyCapacity)
+proc initSpmc(): LockfreequeuesSpmcAdapter[LatencyCapacity, 1, uint64] =
+  makeLockfreequeuesSpmcAdapter[LatencyCapacity, 1, uint64](LatencyCapacity)
 
-proc initMupsic(): LockfreequeuesMupsicAdapter[LatencyCapacity, 1, uint64] =
-  makeLockfreequeuesMupsicAdapter[LatencyCapacity, 1, uint64](LatencyCapacity)
+proc initMpsc(): LockfreequeuesMpscAdapter[LatencyCapacity, 1, uint64] =
+  makeLockfreequeuesMpscAdapter[LatencyCapacity, 1, uint64](LatencyCapacity)
 
-proc initMupmuc(): MupmucAdapter[LatencyCapacity, uint64] =
-  initMupmucAdapter[LatencyCapacity, uint64]()
+proc initMpmc(): MpmcAdapter[LatencyCapacity, uint64] =
+  initMpmcAdapter[LatencyCapacity, uint64]()
+
+# Consolidated BQueue-based parity factories.
+# All 4 cardinality combos route through the unified
+# `QueueBoundedAdapter[ccProd, ccCons, ST, N, P, C, T]` type. Slugs
+# preserve the per-family naming so parity tooling can compute the
+# % delta directly.
+
+proc initQBoundedSpsc(): QueueBoundedAdapter[
+    ccSingle, ccSingle, stEager, LatencyCapacity, 0, 0, uint64
+] =
+  makeQueueBoundedAdapter[ccSingle, ccSingle, stEager, LatencyCapacity, 0, 0, uint64](
+    LatencyCapacity
+  )
+
+proc initQBoundedSpmc(): QueueBoundedAdapter[
+    ccSingle, ccMulti, stEager, LatencyCapacity, 0, 1, uint64
+] =
+  makeQueueBoundedAdapter[ccSingle, ccMulti, stEager, LatencyCapacity, 0, 1, uint64](
+    LatencyCapacity
+  )
+
+proc initQBoundedMpsc(): QueueBoundedAdapter[
+    ccMulti, ccSingle, stEager, LatencyCapacity, 1, 0, uint64
+] =
+  makeQueueBoundedAdapter[ccMulti, ccSingle, stEager, LatencyCapacity, 1, 0, uint64](
+    LatencyCapacity
+  )
+
+proc initQBoundedMpmc(): QueueBoundedAdapter[
+    ccMulti, ccMulti, stEager, LatencyCapacity, 1, 1, uint64
+] =
+  makeQueueBoundedAdapter[ccMulti, ccMulti, stEager, LatencyCapacity, 1, 1, uint64](
+    LatencyCapacity
+  )
 
 # ---------- Variant dispatch ----------
 
-const SupportedVariants = ["sipsic", "mupmuc", "sipmuc", "mupsic"]
+const SupportedVariants = [
+  "spsc", "mpmc", "spmc", "mpsc", "queue_bounded_spsc", "queue_bounded_mpmc",
+  "queue_bounded_spmc", "queue_bounded_mpsc",
+]
 
 proc slugFor(variant: string): string =
   ## Slug per design 2.2 / table at design line 357. PR 1 covers the 1p1c
   ## smoke shape only; PR 2's topology split adds the full grid.
   case variant
-  of "sipsic": "lockfreequeues_sipsic/spsc/1p1c"
-  of "sipmuc": "lockfreequeues_sipmuc/mpmc/1p1c"
-  of "mupsic": "lockfreequeues_mupsic/mpsc/1p1c"
-  of "mupmuc": "lockfreequeues_mupmuc/mpmc/1p1c"
+  of "spsc":
+    "lockfreequeues_spsc/spsc/1p1c"
+  of "spmc":
+    "lockfreequeues_spmc/mpmc/1p1c"
+  of "mpsc":
+    "lockfreequeues_mpsc/mpsc/1p1c"
+  of "mpmc":
+    "lockfreequeues_mpmc/mpmc/1p1c"
+  of "queue_bounded_spsc":
+    "lockfreequeues_queue_bounded_spsc/spsc/1p1c"
+  of "queue_bounded_spmc":
+    "lockfreequeues_queue_bounded_spmc/mpmc/1p1c"
+  of "queue_bounded_mpsc":
+    "lockfreequeues_queue_bounded_mpsc/mpsc/1p1c"
+  of "queue_bounded_mpmc":
+    "lockfreequeues_queue_bounded_mpmc/mpmc/1p1c"
   else:
     raise newException(ValueError, "unknown variant: " & variant)
 
-proc runVariant(
-    variant: string, em: var BMFEmitter
-) =
+proc runVariant(variant: string, em: var BMFEmitter) =
   ## Run one variant's latency harness, print stdout, and emit BMF.
   let slug = slugFor(variant)
   echo fmt"{variant} ({slug}):"
   let metrics =
     case variant
-    of "sipsic":
-      runLatencyHarness[SipsicAdapter[LatencyCapacity, uint64]](
-        queueInit = initSipsic,
+    of "spsc":
+      runLatencyHarness[SpscAdapter[LatencyCapacity, uint64]](
+        queueInit = initSpsc,
         messageCount = BenchLatencyMessageCount,
         runCount = BenchLatencyRuns,
         warmupCount = BenchLatencyWarmupRuns,
       )
-    of "sipmuc":
-      runLatencyHarness[LockfreequeuesSipmucAdapter[LatencyCapacity, 1, uint64]](
-        queueInit = initSipmuc,
+    of "spmc":
+      runLatencyHarness[LockfreequeuesSpmcAdapter[LatencyCapacity, 1, uint64]](
+        queueInit = initSpmc,
         messageCount = BenchLatencyMessageCount,
         runCount = BenchLatencyRuns,
         warmupCount = BenchLatencyWarmupRuns,
       )
-    of "mupsic":
-      runLatencyHarness[LockfreequeuesMupsicAdapter[LatencyCapacity, 1, uint64]](
-        queueInit = initMupsic,
+    of "mpsc":
+      runLatencyHarness[LockfreequeuesMpscAdapter[LatencyCapacity, 1, uint64]](
+        queueInit = initMpsc,
         messageCount = BenchLatencyMessageCount,
         runCount = BenchLatencyRuns,
         warmupCount = BenchLatencyWarmupRuns,
       )
-    of "mupmuc":
-      runLatencyHarness[MupmucAdapter[LatencyCapacity, uint64]](
-        queueInit = initMupmuc,
+    of "mpmc":
+      runLatencyHarness[MpmcAdapter[LatencyCapacity, uint64]](
+        queueInit = initMpmc,
+        messageCount = BenchLatencyMessageCount,
+        runCount = BenchLatencyRuns,
+        warmupCount = BenchLatencyWarmupRuns,
+      )
+    of "queue_bounded_spsc":
+      runLatencyHarness[
+        QueueBoundedAdapter[ccSingle, ccSingle, stEager, LatencyCapacity, 0, 0, uint64]
+      ](
+        queueInit = initQBoundedSpsc,
+        messageCount = BenchLatencyMessageCount,
+        runCount = BenchLatencyRuns,
+        warmupCount = BenchLatencyWarmupRuns,
+      )
+    of "queue_bounded_spmc":
+      runLatencyHarness[
+        QueueBoundedAdapter[ccSingle, ccMulti, stEager, LatencyCapacity, 0, 1, uint64]
+      ](
+        queueInit = initQBoundedSpmc,
+        messageCount = BenchLatencyMessageCount,
+        runCount = BenchLatencyRuns,
+        warmupCount = BenchLatencyWarmupRuns,
+      )
+    of "queue_bounded_mpsc":
+      runLatencyHarness[
+        QueueBoundedAdapter[ccMulti, ccSingle, stEager, LatencyCapacity, 1, 0, uint64]
+      ](
+        queueInit = initQBoundedMpsc,
+        messageCount = BenchLatencyMessageCount,
+        runCount = BenchLatencyRuns,
+        warmupCount = BenchLatencyWarmupRuns,
+      )
+    of "queue_bounded_mpmc":
+      runLatencyHarness[
+        QueueBoundedAdapter[ccMulti, ccMulti, stEager, LatencyCapacity, 1, 1, uint64]
+      ](
+        queueInit = initQBoundedMpmc,
         messageCount = BenchLatencyMessageCount,
         runCount = BenchLatencyRuns,
         warmupCount = BenchLatencyWarmupRuns,
@@ -147,11 +234,11 @@ proc runVariant(
   em.addMeasure(slug, "latency_p50_ns", metrics.p50_ns)
   em.addMeasure(slug, "latency_p95_ns", metrics.p95_ns)
   em.addMeasure(slug, "latency_p99_ns", metrics.p99_ns)
-  # Track 6 Task 6.1: emit p999 + max alongside the p50/p95/p99 trio.
+  # Emit p999 + max alongside the p50/p95/p99 trio.
   # Each runLatencyHarness run uses its own Histogram of MessageCount
   # samples (default 100K), and percentiles are averaged across runs;
-  # the harness does NOT union samples across runs. Histogram K=5000
-  # (Task 6.2) sits well above the 100-sample p999 tail at the default
+  # the harness does NOT union samples across runs. The Histogram's
+  # K=5000 top-K reservoir sits well above the 100-sample p999 tail at the default
   # MessageCount and reserves headroom for larger MessageCount overrides
   # before p999 spills into the rescaled-reservoir stratum. max is
   # `percentile(1.0)`, which after sorting the snapshotted top-K returns
@@ -173,7 +260,8 @@ when isMainModule:
     while true:
       p.next()
       case p.kind
-      of cmdEnd: break
+      of cmdEnd:
+        break
       of cmdLongOption, cmdShortOption:
         case p.key
         of "bmf-out":

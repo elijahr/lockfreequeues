@@ -1,28 +1,43 @@
 # API Reference
 
-## Bounded Queues
+v5 exposes two unified, cardinality-parameterized queue types. Each
+covers all four producer/consumer combinations (SPSC, MPSC, SPMC, MPMC),
+selected at compile time via the `ccProd` and `ccCons` parameters. They
+replace the v4.x family-prefixed types (`Sipsic` / `Sipmuc` / `Mupsic` /
+`Mupmuc` and their `Unbounded*` counterparts).
 
-Fixed-capacity ring buffer implementations. Capacity and thread counts are compile-time constants.
+## Bounded Queue
 
-- **[Sipsic](sipsic.md)** - Single-producer, single-consumer (SPSC). Wait-free operations.
-- **[Sipmuc](sipmuc.md)** - Single-producer, multiple-consumer (SPMC). Wait-free push, lock-free pop.
-- **[Mupsic](mupsic.md)** - Multiple-producer, single-consumer (MPSC). Lock-free push, wait-free pop.
-- **[Mupmuc](mupmuc.md)** - Multiple-producer, multiple-consumer (MPMC). Lock-free operations.
+Fixed-capacity ring buffer. Capacity and thread-registry sizes are
+compile-time constants; the bounded body owns no heap state and needs no
+memory-reclamation manager.
 
-## Unbounded Queues
+- **[BQueue](bqueue.md)** — `BQueue[T, ccProd, ccCons, N, P, C]`. SPSC
+  is wait-free; multi-producer / multi-consumer shapes are lock-free.
+  Multi sides use the Vyukov per-slot `seq`-counter protocol.
 
-Dynamic-capacity linked segment implementations. Grow as needed; the MP/MC variants use DEBRA+ epoch-based memory reclamation supplied by [nim-debra](https://github.com/elijahr/nim-debra), while the SPSC variant frees retired segments inline (no manager).
+## Unbounded Queue
 
-- **[UnboundedSipsic](unbounded_sipsic.md)** - Single-producer, single-consumer (SPSC). Wait-free operations.
-- **[UnboundedSipmuc](unbounded_sipmuc.md)** - Single-producer, multiple-consumer (SPMC). Wait-free push, lock-free pop.
-- **[UnboundedMupsic](unbounded_mupsic.md)** - Multiple-producer, single-consumer (MPSC). Lock-free push, wait-free pop.
-- **[UnboundedMupmuc](unbounded_mupmuc.md)** - Multiple-producer, multiple-consumer (MPMC). Lock-free operations.
+Dynamic-capacity linked-segment buffer; grows as needed. The SPSC shape
+frees retired segments inline (no manager); the MP/MC shapes use DEBRA+
+epoch-based memory reclamation supplied by
+[nim-debra](https://github.com/elijahr/nim-debra), with attach-time
+thread registration.
+
+- **[Queue](queue.md)** — `Queue[T, ccProd, ccCons, ST, S, MaxThreads]`.
+  SPSC is wait-free; multi-producer / multi-consumer shapes are
+  lock-free.
 
 ## Support Types
 
-- **DeallocationStrategy** - Memory reclamation policy:
-  - `Manual` - Retire segments to the `DebraManager`. User calls `tryReclaim()` periodically. Best for `--mm:none`.
-  - `Eager` - Retire segments and immediately call `tryReclaim()`. Best for GC environments.
+- **DeallocationStrategy** — Memory reclamation policy (unbounded
+  reclaiming shapes):
+  - `stManual` — Retire segments to the `DebraManager`. The user calls
+    reclamation periodically. Best for `--mm:none`.
+  - `stEager` — Retire segments and reclaim eagerly. Best for GC
+    environments.
+- **PinScopeCardinality** — `ccSingle` / `ccMulti`, the values supplied
+  for the `ccProd` / `ccCons` type parameters.
 
 ## Performance Guarantees
 
@@ -31,7 +46,7 @@ Dynamic-capacity linked segment implementations. Grow as needed; the MP/MC varia
 | Wait-free | Operation completes in bounded steps regardless of other threads |
 | Lock-free | At least one thread makes progress; individual threads may retry |
 
-## Segment Size Selection (Unbounded Queues)
+## Segment Size Selection (Unbounded `Queue`)
 
 | Use Case | Recommended Size | Rationale |
 |----------|------------------|-----------|
@@ -40,20 +55,24 @@ Dynamic-capacity linked segment implementations. Grow as needed; the MP/MC varia
 | Low latency | 64-128 | Smaller = faster reclamation |
 | Batch processing | 512-2048 | Match batch sizes |
 
-Segment size should be a power of 2 and ideally a multiple of cache line size (64 bytes on most systems).
+Segment size should be a power of 2 and ideally a multiple of cache line
+size (64 bytes on most systems).
 
 ## Cache Line Considerations
 
-### Bounded Queues
+### Bounded `BQueue`
 
-The bounded queues use cache line alignment for head/tail pointers to prevent false sharing. Capacity should be chosen to avoid unnecessary padding:
+The bounded queue uses cache line alignment for head/tail pointers to
+prevent false sharing. Capacity should be chosen to avoid unnecessary
+padding:
 
 - **Good**: 16, 32, 64, 128, 256 (power of 2)
 - **Avoid**: Arbitrary values that don't align well
 
-### Unbounded Queues
+### Unbounded `Queue`
 
-Segment size affects memory layout. Larger segments mean fewer allocations but slower reclamation. Consider:
+Segment size affects memory layout. Larger segments mean fewer
+allocations but slower reclamation. Consider:
 
 - Each segment has fixed overhead (~64 bytes for metadata)
 - Item count per segment = segment size parameter

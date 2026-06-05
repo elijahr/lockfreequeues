@@ -6,7 +6,7 @@
 ##   SlotClaimed -> T                      (terminal: read data + re-arm seq)
 ##
 ## Multiple consumers race on `head` — identical in shape to `mpmc_pop`, only
-## the facade name differs (SipmucBase vs MupmucBase).
+## the facade name differs (SpmcBase vs MpmcBase).
 ##
 ## Key invariant: Once a slot is claimed via CAS on `head`, the data MUST be
 ## read and the per-slot `seq` MUST be advanced to `pos + N` (release). That
@@ -23,7 +23,7 @@
 ##
 ## See design doc §2 (algorithm), §3 (bug walkthrough), §10.7 (recipe).
 
-import ../atomic_dsl
+import debra/atomics
 import typestates
 
 import ./virtual_values_n
@@ -49,11 +49,11 @@ typestate SPMCPopOp[N: static int]:
     SPMCPopStart[N] ->
       SPMCPopSlotClaimed[N] | SPMCPopEmpty[N] | SPMCPopStart[N] as SPMCPopClaimResult[N]
 
-# Forward declaration for Sipmuc (avoid circular import).
-# Field order MUST stay in lockstep with SipmucPushBase in spmc_push.nim
-# - the facade uses a single Sipmuc object castable to either base via the
+# Forward declaration for Spmc (avoid circular import).
+# Field order MUST stay in lockstep with SpmcPushBase in spmc_push.nim
+# - the facade uses a single Spmc object castable to either base via the
 # offsetof asserts in design doc §10.12.
-type SipmucBase*[N, C: static int, T] = object
+type SpmcBase*[N, C: static int, T] = object
   head* {.align: CacheLineBytes.}: Atomic[uint64]
   tail* {.align: CacheLineBytes.}: Atomic[uint64]
   cells*: MPMCCellArrayN[N, T]
@@ -63,7 +63,7 @@ proc start*[N: static int](): SPMCPopStart[N] {.inline.} =
   SPMCPopStart[N]()
 
 proc tryClaim*[N, C: static int, T](
-    op: SPMCPopStart[N], queue: var SipmucBase[N, C, T]
+    op: SPMCPopStart[N], queue: var SpmcBase[N, C, T]
 ): SPMCPopClaimResult[N] {.inline, transition.} =
   ## Vyukov consumer claim. Returns one of:
   ## - SlotClaimed: head CAS won; caller must call `complete`.
@@ -89,12 +89,12 @@ proc tryClaim*[N, C: static int, T](
     SPMCPopClaimResult[N] -> SPMCPopStart[N]() # consumer raced ahead: retry
 
 proc complete*[N, C: static int, T](
-    op: SPMCPopSlotClaimed[N], queue: var SipmucBase[N, C, T]
-): T {.inline.} =
+    op: SPMCPopSlotClaimed[N], queue: var SpmcBase[N, C, T]
+): T {.inline, notATransition.} =
   ## Read value from the claimed slot, then re-arm the seq for the next
   ## generation. The `seq.store(pos+N, moRelease)` is the consumer->next-
   ## producer edge; the next producer at virtual position `pos + N` will
   ## see this seq value via its acquire load and proceed to claim.
-  let value = queue.cells.dataPtr(op.slot)[] # C4 plain load; ordered by C2
+  let value = move(queue.cells.dataPtr(op.slot)[]) # C4 plain load; ordered by C2
   queue.cells.seqStore(op.slot, op.pos + uint64(N), moRelease) # C5 re-arm
   value

@@ -13,6 +13,15 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 crossbeam-queue = "0.3"
+flume = "0.11"
+kanal = "0.1"
+
+[build-dependencies]
+# Parse Cargo.lock as TOML so build.rs's version lookup is robust
+# against future Cargo lockfile format moves (e.g. reordering `name`
+# and `version` keys within a `[[package]]` stanza). Build-script-only
+# dep, not exposed to the cdylib.
+toml = "0.8"
 
 [profile.release]
 # Unwinding a Rust panic across the C-ABI boundary into Nim is undefined

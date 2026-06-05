@@ -7,8 +7,9 @@ use std::collections::HashSet;
 use std::os::raw::c_void;
 
 use bench_ffi_crossbeam::{
-    cb_array_destroy, cb_array_init, cb_array_pop, cb_array_push,
-    cb_seg_destroy, cb_seg_init, cb_seg_pop, cb_seg_push,
+    bench_ffi_crossbeam_queue_version, bench_ffi_flume_version,
+    bench_ffi_kanal_version, cb_array_destroy, cb_array_init, cb_array_pop,
+    cb_array_push, cb_seg_destroy, cb_seg_init, cb_seg_pop, cb_seg_push,
 };
 
 // Bind the local names the tests use so the rest of the file (which
@@ -118,4 +119,77 @@ fn null_pointer_safe() {
         cb_array_destroy(std::ptr::null_mut());
         cb_seg_destroy(std::ptr::null_mut());
     }
+}
+
+// ---------------- Version-getter tests (v5.0.0-wave Item 1) ----------------
+//
+// `build.rs` reads `Cargo.lock` and bakes the resolved versions of
+// `crossbeam-queue`, `flume`, and `kanal` into env vars; the three
+// exported version getters return those strings as C cstrings. These
+// tests catch a "build.rs didn't fire" silent failure: an empty string
+// or a non-semver-looking value means the version-capture chain is
+// broken, and the bench JSON would silently lie about which versions
+// were linked in.
+
+/// Convert an FFI version-getter return value into a Rust `&str`,
+/// asserting the pointer is non-null and the string has no embedded
+/// NULs.
+unsafe fn fetch_version(ptr: *const std::os::raw::c_char) -> &'static str {
+    assert!(!ptr.is_null(), "version getter returned null pointer");
+    std::ffi::CStr::from_ptr(ptr)
+        .to_str()
+        .expect("version string is not valid UTF-8")
+}
+
+/// Minimal semver-shape check: at least `MAJOR.MINOR.PATCH` with all
+/// three parts numeric. We do not require strict semver (pre-release /
+/// build metadata is rare here) — the goal is to catch "got an empty
+/// string" or "got the env var literal" silent failures.
+fn looks_semver_ish(s: &str) -> bool {
+    let parts: Vec<&str> = s.split('.').collect();
+    if parts.len() < 3 {
+        return false;
+    }
+    // First three components must parse as u32.
+    parts[..3].iter().all(|p| {
+        // Strip optional `-suffix` / `+build` from the patch component.
+        let stem = p
+            .split(|c: char| c == '-' || c == '+')
+            .next()
+            .unwrap_or("");
+        !stem.is_empty() && stem.chars().all(|c| c.is_ascii_digit())
+    })
+}
+
+#[test]
+fn crossbeam_queue_version_baked_in() {
+    let v = unsafe { fetch_version(bench_ffi_crossbeam_queue_version()) };
+    assert!(!v.is_empty(), "crossbeam-queue version string is empty");
+    assert!(
+        looks_semver_ish(v),
+        "crossbeam-queue version {:?} does not look like semver",
+        v,
+    );
+}
+
+#[test]
+fn flume_version_baked_in() {
+    let v = unsafe { fetch_version(bench_ffi_flume_version()) };
+    assert!(!v.is_empty(), "flume version string is empty");
+    assert!(
+        looks_semver_ish(v),
+        "flume version {:?} does not look like semver",
+        v,
+    );
+}
+
+#[test]
+fn kanal_version_baked_in() {
+    let v = unsafe { fetch_version(bench_ffi_kanal_version()) };
+    assert!(!v.is_empty(), "kanal version string is empty");
+    assert!(
+        looks_semver_ish(v),
+        "kanal version {:?} does not look like semver",
+        v,
+    );
 }

@@ -1,6 +1,6 @@
 ## Task Fan-Out Example
 ##
-## Demonstrates using a bounded Sipmuc (SPMC) queue for distributing work
+## Demonstrates using a bounded Spmc (SPMC) queue for distributing work
 ## from a single producer to multiple consumer workers.
 ##
 ## Pattern: Single dispatcher → Multiple workers
@@ -16,13 +16,16 @@
 ## - Image processing pipeline
 ## - Game engine job distribution
 
-import lockfreequeues/atomic_dsl
+import debra/atomics
+import debra/atomics/dsl
 import os
 import options
 import std/monotimes
 import times
 
 import lockfreequeues
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 const
   QueueCapacity = 128
@@ -31,9 +34,9 @@ const
 
 type
   TaskKind = enum
-    tkCompute    # CPU-bound work
-    tkIO         # Simulated I/O
-    tkFast       # Quick task
+    tkCompute # CPU-bound work
+    tkIO # Simulated I/O
+    tkFast # Quick task
 
   Task = object
     id: int
@@ -41,11 +44,10 @@ type
     payload: int
 
 var
-  queue = initSipmuc[QueueCapacity, NumWorkers, Task]()
+  q = newSpmcQueue[Task, QueueCapacity, NumWorkers]()
   done: Atomic[bool]
   tasksCompleted: array[NumWorkers, Atomic[int]]
   totalLatency: array[NumWorkers, Atomic[int64]]
-
 
 proc simulateWork(task: Task) =
   ## Simulate different types of work
@@ -53,7 +55,7 @@ proc simulateWork(task: Task) =
   of tkCompute:
     # Simulate CPU work with busy loop
     var sum = 0
-    for i in 0..<task.payload:
+    for i in 0 ..< task.payload:
       sum += i
     discard sum
   of tkIO:
@@ -63,10 +65,9 @@ proc simulateWork(task: Task) =
     # Minimal work
     discard
 
-
 proc workerThread(idx: int) {.thread.} =
   ## Worker consumes tasks from the queue until shutdown.
-  let consumer = queue.getConsumer(idx)
+  var consumer = q.getConsumerHere(idx)
   var completed = 0
   var latencySum: int64 = 0
 
@@ -88,32 +89,35 @@ proc workerThread(idx: int) {.thread.} =
   tasksCompleted[idx].store(completed, moRelease)
   totalLatency[idx].store(latencySum, moRelease)
 
-
 proc dispatcherThread() {.thread.} =
   ## Dispatcher generates and distributes tasks.
   var taskId = 0
 
-  for i in 0..<NumTasks:
+  for i in 0 ..< NumTasks:
     # Create varied task mix
-    let kind = case i mod 10
-      of 0..2: tkFast
-      of 3..6: tkCompute
+    let kind =
+      case i mod 10
+      of 0 .. 2: tkFast
+      of 3 .. 6: tkCompute
       else: tkIO
 
-    let payload = case kind
-      of tkFast: 0
-      of tkCompute: 1000 + (i mod 500)
-      of tkIO: 1 + (i mod 3)
+    let payload =
+      case kind
+      of tkFast:
+        0
+      of tkCompute:
+        1000 + (i mod 500)
+      of tkIO:
+        1 + (i mod 3)
 
     let task = Task(id: taskId, kind: kind, payload: payload)
     inc taskId
 
     # Push with backpressure - wait if queue is full
-    while not queue.push(task):
+    while not q.push(task):
       sleep(0)
 
   done.store(true, moRelease)
-
 
 when isMainModule:
   echo "Task Fan-Out Example"
@@ -124,7 +128,7 @@ when isMainModule:
   echo ""
 
   done.store(false, moRelaxed)
-  for i in 0..<NumWorkers:
+  for i in 0 ..< NumWorkers:
     tasksCompleted[i].store(0, moRelaxed)
     totalLatency[i].store(0, moRelaxed)
 
@@ -132,7 +136,7 @@ when isMainModule:
 
   # Start workers
   var workers: array[NumWorkers, Thread[int]]
-  for i in 0..<NumWorkers:
+  for i in 0 ..< NumWorkers:
     createThread(workers[i], workerThread, i)
 
   # Start dispatcher
@@ -141,8 +145,8 @@ when isMainModule:
 
   # Wait for completion
   joinThread(dispatcher)
-  sleep(50)  # Let workers drain queue
-  for i in 0..<NumWorkers:
+  sleep(50) # Let workers drain queue
+  for i in 0 ..< NumWorkers:
     joinThread(workers[i])
 
   let totalTime = (getMonoTime() - startTime).inMilliseconds
@@ -150,10 +154,14 @@ when isMainModule:
   # Report results
   echo "Results:"
   var totalCompleted = 0
-  for i in 0..<NumWorkers:
+  for i in 0 ..< NumWorkers:
     let completed = tasksCompleted[i].load(moAcquire)
     let latency = totalLatency[i].load(moAcquire)
-    let avgLatency = if completed > 0: latency div completed else: 0
+    let avgLatency =
+      if completed > 0:
+        latency div completed
+      else:
+        0
     echo "  Worker ", i, ": ", completed, " tasks, avg ", avgLatency, "us/task"
     totalCompleted += completed
 

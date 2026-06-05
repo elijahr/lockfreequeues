@@ -1,0 +1,24 @@
+## §6.3 condition (3) / brief §3.3: a Queue with `ccCons == ccMulti`
+## rejects a `ccSingle` DebraManager.
+##
+## `newUnboundedMpmcQueue` (`ccMulti × ccMulti`) borrow-overload
+## requires `DebraManager[MT, debra.ccMulti]` / §3.1 — the consumer-pin
+## CC must be ccMulti for `ccCons == ccMulti`. Passing a ccSingle-
+## cardinality manager must fail type-checking.
+
+import lockfreequeues/queue
+import lockfreequeues/strategy
+import lockfreequeues/reclamation
+import lockfreequeues/internal/pinscope_stub
+
+from debra import initDebraManager
+
+proc main() =
+  # initDebraManager[MT] defaults the CC to debra.ccSingle, producing
+  # `DebraManager[4, debra.ccSingle]`. Feed it to a ccCons == ccMulti
+  # smart-constructor that demands `DebraManager[4, debra.ccMulti]`.
+  var manager = initDebraManager[4]()
+  var q = newUnboundedMpmcQueue[int, stEager, 16, 4](addr manager)
+  discard q.segmentCount()
+
+main()

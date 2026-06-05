@@ -44,24 +44,94 @@ jobs:
       - name: Setup Nim
         uses: jiro4989/setup-nim-action@v2
         with:
-          nim-version: '2.2.8'
+          # Kept in lockstep with `nimble.lock` (which pins `nim` to
+          # `2.2.10`). Bump both files together on Nim upgrades.
+          nim-version: '2.2.10'
 
       - name: Cache Nimble packages
         uses: actions/cache@v4
         with:
           path: ~/.nimble
-          key: ${{ runner.os }}-nimble-docs-${{ hashFiles('*.nimble') }}
-          restore-keys: |
-            ${{ runner.os }}-nimble-docs-
+          # The prefix is intentionally versioned (`-v2-`) so legacy
+          # caches stored under the older `-nimble-docs-` prefix cannot
+          # be partial-matched back in. CI run 26461203298 proved that
+          # changing only the hash suffix is insufficient: a stale cache
+          # from a prior lockfile shape was restored via restore-keys
+          # fallback, and `nimble install nim` then silently no-op'd
+          # because nimble saw "nim already installed" inside that stale
+          # cache — leaving `compiler/ast` unimportable for mkdocstrings.
+          #
+          # restore-keys is intentionally OMITTED: partial-match restores
+          # are exactly what masked the bug. We want either an exact key
+          # hit (safe) or a clean miss followed by a fresh install.
+          key: ${{ runner.os }}-nimble-docs-v2-${{ hashFiles('*.nimble', 'nimble.lock') }}
 
-      - name: Install Nim compiler API package (for mkdocstrings-nim)
+      - name: Make Nim compiler API importable (for mkdocstrings-nim)
         # mkdocstrings-nim's extractor.nim does `import compiler/[ast, parser, ...]`,
-        # which expects Nim's compiler/ source tree to be importable. Installing
-        # the `nim` Nimble package places the compiler source on the Nimble path
-        # so `import compiler/<X>` resolves cleanly. This matches the typestates
-        # repo's docs.yml pattern and replaces the previous in-place nim.cfg
-        # patching (preserved as a ROLLBACK comment at bottom of file).
-        run: nimble install nim -y
+        # which expects Nim's compiler/ source tree (with the .nim files
+        # for ast/parser/idents/lookups/options) to be importable as the
+        # `compiler` module.
+        #
+        # Two paths previously attempted and rejected:
+        #   (1) `nimble install nim` — as of May 2026, routes through
+        #       nimble's nimbinaries flow (downloads a side-car binary
+        #       tarball) and does NOT register compiler/ source on the
+        #       importable path. Verified empirically across 3 CI runs.
+        #   (2) Patch nim.cfg with `path="<setup-nim-action_nim_root>"`.
+        #       setup-nim-action's .nim_runtime layout either omits the
+        #       compiler/ sources or stubs them; the smoke-test in this
+        #       step failed to resolve `compiler/ast` against it.
+        #       Verified empirically in CI run 26462246310.
+        #
+        # Path (3, this implementation): clone the Nim source at the
+        # exact same version the workflow pins, into a known location,
+        # and patch the active nim.cfg to add that clone's root to the
+        # importable path. Registry-independent, layout-independent,
+        # nimble-cache-independent. ~30s overhead per cache miss; the
+        # cloned tree is cached via the nimble cache step.
+        run: |
+          set -euo pipefail
+          NIM_VERSION='2.2.8'   # keep in sync with the Setup Nim step
+          NIM_SRC="$HOME/.cache/nim-source-${NIM_VERSION}"
+          if [ ! -f "$NIM_SRC/compiler/ast.nim" ]; then
+            rm -rf "$NIM_SRC"
+            git clone --depth 1 --branch "v${NIM_VERSION}" \
+              https://github.com/nim-lang/Nim "$NIM_SRC"
+          fi
+          test -f "$NIM_SRC/compiler/ast.nim"
+          nim_bin="$(readlink -f "$(command -v nim)")"
+          nim_root="$(dirname "$(dirname "$nim_bin")")"
+          mkdir -p "$nim_root/config"
+          touch "$nim_root/config/nim.cfg"
+          # Idempotent append: only add the path entry if it's not there yet
+          # (relevant under a warm cache where this step has run before).
+          if ! grep -q "Added by docs.yml" "$nim_root/config/nim.cfg"; then
+            printf '\n# Added by docs.yml to make compiler/ importable for mkdocstrings-nim.\npath="%s"\n' \
+              "$NIM_SRC" >> "$nim_root/config/nim.cfg"
+          fi
+          # Smoke-test: fail loudly here if the import does not resolve,
+          # rather than 30 seconds later inside mkdocstrings.
+          #
+          # The temp file lives inside a mktemp -d directory and is named
+          # with a valid Nim identifier (`smoke.nim`). `nim check` derives
+          # the module name from the file's basename; `mktemp --suffix=.nim`
+          # on its own produces `tmp.<rand>.nim`, whose basename contains a
+          # dot and trips 'invalid module name' before the import is even
+          # evaluated — making the smoke test always fail. Burned one CI
+          # run (26462720391) discovering this.
+          smoke_dir="$(mktemp -d)"
+          smoke="$smoke_dir/smoke.nim"
+          printf 'import compiler/ast\ndiscard\n' > "$smoke"
+          if ! nim check --hints:off --warnings:off "$smoke" >/dev/null 2>&1; then
+            echo 'ERROR: compiler/ast still not importable after Nim-source clone + nim.cfg patch' >&2
+            nim check "$smoke" >&2 || true
+            echo '--- nim.cfg ---' >&2
+            cat "$nim_root/config/nim.cfg" >&2
+            echo "--- $NIM_SRC/compiler (head) ---" >&2
+            ls "$NIM_SRC/compiler" | head >&2 || true
+            exit 1
+          fi
+          echo 'compiler/ast importable: OK'
 
       - name: Create watch directories
         run: mkdir -p docs/overrides
@@ -154,11 +224,3 @@ jobs:
       # step) so the next run picks up the fresh JSON. The chart's
       # example.json fallback (PR #29) handles transient 404s during the
       # gap between docs deploy and bench publication.
-
-### ROLLBACK ###
-# If `nimble install nim -y` ever breaks (registry change, package rename,
-# layout regression), revert the "Install Nim compiler API package" step
-# to the previous in-place nim.cfg patch:
-#   - locate nim_root via `dirname (dirname (readlink -f $(which nim)))`
-#   - append `path="$lib/.."` to `$nim_root/config/nim.cfg`
-# Remove this rollback block after one release cycle (v4.3.0).

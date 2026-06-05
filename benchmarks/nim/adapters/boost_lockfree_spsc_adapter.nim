@@ -18,7 +18,9 @@
 
 when defined(adapter_boost_lockfree_spsc_available):
   when not defined(cpp):
-    {.error: "boost_lockfree_spsc_adapter requires `nim cpp` (Boost.LockFree is C++).".}
+    {.
+      error: "boost_lockfree_spsc_adapter requires `nim cpp` (Boost.LockFree is C++)."
+    .}
 
   import ../bench_common
   import ../adapter
@@ -34,15 +36,17 @@ when defined(adapter_boost_lockfree_spsc_available):
       {.passC: "-I/usr/include".}
       {.passC: "-I/usr/local/include".}
 
-  type
-    BoostSpscRaw {.importcpp: "boost::lockfree::spsc_queue<unsigned long long>",
-                   header: "boost/lockfree/spsc_queue.hpp", byref.} = object
+  type BoostSpscRaw {.
+    importcpp: "boost::lockfree::spsc_queue<unsigned long long>",
+    header: "boost/lockfree/spsc_queue.hpp",
+    byref
+  .} = object
 
-  proc bsPush(q: var BoostSpscRaw; v: culonglong): bool
-      {.importcpp: "#.push(@)".}
+  proc bsPush(q: var BoostSpscRaw, v: culonglong): bool {.importcpp: "#.push(@)".}
 
-  proc bsPop(q: var BoostSpscRaw; v: var culonglong): csize_t
-      {.importcpp: "#.pop(&#, 1ULL)".}
+  proc bsPop(
+    q: var BoostSpscRaw, v: var culonglong
+  ): csize_t {.importcpp: "#.pop(&#, 1ULL)".}
 
   const topologiesSupported* = {tSpsc}
 
@@ -50,13 +54,23 @@ when defined(adapter_boost_lockfree_spsc_available):
     queue*: ptr BoostSpscRaw
     capacity*: int
 
-  proc makeBoostLockfreeSpscAdapter*[T](capacity: int = 1024): BoostLockfreeSpscAdapter[T] =
+  proc makeBoostLockfreeSpscAdapter*[T](
+      capacity: int = 1024
+  ): BoostLockfreeSpscAdapter[T] =
     result.capacity = capacity
     # `allocAligned` (cache-line aligned, zeroed) instead of `alloc0` so the
     # placement-constructed Boost spsc_queue gets the alignment its internal
     # padding pragmas expect; matches the bounded `lockfree::queue` adapter.
     result.queue = allocAligned[BoostSpscRaw]()
-    {.emit: ["new (", result.queue, ") boost::lockfree::spsc_queue<unsigned long long>(", csize_t(capacity), ");"].}
+    {.
+      emit: [
+        "new (",
+        result.queue,
+        ") boost::lockfree::spsc_queue<unsigned long long>(",
+        csize_t(capacity),
+        ");",
+      ]
+    .}
 
   proc cleanup*[T](a: var BoostLockfreeSpscAdapter[T]) =
     if a.queue != nil:
@@ -67,10 +81,7 @@ when defined(adapter_boost_lockfree_spsc_available):
   proc push*[T](a: var BoostLockfreeSpscAdapter[T], item: T): PushResult =
     if a.queue == nil:
       return prFull
-    if bsPush(a.queue[], culonglong(uint64(item))):
-      prSuccess
-    else:
-      prFull
+    if bsPush(a.queue[], culonglong(uint64(item))): prSuccess else: prFull
 
   proc pop*[T](a: var BoostLockfreeSpscAdapter[T]): PopResult[T] =
     if a.queue == nil:

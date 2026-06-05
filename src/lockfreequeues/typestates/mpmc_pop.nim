@@ -20,7 +20,7 @@
 ##
 ## See design doc §2 (algorithm), §3 (bug walkthrough), §10.5 (recipe).
 
-import ../atomic_dsl
+import debra/atomics
 import typestates
 
 import ./virtual_values_n
@@ -46,11 +46,11 @@ typestate MPMCPopOp[N: static int]:
     MPMCPopStart[N] ->
       MPMCPopSlotClaimed[N] | MPMCPopEmpty[N] | MPMCPopStart[N] as MPMCPopClaimResult[N]
 
-# Forward declaration for Mupmuc (avoid circular import).
-# Field order MUST stay in lockstep with MupmucPushBase in mpmc_push.nim
-# - the facade uses a single Mupmuc object castable to either base via the
+# Forward declaration for Mpmc (avoid circular import).
+# Field order MUST stay in lockstep with MpmcPushBase in mpmc_push.nim
+# - the facade uses a single Mpmc object castable to either base via the
 # offsetof asserts in design doc §10.10.
-type MupmucBase*[N, P, C: static int, T] = object
+type MpmcBase*[N, P, C: static int, T] = object
   head* {.align: CacheLineBytes.}: Atomic[uint64]
   tail* {.align: CacheLineBytes.}: Atomic[uint64]
   cells*: MPMCCellArrayN[N, T]
@@ -60,7 +60,7 @@ proc start*[N: static int](): MPMCPopStart[N] {.inline.} =
   MPMCPopStart[N]()
 
 proc tryClaim*[N, P, C: static int, T](
-    op: MPMCPopStart[N], queue: var MupmucBase[N, P, C, T]
+    op: MPMCPopStart[N], queue: var MpmcBase[N, P, C, T]
 ): MPMCPopClaimResult[N] {.inline, transition.} =
   ## Vyukov consumer claim. Returns one of:
   ## - SlotClaimed: head CAS won; caller must call `complete`.
@@ -86,8 +86,8 @@ proc tryClaim*[N, P, C: static int, T](
     MPMCPopClaimResult[N] -> MPMCPopStart[N]() # consumer raced ahead: retry
 
 proc complete*[N, P, C: static int, T](
-    op: MPMCPopSlotClaimed[N], queue: var MupmucBase[N, P, C, T]
-): T {.inline.} =
+    op: MPMCPopSlotClaimed[N], queue: var MpmcBase[N, P, C, T]
+): T {.inline, notATransition.} =
   ## Read value from the claimed slot, then re-arm the seq for the next
   ## generation. The `seq.store(pos+N, moRelease)` is the consumer->next-
   ## producer edge; the next producer at virtual position `pos + N` will
@@ -96,6 +96,6 @@ proc complete*[N, P, C: static int, T](
   ## Note: the old protocol had a "fire-and-forget head advance" CAS here
   ## because head/reservedHead were separate. Vyukov has a single `head`
   ## cursor advanced by the claimant at C3, so no follow-up CAS is needed.
-  let value = queue.cells.dataPtr(op.slot)[] # C4 plain load; ordered by C2
+  let value = move(queue.cells.dataPtr(op.slot)[]) # C4 plain load; ordered by C2
   queue.cells.seqStore(op.slot, op.pos + uint64(N), moRelease) # C5 re-arm
   value

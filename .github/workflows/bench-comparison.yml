@@ -5,6 +5,37 @@ name: bench-comparison
 # yamllint disable rule:truthy
 on:
   workflow_dispatch:
+    inputs:
+      # Per-adapter soft-skip overrides, mirroring bench.yml's
+      # force_skip_* inputs. Empty string when unset (the default),
+      # '1' when the operator forces a skip; the env block below maps
+      # each input to a FORCE_SKIP_<LIB> env var that step-level `if:`
+      # clauses gate on. v5.0.0 Bundle 5: extends the crossbeam-only
+      # comparison job to the full external-adapter set.
+      force_skip_atomic_queue:
+        description: 'Force atomic_queue soft-skip'
+        type: boolean
+        default: false
+      force_skip_rigtorp_spsc:
+        description: 'Force rigtorp/SPSCQueue soft-skip'
+        type: boolean
+        default: false
+      force_skip_rigtorp_mpmc:
+        description: 'Force rigtorp/MPMCQueue soft-skip'
+        type: boolean
+        default: false
+      force_skip_flume:
+        description: 'Force flume soft-skip'
+        type: boolean
+        default: false
+      force_skip_kanal:
+        description: 'Force kanal soft-skip'
+        type: boolean
+        default: false
+      force_skip_liblfds:
+        description: 'Force liblfds soft-skip'
+        type: boolean
+        default: false
   schedule:
     # Nightly at 04:00 UTC. Off-peak so the runner pool is fresh; the
     # cdylib build adds ~30s vs the in-tree benches.
@@ -13,14 +44,33 @@ on:
     branches: [devel]
     paths:
       - 'benchmarks/rust/**'
-      - 'benchmarks/nim/adapters/crossbeam_*'
+      - 'benchmarks/vendor/**'
+      - 'benchmarks/nim/adapters/**'
+      - 'benchmarks/nim/smoke/**'
       - '.github/workflows/bench-comparison.yml'
 # yamllint enable rule:truthy
 
+# Cancel superseded runs on the same ref so a force-push or
+# back-to-back operator dispatches don't burn cdylib+matrix minutes
+# on stale revisions. Scoped per (workflow, ref).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
   CARGO_TERM_COLOR: always
+  # v5.0.0 Bundle 5 soft-skip overrides. Empty string when the
+  # workflow_dispatch input is unset (the default), '1' when the
+  # operator forces a skip. Step-level `if:` clauses gate on these.
+  # Crossbeam has no FORCE_SKIP toggle: it is the original comparison
+  # adapter and its steps are not soft-skippable by design.
+  FORCE_SKIP_ATOMIC_QUEUE: ${{ inputs.force_skip_atomic_queue && '1' || '' }}
+  FORCE_SKIP_RIGTORP_SPSC: ${{ inputs.force_skip_rigtorp_spsc && '1' || '' }}
+  FORCE_SKIP_RIGTORP_MPMC: ${{ inputs.force_skip_rigtorp_mpmc && '1' || '' }}
+  FORCE_SKIP_FLUME: ${{ inputs.force_skip_flume && '1' || '' }}
+  FORCE_SKIP_KANAL: ${{ inputs.force_skip_kanal && '1' || '' }}
+  FORCE_SKIP_LIBLFDS: ${{ inputs.force_skip_liblfds && '1' || '' }}
 
 jobs:
   bench-crossbeam:
@@ -30,26 +80,33 @@ jobs:
     # which would inflate the bench.yml critical path on every PR. Per
     # design 2.6 / impl plan 3.13 it lives in this dedicated workflow,
     # gated on nightly cron + workflow_dispatch + targeted path pushes
-    # to devel only. PR check feedback for crossbeam comes from this
-    # workflow's separate Bencher report.
-    name: bench-crossbeam (ubuntu-latest)
-    runs-on: ubuntu-latest
-    # Mirror bench.yml's bench-upload permissions: bencher run uses
-    # `--github-actions ${{ secrets.GITHUB_TOKEN }}` to publish check
-    # runs / PR annotations, which require explicit `checks: write` and
-    # `pull-requests: write` on repos with default read-only token
-    # permissions. `contents: read` and `actions: read` cover
-    # actions/checkout and any future artifact downloads.
+    # to devel only. Output flows into the merged BMF artifact consumed
+    # by the docs charts.
+    name: bench-crossbeam (ubuntu-22.04)
+    # Pinned to ubuntu-22.04 (not ubuntu-latest) so bench wall-clock
+    # numbers stay reproducible across runs — the GitHub-hosted ubuntu-
+    # latest pointer rolls forward periodically (e.g., 22.04 -> 24.04)
+    # and the resulting kernel/glibc/scheduler delta produces apparent
+    # throughput shifts that have no relationship to a code change.
+    # Mirrors bench.yml's identical pin.
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
       actions: read
-      pull-requests: write
-      checks: write
     timeout-minutes: 30
 
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
+
+      - name: Restore cache
+        uses: actions/cache@v4
+        with:
+          path: ${HOME}/.cache
+          # Mirrors build.yml / bench.yml: include the nimble manifest +
+          # lockfile in the key so a dep bump invalidates the cache
+          # instead of silently reusing a stale entry.
+          key: cache-bench-comparison-${{ runner.os }}-${{ hashFiles('lockfreequeues.nimble', 'nimble.lock') }}
 
       - name: Setup Nim
         uses: jiro4989/setup-nim-action@v2
@@ -61,21 +118,19 @@ jobs:
           sudo apt-get update -q -y
           sudo apt-get -qq install -y clang
 
-      - name: Clone and install sibling Nim deps (nim-debra, nim-typestates)
-        # Mirrors bench.yml -- nim.cfg in src/ resolves these via
-        # ../nim-debra/src and ../nim-typestates/src. Pin to release
-        # tags (not `main`) for deterministic CI; bump in lockstep with
-        # build.yml/bench.yml and lockfreequeues.nimble's `requires`.
+      - name: Install dependencies from nimble registry
+        # Uses lockfreequeues.nimble `requires` + nimble.lock SHAs
+        # for deterministic dep resolution from registry/git.
         run: |
-          set -e
-          cd ..
-          git clone --depth 1 --branch v0.6.0 https://github.com/elijahr/nim-debra.git
-          git clone --depth 1 --branch v0.7.0 https://github.com/elijahr/nim-typestates.git
-          (cd nim-typestates && nimble install -y)
-          (cd nim-debra && nimble install -y)
-
-      - name: Vendor unittest2
-        run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
+          nimble install -dy
+          nimble setup
+          # Hand-fix typestates v0.12.0 srcDir flattening: nimble setup
+          # writes nimble.paths with a trailing /src component but the
+          # typestates v0.12.0 pkg ships flat. Create a self-referential
+          # src symlink inside each pkg dir so both layouts resolve.
+          for d in $(find ~/.nimble/pkgs2 -maxdepth 1 -type d -name "typestates-0.12.0-*" 2>/dev/null); do
+            [ -e "$d/src" ] || ln -s . "$d/src"
+          done
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -105,7 +160,7 @@ jobs:
         # cdylib symbols at runtime before we spend ~10 min on bench
         # binaries with the same defines.
         run: |
-          set -eu
+          set -euo pipefail
           nim c -d:release -d:danger --threads:on \
             -d:adapter_crossbeam_array_queue_available \
             -d:adapter_crossbeam_seg_queue_available \
@@ -114,56 +169,475 @@ jobs:
             benchmarks/nim/smoke/smoke_crossbeam.nim
           ./.tmp/smoke_crossbeam
 
-      - name: Compile bench_mpmc with crossbeam_array_queue
-        # CI run shape mirrors bench.yml's bench_mpmc settings (1M / 5 / 2).
-        # rpath ensures the dylib loads from the in-tree build dir at
-        # runtime without needing LD_LIBRARY_PATH.
+      # ---------- v5.0.0 Bundle 5: vendored header-only C++ adapters ----------
+      #
+      # atomic_queue (max0x7ba) and rigtorp/SPSCQueue + rigtorp/MPMCQueue
+      # are vendored single-header C++ libraries (sources under
+      # benchmarks/vendor/, committed in Bundle 2). They need no apt
+      # packages. Each smoke is `continue-on-error` and gated by its
+      # FORCE_SKIP toggle; on success it records an env flag the
+      # downstream compile/run steps gate on, so a smoke regression
+      # soft-skips that adapter rather than failing the whole workflow
+      # (mirrors bench.yml's install/smoke/set-define pattern).
+
+      - name: Smoke atomic_queue adapter
+        id: smoke-atomic-queue
+        if: env.FORCE_SKIP_ATOMIC_QUEUE != '1'
+        continue-on-error: true
         run: |
-          set -eu
+          set -euo pipefail
+          # nim cpp because atomic_queue.h is C++ and the wrapper is C++.
+          nim cpp -d:release -d:danger --threads:on \
+            -d:adapter_atomic_queue_available \
+            -o:.tmp/smoke_atomic_queue \
+            benchmarks/nim/smoke/smoke_atomic_queue.nim
+          ./.tmp/smoke_atomic_queue
+
+      - name: Set atomic_queue adapter define (success only)
+        if: |
+          env.FORCE_SKIP_ATOMIC_QUEUE != '1' &&
+          steps.smoke-atomic-queue.outcome == 'success'
+        run: echo "ADAPTER_ATOMIC_QUEUE=1" >> "$GITHUB_ENV"
+
+      - name: Annotate atomic_queue skipped
+        if: |
+          env.FORCE_SKIP_ATOMIC_QUEUE == '1' ||
+          steps.smoke-atomic-queue.outcome != 'success'
+        run: |
+          echo "::warning title=Adapter skipped::atomic_queue smoke failed or force-skipped; comparison bench will omit atomic_queue slugs."
+
+      - name: Smoke rigtorp adapters
+        id: smoke-rigtorp
+        if: |
+          env.FORCE_SKIP_RIGTORP_SPSC != '1' ||
+          env.FORCE_SKIP_RIGTORP_MPMC != '1'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          # smoke_rigtorp.nim covers both SPSC and MPMC under their own
+          # defines; enable whichever is not force-skipped. nim cpp
+          # because both upstream headers are C++.
+          flags=""
+          if [ "${FORCE_SKIP_RIGTORP_SPSC:-}" != "1" ]; then
+            flags="$flags -d:adapter_rigtorp_spsc_available"
+          fi
+          if [ "${FORCE_SKIP_RIGTORP_MPMC:-}" != "1" ]; then
+            flags="$flags -d:adapter_rigtorp_mpmc_available"
+          fi
+          # shellcheck disable=SC2086  # $flags is intentionally word-split.
+          nim cpp -d:release -d:danger --threads:on \
+            $flags \
+            -o:.tmp/smoke_rigtorp \
+            benchmarks/nim/smoke/smoke_rigtorp.nim
+          ./.tmp/smoke_rigtorp
+
+      - name: Set rigtorp/SPSCQueue adapter define (success only)
+        if: |
+          env.FORCE_SKIP_RIGTORP_SPSC != '1' &&
+          steps.smoke-rigtorp.outcome == 'success'
+        run: echo "ADAPTER_RIGTORP_SPSC=1" >> "$GITHUB_ENV"
+
+      - name: Set rigtorp/MPMCQueue adapter define (success only)
+        if: |
+          env.FORCE_SKIP_RIGTORP_MPMC != '1' &&
+          steps.smoke-rigtorp.outcome == 'success'
+        run: echo "ADAPTER_RIGTORP_MPMC=1" >> "$GITHUB_ENV"
+
+      - name: Annotate rigtorp skipped
+        if: |
+          env.FORCE_SKIP_RIGTORP_SPSC == '1' ||
+          env.FORCE_SKIP_RIGTORP_MPMC == '1' ||
+          steps.smoke-rigtorp.outcome != 'success'
+        run: |
+          echo "::warning title=Adapter skipped::rigtorp smoke failed or force-skipped for at least one variant; comparison bench will omit the affected rigtorp slugs."
+
+      # ---------- v5.0.0 Bundle 5: flume + kanal (consolidated cdylib) ----------
+      #
+      # flume + kanal are folded into the same libbench_ffi_crossbeam
+      # cdylib already built above (Bundle 1 Cargo change). smoke_comparison
+      # exercises bounded + unbounded for both; the -rpath matches the
+      # crossbeam smoke so the cdylib loads at runtime without
+      # LD_LIBRARY_PATH.
+
+      - name: Smoke flume+kanal adapters
+        id: smoke-comparison
+        if: |
+          env.FORCE_SKIP_FLUME != '1' ||
+          env.FORCE_SKIP_KANAL != '1'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          flags=""
+          if [ "${FORCE_SKIP_FLUME:-}" != "1" ]; then
+            flags="$flags -d:adapter_flume_available"
+          fi
+          if [ "${FORCE_SKIP_KANAL:-}" != "1" ]; then
+            flags="$flags -d:adapter_kanal_available"
+          fi
+          # shellcheck disable=SC2086  # $flags is intentionally word-split.
+          nim c -d:release -d:danger --threads:on \
+            $flags \
+            --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
+            -o:.tmp/smoke_comparison \
+            benchmarks/nim/smoke/smoke_comparison.nim
+          ./.tmp/smoke_comparison
+
+      - name: Set flume adapter define (success only)
+        if: |
+          env.FORCE_SKIP_FLUME != '1' &&
+          steps.smoke-comparison.outcome == 'success'
+        run: echo "ADAPTER_FLUME=1" >> "$GITHUB_ENV"
+
+      - name: Set kanal adapter define (success only)
+        if: |
+          env.FORCE_SKIP_KANAL != '1' &&
+          steps.smoke-comparison.outcome == 'success'
+        run: echo "ADAPTER_KANAL=1" >> "$GITHUB_ENV"
+
+      - name: Annotate flume+kanal skipped
+        if: |
+          env.FORCE_SKIP_FLUME == '1' ||
+          env.FORCE_SKIP_KANAL == '1' ||
+          steps.smoke-comparison.outcome != 'success'
+        run: |
+          echo "::warning title=Adapter skipped::flume/kanal smoke failed or force-skipped; comparison bench will omit the affected flume/kanal slugs."
+
+      # ---------- v5.0.0 Bundle 5: vendored liblfds (C library) ----------
+      #
+      # liblfds 7.1.1 ships C source that requires a Make build to
+      # produce liblfds711.a. The vendored subset in this repo lacks the
+      # gcc_gnumake Makefile, so the build step is guarded by `test -f`
+      # and `continue-on-error: true` — it soft-skips faithfully (the
+      # adapter then never gets its define and the run is omitted). CI
+      # environments that DO carry the full upstream tree build the
+      # archive and exercise the adapter.
+
+      - name: Install liblfds (vendored Make build)
+        id: install-liblfds
+        if: env.FORCE_SKIP_LIBLFDS != '1'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          test -f benchmarks/vendor/liblfds/liblfds711/build/gcc_gnumake/Makefile
+          # CI runs on Linux so the porting layer's __linux__ branch
+          # fires natively (no CFLAGS override, unlike macOS dev).
+          make -C benchmarks/vendor/liblfds/liblfds711/build/gcc_gnumake ar_rel
+          test -f benchmarks/vendor/liblfds/liblfds711/bin/liblfds711.a
+
+      - name: Smoke liblfds adapter
+        id: smoke-liblfds
+        if: |
+          env.FORCE_SKIP_LIBLFDS != '1' &&
+          steps.install-liblfds.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          # liblfds is C-only; the wrapper is C; no `nim cpp` needed.
+          # --passL points at the vendored archive built above.
+          nim c -d:release -d:danger --threads:on \
+            -d:adapter_liblfds_available \
+            --passL:"-Lbenchmarks/vendor/liblfds/liblfds711/bin -llfds711" \
+            -o:.tmp/smoke_liblfds \
+            benchmarks/nim/smoke/smoke_liblfds.nim
+          ./.tmp/smoke_liblfds
+
+      - name: Set liblfds adapter define (success only)
+        if: |
+          env.FORCE_SKIP_LIBLFDS != '1' &&
+          steps.install-liblfds.outcome == 'success' &&
+          steps.smoke-liblfds.outcome == 'success'
+        run: |
+          echo "ADAPTER_LIBLFDS=1" >> "$GITHUB_ENV"
+          # Absolute path so the bench compile's -L resolves regardless
+          # of nim's working directory.
+          echo "LIBLFDS_LIB_DIR=${GITHUB_WORKSPACE}/benchmarks/vendor/liblfds/liblfds711/bin" >> "$GITHUB_ENV"
+
+      - name: Annotate liblfds skipped
+        if: |
+          env.FORCE_SKIP_LIBLFDS == '1' ||
+          steps.install-liblfds.outcome != 'success' ||
+          steps.smoke-liblfds.outcome != 'success'
+        run: |
+          echo "::warning title=Adapter skipped::liblfds build or smoke failed or force-skipped (the vendored subset lacks the gcc_gnumake Makefile); comparison bench will omit liblfds slugs."
+
+      - name: Compile bench_mpmc_bounded with crossbeam_array_queue
+        #: crossbeam_array_queue's slug shape matches
+        # the mpmc grid so it lives in the mpmc binary (the spmc
+        # binary has no MVP-adapter wiring). CI run shape mirrors
+        # bench.yml's bench_mpmc_bounded settings (1M / 5 / 2). rpath
+        # ensures the dylib loads from the in-tree build dir at runtime
+        # without needing LD_LIBRARY_PATH.
+        run: |
+          set -euo pipefail
           nim c -d:release -d:danger --threads:on \
             -d:BenchMpmcMessageCount=1000000 \
             -d:BenchMpmcRuns=5 \
             -d:BenchMpmcWarmup=2 \
             -d:adapter_crossbeam_array_queue_available \
             --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
-            benchmarks/nim/bench_mpmc.nim
+            benchmarks/nim/bench_mpmc_bounded.nim
 
-      - name: Compile bench_unbounded with crossbeam_seg_queue
+      - name: Compile bench_unbounded_mpmc with crossbeam_seg_queue
+        # split: the Crossbeam SegQueue adapter lives in
+        # bench_unbounded_mpmc (matches the mpmc unbounded
+        # MVP-adapter slot post-split).
         run: |
-          set -eu
+          set -euo pipefail
           nim c -d:release -d:danger --threads:on \
-            -d:UnboundedSipsicMessageCount=500000 \
-            -d:UnboundedSipsicRuns=3 \
-            -d:UnboundedSipmucMessageCount=500000 \
-            -d:UnboundedSipmucRuns=3 \
-            -d:UnboundedMupsicMessageCount=500000 \
-            -d:UnboundedMupsicRuns=3 \
-            -d:UnboundedMupmucMessageCount=500000 \
-            -d:UnboundedMupmucRuns=3 \
+            -d:UnboundedMpmcMessageCount=500000 \
+            -d:UnboundedMpmcRuns=3 \
             -d:BenchUnboundedWarmup=2 \
             -d:adapter_crossbeam_seg_queue_available \
             --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
-            benchmarks/nim/bench_unbounded.nim
+            benchmarks/nim/bench_unbounded_mpmc.nim
 
-      - name: Run bench_mpmc (crossbeam_array_queue only)
+      - name: Run bench_mpmc_bounded (crossbeam_array_queue only)
         timeout-minutes: 12
         run: |
-          ./.tmp/bench_mpmc crossbeam_array_queue \
+          set -euo pipefail
+          ./.tmp/bench_mpmc_bounded crossbeam_array_queue \
             --bmf-out=bench_mpmc_crossbeam.json \
             | tee bench_mpmc_crossbeam_output.txt
 
-      - name: Run bench_unbounded (crossbeam_seg_queue only)
+      - name: Run bench_unbounded_mpmc (crossbeam_seg_queue only)
         timeout-minutes: 12
         run: |
-          ./.tmp/bench_unbounded crossbeam_seg_queue \
+          set -euo pipefail
+          ./.tmp/bench_unbounded_mpmc crossbeam_seg_queue \
             --bmf-out=bench_unbounded_crossbeam.json \
             | tee bench_unbounded_crossbeam_output.txt
 
-      - name: Merge BMF JSON
+      # ---------- v5.0.0 Bundle 5: external-adapter compile + run ----------
+      #
+      # Each enabled adapter compiles ITS bench binary to a distinct
+      # `-o:.tmp/<binary>_<adapter>` output so it does not clobber the
+      # crossbeam binaries (or another adapter sharing the same source
+      # binary), then runs only its own variant slug. This mirrors the
+      # crossbeam one-compile-one-run pattern above while staying
+      # collision-safe in the linear single-job layout. Each step is
+      # gated on the ADAPTER_<LIB> env flag set by the smoke steps, so a
+      # soft-skipped adapter contributes no compile, no run, and no BMF
+      # fragment. CI run shapes mirror bench.yml: bench_spsc 1M/5/2,
+      # bench_mpmc_bounded 1M/5/2, bench_unbounded_mpmc 500K/3/2.
+
+      # --- atomic_queue: bench_spsc + bench_mpmc_bounded ---
+      - name: Compile + run bench_spsc with atomic_queue
+        if: env.ADAPTER_ATOMIC_QUEUE == '1'
+        timeout-minutes: 12
         run: |
-          python3 benchmarks/merge_bmf.py merged.json \
-            bench_mpmc_crossbeam.json \
-            bench_unbounded_crossbeam.json
+          set -euo pipefail
+          nim cpp -d:release -d:danger --threads:on \
+            -d:BenchSpscMessageCount=1000000 \
+            -d:BenchSpscRuns=5 \
+            -d:BenchSpscWarmup=2 \
+            -d:adapter_atomic_queue_available \
+            -o:.tmp/bench_spsc_atomic_queue \
+            benchmarks/nim/bench_spsc.nim
+          ./.tmp/bench_spsc_atomic_queue atomic_queue \
+            --bmf-out=bench_spsc_atomic_queue.json \
+            | tee bench_spsc_atomic_queue_output.txt
+
+      - name: Compile + run bench_mpmc_bounded with atomic_queue
+        if: env.ADAPTER_ATOMIC_QUEUE == '1'
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          nim cpp -d:release -d:danger --threads:on \
+            -d:BenchMpmcMessageCount=1000000 \
+            -d:BenchMpmcRuns=5 \
+            -d:BenchMpmcWarmup=2 \
+            -d:adapter_atomic_queue_available \
+            -o:.tmp/bench_mpmc_atomic_queue \
+            benchmarks/nim/bench_mpmc_bounded.nim
+          ./.tmp/bench_mpmc_atomic_queue atomic_queue \
+            --bmf-out=bench_mpmc_atomic_queue.json \
+            | tee bench_mpmc_atomic_queue_output.txt
+
+      # --- rigtorp/SPSCQueue: bench_spsc only ---
+      - name: Compile + run bench_spsc with rigtorp_spsc
+        if: env.ADAPTER_RIGTORP_SPSC == '1'
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          nim cpp -d:release -d:danger --threads:on \
+            -d:BenchSpscMessageCount=1000000 \
+            -d:BenchSpscRuns=5 \
+            -d:BenchSpscWarmup=2 \
+            -d:adapter_rigtorp_spsc_available \
+            -o:.tmp/bench_spsc_rigtorp_spsc \
+            benchmarks/nim/bench_spsc.nim
+          ./.tmp/bench_spsc_rigtorp_spsc rigtorp_spsc \
+            --bmf-out=bench_spsc_rigtorp_spsc.json \
+            | tee bench_spsc_rigtorp_spsc_output.txt
+
+      # --- rigtorp/MPMCQueue: bench_mpmc_bounded only ---
+      - name: Compile + run bench_mpmc_bounded with rigtorp_mpmc
+        if: env.ADAPTER_RIGTORP_MPMC == '1'
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          nim cpp -d:release -d:danger --threads:on \
+            -d:BenchMpmcMessageCount=1000000 \
+            -d:BenchMpmcRuns=5 \
+            -d:BenchMpmcWarmup=2 \
+            -d:adapter_rigtorp_mpmc_available \
+            -o:.tmp/bench_mpmc_rigtorp_mpmc \
+            benchmarks/nim/bench_mpmc_bounded.nim
+          ./.tmp/bench_mpmc_rigtorp_mpmc rigtorp_mpmc \
+            --bmf-out=bench_mpmc_rigtorp_mpmc.json \
+            | tee bench_mpmc_rigtorp_mpmc_output.txt
+
+      # --- flume: bench_mpmc_bounded (bounded) + bench_unbounded_mpmc ---
+      - name: Compile + run bench_mpmc_bounded with flume
+        if: env.ADAPTER_FLUME == '1'
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          nim c -d:release -d:danger --threads:on \
+            -d:BenchMpmcMessageCount=1000000 \
+            -d:BenchMpmcRuns=5 \
+            -d:BenchMpmcWarmup=2 \
+            -d:adapter_flume_available \
+            --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
+            -o:.tmp/bench_mpmc_flume \
+            benchmarks/nim/bench_mpmc_bounded.nim
+          ./.tmp/bench_mpmc_flume flume \
+            --bmf-out=bench_mpmc_flume.json \
+            | tee bench_mpmc_flume_output.txt
+
+      - name: Compile + run bench_unbounded_mpmc with flume_unbounded
+        if: env.ADAPTER_FLUME == '1'
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          nim c -d:release -d:danger --threads:on \
+            -d:UnboundedMpmcMessageCount=500000 \
+            -d:UnboundedMpmcRuns=3 \
+            -d:BenchUnboundedWarmup=2 \
+            -d:adapter_flume_available \
+            --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
+            -o:.tmp/bench_unbounded_flume \
+            benchmarks/nim/bench_unbounded_mpmc.nim
+          ./.tmp/bench_unbounded_flume flume_unbounded \
+            --bmf-out=bench_unbounded_flume.json \
+            | tee bench_unbounded_flume_output.txt
+
+      # --- kanal: bench_spsc + bench_mpmc_bounded (bounded) + bench_unbounded_mpmc ---
+      - name: Compile + run bench_spsc with kanal
+        if: env.ADAPTER_KANAL == '1'
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          nim c -d:release -d:danger --threads:on \
+            -d:BenchSpscMessageCount=1000000 \
+            -d:BenchSpscRuns=5 \
+            -d:BenchSpscWarmup=2 \
+            -d:adapter_kanal_available \
+            --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
+            -o:.tmp/bench_spsc_kanal \
+            benchmarks/nim/bench_spsc.nim
+          ./.tmp/bench_spsc_kanal kanal \
+            --bmf-out=bench_spsc_kanal.json \
+            | tee bench_spsc_kanal_output.txt
+
+      - name: Compile + run bench_mpmc_bounded with kanal
+        if: env.ADAPTER_KANAL == '1'
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          nim c -d:release -d:danger --threads:on \
+            -d:BenchMpmcMessageCount=1000000 \
+            -d:BenchMpmcRuns=5 \
+            -d:BenchMpmcWarmup=2 \
+            -d:adapter_kanal_available \
+            --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
+            -o:.tmp/bench_mpmc_kanal \
+            benchmarks/nim/bench_mpmc_bounded.nim
+          ./.tmp/bench_mpmc_kanal kanal \
+            --bmf-out=bench_mpmc_kanal.json \
+            | tee bench_mpmc_kanal_output.txt
+
+      - name: Compile + run bench_unbounded_mpmc with kanal_unbounded
+        if: env.ADAPTER_KANAL == '1'
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          nim c -d:release -d:danger --threads:on \
+            -d:UnboundedMpmcMessageCount=500000 \
+            -d:UnboundedMpmcRuns=3 \
+            -d:BenchUnboundedWarmup=2 \
+            -d:adapter_kanal_available \
+            --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
+            -o:.tmp/bench_unbounded_kanal \
+            benchmarks/nim/bench_unbounded_mpmc.nim
+          ./.tmp/bench_unbounded_kanal kanal_unbounded \
+            --bmf-out=bench_unbounded_kanal.json \
+            | tee bench_unbounded_kanal_output.txt
+
+      # --- liblfds: bench_spsc (bss) + bench_mpmc_bounded (bmm) ---
+      - name: Compile + run bench_spsc with liblfds
+        if: env.ADAPTER_LIBLFDS == '1'
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          nim c -d:release -d:danger --threads:on \
+            -d:BenchSpscMessageCount=1000000 \
+            -d:BenchSpscRuns=5 \
+            -d:BenchSpscWarmup=2 \
+            -d:adapter_liblfds_available \
+            --passL:"-L${LIBLFDS_LIB_DIR} -llfds711" \
+            -o:.tmp/bench_spsc_liblfds \
+            benchmarks/nim/bench_spsc.nim
+          ./.tmp/bench_spsc_liblfds liblfds \
+            --bmf-out=bench_spsc_liblfds.json \
+            | tee bench_spsc_liblfds_output.txt
+
+      - name: Compile + run bench_mpmc_bounded with liblfds
+        if: env.ADAPTER_LIBLFDS == '1'
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          nim c -d:release -d:danger --threads:on \
+            -d:BenchMpmcMessageCount=1000000 \
+            -d:BenchMpmcRuns=5 \
+            -d:BenchMpmcWarmup=2 \
+            -d:adapter_liblfds_available \
+            --passL:"-L${LIBLFDS_LIB_DIR} -llfds711" \
+            -o:.tmp/bench_mpmc_liblfds \
+            benchmarks/nim/bench_mpmc_bounded.nim
+          ./.tmp/bench_mpmc_liblfds liblfds \
+            --bmf-out=bench_mpmc_liblfds.json \
+            | tee bench_mpmc_liblfds_output.txt
+
+      - name: Merge BMF JSON
+        # Crossbeam fragments are always present (no soft-skip); the
+        # external-adapter fragments exist only for adapters that passed
+        # smoke + ran. `merge_bmf.py` errors on a missing input, so the
+        # input list is built dynamically from the JSON files actually
+        # on disk. The two crossbeam fragments anchor the list so a run
+        # where every external adapter soft-skipped still merges.
+        run: |
+          set -euo pipefail
+          inputs="bench_mpmc_crossbeam.json bench_unbounded_crossbeam.json"
+          for f in \
+            bench_spsc_atomic_queue.json \
+            bench_mpmc_atomic_queue.json \
+            bench_spsc_rigtorp_spsc.json \
+            bench_mpmc_rigtorp_mpmc.json \
+            bench_mpmc_flume.json \
+            bench_unbounded_flume.json \
+            bench_spsc_kanal.json \
+            bench_mpmc_kanal.json \
+            bench_unbounded_kanal.json \
+            bench_spsc_liblfds.json \
+            bench_mpmc_liblfds.json; do
+            if [ -f "$f" ]; then
+              inputs="$inputs $f"
+            fi
+          done
+          echo "Merging BMF fragments: $inputs"
+          # shellcheck disable=SC2086  # $inputs is intentionally word-split.
+          python3 benchmarks/merge_bmf.py merged.json $inputs
 
       - name: Show BMF JSON (debug)
         run: cat merged.json
@@ -171,57 +645,8 @@ jobs:
       - name: Upload BMF artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bench-comparison-crossbeam-bmf
+          # v5.0.0 Bundle 5: this merged fragment now spans crossbeam +
+          # the external-adapter set (atomic_queue, rigtorp, flume,
+          # kanal, liblfds), not crossbeam alone.
+          name: bench-comparison-external-bmf
           path: merged.json
-
-      - name: Install Bencher CLI
-        uses: bencherdev/bencher@main
-
-      - name: Bencher token preflight
-        run: |
-          if [ -z "$BENCHER_API_TOKEN" ]; then
-            echo "::warning title=Bencher upload skipped::BENCHER_API_TOKEN is not set; bench-comparison ran but did not upload."
-          else
-            echo "Bencher token present; proceeding with upload."
-          fi
-
-      - name: Track scheduled benchmarks with Bencher
-        if: github.event_name == 'schedule' && env.BENCHER_API_TOKEN != ''
-        run: |
-          bencher run \
-            --project lockfreequeues \
-            --token '${{ secrets.BENCHER_API_TOKEN }}' \
-            --branch devel \
-            --testbed ubuntu-latest \
-            --threshold-measure throughput_ops_ms \
-            --threshold-test t_test \
-            --threshold-max-sample-size 64 \
-            --threshold-lower-boundary 0.99 \
-            --thresholds-reset \
-            --adapter json \
-            --file merged.json \
-            --github-actions '${{ secrets.GITHUB_TOKEN }}' \
-            --err
-
-      - name: Track devel-push benchmarks with Bencher
-        if: github.event_name == 'push' && env.BENCHER_API_TOKEN != ''
-        run: |
-          bencher run \
-            --project lockfreequeues \
-            --token '${{ secrets.BENCHER_API_TOKEN }}' \
-            --branch devel \
-            --testbed ubuntu-latest \
-            --adapter json \
-            --file merged.json \
-            --github-actions '${{ secrets.GITHUB_TOKEN }}'
-
-      - name: Track manual benchmarks with Bencher
-        if: github.event_name == 'workflow_dispatch' && env.BENCHER_API_TOKEN != ''
-        run: |
-          bencher run \
-            --project lockfreequeues \
-            --token '${{ secrets.BENCHER_API_TOKEN }}' \
-            --branch "${GITHUB_REF##*/}" \
-            --testbed ubuntu-latest \
-            --adapter json \
-            --file merged.json

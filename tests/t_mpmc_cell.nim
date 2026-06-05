@@ -1,5 +1,6 @@
 import unittest2
-import lockfreequeues/atomic_dsl
+import debra/atomics
+import debra/atomics/dsl
 import lockfreequeues/typestates/virtual_values_n
 import lockfreequeues/typestates/mpmc_cell
 
@@ -23,8 +24,7 @@ suite "MPMCCell[T] layout":
   test "adjacent cells in MPMCCellArrayN are cache-line separated":
     var a: MPMCCellArrayN[4, int]
     a.init()
-    let stride =
-      cast[int](addr a.cells[1]) - cast[int](addr a.cells[0])
+    let stride = cast[int](addr a.cells[1]) - cast[int](addr a.cells[0])
     check(stride mod CacheLineBytes == 0)
     check(stride >= CacheLineBytes)
     # The first cell must itself be cache-line aligned.
@@ -82,6 +82,4 @@ suite "MPMCCellArrayN[N, T]":
   test "MPMCCellArrayN size scales as N * sizeof(MPMCCell[T])":
     check(sizeof(MPMCCellArrayN[4, int]) == 4 * sizeof(MPMCCell[int]))
     check(sizeof(MPMCCellArrayN[16, int]) == 16 * sizeof(MPMCCell[int]))
-    check(
-      sizeof(MPMCCellArrayN[8, ptr int]) == 8 * sizeof(MPMCCell[ptr int])
-    )
+    check(sizeof(MPMCCellArrayN[8, ptr int]) == 8 * sizeof(MPMCCell[ptr int]))

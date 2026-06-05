@@ -1,6 +1,6 @@
 ## N-slot virtual values for SPSC and unbounded queue slot-index arithmetic.
 ##
-## Used by sipsic (SPSC) and the unbounded queue variants for `mod N` physical
+## Used by spsc (SPSC) and the unbounded queue variants for `mod N` physical
 ## slot calculation over a virtual space of 0..<2*N. Bounded MPMC/MPSC/SPMC
 ## queues use Vyukov-style sequence-numbered cells (mpmc_cell) instead.
 

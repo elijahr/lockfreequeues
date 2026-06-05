@@ -1,12 +1,12 @@
-## Deterministic regression test for the original mupmuc protocol bug.
+## Deterministic regression test for the original mpmc protocol bug.
 ##
 ## This test reproduces the §3 walk-through from the design doc step-by-step
 ## using the typestate primitives directly (no thread spawning). Three
 ## walkthroughs cover the three affected variants:
 ##
-##   1. Mupmuc (multi-producer, multi-consumer)
-##   2. Sipmuc (single-producer, multi-consumer)
-##   3. Mupsic (multi-producer, single-consumer)
+##   1. Mpmc (multi-producer, multi-consumer)
+##   2. Spmc (single-producer, multi-consumer)
+##   3. Mpsc (multi-producer, single-consumer)
 ##
 ## In every variant the original protocol allowed a preempted consumer's
 ## reservation to be silently re-claimed by a later consumer at a wrap-around
@@ -27,7 +27,8 @@
 import unittest2
 
 import lockfreequeues
-import lockfreequeues/atomic_dsl
+import debra/atomics
+import debra/atomics/dsl
 
 import lockfreequeues/typestates/mpmc_cell
 import lockfreequeues/typestates/mpmc_push
@@ -36,22 +37,22 @@ import lockfreequeues/typestates/spmc_push
 import lockfreequeues/typestates/spmc_pop
 import lockfreequeues/typestates/mpsc_push
 import lockfreequeues/typestates/mpsc_pop
-
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
 
 # ---------------------------------------------------------------------------
-# Mupmuc walkthrough
+# Mpmc walkthrough
 # ---------------------------------------------------------------------------
 
-suite "slot-seq generation rollover - Mupmuc":
-
-  test "preempted consumer cannot be re-claimed by wrap-around consumer (Mupmuc)":
+suite "slot-seq generation rollover - Mpmc":
+  test "preempted consumer cannot be re-claimed by wrap-around consumer (Mpmc)":
     # N=4 is the smallest capacity that exercises the wrap. P/C are arbitrary
     # for this single-threaded drive; we never call getProducer/getConsumer.
-    var q = initMupmuc[4, 2, 2, int]()
-    let pushBase = cast[ptr MupmucPushBase[4, 2, 2, int]](addr q)
-    let popBase = cast[ptr MupmucBase[4, 2, 2, int]](addr q)
+    var q = newMpmcQueue[int, 4, 2, 2]()
+    let pushBase = cast[ptr MpmcPushBase[4, 2, 2, int]](addr q)
+    let popBase = cast[ptr MpmcBase[4, 2, 2, int]](addr q)
 
-    # ----- Phase 1: P0..P3 push items, leaving head=0, tail=4, all cells
+    # ----- Step (1): P0..P3 push items, leaving head=0, tail=4, all cells
     # holding their producer's value with seq[i] = i+1.
     for i in 0 .. 3:
       var op = mpmc_push.start[4]()
@@ -64,7 +65,7 @@ suite "slot-seq generation rollover - Mupmuc":
     check(q.tail.load(moRelaxed) == 4'u64)
     for i in 0 .. 3:
       check(q.cells.cells[i].payload.seq.load(moAcquire) == uint64(i + 1))
-    # Phase 1 invariant: cell[3] holds item_A = 103, seq[3] = 4.
+    # Step (1) invariant: cell[3] holds item_A = 103, seq[3] = 4.
 
     # ----- Consume positions 0..2 (sets up "after consuming 0..2" state).
     for i in 0 .. 2:
@@ -83,13 +84,13 @@ suite "slot-seq generation rollover - Mupmuc":
     # Slot 3 is still seq=4 (no consumer has touched it).
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 4'u64)
 
-    # ----- Phase 2: Consumer A claims slot 3 (pos=3) but DOES NOT complete.
+    # ----- Step (2): Consumer A claims slot 3 (pos=3) but DOES NOT complete.
     # Simulates A being preempted between C3 (head CAS) and C5 (seq.store).
     var opA = mpmc_pop.start[4]()
     let claimA = opA.tryClaim(popBase[])
     check(claimA.kind == mMPMCPopSlotClaimed)
     check(claimA.mpmcpopslotclaimed.pos == 3'u64)
-    # Capture the SlotClaimed verb so we can complete it later (Phase 6).
+    # Capture the SlotClaimed verb so we can complete it later (Step (6)).
     let pendingA = claimA.mpmcpopslotclaimed
 
     # Post-claim invariants: head advanced to 4 by A's CAS at C3. seq[3] is
@@ -97,7 +98,7 @@ suite "slot-seq generation rollover - Mupmuc":
     check(q.head.load(moRelaxed) == 4'u64)
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 4'u64)
 
-    # ----- Phase 3: Simulate other threads cycling. Manually advance head to
+    # ----- Step (3): Simulate other threads cycling. Manually advance head to
     # 7 and tail to 7, and re-arm slots 0, 1, 2 to the seq values they would
     # carry after one more push+pop cycle each. We CANNOT actually push at
     # virtual position 7 (slot 3) without releasing slot 3 first; the
@@ -118,7 +119,7 @@ suite "slot-seq generation rollover - Mupmuc":
     q.head.store(7'u64, moRelease)
     q.tail.store(7'u64, moRelease)
 
-    # ----- Phase 4: Consumer B at pos=7 (slot 3). Must observe Empty.
+    # ----- Step (4): Consumer B at pos=7 (slot 3). Must observe Empty.
     # diff = seq - (pos + 1) = 4 - 8 = -4. Critical: NOT a stale-ready
     # claim of slot 3.
     var opB = mpmc_pop.start[4]()
@@ -129,7 +130,7 @@ suite "slot-seq generation rollover - Mupmuc":
     check(q.head.load(moRelaxed) == 7'u64)
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 4'u64)
 
-    # ----- Phase 5: Producer P1 at pos=7 (slot 3). Must observe Full.
+    # ----- Step (5): Producer P1 at pos=7 (slot 3). Must observe Full.
     # diff = seq - pos = 4 - 7 = -3. Slot reserved by pending consumer.
     var opP1 = mpmc_push.start[4]()
     let claimP1 = opP1.tryClaim(pushBase[])
@@ -139,15 +140,15 @@ suite "slot-seq generation rollover - Mupmuc":
     check(q.tail.load(moRelaxed) == 7'u64)
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 4'u64)
 
-    # ----- Phase 6: Consumer A finally completes (executes C5).
-    # cell[3].data is whatever A was reading; Mupmuc's complete returns it.
+    # ----- Step (6): Consumer A finally completes (executes C5).
+    # cell[3].data is whatever A was reading; Mpmc's complete returns it.
     let valA = pendingA.complete(popBase[])
-    check(valA == 103) # The original item_A pushed in Phase 1.
+    check(valA == 103) # The original item_A pushed in Step (1).
     # seq[3] is now pos + N = 3 + 4 = 7, matching the next producer
     # generation's expected diff=0 entry condition.
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 7'u64)
 
-    # ----- Phase 7: Producer P1 retries at pos=7 (slot 3). Must succeed
+    # ----- Step (7): Producer P1 retries at pos=7 (slot 3). Must succeed
     # (diff = 7 - 7 = 0) and publish seq=8.
     var opP1b = mpmc_push.start[4]()
     let claimP1b = opP1b.tryClaim(pushBase[])
@@ -168,22 +169,20 @@ suite "slot-seq generation rollover - Mupmuc":
     check(q.head.load(moRelaxed) == 8'u64)
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 11'u64) # 7 + N
 
-
 # ---------------------------------------------------------------------------
-# Sipmuc walkthrough (single producer, multi-consumer)
+# Spmc walkthrough (single producer, multi-consumer)
 # ---------------------------------------------------------------------------
 
-suite "slot-seq generation rollover - Sipmuc":
-
-  test "preempted consumer cannot be re-claimed by wrap-around consumer (Sipmuc)":
-    # Same trace structure as Mupmuc, but the producer side uses the
+suite "slot-seq generation rollover - Spmc":
+  test "preempted consumer cannot be re-claimed by wrap-around consumer (Spmc)":
+    # Same trace structure as Mpmc, but the producer side uses the
     # spmc_push (defensive-CAS) verb. The bug shape is identical - the
     # consumer side is what re-armed the slot in the original protocol.
-    var q = initSipmuc[4, 2, int]()
-    let pushBase = cast[ptr SipmucPushBase[4, 2, int]](addr q)
-    let popBase = cast[ptr SipmucBase[4, 2, int]](addr q)
+    var q = newSpmcQueue[int, 4, 2]()
+    let pushBase = cast[ptr SpmcPushBase[4, 2, int]](addr q)
+    let popBase = cast[ptr SpmcBase[4, 2, int]](addr q)
 
-    # Phase 1: push 4 items via the SPMC push verb.
+    # Step (1): push 4 items via the SPMC push verb.
     for i in 0 .. 3:
       var op = spmc_push.start[4]()
       let claim = op.tryClaim(pushBase[])
@@ -207,7 +206,7 @@ suite "slot-seq generation rollover - Sipmuc":
     check(q.head.load(moRelaxed) == 3'u64)
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 4'u64)
 
-    # Phase 2: Consumer A claims slot 3, holds completion.
+    # Step (2): Consumer A claims slot 3, holds completion.
     var opA = spmc_pop.start[4]()
     let claimA = opA.tryClaim(popBase[])
     check(claimA.kind == sSPMCPopSlotClaimed)
@@ -216,33 +215,33 @@ suite "slot-seq generation rollover - Sipmuc":
     check(q.head.load(moRelaxed) == 4'u64)
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 4'u64)
 
-    # Phase 3: forge state to simulate cycling, head=tail=7.
+    # Step (3): forge state to simulate cycling, head=tail=7.
     q.cells.cells[0].payload.seq.store(8'u64, moRelease)
     q.cells.cells[1].payload.seq.store(9'u64, moRelease)
     q.cells.cells[2].payload.seq.store(10'u64, moRelease)
     q.head.store(7'u64, moRelease)
     q.tail.store(7'u64, moRelease)
 
-    # Phase 4: Consumer B at pos=7 -> Empty.
+    # Step (4): Consumer B at pos=7 -> Empty.
     var opB = spmc_pop.start[4]()
     let claimB = opB.tryClaim(popBase[])
     check(claimB.kind == sSPMCPopEmpty)
     check(q.head.load(moRelaxed) == 7'u64)
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 4'u64)
 
-    # Phase 5: Producer at pos=7 -> Full.
+    # Step (5): Producer at pos=7 -> Full.
     var opP = spmc_push.start[4]()
     let claimP = opP.tryClaim(pushBase[])
     check(claimP.kind == sSPMCPushFull)
     check(q.tail.load(moRelaxed) == 7'u64)
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 4'u64)
 
-    # Phase 6: Consumer A completes.
+    # Step (6): Consumer A completes.
     let valA = pendingA.complete(popBase[])
     check(valA == 203)
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 7'u64)
 
-    # Phase 7: producer + consumer at pos=7 succeed in order.
+    # Step (7): producer + consumer at pos=7 succeed in order.
     var opPb = spmc_push.start[4]()
     let claimPb = opPb.tryClaim(pushBase[])
     check(claimPb.kind == sSPMCPushSlotClaimed)
@@ -260,21 +259,19 @@ suite "slot-seq generation rollover - Sipmuc":
     check(q.head.load(moRelaxed) == 8'u64)
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 11'u64)
 
-
 # ---------------------------------------------------------------------------
-# Mupsic walkthrough (multi-producer, single consumer)
+# Mpsc walkthrough (multi-producer, single consumer)
 # ---------------------------------------------------------------------------
 
-suite "slot-seq generation rollover - Mupsic":
-
-  test "preempted consumer cannot be re-claimed by wrap-around consumer (Mupsic)":
+suite "slot-seq generation rollover - Mpsc":
+  test "preempted consumer cannot be re-claimed by wrap-around consumer (Mpsc)":
     # Same trace structure. Producer side uses mpsc_push; consumer side
     # uses mpsc_pop (defensive-CAS form per design §10.9).
-    var q = initMupsic[4, 2, int]()
-    let pushBase = cast[ptr MupsicPushBase[4, 2, int]](addr q)
-    let popBase = cast[ptr MupsicBase[4, 2, int]](addr q)
+    var q = newMpscQueue[int, 4, 2]()
+    let pushBase = cast[ptr MpscPushBase[4, 2, int]](addr q)
+    let popBase = cast[ptr MpscBase[4, 2, int]](addr q)
 
-    # Phase 1: push 4 items.
+    # Step (1): push 4 items.
     for i in 0 .. 3:
       var op = mpsc_push.start[4]()
       let claim = op.tryClaim(pushBase[])
@@ -298,7 +295,7 @@ suite "slot-seq generation rollover - Mupsic":
     check(q.head.load(moRelaxed) == 3'u64)
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 4'u64)
 
-    # Phase 2: Consumer A claims slot 3, holds completion.
+    # Step (2): Consumer A claims slot 3, holds completion.
     var opA = mpsc_pop.start[4]()
     let claimA = opA.tryClaim(popBase[])
     check(claimA.kind == mMPSCPopSlotClaimed)
@@ -307,33 +304,33 @@ suite "slot-seq generation rollover - Mupsic":
     check(q.head.load(moRelaxed) == 4'u64)
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 4'u64)
 
-    # Phase 3: forge state to simulate cycling, head=tail=7.
+    # Step (3): forge state to simulate cycling, head=tail=7.
     q.cells.cells[0].payload.seq.store(8'u64, moRelease)
     q.cells.cells[1].payload.seq.store(9'u64, moRelease)
     q.cells.cells[2].payload.seq.store(10'u64, moRelease)
     q.head.store(7'u64, moRelease)
     q.tail.store(7'u64, moRelease)
 
-    # Phase 4: Consumer B at pos=7 -> Empty.
+    # Step (4): Consumer B at pos=7 -> Empty.
     var opB = mpsc_pop.start[4]()
     let claimB = opB.tryClaim(popBase[])
     check(claimB.kind == mMPSCPopEmpty)
     check(q.head.load(moRelaxed) == 7'u64)
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 4'u64)
 
-    # Phase 5: Producer at pos=7 -> Full.
+    # Step (5): Producer at pos=7 -> Full.
     var opP = mpsc_push.start[4]()
     let claimP = opP.tryClaim(pushBase[])
     check(claimP.kind == mMPSCPushFull)
     check(q.tail.load(moRelaxed) == 7'u64)
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 4'u64)
 
-    # Phase 6: Consumer A completes.
+    # Step (6): Consumer A completes.
     let valA = pendingA.complete(popBase[])
     check(valA == 303)
     check(q.cells.cells[3].payload.seq.load(moAcquire) == 7'u64)
 
-    # Phase 7: producer + consumer at pos=7 succeed in order.
+    # Step (7): producer + consumer at pos=7 succeed in order.
     var opPb = mpsc_push.start[4]()
     let claimPb = opPb.tryClaim(pushBase[])
     check(claimPb.kind == mMPSCPushSlotClaimed)

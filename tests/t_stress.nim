@@ -4,9 +4,13 @@
 when not compileOption("threads"):
   {.error: "t_stress requires --threads:on option.".}
 
-import std/[atomics, options]
+import std/options
 import unittest2
 import lockfreequeues
+import lockfreequeues/endpoint
+import lockfreequeues/role_tags
+import debra/atomics
+import debra/atomics/dsl
 
 const
   SmallBuffer = 16
@@ -27,12 +31,12 @@ proc computeChecksum(id: int, payload: string): uint32 =
     result = result xor uint32(ord(c))
 
 # =============================================================================
-# Sipsic (SPSC) Stress Tests
+# Spsc (SPSC) Stress Tests
 # =============================================================================
 
-suite "Stress - Sipsic (SPSC)":
-  test "Sipsic 100k int":
-    var queue = initSipsic[StandardBuffer, int]()
+suite "Stress - Spsc (SPSC)":
+  test "Spsc 100k int":
+    var queue = newSpscQueue[int, StandardBuffer]()
 
     # Push all items
     for i in 0 ..< Count100k:
@@ -51,8 +55,8 @@ suite "Stress - Sipsic (SPSC)":
 
     check popped > 0
 
-  test "Sipsic 100k with buffer=16 (frequent wrapping)":
-    var queue = initSipsic[SmallBuffer, int]()
+  test "Spsc 100k with buffer=16 (frequent wrapping)":
+    var queue = newSpscQueue[int, SmallBuffer]()
     var pushed = 0
     var popped = 0
 
@@ -73,8 +77,8 @@ suite "Stress - Sipsic (SPSC)":
 
     check pushed == popped
 
-  test "Sipsic 100k string":
-    var queue = initSipsic[StandardBuffer, string]()
+  test "Spsc 100k string":
+    var queue = newSpscQueue[string, StandardBuffer]()
     var pushed = 0
     var popped = 0
 
@@ -94,8 +98,8 @@ suite "Stress - Sipsic (SPSC)":
 
     check pushed == popped
 
-  test "Sipsic 100k TestObject with checksum verification":
-    var queue = initSipsic[StandardBuffer, TestObject]()
+  test "Spsc 100k TestObject with checksum verification":
+    var queue = newSpscQueue[TestObject, StandardBuffer]()
     var pushed = 0
     var verified = 0
 
@@ -124,176 +128,176 @@ suite "Stress - Sipsic (SPSC)":
     check pushed == verified
 
 # =============================================================================
-# Mupmuc (MPMC) Stress Tests
+# Mpmc (MPMC) Stress Tests
 # =============================================================================
 
 type
-  MupmucPCtx[N, P, C: static int, T] = object
-    queue: ptr Mupmuc[N, P, C, T]
+  MpmcPCtx[N, P, C: static int, T] = object
+    queue: ptr BQueue[T, ccMulti, ccMulti, N, P, C]
     count: int
     producerIdx: int
     sent: ptr Atomic[int]
 
-  MupmucCCtx[N, P, C: static int, T] = object
-    queue: ptr Mupmuc[N, P, C, T]
+  MpmcCCtx[N, P, C: static int, T] = object
+    queue: ptr BQueue[T, ccMulti, ccMulti, N, P, C]
     count: int
     consumerIdx: int
     received: ptr Atomic[int]
 
-proc mupmucProducer[N, P, C: static int](ctx: ptr MupmucPCtx[N, P, C, int]) {.thread.} =
+proc mpmcProducer[N, P, C: static int](ctx: ptr MpmcPCtx[N, P, C, int]) {.thread.} =
   let p = ctx.queue[].getProducer(idx = ctx.producerIdx)
   for i in 0 ..< ctx.count:
     while not p.push(i):
       discard
-    ctx.sent[].atomicInc()
+    discard ctx.sent[].fetchAdd(1, moRelaxed)
 
-proc mupmucConsumer[N, P, C: static int](ctx: ptr MupmucCCtx[N, P, C, int]) {.thread.} =
+proc mpmcConsumer[N, P, C: static int](ctx: ptr MpmcCCtx[N, P, C, int]) {.thread.} =
   let c = ctx.queue[].getConsumer(idx = ctx.consumerIdx)
   var localReceived = 0
   while localReceived < ctx.count:
     let item = c.pop()
     if item.isSome:
       inc localReceived
-      ctx.received[].atomicInc()
+      discard ctx.received[].fetchAdd(1, moRelaxed)
 
-suite "Stress - Mupmuc (MPMC)":
-  test "Mupmuc 1P/1C 10k int":
-    var queue = initMupmuc[StandardBuffer, 1, 1, int]()
+suite "Stress - Mpmc (MPMC)":
+  test "Mpmc 1P/1C 10k int":
+    var queue = newMpmcQueue[int, StandardBuffer, 1, 1]()
     var sent, received: Atomic[int]
-    sent.store(0)
-    received.store(0)
+    sent.store(0, moRelaxed)
+    received.store(0, moRelaxed)
 
-    var pctx = MupmucPCtx[StandardBuffer, 1, 1, int](
+    var pctx = MpmcPCtx[StandardBuffer, 1, 1, int](
       queue: addr queue, count: Count10k, producerIdx: 0, sent: addr sent
     )
-    var cctx = MupmucCCtx[StandardBuffer, 1, 1, int](
+    var cctx = MpmcCCtx[StandardBuffer, 1, 1, int](
       queue: addr queue, count: Count10k, consumerIdx: 0, received: addr received
     )
 
-    var pThread: Thread[ptr MupmucPCtx[StandardBuffer, 1, 1, int]]
-    var cThread: Thread[ptr MupmucCCtx[StandardBuffer, 1, 1, int]]
+    var pThread: Thread[ptr MpmcPCtx[StandardBuffer, 1, 1, int]]
+    var cThread: Thread[ptr MpmcCCtx[StandardBuffer, 1, 1, int]]
 
-    createThread(pThread, mupmucProducer[StandardBuffer, 1, 1], addr pctx)
-    createThread(cThread, mupmucConsumer[StandardBuffer, 1, 1], addr cctx)
+    createThread(pThread, mpmcProducer[StandardBuffer, 1, 1], addr pctx)
+    createThread(cThread, mpmcConsumer[StandardBuffer, 1, 1], addr cctx)
 
     joinThread(pThread)
     joinThread(cThread)
 
-    check sent.load() == Count10k
-    check received.load() == Count10k
+    check sent.load(moRelaxed) == Count10k
+    check received.load(moRelaxed) == Count10k
 
-  test "Mupmuc 2P/2C 10k int":
-    var queue = initMupmuc[StandardBuffer, 2, 2, int]()
+  test "Mpmc 2P/2C 10k int":
+    var queue = newMpmcQueue[int, StandardBuffer, 2, 2]()
     var sent, received: Atomic[int]
-    sent.store(0)
-    received.store(0)
+    sent.store(0, moRelaxed)
+    received.store(0, moRelaxed)
 
     const PerThread = Count10k div 2
 
-    var pctx0 = MupmucPCtx[StandardBuffer, 2, 2, int](
+    var pctx0 = MpmcPCtx[StandardBuffer, 2, 2, int](
       queue: addr queue, count: PerThread, producerIdx: 0, sent: addr sent
     )
-    var pctx1 = MupmucPCtx[StandardBuffer, 2, 2, int](
+    var pctx1 = MpmcPCtx[StandardBuffer, 2, 2, int](
       queue: addr queue, count: PerThread, producerIdx: 1, sent: addr sent
     )
-    var cctx0 = MupmucCCtx[StandardBuffer, 2, 2, int](
+    var cctx0 = MpmcCCtx[StandardBuffer, 2, 2, int](
       queue: addr queue, count: PerThread, consumerIdx: 0, received: addr received
     )
-    var cctx1 = MupmucCCtx[StandardBuffer, 2, 2, int](
+    var cctx1 = MpmcCCtx[StandardBuffer, 2, 2, int](
       queue: addr queue, count: PerThread, consumerIdx: 1, received: addr received
     )
 
-    var pThreads: array[2, Thread[ptr MupmucPCtx[StandardBuffer, 2, 2, int]]]
-    var cThreads: array[2, Thread[ptr MupmucCCtx[StandardBuffer, 2, 2, int]]]
+    var pThreads: array[2, Thread[ptr MpmcPCtx[StandardBuffer, 2, 2, int]]]
+    var cThreads: array[2, Thread[ptr MpmcCCtx[StandardBuffer, 2, 2, int]]]
 
-    createThread(pThreads[0], mupmucProducer[StandardBuffer, 2, 2], addr pctx0)
-    createThread(pThreads[1], mupmucProducer[StandardBuffer, 2, 2], addr pctx1)
-    createThread(cThreads[0], mupmucConsumer[StandardBuffer, 2, 2], addr cctx0)
-    createThread(cThreads[1], mupmucConsumer[StandardBuffer, 2, 2], addr cctx1)
+    createThread(pThreads[0], mpmcProducer[StandardBuffer, 2, 2], addr pctx0)
+    createThread(pThreads[1], mpmcProducer[StandardBuffer, 2, 2], addr pctx1)
+    createThread(cThreads[0], mpmcConsumer[StandardBuffer, 2, 2], addr cctx0)
+    createThread(cThreads[1], mpmcConsumer[StandardBuffer, 2, 2], addr cctx1)
 
     joinThread(pThreads[0])
     joinThread(pThreads[1])
     joinThread(cThreads[0])
     joinThread(cThreads[1])
 
-    check sent.load() == Count10k
-    check received.load() == Count10k
+    check sent.load(moRelaxed) == Count10k
+    check received.load(moRelaxed) == Count10k
 
-  test "Mupmuc 2P/2C 10k with buffer=16 (stress wraparound)":
-    var queue = initMupmuc[SmallBuffer, 2, 2, int]()
+  test "Mpmc 2P/2C 10k with buffer=16 (stress wraparound)":
+    var queue = newMpmcQueue[int, SmallBuffer, 2, 2]()
     var sent, received: Atomic[int]
-    sent.store(0)
-    received.store(0)
+    sent.store(0, moRelaxed)
+    received.store(0, moRelaxed)
 
     const PerThread = Count10k div 2
 
-    var pctx0 = MupmucPCtx[SmallBuffer, 2, 2, int](
+    var pctx0 = MpmcPCtx[SmallBuffer, 2, 2, int](
       queue: addr queue, count: PerThread, producerIdx: 0, sent: addr sent
     )
-    var pctx1 = MupmucPCtx[SmallBuffer, 2, 2, int](
+    var pctx1 = MpmcPCtx[SmallBuffer, 2, 2, int](
       queue: addr queue, count: PerThread, producerIdx: 1, sent: addr sent
     )
-    var cctx0 = MupmucCCtx[SmallBuffer, 2, 2, int](
+    var cctx0 = MpmcCCtx[SmallBuffer, 2, 2, int](
       queue: addr queue, count: PerThread, consumerIdx: 0, received: addr received
     )
-    var cctx1 = MupmucCCtx[SmallBuffer, 2, 2, int](
+    var cctx1 = MpmcCCtx[SmallBuffer, 2, 2, int](
       queue: addr queue, count: PerThread, consumerIdx: 1, received: addr received
     )
 
-    var pThreads: array[2, Thread[ptr MupmucPCtx[SmallBuffer, 2, 2, int]]]
-    var cThreads: array[2, Thread[ptr MupmucCCtx[SmallBuffer, 2, 2, int]]]
+    var pThreads: array[2, Thread[ptr MpmcPCtx[SmallBuffer, 2, 2, int]]]
+    var cThreads: array[2, Thread[ptr MpmcCCtx[SmallBuffer, 2, 2, int]]]
 
-    createThread(pThreads[0], mupmucProducer[SmallBuffer, 2, 2], addr pctx0)
-    createThread(pThreads[1], mupmucProducer[SmallBuffer, 2, 2], addr pctx1)
-    createThread(cThreads[0], mupmucConsumer[SmallBuffer, 2, 2], addr cctx0)
-    createThread(cThreads[1], mupmucConsumer[SmallBuffer, 2, 2], addr cctx1)
+    createThread(pThreads[0], mpmcProducer[SmallBuffer, 2, 2], addr pctx0)
+    createThread(pThreads[1], mpmcProducer[SmallBuffer, 2, 2], addr pctx1)
+    createThread(cThreads[0], mpmcConsumer[SmallBuffer, 2, 2], addr cctx0)
+    createThread(cThreads[1], mpmcConsumer[SmallBuffer, 2, 2], addr cctx1)
 
     joinThread(pThreads[0])
     joinThread(pThreads[1])
     joinThread(cThreads[0])
     joinThread(cThreads[1])
 
-    check sent.load() == Count10k
-    check received.load() == Count10k
+    check sent.load(moRelaxed) == Count10k
+    check received.load(moRelaxed) == Count10k
 
 # =============================================================================
-# Sipmuc (SPMC) Stress Tests
+# Spmc (SPMC) Stress Tests
 # =============================================================================
 
-type SipmucCCtx[N, C: static int, T] = object
-  queue: ptr Sipmuc[N, C, T]
+type SpmcCCtx[N, C: static int, T] = object
+  queue: ptr BQueue[T, ccSingle, ccMulti, N, 0, C]
   count: int
   consumerIdx: int
   received: ptr Atomic[int]
 
-proc sipmucConsumer[N, C: static int](ctx: ptr SipmucCCtx[N, C, int]) {.thread.} =
+proc spmcConsumer[N, C: static int](ctx: ptr SpmcCCtx[N, C, int]) {.thread.} =
   let c = ctx.queue[].getConsumer(idx = ctx.consumerIdx)
   var localReceived = 0
   while localReceived < ctx.count:
     let item = c.pop()
     if item.isSome:
       inc localReceived
-      ctx.received[].atomicInc()
+      discard ctx.received[].fetchAdd(1, moRelaxed)
 
-suite "Stress - Sipmuc (SPMC)":
-  test "Sipmuc 1P/2C 10k int":
-    var queue = initSipmuc[StandardBuffer, 2, int]()
+suite "Stress - Spmc (SPMC)":
+  test "Spmc 1P/2C 10k int":
+    var queue = newSpmcQueue[int, StandardBuffer, 2]()
     var received: Atomic[int]
-    received.store(0)
+    received.store(0, moRelaxed)
 
     const PerConsumer = Count10k div 2
 
-    var cctx0 = SipmucCCtx[StandardBuffer, 2, int](
+    var cctx0 = SpmcCCtx[StandardBuffer, 2, int](
       queue: addr queue, count: PerConsumer, consumerIdx: 0, received: addr received
     )
-    var cctx1 = SipmucCCtx[StandardBuffer, 2, int](
+    var cctx1 = SpmcCCtx[StandardBuffer, 2, int](
       queue: addr queue, count: PerConsumer, consumerIdx: 1, received: addr received
     )
 
-    var cThreads: array[2, Thread[ptr SipmucCCtx[StandardBuffer, 2, int]]]
+    var cThreads: array[2, Thread[ptr SpmcCCtx[StandardBuffer, 2, int]]]
 
-    createThread(cThreads[0], sipmucConsumer[StandardBuffer, 2], addr cctx0)
-    createThread(cThreads[1], sipmucConsumer[StandardBuffer, 2], addr cctx1)
+    createThread(cThreads[0], spmcConsumer[StandardBuffer, 2], addr cctx0)
+    createThread(cThreads[1], spmcConsumer[StandardBuffer, 2], addr cctx1)
 
     # Producer runs in main thread
     for i in 0 ..< Count10k:
@@ -303,44 +307,44 @@ suite "Stress - Sipmuc (SPMC)":
     joinThread(cThreads[0])
     joinThread(cThreads[1])
 
-    check received.load() == Count10k
+    check received.load(moRelaxed) == Count10k
 
 # =============================================================================
-# Mupsic (MPSC) Stress Tests
+# Mpsc (MPSC) Stress Tests
 # =============================================================================
 
-type MupsicPCtx[N, P: static int, T] = object
-  queue: ptr Mupsic[N, P, T]
+type MpscPCtx[N, P: static int, T] = object
+  queue: ptr BQueue[T, ccMulti, ccSingle, N, P, 0]
   count: int
   producerIdx: int
   sent: ptr Atomic[int]
 
-proc mupsicProducer[N, P: static int](ctx: ptr MupsicPCtx[N, P, int]) {.thread.} =
+proc mpscProducer[N, P: static int](ctx: ptr MpscPCtx[N, P, int]) {.thread.} =
   let p = ctx.queue[].getProducer(idx = ctx.producerIdx)
   for i in 0 ..< ctx.count:
     while not p.push(i):
       discard
-    ctx.sent[].atomicInc()
+    discard ctx.sent[].fetchAdd(1, moRelaxed)
 
-suite "Stress - Mupsic (MPSC)":
-  test "Mupsic 2P/1C 10k int":
-    var queue = initMupsic[StandardBuffer, 2, int]()
+suite "Stress - Mpsc (MPSC)":
+  test "Mpsc 2P/1C 10k int":
+    var queue = newMpscQueue[int, StandardBuffer, 2]()
     var sent: Atomic[int]
-    sent.store(0)
+    sent.store(0, moRelaxed)
 
     const PerProducer = Count10k div 2
 
-    var pctx0 = MupsicPCtx[StandardBuffer, 2, int](
+    var pctx0 = MpscPCtx[StandardBuffer, 2, int](
       queue: addr queue, count: PerProducer, producerIdx: 0, sent: addr sent
     )
-    var pctx1 = MupsicPCtx[StandardBuffer, 2, int](
+    var pctx1 = MpscPCtx[StandardBuffer, 2, int](
       queue: addr queue, count: PerProducer, producerIdx: 1, sent: addr sent
     )
 
-    var pThreads: array[2, Thread[ptr MupsicPCtx[StandardBuffer, 2, int]]]
+    var pThreads: array[2, Thread[ptr MpscPCtx[StandardBuffer, 2, int]]]
 
-    createThread(pThreads[0], mupsicProducer[StandardBuffer, 2], addr pctx0)
-    createThread(pThreads[1], mupsicProducer[StandardBuffer, 2], addr pctx1)
+    createThread(pThreads[0], mpscProducer[StandardBuffer, 2], addr pctx0)
+    createThread(pThreads[1], mpscProducer[StandardBuffer, 2], addr pctx1)
 
     # Consumer runs in main thread
     var received = 0
@@ -352,27 +356,27 @@ suite "Stress - Mupsic (MPSC)":
     joinThread(pThreads[0])
     joinThread(pThreads[1])
 
-    check sent.load() == Count10k
+    check sent.load(moRelaxed) == Count10k
     check received == Count10k
 
-  test "Mupsic 2P/1C 10k with buffer=16 (stress wraparound)":
-    var queue = initMupsic[SmallBuffer, 2, int]()
+  test "Mpsc 2P/1C 10k with buffer=16 (stress wraparound)":
+    var queue = newMpscQueue[int, SmallBuffer, 2]()
     var sent: Atomic[int]
-    sent.store(0)
+    sent.store(0, moRelaxed)
 
     const PerProducer = Count10k div 2
 
-    var pctx0 = MupsicPCtx[SmallBuffer, 2, int](
+    var pctx0 = MpscPCtx[SmallBuffer, 2, int](
       queue: addr queue, count: PerProducer, producerIdx: 0, sent: addr sent
     )
-    var pctx1 = MupsicPCtx[SmallBuffer, 2, int](
+    var pctx1 = MpscPCtx[SmallBuffer, 2, int](
       queue: addr queue, count: PerProducer, producerIdx: 1, sent: addr sent
     )
 
-    var pThreads: array[2, Thread[ptr MupsicPCtx[SmallBuffer, 2, int]]]
+    var pThreads: array[2, Thread[ptr MpscPCtx[SmallBuffer, 2, int]]]
 
-    createThread(pThreads[0], mupsicProducer[SmallBuffer, 2], addr pctx0)
-    createThread(pThreads[1], mupsicProducer[SmallBuffer, 2], addr pctx1)
+    createThread(pThreads[0], mpscProducer[SmallBuffer, 2], addr pctx0)
+    createThread(pThreads[1], mpscProducer[SmallBuffer, 2], addr pctx1)
 
     # Consumer runs in main thread
     var received = 0
@@ -384,5 +388,5 @@ suite "Stress - Mupsic (MPSC)":
     joinThread(pThreads[0])
     joinThread(pThreads[1])
 
-    check sent.load() == Count10k
+    check sent.load(moRelaxed) == Count10k
     check received == Count10k

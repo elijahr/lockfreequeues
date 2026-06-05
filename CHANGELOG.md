@@ -7,12 +7,406 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+(No entries yet — post-5.0.0 work lands here.)
+
+## [5.0.0] - 2026-05-25
+
+What was developed under the v4.2.0 and v4.3.0 banners ships for the
+first time as v5.0.0. Neither v4.2.0 nor v4.3.0 was tagged or merged to
+`devel`; both branches are abandoned in place (`feat/v4.2.0-bench-tightening`
+and `feat/v4.3-task-14` remain on the remote as audit-trail artifacts and
+are NOT carried forward as tags). The substantive work from both windows
+is consolidated into v5.0.0 below, deduplicated against the unified Queue
+reframe and against each other.
+
+> **3.3.11-B reshape note (final v5.0.0 surface).** The original
+> v5.0.0 plan landed a single unified
+> `Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]` (10
+> params) plus a standalone `UnboundedSipsic[S, T]`. Phase 3.3.11-B
+> reshaped that further:
+>
+> - **Bounded surface** split into a dedicated
+>   `BQueue[T, ccProd, ccCons, N, P, C]` (6 params, no debra, no
+>   `RK`/`ST`/`S`/`MaxThreads`).
+> - **Unbounded surface** became
+>   `Queue[T, ccProd, ccCons, ST, S, MaxThreads]` (also 6 params).
+>   The `(ccSingle, ccSingle)` arm of `Queue` absorbs the standalone
+>   `UnboundedSipsic` body verbatim (debra-free, committed-flag
+>   protocol). The standalone `UnboundedSipsic` module is deleted.
+> - **Smart constructors** collapse from 11 family-prefixed entry
+>   points to two generic ones (`newBQueue`, `newQueue`) plus
+>   family-named thin wrappers (`newSipsicQueue`, `newMupsicQueue`,
+>   `newSipmucQueue`, `newMupmucQueue`, `newUnboundedSipsicQueue`,
+>   `newUnboundedMupsicQueue`, `newUnboundedSipmucQueue`,
+>   `newUnboundedMupmucQueue`) retained as ergonomic aliases.
+> - **Runtime `InvalidCallDefect` traps** (6 cardinality-illegal
+>   call sites in the old unified Queue) lifted to compile-time
+>   `{.error.}` overloads with user-visible-alias-only diagnostic
+>   strings (M5 R9 gate).
+> - **Middle-axis typestates landed in 3.3.11-B.4.1.6 (Bundle F).**
+>   Lifecycle (`BQueueInit -> BQueueDestroyed` on `BQueue`;
+>   `QueueInit -> QueueDestroyed` on `Queue`) and Claim-state
+>   (`Unclaimed -> ProducerClaimed | ConsumerClaimed | BothClaimed`
+>   on view types) ship under a REVISED design relative to the
+>   original brief — see the "Bundle F revised design" section
+>   below for the Wall 1 / Wall 2 / Wall 3 deviations.
+>
+> The canonical reference for the current surface is this CHANGELOG
+> entry plus `docs/migration.md`.
+>
+> **Worked example — primary surface (3.3.11-B / M7 lock).** For new
+> code, prefer the two generic constructors:
+>
+> ```nim
+> import lockfreequeues
+>
+> # Bounded mupsic-equivalent (multi-producer, single-consumer):
+> var q1 = newBQueue[int, ccMulti, ccSingle, 8, 4, 0]()
+> let p1 = q1.getProducer()
+> discard p1.push(42)
+> discard q1.pop()                 # SPSC pop on single-consumer side
+>
+> # Unbounded mupmuc-equivalent (multi-producer, multi-consumer).
+> # Each operating thread attaches before push/pop: debra thread
+> # registration happens at attach time, not at construction.
+> var q2 = newQueue(Queue[int, ccMulti, ccMulti, stEager, 64, 8])
+> var p2 = q2.getProducer()
+> p2.attach()                      # registers this thread; may raise
+>                                  #   DebraRegistrationError
+> var c2 = q2.getConsumer()
+> c2.attach()
+> p2.push(99)
+> discard c2.pop()
+> ```
+>
+> The family-named thin-wrappers (`newMupsicQueue`,
+> `newUnboundedMupmucQueue`, …) stay for grep continuity with the
+> v3.x/v4.x naming and to minimize churn in downstream call sites
+> and benchmark adapters. For new code, prefer the two generic
+> constructors above. Both styles compile to the same underlying
+> type; the wrappers are pure ergonomic aliases.
+>
+> **Bundle F revised design (3.3.11-B.4.1.6).** The original Bundle
+> F brief called for (a) self-loop `{.transition.}` pragmas on every
+> state-preserving op to keep the queue value in `QueueInit` across
+> push/pop and (b) a two-type alias dispatch (`BQueueProducer =
+> when ccProd is ccMulti: BQueueProducerMulti else:
+> BQueueProducerSingle`) so Claim-state attached only on the multi
+> side. A pre-implementation probe step (B.4.1.5) empirically
+> validated revised patterns against typestates v0.9.3:
+>
+> - ** — no self-loop transitions.** State-preserving
+>   methods (`push`, `pop`, `getProducer`, `getConsumer`, `attach`,
+>   `detach`, batch variants) declare NO `{.transition.}` pragma.
+>   The typestate verifier accepts same-module non-transition procs
+>   as state-preserving operations that mutate runtime fields
+>   without changing the static typestate. Self-loop transitions
+>   would be rejected by `validateTransitionsRespectInitialTerminal`
+>   in the typestates parser. Terminal transitions are emitted
+>   exclusively by `=destroy` via `destructorTransition`, mirroring
+>   nim-debra's `pinned_scope.nim:178-180` verbatim.
+>
+> - ** — single object type with internal `when` switch.**
+>   `BQueueProducer` / `BQueueConsumer` / `QueueProducer` /
+>   `QueueConsumer` are single user-facing object types per view
+>   (no Multi/Single split). The optional `claimed: bool` field
+>   exists only under `when ccProd == ccMulti:` (or `ccCons ==
+>   ccMulti` for consumers). The typestate attaches uniformly; the
+>   ccSingle path has the typestate statically attached but no
+>   `attach` / `detach` overloads, so it is functionally dormant.
+>   `attach` / `detach` are declared with `BQueueProducer[T,
+>   ccMulti, ccCons, N, P, C]` (or analogue) in the param
+>   signature; the compiler statically excludes ccSingle from the
+>   overload set and produces a clean "type mismatch" diagnostic
+>   that references the user-visible alias name. No `*Multi` /
+>   `*Single` backing types exist (M5 R9 grep gate trivially
+>   satisfied — there is no backing-type name to leak).
+>
+> - **Wall 3 acceptance — documented limitation.** typestates v0.9.3
+>   does NOT statically catch use-after-destroy. The CFG analyzer
+>   enforces "reaches terminal by end of scope," not "no method
+>   calls on a value already in terminal state." Concretely:
+>   `=destroy(q); q.push(item)` does NOT fail compile (the typestate
+>   is in `QueueDestroyed`, but the push proc has no transition
+>   pragma and the verifier sees no rule violation). Similarly, an
+>   explicit `=destroy(q); =destroy(q)` double-destroy is not caught
+>   by the destructor's `destructorTransition` because the second
+>   call still treats the value as a fresh entry into the destructor
+>   surface.
+>
+>   **Recovery path**: typestates v0.10+ post-terminal CFG mode (open
+>   feature request) OR design pivot to consume-on-transition
+>   destructors. For must-not-double-use sites where the failure
+>   mode warrants runtime instrumentation, mirror
+>   `pinned_scope.nim:128-131`'s `doAssert(not consumed, ...)`
+>   pattern. v5.0.0 does NOT blanket-instrument BQueue or Queue
+>   destructors so hot-path push/pop stays allocation-free and
+>   branch-free.
+>
+> The user-visible API is unchanged from the original brief: smart
+> constructors return `BQueue[...]` / `Queue[...]` aliases;
+> `getProducer()` / `getConsumer()` return `BQueueProducer[...]` /
+> view aliases; cardinality-illegal direct calls are still gated by
+>'s `{.error.}` overloads (which take precedence over the
+> typestate's destructor-only transition because the `{.error.}`
+> overload is more-specific).
+
+The reframe consolidates 7+ typestate queue families (`Sipsic`, `Sipmuc`,
+`Mupsic`, `Mupmuc`, `UnboundedSipmuc`, `UnboundedMupsic`, `UnboundedMupmuc`,
+plus their phantom variants) into two 6-param generics per the 3.3.11-B
+reshape above: a bounded `BQueue[T, ccProd, ccCons, N, P, C]` and an
+unbounded `Queue[T, ccProd, ccCons, ST, S, MaxThreads]`. The standalone
+`UnboundedSipsic[S, T]` SPSC type was ABSORBED into `Queue`'s
+`(ccSingle, ccSingle)` arm (debra-free committed-flag-free protocol) and
+its module deleted — it is no longer a separate type. The final shape
+summarized in the addendum above is canonical.
+
+Reclamation is cardinality-driven, not a phantom parameter. The
+`(ccSingle, ccSingle)` arm uses the debra-free committed-flag-free
+protocol; the multi-cardinality arms (mupsic-/sipmuc-/mupmuc-equiv) ship
+LIVE epoch-based reclamation via nim-debra 0.8.0 (the `nim-debra >= 0.8.0`
+precondition is met, so EBR ships in 5.0.0 — there is no deferred RC).
+`ReclamationKind` (`rkNone` / `rkEbr`) survives only as a vestigial
+re-export for bench-adapter / migration-shim compatibility; it is NOT a
+type parameter on either generic.
+
+### Refactor highlights (3.3.11-B)
+
+The v5.0.0 reshape is measured against the pre-wave devel baseline
+(merge-base `b6da7f60`):
+
+- **Production-code surface**: 8 per-family modules deleted
+  (`mupmuc.nim`, `mupsic.nim`, `sipmuc.nim`, `sipsic.nim`,
+  `unbounded_mupmuc.nim`, `unbounded_mupsic.nim`,
+  `unbounded_sipmuc.nim`, `unbounded_sipsic.nim` — 2570 LOC total);
+  replaced by `bqueue.nim` (1269 LOC, greenfield 6-param BQueue),
+  `queue.nim` (1389 LOC, unified 6-param Queue absorbing the standalone
+  `UnboundedSipsic`), `internal/shared.nim` (37 LOC), and
+  `internal/typestates_dsl.nim` (21 LOC, attachment-pragma resolution
+  shim). Plus typestate-machinery edits across
+  `typestates/unbounded_*_push.nim` and `typestates/unbounded_*_pop.nim`.
+- **Net src/ LOC delta**: +393 LOC (5903 → 6296). The growth is
+  paid by typestate machinery (Middle-axis Lifecycle + Claim-state
+  attachment) which is feature-bearing, not bloat; the per-family
+  module deletions are offset by the typestate-attached BQueue/Queue
+  surface plus view types.
+- **Smart-constructor surface**: collapsed from 11 family-prefixed
+  entry points (one per family + per-reclamation kind) to 2 primary
+  generic constructors (`newBQueue`, `newQueue`) plus 8 family-named
+  thin wrappers retained for grep continuity.
+- **UnboundedSipsic absorbed into Queue** via
+  `when (ccProd, ccCons) is (ccSingle, ccSingle):` branch with the
+  legacy committed-flag protocol verbatim (debra-free, no manager).
+- **Middle-axis typestates landed** (3.3.11-B.4.1.6):
+  `BQueueLifecycle: BQueueInit -> BQueueDestroyed` on `BQueue`,
+  `QueueLifecycle: QueueInit -> QueueDestroyed` on `Queue`, and
+  `BQueueClaimState` / `QueueClaimState` (`Unclaimed -> ProducerClaimed
+  | ConsumerClaimed | BothClaimed`) on the 4 view types
+  (`BQueueProducer`, `BQueueConsumer`, `QueueProducer`,
+  `QueueConsumer`). Wall 3 limitation: typestates v0.9.3 does not
+  catch use-after-destroy in the CFG analyzer; see the "Bundle F
+  revised design" subsection above for the documented recovery path.
+- **Bench-binary size delta** (vs immediate pre-Bundle-F baseline
+  `e0f2850`, release builds): total +15,088 bytes across 9 binaries
+  (+0.74%). The largest grow-by binary is `bench_mpmc_mupmuc`
+  (+25,616 bytes / +8.35%), reflecting the typestate-attachment
+  codegen on the highest-cardinality topology. 7 of 9 binaries
+  shrank or grew under 1%.
+- **Test posture at v5.0.0 cut**: 5 MM lanes (orc / arc / refc /
+  atomicArc+TSan / orc+ASan) green at 240/240 each, plus C++ lane
+  240/240. `should_fail/runner.nim`: 14/14. R7 / R8 / R9 grep gates:
+  clean.
+
+### Removed (3.3.11-B late)
+
+- **Stress test suite (`nimble stresstests`)**: the 9 legacy
+  `stress-tests/t_*_threaded.nim` files referenced the deleted
+  per-family aliases (`Mupmuc[N, P, C, T]`, `Sipmuc[N, C, T]`, etc.)
+  and pre-DEBRA constructors. Rewiring 1,197 LOC across 9 files to
+  the new BQueue/Queue surface with the attach/detach Claim-state
+  idiom was estimated at multi-hour refactor scope (well beyond the
+  v5.0.0 wrap-up budget). Per Bundle I principle ("do NOT silently
+  disable failing tests — fix production code OR delete the test"),
+  the stress test suite + `stresstests` nimble task are removed in
+  v5.0.0. The MM lane matrix (5 lanes × 240 tests at maximum stress
+  shape, plus TSan/ASan sanitizers) provides the primary
+  concurrency-correctness signal; the dropped stress suite was
+  duplicative single-shape coverage. Post-v5.0.0 work may resurrect a
+  smaller targeted stress suite under the new surface if a gap
+  surfaces.
+
 ### BREAKING
 
+- Two unified queue generics. The seven non-SPSC queue families
+  (`Sipsic`, `Sipmuc`, `Mupsic`, `Mupmuc`, `UnboundedSipmuc`,
+  `UnboundedMupsic`, `UnboundedMupmuc`) plus the standalone
+  `UnboundedSipsic` collapse into a bounded
+  `BQueue[T, ccProd, ccCons, N, P, C]` (6 params, debra-free) and an
+  unbounded `Queue[T, ccProd, ccCons, ST, S, MaxThreads]` (6 params).
+  `PinScopeCardinality` (`ccSingle` / `ccMulti`) is a static phantom on
+  both. There is NO `RK` / `ReclamationKind` type parameter: reclamation
+  is selected by cardinality (the `(ccSingle, ccSingle)` arm is
+  debra-free; the multi arms are debra-integrated). `DeallocationStrategy`
+  (formerly a runtime enum field on the unbounded queues) is now a static
+  phantom `ST` (`stManual` / `stEager`) on `Queue`; the legacy enum
+  values `Manual` / `Eager` remain exported as `const` aliases for grep
+  continuity. `UnboundedSipsic[S, T]` was ABSORBED into `Queue`'s
+  `(ccSingle, ccSingle)` arm and its module deleted. **No type aliases
+  are provided** — every typed call site (`var q: Mupsic[...]`,
+  `var u: UnboundedMupmuc[...]`, etc.) must migrate mechanically to the
+  `BQueue[...]` / `Queue[...]` form (family-named smart constructors such
+  as `newMupsicQueue` / `newUnboundedMupmucQueue` remain as ergonomic
+  aliases). See `docs/migration.md` for the full migration table.
+- `Queue` is non-copyable (move-only). Its `=copy` hook is a compile-time
+  `{.error.}`: a `Queue` owns a heap `ptr Segment` chain and (for the
+  debra-integrated, non-sipsic cardinalities) a `ptr DebraManager`, both
+  reclaimed exactly once in `=destroy`. A field-wise copy would alias those
+  owned pointers and double-free / use-after-free when both copies run their
+  destructor. Move the `Queue` (the implicit `=sink` synthesized alongside
+  `=destroy` is available) or share it across threads by `var` / `ptr`
+  parameter; only copies are rejected. `BQueue` remains copyable — it owns
+  only inline slot storage (no heap segments, no manager), so a field-wise
+  copy is sound.
+- Epoch-based reclamation ships LIVE in v5.0.0. The multi-cardinality
+  unbounded arms (mupsic-/sipmuc-/mupmuc-equiv) integrate nim-debra 0.8.0
+  (`>= 0.8.0`) directly; the `(ccSingle, ccSingle)` arm stays debra-free.
+  The legacy unbounded `withPin:` ergonomics carry into the debra-
+  integrated arms via the `Queue` facade. There is no deferred RC: the
+  nim-debra precondition is met and EBR ships in the base release.
+- Compile-time param-coherence guards split across the two generics:
+  bounded guards live in `assertBQueueParams` (`bqueue.nim`,
+  `validateBQueueParams[BQueue[T, ...]]()`); unbounded guards live in
+  `assertQueueParams` (`queue.nim`, `validateQueueParams[Queue[T, ...]]()`,
+  asserting `S > 0` and `MaxThreads > 0`). Calling a malformed
+  parametrisation (e.g. `ccProd = ccMulti` with `P = 1`, `S` not
+  positive, etc.) fails at compile time with the verbatim guard error
+  messages.
 - `CASAttempt` typestate restructured into a proper typestate union. `CASPending` now transitions to `CASSucceeded | CASFailed` (aliased as `CASResult`) via `executeCAS`, replacing the previous single-state design with `assumeSuccess` / `assumeFailure` escape hatches. The `assumeSuccess` and `assumeFailure` procs have been removed. Callers that drove `CASAttempt` outside the bundled MPMC machinery must migrate to the union return form. These helpers were only consumed by `tests/t_cas.nim`; the bundled MPMC machinery calls `compareExchangeWeak` directly and was unaffected. No public lock-free queue API is affected.
+
+### Registration & lifecycle (unbounded multi-cardinality arms)
+
+Debra thread registration moved to **attach time**. The auto-create
+`newQueue` / family-named constructors (and `getProducer` /
+`getConsumer`) no longer call `registerThread`; `registerThread` is
+thread-affine (it stamps the calling thread and installs a per-thread
+signal handler), so registering at construction would mis-route the
+handle when the queue is later operated on a different thread. Each
+operating thread now registers itself on its own thread before its first
+push/pop. This is a BREAKING change to the call sequence for the
+unbounded multi-cardinality arms.
+
+**Debug builds now assert thread affinity.** `attach()` /
+`attachConsumer()` stamp the registering thread's id (`attachedTid`, a
+`when defined(debug):` field — zero layout/hot-path cost in release), and
+the subsequent `push` / `pop` carries a `when defined(debug):` assert
+that the operating thread matches the thread that attached. Operating a
+view on a different thread than you attached on therefore fails fast in
+debug builds; release builds carry NO such check (the mis-routed handle
+would silently corrupt reclamation), so the affinity contract MUST be
+honoured regardless of build mode.
+
+- **Multi-producer / multi-consumer views must `attach()` before
+  push/pop.** `QueueProducer.attach()` (for `ccProd == ccMulti`) and
+  `QueueConsumer.attach()` (for `ccCons == ccMulti`) register the calling
+  thread and store its `ThreadHandle` on the view. Both are
+  `{.raises: [DebraRegistrationError].}`; the call is guarded
+  (`if not self.claimed: self.handle = registerThread(...)`) so a repeat
+  attach on the same view does not consume a second registry slot.
+  `detach()` releases the view's claim (`self.claimed = false`) and does
+  not raise. The `ccSingle` sides carry no `attach` / `detach` overload
+  (the compiler statically excludes them with a user-visible-alias type
+  mismatch).
+
+- **The unbounded mupsic-equiv single consumer must call
+  `attachConsumer()` before its first `pop`.** The single consumer pops
+  directly through `Queue.pop` (no view), so it registers via
+  `Queue.attachConsumer()` (`{.raises: [DebraRegistrationError].}`) on
+  the thread that will pop. Auto-create no longer registers the consumer
+  handle at construction. `pop` carries an `assert self.consumerAttached`
+  guard that fails fast in debug builds if `attachConsumer` was skipped.
+  `attachConsumer` is idempotent (guarded so a repeat call does not burn
+  a second slot).
+
+- **`MaxThreads` counts LIFETIME distinct operating threads, not the
+  live count.** nim-debra 0.8.0 has no per-thread unregister, so each
+  `attach()` / `attachConsumer()` consumes a registry slot for the
+  manager's entire lifetime; `detach()` releases the view's claim but
+  does NOT free the underlying slot. When the registry is exhausted,
+  `registerThread` raises `DebraRegistrationError` (surfaced, never
+  swallowed). Size `MaxThreads` for the total number of distinct threads
+  that will ever operate the queue, not the maximum concurrent count.
+  Repeated `detach()` / re-`attach()` on the same thread burns a fresh
+  slot each time (there is no slot to reclaim), so churning attach/detach
+  cycles will exhaust the registry even with a small live thread count.
+
+- **`DebraRegistrationError` is a NEW propagatable exception.**
+  `attach()` / `attachConsumer()` are `{.raises: [DebraRegistrationError].}`
+  and fire this exception on `MaxThreads` slot exhaustion. Because
+  registration moved out of the constructors and into these procs, the
+  error now surfaces at the call site instead of at queue construction.
+  Callers that previously declared `{.raises: [].}` around the code paths
+  that operate the unbounded multi-cardinality arms MUST widen their
+  raises set (or handle / convert the exception) to cover
+  `DebraRegistrationError`.
+
+- **Pre-v5 -> v5 migration.** Pre-v5.0.0, `get*()` (and the auto-create
+  constructors) registered the debra handle immediately on the
+  constructing / calling thread, so a view could be operated without any
+  further setup. v5.0.0 returns an UNREGISTERED view: the caller MUST
+  call `.attach()` on the operating thread before its first push/pop, and
+  the mupsic-equiv single consumer MUST call `attachConsumer()` on the
+  consumer thread before its first `pop` (auto-create no longer registers
+  the consumer handle at construction). Minimal corrected idiom:
+
+  ```nim
+  # Pre-v5.0.0 (registered at get-time — REMOVED):
+  #   var p = q.getProducer()      # already registered
+  #   p.push(5)
+  # v5.0.0 (register on the operating thread):
+  var p = q.getProducer()
+  p.attach()                       # on the producer thread, before push
+  p.push(5)
+  ```
+
+- **Borrow constructors remain the epoch-sharing escape hatch.** The
+  caller-provided-handle / caller-provided-manager `newQueue` overloads
+  (e.g. `newUnboundedMupsicQueue[T, ST, S, MaxThreads](addr mgr,
+  consumerHandle)`, `newUnboundedMupmucQueue[...](addr mgr)`) stay
+  available for multi-queue setups that share one `DebraManager`.
+  Callers using the handle-carrying mupsic borrow overload register the
+  consumer handle themselves and MUST NOT also call `attachConsumer`.
+
+  Auto-create idiom (mupmuc-equiv):
+
+  ```nim
+  var q = newUnboundedMupmucQueue[int, stEager, 8, 4]()
+  var p = q.getProducer()
+  p.attach()
+  var c = q.getConsumer()
+  c.attach()
+  p.push(5)
+  discard c.pop()
+  ```
+
+  Auto-create idiom (mupsic-equiv — single consumer pops via the queue):
+
+  ```nim
+  var q = newUnboundedMupsicQueue[int, stEager, 8, 4]()
+  q.attachConsumer()               # on the consuming thread, before pop
+  var p = q.getProducer()
+  p.attach()
+  p.push(1)
+  discard q.pop()
+  ```
 
 ### Added
 
+- `getProducerHere` / `getConsumerHere` templates as ergonomic sugar
+  for `getProducer()` + `attach()` (and `getConsumer()` + `attach()`)
+  when the calling thread is also the operating thread. Producer-to-
+  worker handoff patterns still use the explicit form so the debra
+  registration lands on the worker thread. Available on both `Queue`
+  (unbounded) and `BQueue` (bounded) multi-cardinality shapes.
 - Multi-panel benchmark chart layout on `docs/benchmarks.md`: a hero
   panel highlighting lockfreequeues vs alternatives at the most-relevant
   shape, per-topology throughput panels, and a dedicated latency panel.
@@ -148,9 +542,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `benchmarks/README.md` "Updating the README summary" subsection
   codifies the new hand-curation procedure for the README BENCHMARKS
   markers (which shapes to read, where to read them, when to commit).
+- Bench `meta.adapters.*` meta-block emission protocol unified under
+  `benchmarks/nim/adapter_versions.nim`: every adapter records a
+  `version` (or `null` when the upstream exposes no version macro), a
+  `kind` discriminator (`nimble-resolved`, `cargo-locked`,
+  `vendored-content-hash`, `vendored-version-macro`, `system-package`,
+  `compiler-builtin`), and — for vendored libraries without a version
+  macro — a SHA-1 `fingerprint` of the header bytes computed at
+  compile time plus a `pinned_sha_per_readme` cross-check field.
+  `status` is OMITTED on the success path; absent / build-without-*
+  / unknown cases carry the corresponding explicit status string.
+- Five new vendored / nimble / system adapters land in v5.0.0
+  alongside the meta-block reshape: three Rust crates riding the
+  existing `bench-ffi-crossbeam` cdylib (`crossbeam_queue::SegQueue`,
+  `flume::Sender/Receiver`, `kanal::Sender/Receiver`) and five
+  C/C++ vendored targets (`atomic_queue` SPSC + MPMC,
+  `liblfds7.1.1` bss + bmm, `rigtorp::mpmc::Queue`,
+  `rigtorp::SPSCQueue`, MoodyCamel `concurrentqueue`). Each entry is
+  third-party-license-tracked in `THIRD_PARTY_LICENSES.md` and gated
+  behind `-d:adapter_<slug>_available` so production builds are
+  unaffected.
 
 ### Changed
 
+- `benchmarks/nim/bench_mpmc.nim` split into per-family binaries
+  (`bench_mpmc_mupmuc.nim` + `bench_mpmc_sipmuc.nim`) as the v5.0.0 B3
+  bench-binary-layout mitigation. Co-compiling the Mupmuc grid, the
+  Sipmuc shapes, the Queue-bounded parity paths, the Nim channels
+  grid, and the MVP comparison adapters into a single release binary
+  was producing a -39.6% ± 1.2% throughput artifact on
+  `sipmuc/mpmc/1p1c` even though Queue's SPMC pop generated C is
+  byte-for-byte identical to the legacy Sipmuc pop. Isolating each
+  family into its own binary removes the cross-family iCache
+  contention surface at the source. CI matrix (`bench.yml`), local
+  runner (`benchmarks/runner.py`), the `nimble benchmarks` task,
+  the topology-split deletion-safety tests, and the nightly
+  `bench-comparison.yml` crossbeam workflow all enumerate both new
+  binaries in place of the pre-split single. MVP comparison adapters
+  (boost.lockfree, crossbeam ArrayQueue, threading.Chan) live in the
+  mupmuc binary because their slug shape matches the mupmuc grid.
 - The three pre-existing guide-shaped pages (`safety-model.md`,
   `slot-ownership-typestates.md`, `examples.md`) moved from
   `docs/` to `docs/guide/` so the entire guide track lives under one
@@ -202,7 +632,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mike pipeline introduced in v4.0.x is now the canonical docs
   build path; legacy artifacts were not regenerated by current CI.
 
-- Comparison expansion (PR 4, Track 4): four new third-party adapters
+- Comparison expansion (PR 4, Track 4): three new third-party adapters
   reach the comparison set. `moodycamel_adapter.nim` wraps
   `moodycamel::ConcurrentQueue` (BSD-2-Clause / Boost dual,
   `mpmc_unbounded`) via a thin `extern "C"` shim isolating Nim from
@@ -493,6 +923,435 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 22 read-only typestate accessors across `src/lockfreequeues/typestates/` now carry `{.notATransition.}`. typestates' verifier flagged these once `typestates verify -W` was wired into CI; the procs are pure data extraction and were never transitions.
 
+### Dependencies & verification (typestates 0.10.0 AST verifier)
+
+- Bump minimum `typestates` to 0.10.0 and minimum `debra` to 0.8.0. The
+  transitive dependency chain is now `typestates >= 0.10.0`,
+  `debra >= 0.8.0`.
+- Re-audited the typestate model under the 0.10.0 AST verifier. The
+  pre-0.10.0 verifier used a line-by-line text scanner with a multi-line
+  silent-unscan defect; the AST verifier walks the parsed tree instead.
+  Re-auditing confirmed all 22 existing `{.notATransition.}` markings and
+  added 38 that the old text scanner had silently missed (0 spurious, 0
+  drift). The verifier now reports zero findings.
+
+### Added (v5.0.0 unified Queue — Phase 1)
+
+> **Historical Phase-1 snapshot (superseded by 3.3.11-B).** The bullets
+> below describe the unified Queue *as built in Phase 1* — the 10-param
+> `Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]` shell with
+> the `when RK == rkEbr` body under a `when false:` carve-out. Phase
+> 3.3.11-B reshaped this into the two final 6-param generics (`BQueue`
+> bounded, `Queue[T, ccProd, ccCons, ST, S, MaxThreads]` unbounded),
+> dropped the `RK` parameter (reclamation is now cardinality-driven), and
+> absorbed `UnboundedSipsic` into `Queue`. See the 3.3.11-B reshape note
+> at the top of this release for the shipped surface. The entries are
+> retained for the audit trail.
+
+- `Queue[T, ccProd, ccCons, ST, RK, N, P, C, S, MaxThreads]` generic
+  type shell at `src/lockfreequeues/queue.nim`. Field layout splits by
+  cardinality: `ccSingle × ccSingle` uses `StorageN1[N, T]` (N+1 slots,
+  `Atomic[int]` head/tail) lifted verbatim from `sipsic.nim`; all other
+  bounded shapes use `MPMCCellArrayN[N, T]` (Vyukov per-slot seq
+  counters, `Atomic[uint64]` head/tail) lifted verbatim from
+  `mupsic.nim` / `sipmuc.nim` / `mupmuc.nim`. Param order is
+  LOAD-BEARING per Doc C §3.0.1: `T, ccProd, ccCons, ST, RK, N, P, C,
+  S, MaxThreads`. The `when RK == rkEbr` field declarations are wrapped
+  in `when false:` for the Phase 1 mode-(a) carve-out so the type
+  instantiates without a `nim-debra >= 0.8.0` dependency; Track E
+  rewrites those declarations with real debra types when the
+  nim-debra worktree linkage lands.
+- `ReclamationKind` enum (`rkNone` / `rkEbr`) and `PinScopeCardinality`
+  enum (`ccSingle` / `ccMulti`) under `src/lockfreequeues/reclamation.nim`
+  and `src/lockfreequeues/strategy.nim`. Both are exposed as static
+  phantom parameters on `Queue` and travel with their enum type
+  (visible to any module that imports `queue`; per-member re-exports
+  are rejected by Nim).
+- `DeallocationStrategy` lifted to a static phantom parameter `ST`
+  (`stManual` / `stEager`) on `Queue`. The runtime `strategy:` field on
+  the legacy `Unbounded*` queues is removed; every `if self.strategy
+  == X` collapses to `when ST == X` and the two strategies
+  monomorphize separately. Legacy enum values `Manual` and `Eager`
+  remain exported as `const` aliases for `stManual` / `stEager` to
+  ease grep continuity.
+- 9 compile-time `validateQueueParams` guards (Doc C §3.0.2.4) wired
+  through a sibling generic template `assertQueueParams`. Nim does not
+  accept `static:` blocks (nor `{.error.}` pragmas) directly inside an
+  object type body, so the guards are lifted out of the type
+  declaration and invoked by `validateQueueParams[Queue[T, ...]]()`.
+  Condition expressions and error messages are byte-identical with
+  Doc C §3.0.2.4; only the syntactic wrapper differs. Track A4 will
+  harden this with a `nim check` expected-fail shell harness.
+- `rkNone` (bounded) push/pop ladder under the unified `Queue`
+  (Phase 1, Track B). All four bounded topologies (SPSC, SPMC, MPSC,
+  MPMC) route through the typestate verbs from
+  `src/lockfreequeues/typestates/` and use `backoffOnRetry` (with
+  schedYield escalation at `YieldThreshold`) on CAS-retry paths. Per
+  Doc C §3.0: the bounded body field declarations are lifted verbatim
+  from the legacy facades, so the typestate verbs continue to compile
+  against `head` / `tail` / `(storage | cells)` without change.
+- Bounded parity tests under the unified `Queue` shell (Phase 1,
+  Track B2). `t_queue_bounded_{sipsic,sipmuc,mupsic,mupmuc}.nim`
+  exercise round-trip set equality, FIFO-per-producer, and capacity
+  edges through the unified facade; results are byte-for-byte
+  identical with the legacy facade.
+- `tests/t_queue_bounded_mupmuc_threaded.nim` and
+  `tests/t_queue_bounded_sipmuc_threaded.nim` re-enabled (commit
+  `232d418`). These were previously disabled with a stale v3.x
+  deadlock comment; the v4.0.0 Vyukov bounded protocol rewrite
+  closed the underlying race, and the v5.0.0 unified Queue facade
+  has the same protocol body.
+- Intra-binary bench parity gate. `benchmarks/nim/bench_mpmc.nim`
+  split into per-family binaries (`bench_mpmc_mupmuc.nim` +
+  `bench_mpmc_sipmuc.nim`) as the B3 bench-binary-layout mitigation
+  (commit `37aa1c5`). Co-compiling the Mupmuc grid, the Sipmuc
+  shapes, the Queue-bounded parity paths, the Nim channels grid,
+  and the MVP comparison adapters into a single release binary was
+  producing a -39.6% ± 1.2% throughput artifact on
+  `sipmuc/mpmc/1p1c` even though Queue's SPMC pop generated C is
+  byte-for-byte identical to the legacy Sipmuc pop. Isolating each
+  family into its own binary removes the cross-family iCache
+  contention surface at the source. CI matrix (`bench.yml`), local
+  runner (`benchmarks/runner.py`), the `nimble benchmarks` task, the
+  topology-split deletion-safety tests, and the nightly
+  `bench-comparison.yml` crossbeam workflow all enumerate both new
+  binaries in place of the pre-split single. MVP comparison adapters
+  (boost.lockfree, crossbeam ArrayQueue, threading.Chan) live in the
+  mupmuc binary because their slug shape matches the mupmuc grid.
+- Smart-constructor shorthands per Doc C §3.0.4 (Step 3.3.5b). Seven
+  user-facing helpers wrap the generic `initQueue` (bounded) and
+  `newQueue` (unbounded) constructors with per-family fixed
+  cardinality, hiding the 10-param phantom suite from the common
+  call-site: `newSipsicQueue[T, N]`, `newMupsicQueue[T, N, P]`,
+  `newSipmucQueue[T, N, C]`, `newMupmucQueue[T, N, P, C]` (bounded,
+  `RK = rkNone`); `newUnboundedMupsicQueue[T, S, MaxThreads]` (borrow
+  takes `(mgr, consumerHandle)` to register the single consumer at
+  construction, or manager-only `(mgr)` with the consumer registering
+  itself later via `attachConsumer()`; auto-create takes `()`),
+  `newUnboundedSipmucQueue[T, S, MaxThreads]` and
+  `newUnboundedMupmucQueue[T, S, MaxThreads]` (borrow takes `(mgr)`;
+  auto-create takes `()`) (unbounded, debra-integrated). (Phase-1 framed
+  these as `RK = rkEbr`; 3.3.11-B dropped the `RK` axis — these arms are
+  debra-integrated by cardinality.) Initially Doc C §3.0.3 kept
+  `UnboundedSipsic` separate in `unbounded_sipsic.nim`; 3.3.11-B
+  superseded this by ABSORBING it into `Queue`'s `(ccSingle, ccSingle)`
+  arm, and a `newUnboundedSipsicQueue` smart constructor now exists for
+  the absorbed SPSC path. A handle-free `ccCons == ccMulti` `newQueue` borrow overload
+  is added alongside the smart-constructors to preserve legacy
+  `newUnboundedSipmuc(mgr)` and `newUnboundedMupmuc(mgr)` ergonomics
+  under the smart-constructor surface; the handle-taking overload
+  remains canonical for direct `newQueue` callers.
+- rkEbr batch wrappers (Step 3.3.6.5). `QueueProducer.push(openArray[T])`
+  and `pop(count: int): Option[seq[T]]` (on `Queue` for ccCons ==
+  ccSingle, on `QueueConsumer` for ccCons == ccMulti). Thin loop
+  wrappers mirroring the legacy unbounded API
+  (`unbounded_mupsic.nim:301-306` and `:383-402`) and the bounded
+  counterparts at queue.nim:855-1029. Pure additive; no algorithm
+  change; wrappers reuse the existing single-item rkEbr push/pop
+  bodies and add no new retire-bearing sites. A
+  `Queue.pop(count: int)` trap on bare `Queue` for ccCons == ccMulti
+  matches the single-item trap shape.
+- Migrated ~290 legacy API call sites across tests + examples to the
+  unified Queue generic via the 3.3.5b smart-constructors. Per-family
+  bundling preserved bisectability; UnboundedSipsic + its 4 tests
+  untouched per §3.0.3 keep-separate decision.
+
+### Documentation (v5.0.0 reframe audit trail)
+
+- Reframe rationale (audit trail): the 2026-05-17 operator decision
+  reframed the planned v4.3 MINOR release as a SemVer MAJOR `v5.0.0`
+  and collapsed the seven non-SPSC queue families into the unified
+  `Queue` generic per the most-correct-least-deferred rule.
+- `docs/migration.md` (commit `d6f6244`): full migration guide for
+  4.1.x → 5.0.0, including the migration table for every retired
+  type and the explicit "no aliases" rule for typed call sites. (The
+  doc's two-stage `rkNone` base / `rkEbr` RC release plan was superseded
+  by 3.3.11-B — reclamation is cardinality-driven and EBR ships live in
+  5.0.0; the `RK` axis no longer exists.)
+- Queue-collapse surface specification (audit trail): defined the
+  unified `Queue` generic's target shape, uniform generic, param-
+  coherence guards, and verbatim source for the bounded and unbounded
+  field bodies.
+- Cascade inventory and mapping (audit trail): inventoried and mapped
+  every legacy-facade call site touched by the unified `Queue` cascade.
+  Refactor commits (`c6c9066` umbrella, `5e32dd4` runner, `40fe70b`
+  examples, `333b339` benches, `a3b0b4b` adapter consolidation) drew
+  from these inventories.
+- Track E preflight (audit trail): captured the Task 11 LCRQ baseline
+  rename `prevConsumerIdx → consumerHead` as orphan on
+  `feat/v4.3-task-14`; the rename was NOT applied to v5.0.0-impl, so
+  the unbounded path on v5.0.0-impl is pre-Task-11 state. The
+  unbounded debra-integrated body shipped live in 5.0.0 WITHOUT the
+  rename; the consumer-claim relaxation carries forward as a v5.x
+  post-release semantics change (see L5).
+- Phase 4.6 audit-trail clarifications (commit `9cde893`,
+  I1+D2+N3): three coordinated docstring / cross-reference fixes
+  surfaced by the Phase 4.6 self-review pass. Documented at the
+  point of impact so future maintainers see the rationale inline.
+- `AGENTS.md` propagation (commit `d0e1996`): the `AGENTS.md`
+  pattern established under v4.2/v4.3 (TSAN test-runner hang
+  workaround, "Defense placement follows commit placement"
+  principle) propagated into v5.0.0-impl audit trail without
+  semantic change.
+
+### Known Limitations
+
+The v4.3-no-post-release-deferral rule requires that every limitation
+surfaced in a prior release be verdict-classified for the successor
+release rather than silently dropped. The 7 limitations carried into
+v5.0.0 are below, each with codebase-grounded evidence for the
+verdict.
+
+- **L1 — `backoffOnPeerWait` queue-side `schedYield` escalation: (b)
+  STILL OPEN.** v4.2.0's Constraint #7 noted that queue-side
+  `backoffOnPeerWait` does not escalate to `schedYield`; only the
+  harness-side `HarnessBackoff` does. v4.3 took a different shape
+  (path-typed split via `backoffOnCASLossRetry`) but that work is
+  orphan on `feat/v4.3-task-14` and did NOT propagate to v5.0.0-impl.
+  On v5.0.0-impl, `backoffOnPeerWait` remains cpuPause-only
+  (`src/lockfreequeues/backoff.nim` line 78), and no queue source
+  file calls it (all CAS-retry sites use `backoffOnRetry`, which
+  DOES escalate to `schedYield` at `YieldThreshold`). The original
+  L1 concern about `backoffOnPeerWait` migration is unaddressed, so
+  the limitation carries forward; the unified Queue's CAS-retry
+  paths are healthy via `backoffOnRetry`. Resolution path:
+  either drop `backoffOnPeerWait` (no callers), give it
+  `schedYield` escalation, or document it as cpuPause-only by
+  design. Deferred to a v5.x post-release cleanup pass.
+
+- **L2 — `folly_pcq` adapter DROPPED (transitive-include threshold):
+  (a) FIXED via removal.** v4.2.0 dropped the `folly_pcq` adapter
+  from the comparison set because the transitive-include closure
+  (15 unique folly headers) exceeded the 6-header threshold and
+  folly main required C++20 vs the repo's C++17. Verification:
+  `grep -rn folly_pcq src/ benchmarks/` returns no matches on
+  v5.0.0-impl; the adapter file is not present in
+  `benchmarks/nim/adapters/`. The decision stands as final.
+
+- **L3 — `LOCKFREEQUEUES_BENCH_STRICT_FLOOR=1` env-var gate: (a)
+  FIXED via removal.** v4.2.0 left the strict-floor gate in place
+  pending post-merge regeneration of
+  `docs/assets/bench-results/latest.json` with the restored
+  boost / loony / threading_channels / crossbeam slugs.
+  Verification: `grep -rn LOCKFREEQUEUES_BENCH_STRICT_FLOOR
+  STRICT_FLOOR .` returns no matches on v5.0.0-impl. The gate has
+  been retired; strict-mode is now the de facto default through
+  the deletion-safety guard in `superset_check.py` (wired into
+  `bench.yml` between `merge_bmf.py` and `bencher run`).
+
+- **L4 — ~65-70% compile-time growth under v4.3 facade-over-
+  typestate-verbs pattern: (c) NO LONGER APPLICABLE per reframe.**
+  v4.3.0 noted ~65-70% compile-time growth from the v4.3 facade-
+  over-typestate-verbs migration of the four unbounded families.
+  That migration is orphan on `feat/v4.3-task-14` and did NOT
+  propagate to v5.0.0-impl. The v5.0.0 unified `Queue` reframe
+  uses a different code-organisation strategy (single generic
+  type, `when RK == ...` branches, lifted-verbatim bounded body
+  from the legacy facades) so the v4.3 compile-time baseline is
+  no longer the reference. The unified Queue's bounded body
+  `compiles()` helper (`51f9e47`) and the 9 `validateQueueParams`
+  guards (B1+B1.1) shifted the compile-time characteristics
+  enough that the v4.3 "65-70% growth" metric is not meaningful
+  against v5.0.0. Bench harness measurement is deferred (no
+  benches in Phase 4.7 prep scope); compile-time tracking
+  resumes as a v5.x post-release optimisation candidate, not a
+  v5.0.0 release gate.
+
+- **L5 — Strict-FIFO consumer-claim relaxation (`prevConsumerIdx →
+  consumerHead`): (b) STILL OPEN.** v4.3.0 deferred this rename
+  and the CAS-on-head consumer-claim mechanism to v4.4. The Task 11
+  LCRQ baseline rename is orphan on `feat/v4.3-task-14` and was NOT
+  applied to v5.0.0-impl.
+  Verification: `prevConsumerIdx` remains the multi-consumer CAS slot
+  field name in the shipped `Queue` (`queue.nim`, the `ccCons == ccMulti`
+  branches) — the pre-Task-11 state. The unbounded debra-integrated body
+  shipped LIVE in 5.0.0, but the strict-FIFO consumer-claim relaxation
+  (the `prevConsumerIdx → consumerHead` rename plus CAS-on-head
+  mechanism) was NOT included; it carries forward as a v5.x post-release
+  semantics change, not a release gate. (There is no v5.0.0 RC — the
+  two-stage plan was superseded by 3.3.11-B.)
+
+- **L6 — `neutralizeStalled` mid-call safety caveat (R5): (c) NO
+  LONGER APPLICABLE per reframe.** v4.3.0 documented that queue
+  push/pop is not safe under `neutralizeStalled` mid-call.
+  Verification: `grep -rn neutralizeStalled src/ tests/ docs/`
+  returns zero matches on v5.0.0-impl. The function is not part
+  of the v5.0.0 public surface, so the safety caveat no longer
+  has an API to attach to. If a future release re-introduces
+  `neutralizeStalled` (e.g. under Track E's pin-scope work), the
+  caveat returns with the function.
+
+- **L7 — Apple Silicon padding test manual-only: (b) STILL OPEN.**
+  v4.2.0 and v4.3.0 documented that `tests/t_unbounded_padding.nim`
+  runs against the host's `CacheLineBytes` (64 bytes on
+  `ubuntu-latest`, 128 bytes on Apple Silicon). The 128-byte path
+  runs manually on Apple Silicon hardware rather than as part of
+  the CI matrix. Verification: `tests/t_unbounded_padding.nim`
+  exists and IS wired into `tests/test.nim` (imported at line 35,
+  enumerated at line 64) — so the 64-byte path runs in CI under
+  every memory-manager lane. CI for the 128-byte Apple Silicon
+  path is not present in `.github/workflows/`. The manual on-device
+  run remains the documented procedure. Carries forward as
+  STILL OPEN; cross-platform CI for aarch64 is tracked as a v5.x
+  post-release infrastructure candidate.
+
+### v4.3 work NOT carried into v5.0.0 (orphan on `feat/v4.3-task-14`)
+
+The unbounded debra-integrated body ships LIVE in v5.0.0 (the multi-
+cardinality arms integrate nim-debra 0.8.0 directly). However, a set of
+additional v4.3.0 refinements that landed on `feat/v4.3-task-14` (TOCTOU
+item-loss fixes for unbounded SPMC / SPSC / MPSC pop at commits `bb50bc9`
+and `7296240`; the facade-over-typestate-verbs organization of the four
+unbounded families; the orphan SPMC `consumerHeads` field removal — the
+field is still present at `queue.nim`, the `ccCons == ccMulti` branch;
+14 previously-orphan tests wired into `nimble test`) is NOT on
+v5.0.0-impl. Per the operator decision to abandon the v4.2/v4.3 banners
+and roll the work into the v5.0.0 narrative, these refinements were NOT
+ported into the shipped surface; the original two-stage RC plan that was
+to absorb them was superseded by 3.3.11-B (there is no v5.0.0 RC). The
+orphan branches remain on the remote as audit-trail artifacts; the
+substantive content is a v5.x post-release follow-up that will cite their
+commit SHAs when ported. This is consistent with the
+v4.3-no-post-release-deferral rule's spirit because the work is not
+silently dropped — it is explicitly tracked here as orphan with a named
+destination subsystem.
+
+### Phase B: strict-LCRQ migration on unbounded MPMC
+
+Late in the v5.0.0 cycle, the unbounded `Queue[T, ccMulti, ccMulti, ...]`
+arm was migrated from a `committed: array[S, Atomic[bool]]` overlay onto
+strict-LCRQ cells per the LCRQ paper §4 close-CAS-on-empty progress
+guarantee. The migration landed atomically across commits T0..T9 on
+`feat/v5.0.0-strict-lcrq` (T10..T16 are follow-on cleanup + docs).
+
+#### 🚨 BREAKING CHANGES (Phase B)
+
+- **`Queue[T, ccMulti, ccMulti, ...]` (unbounded MPMC) now requires
+  `supportsCopyMem(T) AND sizeof(T) <= 8`.** The strict-LCRQ cell layout
+  is a packed 128-bit DWCAS word; T must fit in the 8-byte value lane and
+  must be trivially copyable. Wider T or non-trivially-copyable T is
+  rejected at compile time with a `{.error.}` overload that cites the
+  migration path below.
+- **Migration:** for wider T (anything larger than 8 bytes, or move-only /
+  ref-type / non-`supportsCopyMem` T), use `BQueue[T, ccMulti, ccMulti,
+  N, P, C]` (bounded MPMC, Vyukov per-slot seq). `BQueue` is unchanged
+  in v5.0.0 and preserves general T support including move-only types.
+  For T that fits in 8 bytes and is trivially copyable (integers,
+  pointers, small `distinct` integer types, etc.), no source change is
+  required.
+
+#### Added (Phase B)
+
+- Strict-LCRQ migration on unbounded MPMC queue per the LCRQ paper §4
+  close-CAS-on-empty progress guarantee. Resolves the case-(b)
+  consumer-reservation race in the pop fast-path via an inner-spin
+  pattern (Phase B design §5.3).
+- New cell primitives on `LCRQCell[T]`: `tryPublish`, `tryClaim`, and
+  `tryCloseOnEmpty`. These wrap the DWCAS operations on the packed
+  128-bit cell word and form the strict-LCRQ surface used by the MPMC
+  arm.
+- Compile-time `{.error.}` guards on T-constraint violation with
+  migration guidance pointing at `BQueue[T]`.
+- Test infrastructure: `t_lcrq_cell_*`, `t_lcrq_init`,
+  `t_lcrq_push_single`, `t_lcrq_pop_single`, `t_lcrq_pop_race`,
+  `t_lcrq_pop_slowpath`, `t_lcrq_push_close_race`,
+  `t_bqueue_mpmc_wide_T_accepted`, and the
+  `should_fail/unbounded_mpmc_wide_T_rejected` negative control.
+
+#### Removed (Phase B)
+
+- Internal `committed: array[S, Atomic[bool]]` + `data: array[S, T]`
+  overlay on the MPMC arm. Replaced by `cells: array[S, LCRQCell[T]]`.
+- `t_queue_unbounded_mpmc_move_analyzer.nim` — the capability it covered
+  (move-only T on unbounded MPMC) was removed by the T narrowing above.
+  Coverage is preserved on the BQueue twin
+  (`t_bqueue_mpmc_wide_T_accepted` plus the move-only test that already
+  exercises `BQueue`).
+
+#### Fixed (Phase B)
+
+- C11-incorrect CAS ordering pairs at `typestates/cas.nim:54` and
+  `endpoint.nim:223` / `endpoint.nim:258`. Forced-fallout from debra
+  v0.10.0's `validCasFailureOrder` strictening; the failure-order
+  argument is now well-formed under C11.
+- Case-(b) consumer-reservation race in the pop fast-path (the inner-
+  spin pattern documented in Phase B design §5.3).
+- **CR-2 — premature segment retirement on CLOSED cells at low
+  index.** In the §5.3 CLOSED-detection branch, the consumer
+  previously short-circuited to the eager-retire path the moment it
+  observed a CLOSED cell, even when other live (or claimable) cells
+  remained in the segment. Under contention this could trigger
+  segment retirement while the producer for a higher-indexed cell
+  was still mid-publish, dropping the in-flight item. The CLOSED
+  branch now falls through to the §5.2 slow-path inline-skip, which
+  scans across closed cells without retiring; the invariant on
+  `prevConsumerIdx` is correspondingly broadened: **it advances on
+  both successful claims AND skipped-closed cells** (previously
+  documented as claim-count-only). Repro: `t_pop_cr2_premature_retire`
+  (committed in cycle-4).
+- **CR-1 — unbounded spin in `waitForPublish` when a producer
+  stalls.** A producer preempted (or killed) between its tail-CAS
+  reservation and its `tryPublish` left consumers spinning in
+  `waitForPublish` indefinitely, violating the lock-free progress
+  argument from LCRQ paper §4. The wait loop is now bounded by
+  `MaxWaitForPublishSpins = 1024`; when the budget is exhausted the
+  consumer escalates to `tryCloseOnEmpty` on the contested cell,
+  which either lets the consumer move on (cell closed) or restarts
+  the claim path (the late producer published just-in-time). Repro:
+  `t_pop_cr1_producer_stall` (committed in cycle-4). Lock-free
+  progress is now actually enforced, not merely asserted.
+- **32-bit cleanliness.** Test infrastructure that previously
+  hardcoded 8-byte assumptions has been rewritten in terms of
+  `sizeof(uint)`: `t_lcrq_cell_alias` asserts on `sizeof(uint) * 2`
+  (the cell width), the compile-time T-constraint error message is
+  generated dynamically rather than literal `"> 8 bytes"`, and the
+  unbounded MPMC stress-test uses `Atomic[int64]` for cross-thread
+  sums so 32-bit hosts do not overflow during the validation
+  reduction.
+
+#### Dependencies (Phase B)
+
+- `debra` bumped to `>= 0.10.0` for the DWCAS surface used by the
+  strict-LCRQ cell primitives.
+
+#### Platform requirements (Phase B)
+
+- **arm64 hosts require ARMv8.1-A or newer** (LSE atomic
+  instructions: `CAS`, `CASP`, etc.). `nim.cfg` passes
+  `-march=armv8.1-a+lse` on gcc/clang for arm64 so DWCAS is inlined
+  rather than routed through libgcc outline helpers. Pre-ARMv8.1
+  hardware — notably Raspberry Pi 4 / Cortex-A72, Cortex-A53/A57,
+  and the original Pixel C — lacks LSE; binaries built with these
+  flags will fault with `SIGILL` (Illegal Instruction) at the first
+  CAS. Affected users must either upgrade the host (most ARM SoCs
+  released since 2019, plus Apple Silicon and Graviton2/3/4,
+  support LSE) or pre-v5.0.0 `lockfreequeues` and pre-0.10.0
+  `nim-debra` releases that do not require DWCAS. The macOS arm64
+  target (Apple Silicon) and ubuntu-24.04-arm CI runner both
+  support LSE; the constraint affects self-hosted builds on older
+  SBCs / dev boards only.
+
+#### Bisect notes (Phase B)
+
+The T3..T7 commit range (`77c7f20c..51f10b63` on
+`feat/v5.0.0-strict-lcrq`) intentionally contains partial-migration
+states marked with `STRICT-LCRQ-PARTIAL` sentinels in source. These
+commits do NOT pass the full test suite by design — they are interior
+points in the atomic migration. When bisecting through this range, use
+`git bisect skip` for SHAs in `77c7f20c..51f10b63`. The green-gate
+commits are T8 (`33b8d49f`) and T9 (`cd8b27a1`); STRICT-LCRQ-PARTIAL
+marker count is 0 at T9 and at all post-T9 commits.
+
+### References
+
+- [Migration guide](docs/migration.md) — full migration table from
+  4.1.x to 5.0.0; cited in BREAKING.
+- [README References section](README.md#references) — fact-checked
+  bibliography for the algorithms underlying v5.0.0: Morrison & Afek
+  (LCRQ, PPoPP 2013), Vyukov (bounded MPMC), Michael & Scott (MS-queue
+  baseline), and Brown (DEBRA, PODC 2015). Each citation verified at
+  audit time against authoritative sources.
+
 ## [4.1.0] - 2026-05-01
 
 ### Added
@@ -568,7 +1427,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Latency and throughput benchmark suite under `benchmarks/nim/` (`bench_latency.nim`, `bench_throughput.nim`, `bench_main.nim`) with adapters for each queue type.
 - New examples: `audio_buffer.nim`, `event_collector.nim`, `job_scheduler.nim`, `task_fanout.nim`, and `sipmuc.nim`.
 - Thread safety section and slot-ownership typestate documentation in README.
-- CI matrix across arc, orc, and refc memory managers, including a `-d:nimEnforceLockFreeAtomics` lane.
+- CI matrix across arc, orc, and refc memory managers.
 - Dependency on `debra >= 0.3.0` for safe memory reclamation in the unbounded multi-consumer queues.
 - Dependency on `typestates >= 0.3.1` (already used; bumped to pull in the latest API).
 

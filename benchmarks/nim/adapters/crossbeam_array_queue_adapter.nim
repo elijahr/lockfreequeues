@@ -5,8 +5,8 @@
 ## ring-buffer MPMC queue.
 ##
 ## We do not link directly against the Rust library; instead we go through
-## a thin C-ABI cdylib at ``benchmarks/rust/bench-ffi-crossbeam/`` (see
-## ``Track 3 Task 3.8``). The cdylib exports four ``extern "C"`` fns:
+## a thin C-ABI cdylib at ``benchmarks/rust/bench-ffi-crossbeam/``.
+## The cdylib exports four ``extern "C"`` fns:
 ## ``cb_array_init``, ``cb_array_push``, ``cb_array_pop``, ``cb_array_destroy``.
 ##
 ## Topology: ``mpmc`` bounded. ``topologiesSupported = {tMpmc}``.
@@ -35,8 +35,8 @@ when defined(adapter_crossbeam_array_queue_available):
   # itself is MPMC-safe.
 
   proc cb_array_init(capacity: csize_t): pointer {.importc, cdecl.}
-  proc cb_array_push(q: pointer; item: uint64): bool {.importc, cdecl.}
-  proc cb_array_pop(q: pointer; outVal: ptr uint64): bool {.importc, cdecl.}
+  proc cb_array_push(q: pointer, item: uint64): bool {.importc, cdecl.}
+  proc cb_array_pop(q: pointer, outVal: ptr uint64): bool {.importc, cdecl.}
   proc cb_array_destroy(q: pointer) {.importc, cdecl.}
 
   const topologiesSupported* = {tMpmc}
@@ -45,7 +45,9 @@ when defined(adapter_crossbeam_array_queue_available):
     queue*: pointer
     capacity*: int
 
-  proc makeCrossbeamArrayQueueAdapter*[T](capacity: int = 1024): CrossbeamArrayQueueAdapter[T] =
+  proc makeCrossbeamArrayQueueAdapter*[T](
+      capacity: int = 1024
+  ): CrossbeamArrayQueueAdapter[T] =
     doAssert capacity > 0,
       "CrossbeamArrayQueue requires capacity > 0 (zero would null-init)"
     result.capacity = capacity
@@ -60,10 +62,7 @@ when defined(adapter_crossbeam_array_queue_available):
   proc push*[T](a: var CrossbeamArrayQueueAdapter[T], item: T): PushResult =
     if a.queue == nil:
       return prFull
-    if cb_array_push(a.queue, uint64(item)):
-      prSuccess
-    else:
-      prFull
+    if cb_array_push(a.queue, uint64(item)): prSuccess else: prFull
 
   proc pop*[T](a: var CrossbeamArrayQueueAdapter[T]): PopResult[T] =
     if a.queue == nil:

@@ -20,7 +20,6 @@ lockfreequeues/
 ├── tests/                   # unittest2 suites + the `test.nim` aggregator
 ├── examples/                # runnable examples (driven by `nimble examples`)
 ├── benchmarks/              # bench harness (Nim binaries + Python merge)
-├── stress-tests/            # long-running multi-thread shakedown
 ├── docs/                    # mkdocs source (this site)
 ├── .github/workflows/       # CI: build, docs, bench, release
 ├── lockfreequeues.nimble    # package manifest + tasks
@@ -30,25 +29,37 @@ lockfreequeues/
 
 ### `src/lockfreequeues/` — the public API
 
-The four bounded queue types (`Sipsic`, `Sipmuc`, `Mupsic`, `Mupmuc`)
-each live in a single file. Their unbounded counterparts are in
-`unbounded_sipsic.nim` etc. Supporting modules:
+v5 collapsed the v4 per-family files (`sipsic.nim`, `mupsic.nim`,
+`unbounded_sipsic.nim`, etc.) into two unified generic types
+parameterised on cardinality phantoms:
 
-- `atomic_dsl.nim` — re-exports `debra/atomics` and the load / store
-  acquire / release DSL.
-- `backoff.nim` — exponential-backoff helper used by the multi-producer
-  CAS loops.
-- `typestates.nim` plus `typestates/*.nim` — the per-slot state machine
-  that governs publish / claim / drain transitions. See
+- `bqueue.nim` — bounded `BQueue[T, ccProd, ccCons, N, P, C]` with
+  phantom cardinality typestates (`ccSingle` / `ccMulti`) on the
+  producer and consumer axes. Family-named smart constructors
+  (`newSpscQueue`, `newMpscQueue`, `newSpmcQueue`,
+  `newMpmcQueue`) wrap the unified `newBQueue` ctor with the right
+  phantom arguments.
+- `queue.nim` — unbounded `Queue[T, ccProd, ccCons, ST, S, MaxThreads]`
+  with a deallocation-strategy phantom `ST` (`stEager` /
+  `stManual`, defaulting to `DefaultDeallocationStrategy`). Family-named
+  smart constructors (`newUnboundedSpscQueue`,
+  `newUnboundedMpscQueue`, `newUnboundedSpmcQueue`,
+  `newUnboundedMpmcQueue`) match the bounded pattern. The SPSC variant
+  skips the debra manager allocation; the others use nim-debra EBR for
+  segment reclamation.
+- `typestates/` — typestate scaffolding for the per-slot state machine
+  governing publish / claim / drain transitions. The CFG-verified state
+  machines come from nim-typestates. See
   [Slot Ownership Typestates](guide/slot-ownership-typestates.md) for
   the conceptual treatment.
-- `internal/aligned_alloc.nim` — segment allocator for the unbounded
-  variants, lining up segment storage on `CacheLineBytes` boundaries.
+- `internal/` — atomic-op helpers, segment allocator (lining up segment
+  storage on `CacheLineBytes` boundaries), and other implementation
+  details.
 
-When in doubt, the public proc signatures in the four
-queue-type files are the authoritative API surface. The `*Base` types
-in `typestates/*.nim` are an implementation detail and may change
-between minor versions.
+When in doubt, the public proc signatures on `BQueue` and `Queue` plus
+the family-named smart constructors are the authoritative API surface.
+Internal helpers under `internal/` and `typestates/` are
+implementation details and may change between minor versions.
 
 ### `benchmarks/` — bench harness
 
@@ -61,7 +72,7 @@ its threading dependencies do not leak into the regular test suite;
 
 `tests/test.nim` imports every individual test module and is the entry
 point for `nimble test`. The convention: one module per logical surface
-(`t_sipsic.nim`, `t_mupsic.nim`, `t_unbounded_mupmuc.nim`, etc.), with
+(`t_spsc.nim`, `t_mpsc.nim`, `t_unbounded_mpmc.nim`, etc.), with
 threaded variants in `*_threaded.nim` files. Tests use `unittest2`.
 
 ## Testing workflow
@@ -73,8 +84,6 @@ relevant combination:
 
 - C backend with default MM (`orc`) and explicit `arc`, `refc`.
 - C++ backend with default MM.
-- Two `-d:nimEnforceLockFreeAtomics` lanes (on `arc` and `orc`) that
-  reject any spinlock fallback at compile time.
 - ThreadSanitizer on `clang` + `atomicArc` (gated by
   `SANITIZE_THREADS=no` to skip on machines without a working clang
   TSAN).
@@ -111,20 +120,19 @@ and is opt-in (~10-15 s release).
 For tight iteration, point Nim straight at one file:
 
 ```sh
-nim c --threads:on -r tests/t_sipsic.nim
+nim c --threads:on -r tests/t_spsc.nim
 ```
 
-Add flags as needed: `-d:release` for speed,
-`--mm:arc -d:nimEnforceLockFreeAtomics` to reproduce a CI lane,
-`--cc:clang --passC:"-fsanitize=thread" --passL:"-fsanitize=thread"` to
-debug a TSAN report.
+Add flags as needed: `-d:release` for speed, `--mm:arc` to reproduce a
+specific CI lane, `--cc:clang --passC:"-fsanitize=thread"
+--passL:"-fsanitize=thread"` to debug a TSAN report.
 
 ### Adding a new test
 
 New behaviour goes in a focused `t_<feature>.nim` and gets imported
 from `tests/test.nim`. Keep tests deterministic: the multi-threaded
 suites use bounded loops with timeouts rather than "wait for it to
-settle". Follow the pattern in `t_mupsic_threaded.nim` for the
+settle". Follow the pattern in `t_mpsc_threaded.nim` for the
 producer / consumer thread plumbing.
 
 ## Documentation workflow
@@ -193,8 +201,9 @@ The repo's `.editorconfig` is the canonical formatter contract: 2-space
 indent, LF line endings, UTF-8, trailing newline. Beyond that, the
 conventions visible in `src/lockfreequeues/`:
 
-- One queue type per file; the file name matches the type
-  (`sipsic.nim` for `Sipsic`, etc.).
+- Bounded and unbounded queue families share a single file each
+  (`bqueue.nim`, `queue.nim`); cardinality is selected via phantom
+  generics rather than per-family files.
 - Module-level docstring at the top using `##` for public headers and
   RST-style fields (`* parameter description`) for arguments.
 - `{.align: CacheLineBytes.}` on every shared atomic that lives next to

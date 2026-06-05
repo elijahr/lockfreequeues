@@ -1,7 +1,9 @@
 # Benchmark Suite
 
-Throughput and latency benchmarks for lockfreequeues, plus a cloud-based
-regression gate via [Bencher.dev](https://bencher.dev).
+Throughput and latency benchmarks for lockfreequeues. CI publishes the
+merged BMF (Bencher Metric Format) snapshot under
+`docs/assets/bench-results/latest.json`, which the docs charts read
+directly.
 
 ## Structure
 
@@ -9,14 +11,35 @@ regression gate via [Bencher.dev](https://bencher.dev).
 - `nim/bench_common.nim` - Shared bench harness (BMF emission, stats,
   Histogram with top-K + reservoir percentiles, throughput / latency
   runners). One module, consumed by every per-topology bench binary.
-- `nim/bench_spsc.nim` - Bounded SPSC throughput driver (Sipsic 1p1c).
+- `nim/bench_spsc.nim` - Bounded SPSC throughput driver (Spsc 1p1c).
 - `nim/bench_mpsc.nim` - Bounded MPSC throughput driver
-  (Mupsic {1,2,4}p1c).
-- `nim/bench_mpmc.nim` - Bounded MPMC throughput driver
-  (Mupmuc {1,2,4}p{1,2,4}c plus 8p8c oversubscription, Sipmuc 1p{1,2,4}c,
-  Nim channels {1,2,4}p{1,2,4}c).
-- `nim/bench_unbounded.nim` - Unbounded throughput driver across all
-  four lockfreequeues unbounded variants.
+  (Mpsc {1,2,4}p1c).
+- `nim/bench_mpmc_bounded.nim` - Bounded MPMC throughput driver, Mpmc
+  family (Mpmc {1,2,4}p{1,2,4}c plus 8p8c oversubscription, Queue
+  ccMulti×ccMulti parity at the same shapes, Nim channels
+  {1,2,4}p{1,2,4}c, plus the MVP comparison adapters whose slug shape
+  matches the mpmc grid).
+- `nim/bench_spmc_bounded.nim` - Bounded MPMC throughput driver, Spmc
+  family (Spmc 1p{1,2,4}c, Queue ccSingle×ccMulti parity at the same
+  shapes). the original `bench_mpmc.nim` into these
+  two per-family binaries to eliminate cross-family iCache contention
+  that was producing a spurious -39.6% throughput artifact on
+  `spmc/mpmc/1p1c`; see the file headers for the diagnostic.
+- `nim/bench_unbounded_spsc.nim` - Unbounded throughput driver,
+  UnboundedSpsc family (1p1c). split the original
+  `bench_unbounded.nim` into four per-family binaries (this file plus
+  the three below) to eliminate cross-family iCache contention that
+  was producing -17% to -34% throughput regressions on
+  unbounded_mpmc/2p2c, unbounded_mpsc/2p1c, and
+  unbounded_mpsc/4p1c; see the file headers for the diagnostic.
+- `nim/bench_unbounded_spmc.nim` - Unbounded throughput driver,
+  UnboundedSpmc family (1p{1,2,4}c).
+- `nim/bench_unbounded_mpsc.nim` - Unbounded throughput driver,
+  UnboundedMpsc family ({1,2,4}p1c).
+- `nim/bench_unbounded_mpmc.nim` - Unbounded throughput driver,
+  UnboundedMpmc family ({1,2,4}p{1,2,4}c full grid plus the MVP
+  comparison adapters whose slug shape matches the mpmc unbounded
+  grid: Loony, Crossbeam SegQueue, MoodyCamel).
 - `nim/bench_latency.nim` - Latency (ping-pong RTT) driver across the
   four bounded lockfreequeues variants.
 - `nim/adapters/` - One file per upstream queue library
@@ -33,7 +56,7 @@ regression gate via [Bencher.dev](https://bencher.dev).
   Built with `cargo build --release`; consumed by the Nim Crossbeam
   adapters via `importc`.
 - `merge_bmf.py` - Stateless union of per-binary BMF JSON fragments
-  into a single `merged.json` for `bencher run`. Exits 1 on
+  into a single `merged.json` consumed by the docs charts. Exits 1 on
   `(slug, measure)` collisions naming the colliding inputs.
 - `scripts/superset_check.py` - Slug-set deletion-safety guard. Exits
   1 with the missing slug list on stderr if a post-split BMF drops
@@ -41,8 +64,8 @@ regression gate via [Bencher.dev](https://bencher.dev).
   (`tests/fixtures/pre-split-slugs.json`).
 - `results/` - JSON output from local benchmark runs.
 - `runner.py` - Orchestrates local benchmark execution. Builds and
-  runs all five binaries, then merges their fragments via
-  `merge_bmf.py`.
+  runs all nine topology-split binaries , then merges
+  their fragments via `merge_bmf.py`.
 
 ## Quick Start (local)
 
@@ -53,19 +76,27 @@ regression gate via [Bencher.dev](https://bencher.dev).
 nimble benchmarks
 
 # CI-tighter shape: pick one binary and override its per-binary
-# intdefines. Each binary owns its own knobs (design doc 2.5).
+# intdefines. Each binary owns its own knobs (design doc 2.5). The
+# two mpmc binaries share the BenchMpmc* knobs.
 nim c -r -d:release -d:danger --threads:on \
   -d:BenchMpmcMessageCount=100000 -d:BenchMpmcRuns=5 -d:BenchMpmcWarmup=2 \
-  benchmarks/nim/bench_mpmc.nim
+  benchmarks/nim/bench_mpmc_bounded.nim
 
 # Emit BMF JSON natively (no Python parser; merge to combine).
-./.tmp/bench_spsc       --bmf-out=spsc.json
-./.tmp/bench_mpsc       --bmf-out=mpsc.json
-./.tmp/bench_mpmc       --bmf-out=mpmc.json
-./.tmp/bench_unbounded  --bmf-out=unbounded.json
-./.tmp/bench_latency    --bmf-out=latency.json
+./.tmp/bench_spsc                --bmf-out=spsc.json
+./.tmp/bench_mpsc                --bmf-out=mpsc.json
+./.tmp/bench_mpmc_bounded         --bmf-out=mpmc_mpmc.json
+./.tmp/bench_spmc_bounded         --bmf-out=mpmc_spmc.json
+./.tmp/bench_unbounded_spsc    --bmf-out=unbounded_spsc.json
+./.tmp/bench_unbounded_spmc    --bmf-out=unbounded_spmc.json
+./.tmp/bench_unbounded_mpsc    --bmf-out=unbounded_mpsc.json
+./.tmp/bench_unbounded_mpmc    --bmf-out=unbounded_mpmc.json
+./.tmp/bench_latency             --bmf-out=latency.json
 python3 benchmarks/merge_bmf.py merged.json \
-  spsc.json mpsc.json mpmc.json unbounded.json latency.json
+  spsc.json mpsc.json mpmc_mpmc.json mpmc_spmc.json \
+  unbounded_spsc.json unbounded_spmc.json \
+  unbounded_mpsc.json unbounded_mpmc.json \
+  latency.json
 ```
 
 ## Metrics
@@ -74,44 +105,34 @@ python3 benchmarks/merge_bmf.py merged.json \
   (mean, lower=mean-stddev, upper=mean+stddev).
 - **Latency**: RTT nanoseconds with percentiles (p50, p95, p99).
 
-## Cloud benchmarking (Bencher.dev)
+## CI benchmarking
 
-`.github/workflows/bench.yml` runs the five topology-split binaries on
-`ubuntu-latest` for every PR and every push to `main`/`devel` via a
+`.github/workflows/bench.yml` runs the topology-split binaries on
+`ubuntu-22.04` for every PR and every push to `main`/`devel` via a
 GitHub Actions matrix (one matrix entry per binary, each with its own
-`timeout-minutes: 12` budget). The workflow:
+`timeout-minutes: 18` budget). The `bench_mpmc` slot is split into
+`bench_mpmc_bounded` + `bench_spmc_bounded`; the `bench_unbounded`
+slot is fanned into four per-family binaries
+(`bench_unbounded_{spsc,spmc,mpsc,mpmc}`) so each family runs in
+parallel as an independent matrix entry. The workflow:
 
 1. Compiles each binary with its CI-tuned per-binary intdefines
    (e.g. `-d:BenchSpscMessageCount=1000000 -d:BenchSpscRuns=5
    -d:BenchSpscWarmup=2` for `bench_spsc`).
-2. Runs the binary with `--bmf-out=<binary>.json`, which writes
-   Bencher Metric Format JSON natively.
+2. Runs the binary with `--bmf-out=<binary>.json`, which writes BMF
+   (Bencher Metric Format) JSON natively.
 3. Uploads each per-binary JSON as a GitHub Actions artifact.
 4. The dependent `bench-upload` job downloads every artifact, unions
    them via `merge_bmf.py merged.json $(ls bmf-inputs/*.json)`, then
    runs `superset_check.py tests/fixtures/pre-split-slugs.json
-   merged.json` to enforce deletion-safety. A single `bencher run`
-   uploads `merged.json` to the `lockfreequeues` Bencher project.
-
-On pull requests, Bencher posts a comparison comment against the base
-branch using `--start-point-clone-thresholds` and `--start-point-reset`,
-so threshold breaches show up inline.
+   merged.json` to enforce deletion-safety. On `push: devel`
+   (and `pull_request` from same-repo branches) it snapshots
+   `merged.json` into `docs/assets/bench-results/latest.json`; the
+   docs charts (`docs/assets/bench-charts.js`) read that file
+   directly.
 
 The workflow also runs on `workflow_dispatch` for ad-hoc baseline
 pinning.
-
-### One-time setup (maintainer)
-
-The cloud workflow requires:
-
-1. A Bencher.dev project named `lockfreequeues`
-   (create at https://bencher.dev with that exact slug).
-2. A repository secret `BENCHER_API_TOKEN` containing a Bencher API
-   token with write access to the project.
-
-Until those exist the `bench` workflow will fail on the upload step;
-PR / push events still produce the `merged.json` artifact in the
-job log so local debugging is possible without the upload.
 
 ### BMF schema emitted
 
@@ -139,28 +160,43 @@ unions the five binary fragments, a single slug can carry both
 `bench_latency`) when the slug shape matches `1p1c` on a bounded
 variant.
 
-Current slug set emitted across the five binaries:
+Current slug set emitted across the topology-split binaries:
 
-- `bench_spsc`: `lockfreequeues_sipsic/spsc/1p1c`.
-- `bench_mpsc`: `lockfreequeues_mupsic/mpsc/{1,2,4}p1c`.
-- `bench_mpmc`: `lockfreequeues_mupmuc/mpmc/{1,2,4}p{1,2,4}c` plus
-  `lockfreequeues_mupmuc/mpmc/8p8c`,
-  `lockfreequeues_sipmuc/mpmc/1p{1,2,4}c`,
+- `bench_spsc`: `lockfreequeues_spsc/spsc/1p1c`,
+  `lockfreequeues_queue_bounded_spsc/spsc/1p1c`.
+- `bench_mpsc`: `lockfreequeues_mpsc/mpsc/{1,2,4}p1c`,
+  `lockfreequeues_queue_bounded_mpsc/mpsc/{1,2,4}p1c`.
+- `bench_mpmc_bounded`:
+  `lockfreequeues_mpmc/mpmc/{1,2,4}p{1,2,4}c` plus
+  `lockfreequeues_mpmc/mpmc/8p8c`,
+  `lockfreequeues_queue_bounded_mpmc/mpmc/{1,2,4}p{1,2,4}c` plus
+  `lockfreequeues_queue_bounded_mpmc/mpmc/8p8c`,
   `nim_channels/mpmc/{1,2,4}p{1,2,4}c`.
-- `bench_unbounded`:
-  `lockfreequeues_unbounded_sipsic/spsc_unbounded/1p1c`,
-  `lockfreequeues_unbounded_sipmuc/mpmc_unbounded/1p{1,2,4}c`,
-  `lockfreequeues_unbounded_mupsic/mpsc_unbounded/{1,2,4}p1c`,
-  `lockfreequeues_unbounded_mupmuc/mpmc_unbounded/{1,2,4}p{1,2,4}c`.
+- `bench_spmc_bounded`:
+  `lockfreequeues_spmc/mpmc/1p{1,2,4}c`,
+  `lockfreequeues_queue_bounded_spmc/mpmc/1p{1,2,4}c`.
+- `bench_unbounded_spsc`:
+  `lockfreequeues_unbounded_spsc/spsc_unbounded/1p1c`.
+- `bench_unbounded_spmc`:
+  `lockfreequeues_unbounded_spmc/mpmc_unbounded/1p{1,2,4}c`.
+- `bench_unbounded_mpsc`:
+  `lockfreequeues_unbounded_mpsc/mpsc_unbounded/{1,2,4}p1c`.
+- `bench_unbounded_mpmc`:
+  `lockfreequeues_unbounded_mpmc/mpmc_unbounded/{1,2,4}p{1,2,4}c`.
 - `bench_latency`:
-  `lockfreequeues_{sipsic,sipmuc,mupsic,mupmuc}/{spsc,mpmc,mpsc,mpmc}/1p1c`.
+  `lockfreequeues_{spsc,spmc,mpsc,mpmc}/{spsc,mpmc,mpsc,mpmc}/1p1c`.
 
 ## Comparison libraries — third-party adapters
 
-PR 3 (Track 3) introduced the comparison MVP with five
-external-library adapters; PR 4 (Track 4) extends the set to seven
-upstream libraries / nine adapter variants so each topology has ≥ 3
-distinct libraries plotted on the same Bencher dashboard. All
+Earlier releases introduced the comparison MVP with five
+external-library adapters; subsequent work extended the set to seven
+upstream libraries / nine adapter variants. v5.0.0 lands another four
+vendored C/C++ targets (`atomic_queue`, `liblfds`, `rigtorp_mpmc`,
+`rigtorp_spsc`) and two additional Rust crates (`flume`, `kanal`)
+that ride alongside `crossbeam-queue` in the existing
+`bench-ffi-crossbeam` cdylib — bringing the comparison set to twelve
+upstream libraries / eighteen adapter variants so each topology has
+≥ 3 distinct libraries plotted in the merged BMF snapshot. All
 adapters are gated behind `-d:adapter_<library_slug>_available`;
 absent gates produce no symbol references and the production builds
 are unchanged.
@@ -175,6 +211,12 @@ are unchanged.
 | MoodyCamel | `concurrentqueue::ConcurrentQueue` | `mpmc_unbounded` | `-d:adapter_moodycamel_available` | vendored at `benchmarks/vendor/concurrentqueue/` (requires `nim cpp`) |
 | nimble `threading` | `threading.Chan` | `mpmc` (bounded) | `-d:adapter_threading_channels_available` | `nimble install threading` |
 | Nim `system.Channel` | `system/channels.Channel` | `mpsc` (bounded, blocking-on-full producer\*) | `-d:adapter_nim_channel_available` | none (Nim stdlib) |
+| atomic_queue (max0x7ba) | `atomic_queue::AtomicQueueB` | `spsc` + `mpmc` (bounded) | `-d:adapter_atomic_queue_available` | vendored at `benchmarks/vendor/atomic_queue/` (requires `nim cpp`) |
+| liblfds | `lfds711_queue_bss` / `_bmm` | `spsc` + `mpmc` (bounded) | `-d:adapter_liblfds_available` | vendored at `benchmarks/vendor/liblfds/` (C wrapper) |
+| rigtorp::MPMCQueue | `rigtorp::mpmc::Queue` | `mpmc` (bounded) | `-d:adapter_rigtorp_mpmc_available` | vendored at `benchmarks/vendor/rigtorp_mpmc/` (requires `nim cpp`) |
+| rigtorp::SPSCQueue | `rigtorp::SPSCQueue` | `spsc` (bounded) | `-d:adapter_rigtorp_spsc_available` | vendored at `benchmarks/vendor/rigtorp_spsc/` (requires `nim cpp`) |
+| flume | `flume::Sender/Receiver` | `mpmc` (bounded) + `mpmc_unbounded` | `-d:adapter_flume_available` | same as Crossbeam (rides the `bench-ffi-crossbeam` cdylib) |
+| kanal | `kanal::Sender/Receiver` | `spsc` + `mpmc` (bounded) + `mpmc_unbounded` | `-d:adapter_kanal_available` | same as Crossbeam (rides the `bench-ffi-crossbeam` cdylib) |
 
 \* The `system.Channel` adapter blocks the producer when the channel
 is full instead of returning back-pressure to the harness loop, so its
@@ -192,7 +234,15 @@ Library upstreams: [Loony](https://github.com/shayanhabibi/loony)
 (BSD-2-Clause / Boost dual),
 [nimble threading](https://github.com/nim-lang/threading) (MIT),
 [Nim `system.Channel`](https://nim-lang.org) (MIT, ships with the
-compiler). Per-library obligations are tracked in
+compiler),
+[atomic_queue](https://github.com/max0x7ba/atomic_queue) (MIT),
+[liblfds](https://liblfds.org/) (public-domain multi-grant; consumed
+under MIT),
+[rigtorp::MPMCQueue](https://github.com/rigtorp/MPMCQueue) (MIT),
+[rigtorp::SPSCQueue](https://github.com/rigtorp/SPSCQueue) (MIT),
+[flume](https://github.com/zesterer/flume) (Apache-2.0 OR MIT),
+[kanal](https://github.com/fereidani/kanal) (MIT).
+Per-library obligations are tracked in
 [`THIRD_PARTY_LICENSES.md`](../THIRD_PARTY_LICENSES.md).
 
 ### CI integration
@@ -208,24 +258,130 @@ compiler). Per-library obligations are tracked in
   boolean inputs to exercise the skip path manually.
 - **`bench-comparison.yml`** runs Crossbeam (the only adapter with a
   Rust toolchain dependency) on a nightly cron + `workflow_dispatch`
-  + targeted path pushes to `devel`. It produces a separate Bencher
-  Report dedicated to crossbeam slugs.
+  + targeted path pushes to `devel`. Its merged BMF artifact carries
+  the crossbeam slugs separately from `bench.yml`'s artifact.
+
+### Version capture and pinning
+
+Every emitted bench JSON (the per-shape files under
+`benchmarks/results/` and the merged `docs/assets/bench-results/latest.json`
+snapshot) carries a top-level `meta` block recording the resolved
+version of each comparison adapter at run time. Schema (v1):
+
+```json
+"meta": {
+  "schema": 1,
+  "generated_at": "<ISO-8601 UTC>",
+  "host": { "os": "...", "arch": "..." },
+  "lockfreequeues_version": "5.0.0",
+  "nim_version": "2.2.10",
+  "adapters": {
+    "<slug>": {
+      "version":     "<string|null>",
+      "fingerprint": "<string|null>",
+      "kind":        "<in-tree|compiler-builtin|vendored-version-macro|vendored-content-hash|cargo-locked|nimble-resolved|system-package>",
+      "pinned_sha_per_readme": "<optional; vendored libs only>",
+      "status":      "<optional; ok|absent|build-without-*|unknown>"
+    }
+  },
+  "absent_adapters": ["<slug>", ...]
+}
+```
+
+The capture is implemented in `benchmarks/nim/adapter_versions.nim`
+and is read by `benchmarks/nim/bench_common.nim`'s `BMFEmitter.emit`;
+`benchmarks/merge_bmf.py` preserves the `meta` block when unioning
+per-binary BMF fragments; `docs/assets/bench-charts.js` skips the
+`meta` key in its slug-iteration passes via `isMeasurementSlug`.
+
+**SHA-1 fingerprint protocol.** For vendored libraries that expose no
+upstream version macro (`atomic_queue`, `concurrentqueue`/`moodycamel`,
+`rigtorp_mpmc`, `rigtorp_spsc`), the `fingerprint` field is a SHA-1
+digest of the concatenation of every vendored header that ships with
+the adapter, in sorted filename order, each preceded by a
+`\n--- <filename> ---\n` separator. Format is always `"sha1:<40-hex>"`
+so downstream tools can disambiguate hash kinds if we later add
+SHA-256. The bytes are captured at compile time via Nim's `staticRead`,
+so the fingerprint reflects exactly what was baked into the bench
+binary — any change to the vendored sources changes the fingerprint
+deterministically. To compare bench JSONs across builds, compare
+`meta.adapters.<lib>.fingerprint`; matching SHA-1 means the vendored
+bytes are identical and the throughput comparison is apples-to-apples.
+
+Adapter version sourcing rules (no hand-typed mirrors of README files):
+
+- **Vendored C/C++ headers without a version macro** (`atomic_queue`,
+  `concurrentqueue`/`moodycamel`, `rigtorp_mpmc`, `rigtorp_spsc`):
+  `kind = vendored-content-hash`. `version` is `null` (no upstream
+  version exists); `fingerprint` is the SHA-1 digest described above;
+  `pinned_sha_per_readme` documents the README's pinned SHA so audits
+  can compare the upstream-tracked SHA against the compile-time
+  fingerprint. The fingerprint IS the integrity primitive; if the
+  README pin and the compile-time bytes diverge, the fingerprint moves
+  and the README claim becomes inspectable.
+- **Vendored C/C++ libraries with a version macro** (`liblfds`):
+  `kind = vendored-version-macro`. `version` is captured at compile
+  time by `importc`-ing the upstream version macro
+  (`LFDS711_MISC_VERSION_STRING`) through a tiny `{.emit.}` include —
+  the same technique used for Boost. The macro expands inside the
+  bench binary's C compilation, so it reflects exactly what was
+  compiled in.
+- **Rust crates** (`crossbeam_queue`, `flume`, `kanal`):
+  `kind = cargo-locked`. Captured at build time inside the Rust cdylib
+  (`benchmarks/rust/bench-ffi-crossbeam/`). A `build.rs` reads the
+  project's `Cargo.lock`, emits `cargo:rustc-env=BENCH_DEP_*_VERSION`
+  for each crate, and three `#[no_mangle] pub extern "C"` functions
+  return the strings as NUL-terminated C cstrings via `env!()`. The
+  Nim side `importc`-s the getters and calls them at run time, so the
+  reported version is exactly what was linked in at cdylib build time,
+  not what `Cargo.toml` requested. Bench binaries built without any
+  of the Rust adapter gates record
+  `{"version": null, "status": "build-without-rust-cdylib"}`.
+- **Nimble-resolved** (`loony`, `threading`): the bench harness
+  shells out to `nimble path <pkg>` at run time and parses the
+  resolved version from the package directory name. Missing package
+  -> `{"version": null, "status": "absent"}`. Production-dep pinning
+  (nim, unittest2, typestates, debra) is via the committed
+  `nimble.lock` at the repo root; Loony and `threading` are NOT in
+  the manifest because they are bench-only optional adapters, so
+  their pinning is the responsibility of the CI workflow's
+  `nimble install <pkg>` step. The run-time `meta.adapters.*.version`
+  capture is the cross-run-comparable record.
+- **Boost.LockFree** (`boost_lockfree`): captured at compile time
+  via the `BOOST_LIB_VERSION` macro from `boost/version.hpp` when
+  either Boost adapter gate is enabled. Boost.LockFree is consumed
+  via the system package (`apt install libboost-dev` on Ubuntu CI,
+  `brew install boost` on macOS development). The version is
+  therefore implicit in the OS runner image at bench time. The bench
+  output JSON (`meta.adapters.boost_lockfree.version`) records the
+  version captured at run time. To compare bench results across
+  runs, check the `meta.adapters.boost_lockfree.version` field of
+  each JSON; mismatches indicate the OS image bumped Boost and the
+  comparison is not apples-to-apples. Builds without any Boost
+  adapter gate record
+  `{"version": null, "status": "build-without-boost"}`.
+- **Nim compiler builtin** (`nim_channel`): always set to the
+  `NimVersion` constant from `system`, which equals the compiler
+  used for the bench compile.
+- **In-tree** (`lockfreequeues`): the `LockfreequeuesVersion`
+  constant from `src/lockfreequeues.nim` (mirrors the `version` line
+  in `lockfreequeues.nimble`; bump in lockstep on every release).
 
 ### Running comparison adapters locally
 
 ```bash
-# Loony (Nim only):
+# Loony (Nim only; lives in bench_unbounded_mpmc split):
 nimble install loony
 nim c -r -d:release -d:danger --threads:on \
   -d:adapter_loony_available \
-  -d:UnboundedMupmucMessageCount=100000 -d:UnboundedMupmucRuns=3 \
-  benchmarks/nim/bench_unbounded.nim loony
+  -d:UnboundedMpmcMessageCount=100000 -d:UnboundedMpmcRuns=3 \
+  benchmarks/nim/bench_unbounded_mpmc.nim loony
 
 # Boost (C++ headers; macOS: brew install boost; Ubuntu: apt install libboost-dev):
 nim cpp -r -d:release -d:danger --threads:on \
   -d:adapter_boost_lockfree_queue_available \
   -d:BenchMpmcMessageCount=100000 -d:BenchMpmcRuns=3 \
-  benchmarks/nim/bench_mpmc.nim boost_lockfree_queue
+  benchmarks/nim/bench_mpmc_bounded.nim boost_lockfree_queue
 
 # Crossbeam (Rust cdylib):
 cargo build --release \
@@ -234,20 +390,21 @@ nim c -r -d:release -d:danger --threads:on \
   -d:adapter_crossbeam_array_queue_available \
   --passL:"-Wl,-rpath,$(pwd)/benchmarks/rust/bench-ffi-crossbeam/target/release" \
   -d:BenchMpmcMessageCount=100000 -d:BenchMpmcRuns=3 \
-  benchmarks/nim/bench_mpmc.nim crossbeam_array_queue
+  benchmarks/nim/bench_mpmc_bounded.nim crossbeam_array_queue
 
-# MoodyCamel (vendored single-header; nim cpp):
+# MoodyCamel (vendored single-header; nim cpp; lives in
+# bench_unbounded_mpmc split):
 nim cpp -r -d:release -d:danger --threads:on \
   -d:adapter_moodycamel_available \
-  -d:UnboundedMupmucMessageCount=100000 -d:UnboundedMupmucRuns=3 \
-  benchmarks/nim/bench_unbounded.nim moodycamel
+  -d:UnboundedMpmcMessageCount=100000 -d:UnboundedMpmcRuns=3 \
+  benchmarks/nim/bench_unbounded_mpmc.nim moodycamel
 
 # nimble threading.Chan:
 nimble install threading
 nim c -r -d:release -d:danger --threads:on \
   -d:adapter_threading_channels_available \
   -d:BenchMpmcMessageCount=100000 -d:BenchMpmcRuns=3 \
-  benchmarks/nim/bench_mpmc.nim threading_channels
+  benchmarks/nim/bench_mpmc_bounded.nim threading_channels
 
 # Nim system.Channel (no install):
 nim c -r -d:release -d:danger --threads:on \
@@ -270,42 +427,20 @@ enforcement, collision detection (with both colliding files named in
 stderr), alpha-sorted output, 5-input union (one fragment per
 topology binary), the deletion-safety contract enforced by
 `superset_check.py`, and the BMF-shape contract that
-`docs/assets/bench-charts.js` depends on (Track 5 PR 5).
+`docs/assets/bench-charts.js` depends on.
 
 ## Refreshing the example fixture
 
 `docs/assets/bench-results/example.json` is the middle tier of the
 chart's 3-tier fallback chain (live `latest.json` → `example.json`
-fixture → red error banner). It exists so the public benchmarks page
-renders representative data with a yellow "fixture" status banner when
-the live snapshot is unavailable, instead of a broken red banner.
+fixture → red error banner).
 
-The fixture must come from a real successful bench run; hand-authored
-"representative" numbers are forbidden (design §5.4 shape-coverage
-policy). To regenerate:
-
-1. Pick a recent successful `bench.yml` run on `devel` whose merged BMF
-   covers `mpmc/{1p1c,1p2c,2p1c,2p2c,4p4c}` plus latency at `1p1c`
-   bounded variants:
-   `gh run list --workflow=bench.yml --branch=devel --status=success --limit 5`.
-2. Download all five per-binary BMF artifacts:
-   `gh run download <run-id> --pattern 'bench-*-bmf' -D /tmp/bmf/`.
-3. Merge into one BMF document via this repo's merger:
-   `find /tmp/bmf/ -name '*.json' -print0 | xargs -0 python3 benchmarks/merge_bmf.py merged.json`.
-4. Schema-validate (per design §5.4 step 4): every key matches
-   `^[a-z][a-z0-9_]*(?:/[a-z][a-z0-9_]*)+/\d+p\d+c$` and every measure
-   value carries only `value` / `lower_value` / `upper_value`.
-5. Copy the merged result to
-   `docs/assets/bench-results/example.json` and commit with a message
-   that records the source workflow run id, head sha, and run date.
-
-Bench-comparison adapters (Crossbeam, Loony, Boost, MoodyCamel,
-threading.Chan, Nim system.Channel) only run on
-`bench-comparison.yml` (nightly cron); if their slugs are absent from
-the chosen `bench.yml` run, the fixture will not include them and the
-chart will render only the in-house lockfreequeues + nim_channels
-slugs. That is acceptable for the fallback rendering — the live
-`latest.json` carries the full set once snapshots resume.
+`example.json` auto-refreshes on every `bench.yml` run: on `devel`
+pushes the snapshot step writes it alongside `latest.json` and
+`${SHA}.json`; on `pull_request` events the PR-branch snapshot step
+writes it to the PR head ref as well. Hand-curation is no longer
+needed — the fixture tracks the latest successful merged BMF
+automatically.
 
 ## Updating the README summary
 
@@ -321,10 +456,10 @@ README values may lag by up to one release cycle.
 1. Open the latest devel snapshot at
    <https://elijahr.github.io/lockfreequeues/dev/benchmarks/>.
 2. Read the throughput chart for these four shapes:
-   - `lockfreequeues_sipsic/spsc/1p1c`
-   - `lockfreequeues_sipmuc/mpmc/1p2c`
-   - `lockfreequeues_mupsic/mpsc/2p1c`
-   - `lockfreequeues_mupmuc/mpmc/2p2c`
+   - `lockfreequeues_spsc/spsc/1p1c`
+   - `lockfreequeues_spmc/mpmc/1p2c`
+   - `lockfreequeues_mpsc/mpsc/2p1c`
+   - `lockfreequeues_mpmc/mpmc/2p2c`
 3. Edit `README.md` between the BENCHMARKS markers, replacing the four
    `_to be filled at next release_` cells with the rounded throughput
    values (one decimal). Keep the table layout unchanged.
