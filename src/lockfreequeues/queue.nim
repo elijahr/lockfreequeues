@@ -1412,19 +1412,81 @@ proc pop*[
     var scope = pinScope(unpinned(h))
     var seg = self.queue.headSegment.load(moAcquire)
     var spins = InitialSpin
+    # T8 / design §5.2.1 / §7.2 (HIGH-2 remediation): per-pop-call close
+    # counter that accumulates closes across outer-loop iterations
+    # within a SINGLE pop() call. Reset to 0 on every segment-advance
+    # (every `seg = nextSeg` site below). When it reaches S
+    # (StarvingThreshold, design §7.1), the consumer falls through to
+    # the nextSeg advance path even if cells remain unclosed — this
+    # prevents low-throughput consumers from livelocking on a
+    # partially-closed segment.
+    var closesSeenThisSegment = 0
     while true:
       let tail = seg.tail.load(moAcquire)
       var prevIdx = seg.prevConsumerIdx.load(moAcquire)
-      let mySlot = prevIdx + 1
+      var mySlot = prevIdx + 1
       if mySlot >= tail:
+        # Strict-LCRQ §5.2 slow-path: tail may have raced past mySlot
+        # between the two loads. Drive tryCloseOnEmpty on the empty
+        # cell so a stalled producer cannot strand this consumer, and
+        # inline-skip closed cells within the same pop() call (HIGH-2
+        # remediation, design §5.2.1).
         if mySlot < S and seg.tail.load(moAcquire) > mySlot:
-          # STRICT-LCRQ-PARTIAL: was the published-bit check
-          # `if not seg.committed[mySlot].load(moAcquire): break;
-          # backoff; continue`. T4-T8 will replace with `tryClaim(
-          # seg.cells[mySlot], expectedSeq)`. For T3 the slot is
-          # never published (push stubs `wasMoved(item)`), so we
-          # break out as if uncommitted — MPMC suite expected red.
-          break
+          # Nested inline-skip scan. `mySlot` advances monotonically
+          # past closed cells until we either (a) hit a publishable
+          # cell — break out to retry outer loop where the fast-path
+          # will claim it; (b) exhaust the StarvingThreshold budget —
+          # break out to fall through to the nextSeg-advance path
+          # below; or (c) run off the end of the segment (mySlot >= S)
+          # — same fall-through. Bounded by S iterations per outer
+          # invocation.
+          var publishableSeen = false
+          while mySlot < S and seg.tail.load(moAcquire) > mySlot:
+            if tryCloseOnEmpty[T](seg.cells[mySlot], 0'u64):
+              # We won the close-on-empty CAS. Inline-skip past it.
+              inc closesSeenThisSegment
+              if closesSeenThisSegment >= S:
+                break
+              inc mySlot
+              continue
+            # tryCloseOnEmpty failed. Distinguish:
+            #   (a) cell now CLOSED (a peer consumer closed first) —
+            #       inline-skip, same as our own close-success branch.
+            #   (b) cell now FILLED (producer published into it) —
+            #       leave the scan; the fast-path will claim it on a
+            #       subsequent outer-loop iteration once mySlot
+            #       realigns with prevConsumerIdx+1.
+            let recheck = load(seg.cells[mySlot], moAcquire)
+            if (recheck.first and CLOSED_BIT) != 0'u64:
+              inc closesSeenThisSegment
+              if closesSeenThisSegment >= S:
+                break
+              inc mySlot
+              continue
+            # Case (b): producer published. Exit scan; let outer loop
+            # re-derive mySlot from prevConsumerIdx and route to the
+            # fast-path.
+            publishableSeen = true
+            break
+          if publishableSeen:
+            # A publishable cell exists at or past `mySlot`. The
+            # fast-path on the next outer iteration will claim it once
+            # prevConsumerIdx-CAS aligns. Backoff briefly so a
+            # concurrent peer consumer making the same observation
+            # gets a fair chance.
+            backoffOnRetry(spins)
+            continue
+          if closesSeenThisSegment < S and mySlot < S and
+              seg.tail.load(moAcquire) <= mySlot:
+            # We closed some cells but the tail caught back up (no
+            # more empty cells past mySlot in the race-window). Retry
+            # outer to re-evaluate the fast-path; prevConsumerIdx may
+            # have been advanced by peer consumers in the meantime.
+            backoffOnRetry(spins)
+            continue
+          # Either StarvingThreshold reached, or we walked off the end
+          # of the segment with all-closed cells. Fall through to the
+          # nextSeg advance path below.
         let nextSeg = seg.next.load(moAcquire)
         if nextSeg == nil:
           break
@@ -1438,8 +1500,10 @@ proc pop*[
           when ST != stManual:
             discard self.queue.segments.fetchSub(1, moRelaxed)
           seg = nextSeg
+          closesSeenThisSegment = 0
         else:
           seg = self.queue.headSegment.load(moAcquire)
+          closesSeenThisSegment = 0
         backoffOnRetry(spins)
         continue
       # Strict-LCRQ MPMC fast-path consumer claim (design §5.3).
@@ -1487,8 +1551,10 @@ proc pop*[
             when ST != stManual:
               discard self.queue.segments.fetchSub(1, moRelaxed)
             seg = nextSeg
+            closesSeenThisSegment = 0
           else:
             seg = self.queue.headSegment.load(moAcquire)
+            closesSeenThisSegment = 0
           backoffOnRetry(spins)
           continue
         # Case (b): producer mid-publish. We have already reserved
@@ -1522,8 +1588,10 @@ proc pop*[
                 when ST != stManual:
                   discard self.queue.segments.fetchSub(1, moRelaxed)
                 seg = nextSeg
+                closesSeenThisSegment = 0
               else:
                 seg = self.queue.headSegment.load(moAcquire)
+                closesSeenThisSegment = 0
               closedEscalated = true
               break waitForPublish
             if inner.first != 0'u64:
