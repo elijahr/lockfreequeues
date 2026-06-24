@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout project
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Nim
         uses: jiro4989/setup-nim-action@v2
@@ -38,7 +38,7 @@ jobs:
   test:
     name: Test nim-${{ matrix.nim-version }} / ${{ matrix.runs-on }}
     runs-on: ${{ matrix.runs-on }}
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
@@ -46,6 +46,10 @@ jobs:
         include:
           - runs-on: ubuntu-latest
             nim-version: 'stable'
+            sanitize-threads: 'yes'
+            sanitize-address: 'yes'
+          - runs-on: ubuntu-latest
+            nim-version: 'devel'
             sanitize-threads: 'yes'
             sanitize-address: 'yes'
           - runs-on: ubuntu-24.04-arm
@@ -59,13 +63,13 @@ jobs:
 
     steps:
       - name: Restore cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${HOME}/.cache
           key: cache-${{ matrix.runs-on }}-${{ matrix.nim-version }}
 
       - name: Checkout project
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Nim ${{ matrix.nim-version }}
         uses: jiro4989/setup-nim-action@v2
