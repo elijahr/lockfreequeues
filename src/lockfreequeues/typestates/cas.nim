@@ -51,7 +51,7 @@ proc executeCAS*(p: CASPending): CASResult {.transition.} =
   let attempt = CASAttempt(p)
   var expected = attempt.expected
   let success =
-    attempt.atom[].compareExchangeWeak(expected, attempt.desired, moRelease, moAcquire)
+    attempt.atom[].compareExchangeWeak(expected, attempt.desired, moRelease, moRelaxed)
   if success:
     CASResult -> CASSucceeded(newVal: attempt.desired)
   else:
