@@ -161,7 +161,7 @@ proc getConsumer*[N, C: static int, T](
   for i in 0 ..< C:
     var expected = 0
     if self.consumerThreadIds[i].compareExchangeWeak(
-      expected, threadId, moRelease, moAcquire
+      expected, threadId, moRelease, moRelaxed
     ):
       result.idx = i
       return
