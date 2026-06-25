@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-06-24
+
 ### BREAKING
 
 - `CASAttempt` typestate restructured into a proper typestate union. `CASPending` now transitions to `CASSucceeded | CASFailed` (aliased as `CASResult`) via `executeCAS`, replacing the previous single-state design with `assumeSuccess` / `assumeFailure` escape hatches. The `assumeSuccess` and `assumeFailure` procs have been removed. Callers that drove `CASAttempt` outside the bundled MPMC machinery must migrate to the union return form. These helpers were only consumed by `tests/t_cas.nim`; the bundled MPMC machinery calls `compareExchangeWeak` directly and was unaffected. No public lock-free queue API is affected.
@@ -488,10 +490,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added (typestates 0.7 uplift)
 
 - CI: `typestates verify -W --format=github src/` step in `build.yml` to gate the typestate model against drift.
+- CI: Nim `devel` added to the `build.yml` test matrix alongside `stable`, so memory-model and atomics-ordering regressions surface against the development compiler.
 
 ### Fixed (typestates 0.7 uplift)
 
 - 22 read-only typestate accessors across `src/lockfreequeues/typestates/` now carry `{.notATransition.}`. typestates' verifier flagged these once `typestates verify -W` was wired into CI; the procs are pure data extraction and were never transitions.
+- CAS failure memory ordering corrected to `moRelaxed` in the `executeCAS` typestate helper (`typestates/cas.nim`) and in the producer/consumer thread-id registration of the bounded `mupmuc` / `mupsic` / `sipmuc` queues. The prior `moRelease` success / `moAcquire` failure combination is rejected by DEBRA's atomics ordering validation and fails to build against current nim-debra and Nim `devel`. Behaviour is unchanged: the value observed on a failed CAS is discarded, so the failure ordering carries no acquire obligation.
+- Remaining accessor and operation-finalizer procs across `src/lockfreequeues/typestates/` marked `{.notATransition.}` so `typestates verify -W` passes with zero findings under `strictTransitions`; `import typestates` added to the five accessor-only modules that needed the pragma template in scope.
 
 ## [4.1.0] - 2026-05-01
 
