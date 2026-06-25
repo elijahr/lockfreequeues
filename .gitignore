@@ -10,6 +10,15 @@ nimcache/
 nimblecache/
 .tmp/
 
+# local nim.cfg overrides (e.g. for worktree-specific deps paths)
+nim.cfg
+
+# mise
+mise.toml
+
+# claude config
+.claude/
+
 # Generated documentation
 /site/
 
