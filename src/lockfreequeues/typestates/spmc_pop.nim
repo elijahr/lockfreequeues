@@ -90,7 +90,7 @@ proc tryClaim*[N, C: static int, T](
 
 proc complete*[N, C: static int, T](
     op: SPMCPopSlotClaimed[N], queue: var SipmucBase[N, C, T]
-): T {.inline.} =
+): T {.inline, notATransition.} =
   ## Read value from the claimed slot, then re-arm the seq for the next
   ## generation. The `seq.store(pos+N, moRelease)` is the consumer->next-
   ## producer edge; the next producer at virtual position `pos + N` will

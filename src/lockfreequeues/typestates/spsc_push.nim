@@ -90,7 +90,7 @@ proc writeData*[N: static int, T](
 
 proc complete*[N: static int, T](
     op: SPSCPushDataWritten[N], queue: var SipsicBase[N, T]
-): bool {.inline.} =
+): bool {.inline, notATransition.} =
   ## Advance tail and return success.
   queue.tail.storeReleaseN1(op.newTail)
   true

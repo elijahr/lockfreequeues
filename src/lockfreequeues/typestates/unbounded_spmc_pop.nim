@@ -100,7 +100,7 @@ proc startPop*[T; S, MT: static int](
 # Extract Pinned state from terminal states
 proc extractPinned*[T; S, MT: static int](
     complete: sink SPMCPopComplete[T, S, MT]
-): Pinned[MT] =
+): Pinned[MT] {.notATransition.} =
   ## Extract DEBRA's Pinned state for unpinning.
   Pinned[MT](
     EpochGuardContext[MT](handle: complete.pinnedHandle, epoch: complete.pinnedEpoch)
@@ -108,7 +108,7 @@ proc extractPinned*[T; S, MT: static int](
 
 proc extractPinned*[T; S, MT: static int](
     empty: sink SPMCPopEmpty[T, S, MT]
-): Pinned[MT] =
+): Pinned[MT] {.notATransition.} =
   ## Extract DEBRA's Pinned state for unpinning.
   Pinned[MT](
     EpochGuardContext[MT](handle: empty.pinnedHandle, epoch: empty.pinnedEpoch)
@@ -226,6 +226,8 @@ proc advanceSegment*[T; S, MT: static int](
     )
 
 # Get value from completed pop
-proc getValue*[T; S, MT: static int](complete: SPMCPopComplete[T, S, MT]): T =
+proc getValue*[T; S, MT: static int](
+    complete: SPMCPopComplete[T, S, MT]
+): T {.notATransition.} =
   ## Extract the popped value.
   complete.value
