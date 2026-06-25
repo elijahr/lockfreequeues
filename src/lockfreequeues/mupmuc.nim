@@ -114,7 +114,7 @@ proc getProducer*[N, P, C: static int, T](
   for i in 0 ..< P:
     var expected = 0
     if self.producerThreadIds[i].compareExchangeWeak(
-      expected, threadId, moRelease, moAcquire
+      expected, threadId, moRelease, moRelaxed
     ):
       result.idx = i
       return
@@ -149,7 +149,7 @@ proc getConsumer*[N, P, C: static int, T](
   for i in 0 ..< C:
     var expected = 0
     if self.consumerThreadIds[i].compareExchangeWeak(
-      expected, threadId, moRelease, moAcquire
+      expected, threadId, moRelease, moRelaxed
     ):
       result.idx = i
       return

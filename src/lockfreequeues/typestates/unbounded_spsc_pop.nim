@@ -128,6 +128,8 @@ proc readItem*[T; S: static int](
   )
 
 # Get value from completed pop
-proc getValue*[T; S: static int](complete: USPSCPopComplete[T, S]): T =
+proc getValue*[T; S: static int](
+    complete: USPSCPopComplete[T, S]
+): T {.notATransition.} =
   ## Extract the popped value.
   complete.value

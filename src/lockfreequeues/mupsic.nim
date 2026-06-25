@@ -105,7 +105,7 @@ proc getProducer*[N, P: static int, T](
   for i in 0 ..< P:
     var expected = 0
     if self.producerThreadIds[i].compareExchangeWeak(
-      expected, threadId, moRelease, moAcquire
+      expected, threadId, moRelease, moRelaxed
     ):
       result.idx = i
       return

@@ -17,6 +17,7 @@
 ## the old CommittedFlagsN module) — an arbitrary `int` cannot be passed in,
 ## eliminating a class of off-by-one indexing bugs.
 
+import typestates
 import ../atomic_dsl
 import ./virtual_values_n
 
@@ -33,10 +34,10 @@ proc init*[N: static int](s: var SlotSeqN[N]) =
 
 proc load*[N: static int](
     s: var SlotSeqN[N], idx: PhysicalSlotN[N], order: static MemoryOrder
-): uint64 {.inline.} =
+): uint64 {.inline, notATransition.} =
   s.seqs[idx.slotValue].load(order)
 
 proc store*[N: static int](
     s: var SlotSeqN[N], idx: PhysicalSlotN[N], val: uint64, order: static MemoryOrder
-) {.inline.} =
+) {.inline, notATransition.} =
   s.seqs[idx.slotValue].store(val, order)

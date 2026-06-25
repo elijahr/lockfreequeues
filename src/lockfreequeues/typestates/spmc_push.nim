@@ -112,7 +112,7 @@ proc tryClaim*[N, C: static int, T](
 
 proc complete*[N, C: static int, T](
     op: SPMCPushSlotClaimed[N], queue: var SipmucPushBase[N, C, T], item: T
-): bool {.inline.} =
+): bool {.inline, notATransition.} =
   ## Write item to the claimed slot, then publish the seq advance.
   ## The `seq.store(pos+1, moRelease)` is the producer->consumer edge.
   queue.cells.dataPtr(op.slot)[] = item # P4 plain store; ordered by P5

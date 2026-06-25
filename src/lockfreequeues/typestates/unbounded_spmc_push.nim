@@ -89,7 +89,7 @@ proc startPush*[T; S, MT: static int](
 # Extract Pinned state from SPMCPushComplete for unpinning
 proc extractPinned*[T; S, MT: static int](
     complete: sink SPMCPushComplete[T, S, MT]
-): Pinned[MT] =
+): Pinned[MT] {.notATransition.} =
   ## Extract DEBRA's Pinned state for unpinning.
   Pinned[MT](
     EpochGuardContext[MT](handle: complete.pinnedHandle, epoch: complete.pinnedEpoch)
