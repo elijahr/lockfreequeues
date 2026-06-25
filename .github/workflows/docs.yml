@@ -168,8 +168,12 @@ jobs:
           mike set-default --push latest
 
       - name: Deploy docs (dev)
-        # A versioned-docs dispatch must not also clobber the dev alias.
-        if: (github.event_name == 'workflow_dispatch' && inputs.deploy_version == '') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/devel'
+        # A versioned-docs dispatch carries deploy_version and runs with
+        # --ref devel, so guarding the whole condition on an empty
+        # deploy_version is what keeps it from clobbering the dev alias with
+        # release-tag content (the github.ref == refs/heads/devel branch
+        # would otherwise fire on that dispatch).
+        if: inputs.deploy_version == '' && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/devel')
         run: |
           mike deploy --push dev
 
