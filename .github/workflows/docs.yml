@@ -1,13 +1,15 @@
 name: docs
 
 on:
+  # No v* tag-push trigger: release.yml owns versioned deploys and dispatches
+  # this workflow with deploy_version after each release. A tag-push trigger
+  # would never fire for the bot's GITHUB_TOKEN-pushed tag anyway, and on a
+  # manual tag push it would double-deploy alongside release.yml's dispatch.
   push:
     branches:
       - main
       - master
       - devel
-    tags:
-      - 'v*'
   pull_request:
     paths:
       - 'docs/**'
@@ -96,7 +98,6 @@ jobs:
         #   pull_request    -> the PR head branch (so blob URLs in the
         #                      PR-verified build point at the branch
         #                      under review)
-        #   v* tag          -> the tag (versioned docs link to release sha)
         #   devel push      -> devel
         #   main push       -> main
         #   workflow_dispatch (deploy_version set) -> the release tag
@@ -111,11 +112,7 @@ jobs:
               ref="${GITHUB_HEAD_REF}"
               ;;
             push)
-              if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-                ref="${GITHUB_REF#refs/tags/}"
-              else
-                ref="${GITHUB_REF#refs/heads/}"
-              fi
+              ref="${GITHUB_REF#refs/heads/}"
               ;;
             workflow_dispatch)
               if [[ -n "${DEPLOY_VERSION}" ]]; then
@@ -152,19 +149,13 @@ jobs:
           git fetch origin gh-pages --depth=1 || true
 
       - name: Deploy docs (versioned)
-        # Fires on a v* tag push, or on a workflow_dispatch carrying
-        # deploy_version (release.yml uses the latter because tags pushed
-        # by GITHUB_TOKEN do not trigger the tag-push event).
-        if: startsWith(github.ref, 'refs/tags/v') || inputs.deploy_version != ''
+        # Fired by release.yml's workflow_dispatch (carrying deploy_version)
+        # after it creates a GitHub Release.
+        if: inputs.deploy_version != ''
         env:
           DEPLOY_VERSION: ${{ inputs.deploy_version }}
         run: |
-          if [[ -n "${DEPLOY_VERSION}" ]]; then
-            VERSION="${DEPLOY_VERSION}"
-          else
-            VERSION="${GITHUB_REF#refs/tags/v}"
-          fi
-          mike deploy --push --update-aliases "$VERSION" latest
+          mike deploy --push --update-aliases "$DEPLOY_VERSION" latest
           mike set-default --push latest
 
       - name: Deploy docs (dev)
