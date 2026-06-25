@@ -11,9 +11,11 @@ name: release
 # auto-tag workflow, the tag push would need a PAT (or workflow_dispatch
 # call) to fire the release step.
 #
-# Note: docs.yml independently triggers on `tags: ['v*']` to deploy the
-# versioned mkdocs/mike site. That workflow runs in parallel with this
-# one when this job pushes a tag.
+# Note: docs.yml's versioned deploy CANNOT rely on the tag push this job
+# makes, because GITHUB_TOKEN-pushed tags do not trigger workflows. After
+# creating the Release, this job explicitly dispatches docs.yml with the
+# version (workflow_dispatch fires regardless of the GITHUB_TOKEN tag-push
+# limitation) so the /<version>/ + latest mike aliases get published.
 
 on:
   push:
@@ -23,6 +25,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   release:
@@ -74,3 +77,17 @@ jobs:
           prerelease: ${{ contains(steps.tag.outputs.tag, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy versioned docs
+        # docs.yml's tag-push trigger never fires for our GITHUB_TOKEN-pushed
+        # tag, so dispatch it explicitly with the version to publish the
+        # /<version>/ + latest mike aliases.
+        if: steps.tag.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          echo "Dispatching docs.yml to deploy versioned docs for $VERSION"
+          gh workflow run docs.yml --ref devel -f deploy_version="$VERSION"
