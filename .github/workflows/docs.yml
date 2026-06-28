@@ -1,13 +1,15 @@
 name: docs
 
 on:
+  # No v* tag-push trigger: release.yml owns versioned deploys and dispatches
+  # this workflow with deploy_version after each release. A tag-push trigger
+  # would never fire for the bot's GITHUB_TOKEN-pushed tag anyway, and on a
+  # manual tag push it would double-deploy alongside release.yml's dispatch.
   push:
     branches:
       - main
       - master
       - devel
-    tags:
-      - 'v*'
   pull_request:
     paths:
       - 'docs/**'
@@ -16,6 +18,11 @@ on:
       - '.github/workflows/docs.yml'
       - 'src/**'
   workflow_dispatch:
+    inputs:
+      deploy_version:
+        description: 'Release version to deploy as versioned docs + latest alias (e.g. 4.2.0). Leave empty to (re)deploy dev.'
+        required: false
+        default: ''
   schedule:
     - cron: '17 5 * * *'   # daily at 05:17 UTC; redeploys docs to pick up
                            # snapshot pushes that carried [skip ci] (per
@@ -35,6 +42,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # A versioned-docs dispatch builds from the release tag so blob
+          # links and mkdocstrings sources point at the released sha.
+          ref: ${{ inputs.deploy_version != '' && format('v{0}', inputs.deploy_version) || '' }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -88,11 +98,13 @@ jobs:
         #   pull_request    -> the PR head branch (so blob URLs in the
         #                      PR-verified build point at the branch
         #                      under review)
-        #   v* tag          -> the tag (versioned docs link to release sha)
         #   devel push      -> devel
         #   main push       -> main
-        #   workflow_dispatch -> branch name
+        #   workflow_dispatch (deploy_version set) -> the release tag
+        #   workflow_dispatch (no input) -> branch name
         id: docs_ref
+        env:
+          DEPLOY_VERSION: ${{ inputs.deploy_version }}
         run: |
           set -euo pipefail
           case "$GITHUB_EVENT_NAME" in
@@ -100,14 +112,14 @@ jobs:
               ref="${GITHUB_HEAD_REF}"
               ;;
             push)
-              if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-                ref="${GITHUB_REF#refs/tags/}"
+              ref="${GITHUB_REF#refs/heads/}"
+              ;;
+            workflow_dispatch)
+              if [[ -n "${DEPLOY_VERSION}" ]]; then
+                ref="v${DEPLOY_VERSION}"
               else
                 ref="${GITHUB_REF#refs/heads/}"
               fi
-              ;;
-            workflow_dispatch)
-              ref="${GITHUB_REF#refs/heads/}"
               ;;
             *)
               ref="devel"
@@ -137,14 +149,22 @@ jobs:
           git fetch origin gh-pages --depth=1 || true
 
       - name: Deploy docs (versioned)
-        if: startsWith(github.ref, 'refs/tags/v')
+        # Fired by release.yml's workflow_dispatch (carrying deploy_version)
+        # after it creates a GitHub Release.
+        if: inputs.deploy_version != ''
+        env:
+          DEPLOY_VERSION: ${{ inputs.deploy_version }}
         run: |
-          VERSION="${GITHUB_REF#refs/tags/v}"
-          mike deploy --push --update-aliases "$VERSION" latest
+          mike deploy --push --update-aliases "$DEPLOY_VERSION" latest
           mike set-default --push latest
 
       - name: Deploy docs (dev)
-        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/devel'
+        # A versioned-docs dispatch carries deploy_version and runs with
+        # --ref devel, so guarding the whole condition on an empty
+        # deploy_version is what keeps it from clobbering the dev alias with
+        # release-tag content (the github.ref == refs/heads/devel branch
+        # would otherwise fire on that dispatch).
+        if: inputs.deploy_version == '' && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/devel')
         run: |
           mike deploy --push dev
 
