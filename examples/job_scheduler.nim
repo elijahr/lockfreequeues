@@ -48,18 +48,18 @@ type
     workMs: int  # Simulated work duration
 
   SubmitterContext = object
-    queue: ptr UnboundedMupmuc[SegmentSize, Job, MaxThreads]
+    queue: ptr UnboundedMupmuc[SegmentSize, ptr Job, MaxThreads]
     manager: ptr DebraManager[MaxThreads]
     submitterId: int
 
   WorkerContext = object
-    queue: ptr UnboundedMupmuc[SegmentSize, Job, MaxThreads]
+    queue: ptr UnboundedMupmuc[SegmentSize, ptr Job, MaxThreads]
     manager: ptr DebraManager[MaxThreads]
     workerId: int
 
 var
   manager = initDebraManager[MaxThreads]()
-  queue = newUnboundedMupmuc[SegmentSize, Job, MaxThreads](addr manager)
+  queue = newUnboundedMupmuc[SegmentSize, ptr Job, MaxThreads](addr manager)
   running: Atomic[bool]
   jobsSubmitted: array[NumSubmitters, Atomic[int]]
   jobsCompleted: array[NumWorkers, Atomic[int]]
@@ -87,7 +87,8 @@ proc submitterThread(ctx: ptr SubmitterContext) {.thread.} =
         of pNormal: rand(5..15)
         of pLow: rand(10..30)
 
-      let job = Job(
+      let job = create(Job)
+      job[] = Job(
         id: jobId,
         submitterId: ctx.submitterId,
         priority: priority,
@@ -115,13 +116,14 @@ proc workerThread(ctx: ptr WorkerContext) {.thread.} =
       let job = consumer.pop()
 
       if job.isSome:
-        let j = job.get
+        let jp = job.get
 
         # Simulate work
         let start = getMonoTime()
-        sleep(j.workMs)
+        sleep(jp.workMs)
         workTime += (getMonoTime() - start).inMilliseconds
 
+        dealloc(jp)
         inc completed
 
         # Periodic reclamation
