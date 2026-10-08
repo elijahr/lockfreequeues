@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout project
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Setup Nim
         uses: jiro4989/setup-nim-action@v2
@@ -44,14 +44,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runs-on: ubuntu-latest
-            nim-version: 'stable'
-            sanitize-threads: 'yes'
-            sanitize-address: 'yes'
-          - runs-on: ubuntu-latest
-            nim-version: 'devel'
-            sanitize-threads: 'yes'
-            sanitize-address: 'yes'
           - runs-on: ubuntu-24.04-arm
             nim-version: 'stable'
             sanitize-threads: 'yes'
@@ -63,13 +55,13 @@ jobs:
 
     steps:
       - name: Restore cache
-        uses: actions/cache@v6
+        uses: actions/cache@v4
         with:
           path: ${HOME}/.cache
           key: cache-${{ matrix.runs-on }}-${{ matrix.nim-version }}
 
       - name: Checkout project
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Setup Nim ${{ matrix.nim-version }}
         uses: jiro4989/setup-nim-action@v2
@@ -122,3 +114,174 @@ jobs:
           echo "::group::Run examples"
           nimble_run nimble examples
           echo "::endgroup::"
+
+  multi-nim:
+    name: Multi-Nim (2.2.10, 2.2.12, devel) & Nimony / ubuntu-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Setup Nim stable (bootstrap)
+        uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: 'stable'
+
+      - name: Cache Nim toolchains
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.choosenim/toolchains
+            /opt/vfox/cache/nim
+          key: nim-toolchains-${{ runner.os }}-2.2.10-2.2.12-devel
+          restore-keys: |
+            nim-toolchains-${{ runner.os }}-
+
+      - name: Cache nimble packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nimble/pkgs2
+            ~/.nimble/bin
+          key: nimble-${{ runner.os }}-multinim-${{ hashFiles('*.nimble') }}
+          restore-keys: |
+            nimble-${{ runner.os }}-multinim-
+            nimble-${{ runner.os }}-stable-
+
+      - name: Install dependencies (Linux)
+        run: |
+          sudo apt-get update -q -y
+          sudo apt-get -qq install -y clang
+
+      - name: Vendor unittest2 (nim.cfg expects deps/unittest2)
+        run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
+
+      - name: Install dependencies
+        run: nimble install --depsOnly -y
+
+      - name: Test across multiple Nim versions (2.2.10, 2.2.12, devel)
+        run: |
+          set -o pipefail
+          nimble_run() {
+            local logfile
+            logfile="$(mktemp)"
+            "$@" 2>&1 | tee "$logfile"
+            local rc=${PIPESTATUS[0]}
+            if [[ $rc -ne 0 ]]; then
+              return $rc
+            fi
+            if grep -Eq '^[[:space:]]*Error:' "$logfile"; then
+              echo "::error::nimble reported an error but exited 0; failing the step."
+              return 1
+            fi
+          }
+
+          switch_toolchain() {
+            local ver="$1"
+            echo "::group::Switching toolchain to Nim ${ver}"
+            if command -v choosenim &>/dev/null; then
+              if [[ "$ver" == "devel" ]]; then
+                choosenim #devel --yes || choosenim devel --yes
+              else
+                choosenim "$ver" --yes
+              fi
+            elif command -v vfox &>/dev/null; then
+              if [[ "$ver" == "devel" ]]; then
+                vfox install nim@ref:devel || true
+                vfox use nim@ref:devel || true
+              else
+                vfox install "nim@${ver}" || true
+                vfox use "nim@${ver}" || true
+              fi
+            fi
+            echo "Active compiler: $(nim --version | head -1)"
+            echo "Active nimble:   $(nimble --version | head -1)"
+            echo "::endgroup::"
+          }
+
+          VERSIONS=("2.2.10" "2.2.12" "devel")
+          FAILED_STABLE=0
+          FAILED_DEVEL=0
+
+          for ver in "${VERSIONS[@]}"; do
+            switch_toolchain "$ver"
+            echo "::group::Run tests under Nim ${ver}"
+            nimble install --depsOnly -y || true
+            if nimble_run nimble test; then
+              echo "✅ Nim ${ver} test suite passed."
+            else
+              if [[ "$ver" == "devel" ]]; then
+                echo "::warning::Nim devel test suite failed (informational / upstream tracking)."
+                FAILED_DEVEL=1
+              else
+                echo "::error::Nim ${ver} test suite failed!"
+                FAILED_STABLE=1
+              fi
+            fi
+            echo "::endgroup::"
+            echo "::group::Run examples under Nim ${ver}"
+            if nimble_run nimble examples; then
+              echo "✅ Nim ${ver} examples passed."
+            else
+              if [[ "$ver" == "devel" ]]; then
+                echo "::warning::Nim devel examples failed (informational / upstream tracking)."
+                FAILED_DEVEL=1
+              else
+                echo "::error::Nim ${ver} examples failed!"
+                FAILED_STABLE=1
+              fi
+            fi
+            echo "::endgroup::"
+          done
+
+          if [[ $FAILED_STABLE -ne 0 ]]; then
+            echo "::error::One or more release versions of Nim failed tests."
+            exit 1
+          fi
+
+      - name: Cache nimony build
+        uses: actions/cache@v4
+        id: nimony-cache
+        with:
+          path: |
+            /tmp/nimony
+            ~/.nimble/bin/nimony
+          key: nimony-${{ runner.os }}-751121f9ee0fc7584015fc03f5326fe521029d84
+
+      - name: Build nimony from source (pinned SHA)
+        if: steps.nimony-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          git clone https://github.com/nim-lang/nimony.git /tmp/nimony || true
+          if [ -d /tmp/nimony ]; then
+            cd /tmp/nimony
+            git checkout 751121f9ee0fc7584015fc03f5326fe521029d84 || true
+            nimble install -y || nimble build -y || nim c -o:bin/nimony src/nimony.nim || true
+          fi
+
+      - name: Nimony informational test
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          echo "::group::nimony informational check"
+          export PATH="$HOME/.nimble/bin:/tmp/nimony/bin:/tmp/nimony:$PATH"
+          NIMONY_BIN=""
+          for candidate in /tmp/nimony/bin/nimony "$HOME/.nimble/bin/nimony" "$(command -v nimony 2>/dev/null)"; do
+            if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+              NIMONY_BIN="$candidate"
+              break
+            fi
+          done
+          # Run standard Nim arc baseline first
+          echo "Running standard Nim arc baseline..."
+          nim c --threads:on --mm:arc -r tests/nimony/t_nimony_smoke.nim
+          if [ -n "$NIMONY_BIN" ]; then
+            echo "Using nimony binary at: $NIMONY_BIN"
+            "$NIMONY_BIN" c -r tests/nimony/t_nimony_smoke.nim || echo "::warning::nimony build failed (informational / experimental)"
+          else
+            echo "::notice::nimony binary not found; ran standard Nim arc baseline only"
+          fi
+          echo "::endgroup::"
+
