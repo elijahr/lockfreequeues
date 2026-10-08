@@ -109,14 +109,8 @@ jobs:
           sudo apt-get update -q -y
           sudo apt-get -qq install -y clang
 
-      - name: Clone and install sibling Nim deps (nim-debra, nim-typestates)
-        run: |
-          set -e
-          cd ..
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
-          (cd nim-typestates && nimble install -y)
-          (cd nim-debra && nimble install -y)
+      - name: Install dependencies
+        run: nimble install --depsOnly -y
 
       - name: Vendor unittest2
         run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
@@ -178,19 +172,8 @@ jobs:
           sudo apt-get update -q -y
           sudo apt-get -qq install -y clang
 
-      - name: Clone and install sibling Nim deps (nim-debra, nim-typestates)
-        # Mirrors build.yml: nim.cfg uses --path:"../nim-debra/src" and
-        # --path:"../nim-typestates/src", and nimble's resolver runs before
-        # the compiler so we must install matching branches locally. Tracks
-        # `main` until nimble.directory picks up the relevant tags; bump in
-        # lockstep with build.yml and lockfreequeues.nimble's `requires`.
-        run: |
-          set -e
-          cd ..
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
-          (cd nim-typestates && nimble install -y)
-          (cd nim-debra && nimble install -y)
+      - name: Install dependencies
+        run: nimble install --depsOnly -y
 
       - name: Vendor unittest2
         run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2

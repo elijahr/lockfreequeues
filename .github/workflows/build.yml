@@ -82,22 +82,8 @@ jobs:
           sudo apt-get update -q -y
           sudo apt-get -qq install -y clang
 
-      - name: Clone and install sibling deps (nim-debra, nim-typestates)
-        # nim.cfg uses --path:"../nim-debra/src" and --path:"../nim-typestates/src"
-        # for compiler-side resolution. Nimble's dep resolver runs BEFORE
-        # the compiler though, and `nimble test` will refuse to launch if
-        # `requires "debra >= 0.7.0"` is unsatisfiable from nimble's
-        # package store. So fetch matching branches and `nimble install`
-        # them locally to satisfy the resolver. Once nimble.directory has
-        # picked up the new tags, this whole step can be replaced with a
-        # plain `nimble install -d -y`.
-        run: |
-          set -e
-          cd ..
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-debra.git
-          git clone --depth 1 --branch main https://github.com/elijahr/nim-typestates.git
-          (cd nim-typestates && nimble install -y)
-          (cd nim-debra && nimble install -y)
+      - name: Install dependencies
+        run: nimble install --depsOnly -y
 
       - name: Vendor unittest2 (nim.cfg expects deps/unittest2)
         # deps/ is gitignored. nim.cfg has --path:"deps/unittest2".
