@@ -182,7 +182,7 @@ jobs:
             echo "::group::Switching toolchain to Nim ${ver}"
             if command -v choosenim &>/dev/null; then
               if [[ "$ver" == "devel" ]]; then
-                choosenim #devel --yes || choosenim devel --yes
+                choosenim devel --yes || choosenim "#head" --yes
               else
                 choosenim "$ver" --yes
               fi
