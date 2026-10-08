@@ -1,0 +1,12 @@
+/* Custom code font - prefers Fantasque Sans Mono if available */
+:root {
+  --md-code-font: "FantasqueSansM Nerd Font", "Fantasque Sans Mono", "Fira Code", "JetBrains Mono", "Source Code Pro", "Roboto Mono", monospace;
+}
+
+code,
+pre,
+kbd,
+.highlight code,
+.doc-signature code {
+  font-family: var(--md-code-font) !important;
+}

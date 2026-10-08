@@ -1,0 +1,398 @@
+{
+  "lockfreequeues_mupmuc/mpmc/1p1c": {
+    "latency_max_ns": {
+      "value": 21664.454545454544
+    },
+    "latency_p50_ns": {
+      "value": 351.0
+    },
+    "latency_p95_ns": {
+      "value": 381.0
+    },
+    "latency_p999_ns": {
+      "value": 504.27272727272725
+    },
+    "latency_p99_ns": {
+      "value": 400.90909090909093
+    },
+    "throughput_ops_ms": {
+      "lower_value": 21792.947238681878,
+      "upper_value": 24804.751567864845,
+      "value": 23298.84940327336
+    }
+  },
+  "lockfreequeues_mupmuc/mpmc/1p2c": {
+    "throughput_ops_ms": {
+      "lower_value": 20935.690494425628,
+      "upper_value": 21822.709182558316,
+      "value": 21379.19983849197
+    }
+  },
+  "lockfreequeues_mupmuc/mpmc/1p4c": {
+    "throughput_ops_ms": {
+      "lower_value": 20504.497509491895,
+      "upper_value": 21727.99523394425,
+      "value": 21116.246371718073
+    }
+  },
+  "lockfreequeues_mupmuc/mpmc/2p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 18194.02677886422,
+      "upper_value": 18423.68671965518,
+      "value": 18308.8567492597
+    }
+  },
+  "lockfreequeues_mupmuc/mpmc/2p2c": {
+    "throughput_ops_ms": {
+      "lower_value": 19847.76768596655,
+      "upper_value": 19984.771389454865,
+      "value": 19916.26953771071
+    }
+  },
+  "lockfreequeues_mupmuc/mpmc/2p4c": {
+    "throughput_ops_ms": {
+      "lower_value": 18548.51119581309,
+      "upper_value": 19460.12223788605,
+      "value": 19004.31671684957
+    }
+  },
+  "lockfreequeues_mupmuc/mpmc/4p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 11693.690215566465,
+      "upper_value": 12094.812470878118,
+      "value": 11894.251343222291
+    }
+  },
+  "lockfreequeues_mupmuc/mpmc/4p2c": {
+    "throughput_ops_ms": {
+      "lower_value": 10364.845007731958,
+      "upper_value": 12039.704490343007,
+      "value": 11202.274749037482
+    }
+  },
+  "lockfreequeues_mupmuc/mpmc/4p4c": {
+    "throughput_ops_ms": {
+      "lower_value": 10255.519591619603,
+      "upper_value": 21381.212536937426,
+      "value": 15818.366064278514
+    }
+  },
+  "lockfreequeues_mupmuc/mpmc/8p8c": {
+    "throughput_ops_ms": {
+      "lower_value": 18713.610532187573,
+      "upper_value": 21160.416606446553,
+      "value": 19937.013569317063
+    }
+  },
+  "lockfreequeues_mupsic/mpsc/1p1c": {
+    "latency_max_ns": {
+      "value": 25160.545454545456
+    },
+    "latency_p50_ns": {
+      "value": 351.0
+    },
+    "latency_p95_ns": {
+      "value": 381.0
+    },
+    "latency_p999_ns": {
+      "value": 512.7272727272727
+    },
+    "latency_p99_ns": {
+      "value": 400.45454545454544
+    },
+    "throughput_ops_ms": {
+      "lower_value": 26609.405827161972,
+      "upper_value": 27623.35418228116,
+      "value": 27116.380004721566
+    }
+  },
+  "lockfreequeues_mupsic/mpsc/2p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 20794.86028097661,
+      "upper_value": 21072.948561906574,
+      "value": 20933.90442144159
+    }
+  },
+  "lockfreequeues_mupsic/mpsc/4p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 19419.767433944435,
+      "upper_value": 22910.667825405355,
+      "value": 21165.217629674895
+    }
+  },
+  "lockfreequeues_sipmuc/mpmc/1p1c": {
+    "latency_max_ns": {
+      "value": 27229.727272727272
+    },
+    "latency_p50_ns": {
+      "value": 351.0
+    },
+    "latency_p95_ns": {
+      "value": 381.0
+    },
+    "latency_p999_ns": {
+      "value": 543.5454545454545
+    },
+    "latency_p99_ns": {
+      "value": 401.0
+    },
+    "throughput_ops_ms": {
+      "lower_value": 25044.049937477877,
+      "upper_value": 25130.460836241775,
+      "value": 25087.255386859826
+    }
+  },
+  "lockfreequeues_sipmuc/mpmc/1p2c": {
+    "throughput_ops_ms": {
+      "lower_value": 20852.456495877617,
+      "upper_value": 21073.909004203968,
+      "value": 20963.182750040793
+    }
+  },
+  "lockfreequeues_sipmuc/mpmc/1p4c": {
+    "throughput_ops_ms": {
+      "lower_value": 19207.09035137247,
+      "upper_value": 20510.88078484484,
+      "value": 19858.985568108656
+    }
+  },
+  "lockfreequeues_sipsic/spsc/1p1c": {
+    "latency_max_ns": {
+      "value": 32777.27272727273
+    },
+    "latency_p50_ns": {
+      "value": 640.0909090909091
+    },
+    "latency_p95_ns": {
+      "value": 671.0
+    },
+    "latency_p999_ns": {
+      "value": 1904.5454545454545
+    },
+    "latency_p99_ns": {
+      "value": 682.8181818181819
+    },
+    "throughput_ops_ms": {
+      "lower_value": 6740.509368725268,
+      "upper_value": 7040.761916171234,
+      "value": 6890.635642448251
+    }
+  },
+  "lockfreequeues_unbounded_mupmuc/mpmc_unbounded/1p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 9741.257758253629,
+      "upper_value": 9779.65763765449,
+      "value": 9760.45769795406
+    }
+  },
+  "lockfreequeues_unbounded_mupmuc/mpmc_unbounded/1p2c": {
+    "throughput_ops_ms": {
+      "lower_value": 4639.680470710957,
+      "upper_value": 5109.728084696777,
+      "value": 4874.704277703867
+    }
+  },
+  "lockfreequeues_unbounded_mupmuc/mpmc_unbounded/2p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 8849.804562652263,
+      "upper_value": 10066.53467726111,
+      "value": 9458.169619956687
+    }
+  },
+  "lockfreequeues_unbounded_mupmuc/mpmc_unbounded/2p2c": {
+    "throughput_ops_ms": {
+      "lower_value": 9901.49685505016,
+      "upper_value": 10032.341032856404,
+      "value": 9966.918943953282
+    }
+  },
+  "lockfreequeues_unbounded_mupsic/mpsc_unbounded/1p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 10031.922680458261,
+      "upper_value": 10037.983722553152,
+      "value": 10034.953201505707
+    }
+  },
+  "lockfreequeues_unbounded_mupsic/mpsc_unbounded/2p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 9266.494702217951,
+      "upper_value": 9691.224778522283,
+      "value": 9478.859740370117
+    }
+  },
+  "lockfreequeues_unbounded_mupsic/mpsc_unbounded/4p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 10610.505476394424,
+      "upper_value": 11258.135242723343,
+      "value": 10934.320359558884
+    }
+  },
+  "lockfreequeues_unbounded_sipmuc/mpmc_unbounded/1p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 16167.535367018196,
+      "upper_value": 16608.73999687544,
+      "value": 16388.137681946817
+    }
+  },
+  "lockfreequeues_unbounded_sipmuc/mpmc_unbounded/1p2c": {
+    "throughput_ops_ms": {
+      "lower_value": 11012.098498948195,
+      "upper_value": 15297.247691477525,
+      "value": 13154.67309521286
+    }
+  },
+  "lockfreequeues_unbounded_sipsic/spsc_unbounded/1p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 29109.068387708936,
+      "upper_value": 30145.721398050995,
+      "value": 29627.394892879965
+    }
+  },
+  "moodycamel/mpmc_unbounded/1p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 21116.696418111063,
+      "upper_value": 22463.84236897108,
+      "value": 21790.26939354107
+    }
+  },
+  "moodycamel/mpmc_unbounded/1p2c": {
+    "throughput_ops_ms": {
+      "lower_value": 8493.010246832338,
+      "upper_value": 15404.792472466102,
+      "value": 11948.90135964922
+    }
+  },
+  "moodycamel/mpmc_unbounded/1p4c": {
+    "throughput_ops_ms": {
+      "lower_value": 12191.833804854574,
+      "upper_value": 16392.270731455465,
+      "value": 14292.05226815502
+    }
+  },
+  "moodycamel/mpmc_unbounded/2p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 29219.458518989635,
+      "upper_value": 29827.557413217317,
+      "value": 29523.507966103476
+    }
+  },
+  "moodycamel/mpmc_unbounded/2p2c": {
+    "throughput_ops_ms": {
+      "lower_value": 10038.116828180815,
+      "upper_value": 11389.971440811636,
+      "value": 10714.044134496226
+    }
+  },
+  "moodycamel/mpmc_unbounded/2p4c": {
+    "throughput_ops_ms": {
+      "lower_value": 13046.91125648945,
+      "upper_value": 14292.948192024145,
+      "value": 13669.929724256797
+    }
+  },
+  "moodycamel/mpmc_unbounded/4p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 33057.9395270271,
+      "upper_value": 33903.1314391103,
+      "value": 33480.5354830687
+    }
+  },
+  "moodycamel/mpmc_unbounded/4p2c": {
+    "throughput_ops_ms": {
+      "lower_value": 10987.805405123006,
+      "upper_value": 11288.916160888777,
+      "value": 11138.360783005892
+    }
+  },
+  "moodycamel/mpmc_unbounded/4p4c": {
+    "throughput_ops_ms": {
+      "lower_value": 9570.947765125917,
+      "upper_value": 28129.779492646987,
+      "value": 18850.36362888645
+    }
+  },
+  "nim_channel/mpsc/1p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 2558.677299355062,
+      "upper_value": 2597.14220939571,
+      "value": 2577.909754375386
+    }
+  },
+  "nim_channel/mpsc/2p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 5008.845881160262,
+      "upper_value": 5267.142569615456,
+      "value": 5137.994225387859
+    }
+  },
+  "nim_channel/mpsc/4p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 4850.276441290052,
+      "upper_value": 5172.3245963663285,
+      "value": 5011.30051882819
+    }
+  },
+  "nim_channels/mpmc/1p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 2448.9785491649945,
+      "upper_value": 2699.5625763668495,
+      "value": 2574.270562765922
+    }
+  },
+  "nim_channels/mpmc/1p2c": {
+    "throughput_ops_ms": {
+      "lower_value": 1220.7723628887502,
+      "upper_value": 1331.760270129032,
+      "value": 1276.2663165088911
+    }
+  },
+  "nim_channels/mpmc/1p4c": {
+    "throughput_ops_ms": {
+      "lower_value": 303.41371305214193,
+      "upper_value": 320.70370004896574,
+      "value": 312.05870655055384
+    }
+  },
+  "nim_channels/mpmc/2p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 5111.901281469953,
+      "upper_value": 5793.9134208759115,
+      "value": 5452.907351172932
+    }
+  },
+  "nim_channels/mpmc/2p2c": {
+    "throughput_ops_ms": {
+      "lower_value": 1444.83513377589,
+      "upper_value": 1507.0942605234713,
+      "value": 1475.9646971496807
+    }
+  },
+  "nim_channels/mpmc/2p4c": {
+    "throughput_ops_ms": {
+      "lower_value": 655.534917377295,
+      "upper_value": 760.5404851432388,
+      "value": 708.0377012602669
+    }
+  },
+  "nim_channels/mpmc/4p1c": {
+    "throughput_ops_ms": {
+      "lower_value": 4943.161998074444,
+      "upper_value": 5355.258090400307,
+      "value": 5149.210044237376
+    }
+  },
+  "nim_channels/mpmc/4p2c": {
+    "throughput_ops_ms": {
+      "lower_value": 1766.126229311884,
+      "upper_value": 2569.2311724046253,
+      "value": 2167.6787008582546
+    }
+  },
+  "nim_channels/mpmc/4p4c": {
+    "throughput_ops_ms": {
+      "lower_value": 1769.1365835773386,
+      "upper_value": 1935.598783483878,
+      "value": 1852.3676835306082
+    }
+  }
+}
