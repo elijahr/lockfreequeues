@@ -1,9 +1,9 @@
 import os
 
 # Package
-version        = "4.2.0"
+version        = "5.1.0"
 author         = "Elijah Shaw-Rutschman"
-description    = "Lock-free queue implementations for Nim."
+description    = "Compatibility facade for lockfree — lock-free queues for Nim."
 license        = "MIT"
 srcDir         = "src"
 entryPoints    = @["tests/test.nim"]
