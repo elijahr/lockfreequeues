@@ -56,7 +56,11 @@ type
   MupmucProducer*[N, P, C: static int; T] = Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccMulti, N, P, C]]
   MupmucConsumer*[N, P, C: static int; T] = Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccMulti, N, P, C]]
   MupsicProducer*[N, P: static int; T] = Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccSingle, N, P, 0]]
+  MupsicConsumer*[N, P: static int; T] = Bound[T, AnyThreadTag, BQueue[T, ccMulti, ccSingle, N, P, 0]]
+  SipmucProducer*[N, C: static int; T] = Bound[T, AnyThreadTag, BQueue[T, ccSingle, ccMulti, N, 0, C]]
   SipmucConsumer*[N, C: static int; T] = Bound[T, AnyThreadTag, BQueue[T, ccSingle, ccMulti, N, 0, C]]
+  SipsicProducer*[N: static int; T] = Bound[T, AnyThreadTag, BQueue[T, ccSingle, ccSingle, N, 0, 0]]
+  SipsicConsumer*[N: static int; T] = Bound[T, AnyThreadTag, BQueue[T, ccSingle, ccSingle, N, 0, 0]]
 
 # ---------------------------------------------------------------------------
 # Unbounded legacy type aliases
@@ -80,6 +84,16 @@ type
   UnboundedMupsicQueue*[T; S, MaxThreads: static int] = Queue[T, ccMulti, ccSingle, stEager, S, MaxThreads]
   UnboundedSipmucQueue*[T; S, MaxThreads: static int] = Queue[T, ccSingle, ccMulti, stEager, S, MaxThreads]
   UnboundedMupmucQueue*[T; S, MaxThreads: static int] = Queue[T, ccMulti, ccMulti, stEager, S, MaxThreads]
+
+  # Unbounded per-thread endpoint aliases
+  UnboundedMupsicProducer*[S: static int, T; MaxThreads: static int = 64] = Bound[T, AnyThreadTag, Queue[T, ccMulti, ccSingle, stEager, S, MaxThreads]]
+  UnboundedMupsicConsumer*[S: static int, T; MaxThreads: static int = 64] = Bound[T, AnyThreadTag, Queue[T, ccMulti, ccSingle, stEager, S, MaxThreads]]
+  UnboundedSipmucProducer*[S: static int, T; MaxThreads: static int = 64] = Bound[T, AnyThreadTag, Queue[T, ccSingle, ccMulti, stEager, S, MaxThreads]]
+  UnboundedSipmucConsumer*[S: static int, T; MaxThreads: static int = 64] = Bound[T, AnyThreadTag, Queue[T, ccSingle, ccMulti, stEager, S, MaxThreads]]
+  UnboundedMupmucProducer*[S: static int, T; MaxThreads: static int = 64] = Bound[T, AnyThreadTag, Queue[T, ccMulti, ccMulti, stEager, S, MaxThreads]]
+  UnboundedMupmucConsumer*[S: static int, T; MaxThreads: static int = 64] = Bound[T, AnyThreadTag, Queue[T, ccMulti, ccMulti, stEager, S, MaxThreads]]
+  UnboundedSipsicProducer*[S: static int, T] = Bound[T, AnyThreadTag, Queue[T, ccSingle, ccSingle, stEager, S, 1]]
+  UnboundedSipsicConsumer*[S: static int, T] = Bound[T, AnyThreadTag, Queue[T, ccSingle, ccSingle, stEager, S, 1]]
 
 # ---------------------------------------------------------------------------
 # Bounded constructors (supporting both minimal and 4-param arities)
@@ -140,8 +154,11 @@ template newUnboundedMupsic*[S: static int, T; MaxThreads: static int](manager: 
 template newUnboundedMupsic*[S: static int, T; MaxThreads: static int](manager: auto, handle: auto): untyped =
   newUnboundedMpscQueue[T, stEager, S, MaxThreads](cast[ptr nebr.DebraManager[MaxThreads, nebr.ccSingle]](manager))
 
-template newUnboundedMupsic*[S: static int, T; MaxThreads: static int](manager: auto, handle: auto, strategy: DeallocationStrategy): untyped =
-  newUnboundedMpscQueue[T, strategy, S, MaxThreads](cast[ptr nebr.DebraManager[MaxThreads, nebr.ccSingle]](manager))
+template newUnboundedMupsic*[S: static int, T; MaxThreads: static int](manager: auto, handle: auto, strategy: auto): untyped =
+  when strategy is static DeallocationStrategy:
+    newUnboundedMpscQueue[T, strategy, S, MaxThreads](cast[ptr nebr.DebraManager[MaxThreads, nebr.ccSingle]](manager))
+  else:
+    newUnboundedMpscQueue[T, stEager, S, MaxThreads](cast[ptr nebr.DebraManager[MaxThreads, nebr.ccSingle]](manager))
 
 template newUnboundedSipmuc*[S: static int, T; MaxThreads: static int = 64](): untyped =
   newUnboundedSpmcQueue[T, stEager, S, MaxThreads]()
@@ -149,8 +166,11 @@ template newUnboundedSipmuc*[S: static int, T; MaxThreads: static int = 64](): u
 template newUnboundedSipmuc*[S: static int, T; MaxThreads: static int](manager: auto): untyped =
   newUnboundedSpmcQueue[T, stEager, S, MaxThreads](cast[ptr nebr.DebraManager[MaxThreads, nebr.ccMulti]](manager))
 
-template newUnboundedSipmuc*[S: static int, T; MaxThreads: static int](manager: auto, strategy: DeallocationStrategy): untyped =
-  newUnboundedSpmcQueue[T, strategy, S, MaxThreads](cast[ptr nebr.DebraManager[MaxThreads, nebr.ccMulti]](manager))
+template newUnboundedSipmuc*[S: static int, T; MaxThreads: static int](manager: auto, strategy: auto): untyped =
+  when strategy is static DeallocationStrategy:
+    newUnboundedSpmcQueue[T, strategy, S, MaxThreads](cast[ptr nebr.DebraManager[MaxThreads, nebr.ccMulti]](manager))
+  else:
+    newUnboundedSpmcQueue[T, stEager, S, MaxThreads](cast[ptr nebr.DebraManager[MaxThreads, nebr.ccMulti]](manager))
 
 template newUnboundedMupmuc*[S: static int, T; MaxThreads: static int = 64](): untyped =
   newUnboundedMpmcQueue[T, stEager, S, MaxThreads]()
@@ -158,8 +178,11 @@ template newUnboundedMupmuc*[S: static int, T; MaxThreads: static int = 64](): u
 template newUnboundedMupmuc*[S: static int, T; MaxThreads: static int](manager: auto): untyped =
   newUnboundedMpmcQueue[T, stEager, S, MaxThreads](cast[ptr nebr.DebraManager[MaxThreads, nebr.ccMulti]](manager))
 
-template newUnboundedMupmuc*[S: static int, T; MaxThreads: static int](manager: auto, strategy: DeallocationStrategy): untyped =
-  newUnboundedMpmcQueue[T, strategy, S, MaxThreads](cast[ptr nebr.DebraManager[MaxThreads, nebr.ccMulti]](manager))
+template newUnboundedMupmuc*[S: static int, T; MaxThreads: static int](manager: auto, strategy: auto): untyped =
+  when strategy is static DeallocationStrategy:
+    newUnboundedMpmcQueue[T, strategy, S, MaxThreads](cast[ptr nebr.DebraManager[MaxThreads, nebr.ccMulti]](manager))
+  else:
+    newUnboundedMpmcQueue[T, stEager, S, MaxThreads](cast[ptr nebr.DebraManager[MaxThreads, nebr.ccMulti]](manager))
 
 # ---------------------------------------------------------------------------
 # Auto-attach logic for endpoints (DEFECT-WARN-01)
@@ -359,4 +382,31 @@ proc push*[
   when defined(debug):
     b.attachedTid = getThreadId()
   b.push(items)
+
+# ---------------------------------------------------------------------------
+# Direct push for UnboundedSipmuc (ccSingle x ccMulti)
+# ---------------------------------------------------------------------------
+
+proc push*[
+    T;
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](self: var Queue[T, ccSingle, ccMulti, ST, S, MaxThreads], item: sink T) =
+  var b: Bound[T, AnyThreadTag, Queue[T, ccSingle, ccMulti, ST, S, MaxThreads]]
+  b.queue = addr(self)
+  when defined(debug):
+    b.attachedTid = getThreadId()
+  b.push(item)
+
+proc push*[
+    T;
+    ST: static DeallocationStrategy,
+    S, MaxThreads: static int,
+](self: var Queue[T, ccSingle, ccMulti, ST, S, MaxThreads], items: openArray[T]) =
+  var b: Bound[T, AnyThreadTag, Queue[T, ccSingle, ccMulti, ST, S, MaxThreads]]
+  b.queue = addr(self)
+  when defined(debug):
+    b.attachedTid = getThreadId()
+  b.push(items)
+
 

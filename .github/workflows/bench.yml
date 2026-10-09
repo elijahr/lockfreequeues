@@ -100,7 +100,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Nim
-        uses: jiro4989/setup-nim-action@v2
+        uses: elijahr/vfox-nim@main
         with:
           nim-version: 'stable'
 
@@ -163,7 +163,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Nim
-        uses: jiro4989/setup-nim-action@v2
+        uses: elijahr/vfox-nim@main
         with:
           nim-version: 'stable'
 
