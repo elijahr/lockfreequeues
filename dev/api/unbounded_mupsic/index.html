@@ -1066,6 +1066,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="unbounded_mupsic">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#Producer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Producer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#Consumer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consumer
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
       </ul>
@@ -1259,6 +1287,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="unbounded_mupsic">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#Producer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Producer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#Consumer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consumer
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
       </ul>
@@ -1356,6 +1412,82 @@ full distinction.</p>
   <div class="doc doc-contents first">
     
 
+    
+      
+      
+        <div class="doc doc-object doc-type">
+  
+
+  <h4 id="Producer" class="doc doc-heading">
+    <code class="doc-symbol doc-symbol-heading doc-symbol-type"></code>
+    <span class="doc doc-object-name doc-type-name">Producer</span>
+  <a href="#Producer" class="headerlink" title="Permanent link">¶</a></h4>
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">type</span><span class="w"> </span><span class="n">Producer</span><span class="o">[</span><span class="n">S</span><span class="p">:</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="nb">int</span><span class="p">;</span><span class="w"> </span><span class="n">T</span><span class="p">;</span><span class="w"> </span><span class="n">MaxThreads</span><span class="p">:</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="nb">int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">64</span><span class="o">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">UnboundedMupsicProducer</span><span class="o">[</span><span class="n">S</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents">
+    
+
+    
+
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_mupsic.nim#L5" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_mupsic.nim:5
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
+    
+      
+      
+        <div class="doc doc-object doc-type">
+  
+
+  <h4 id="Consumer" class="doc doc-heading">
+    <code class="doc-symbol doc-symbol-heading doc-symbol-type"></code>
+    <span class="doc doc-object-name doc-type-name">Consumer</span>
+  <a href="#Consumer" class="headerlink" title="Permanent link">¶</a></h4>
+
+  
+    <div class="doc-signature highlight">
+      <pre><code class="language-nim highlight"><span class="k">type</span><span class="w"> </span><span class="n">Consumer</span><span class="o">[</span><span class="n">S</span><span class="p">:</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="nb">int</span><span class="p">;</span><span class="w"> </span><span class="n">T</span><span class="p">;</span><span class="w"> </span><span class="n">MaxThreads</span><span class="p">:</span><span class="w"> </span><span class="k">static</span><span class="w"> </span><span class="nb">int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">64</span><span class="o">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">UnboundedMupsicConsumer</span><span class="o">[</span><span class="n">S</span><span class="p">,</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">MaxThreads</span><span class="o">]</span>
+</code></pre>
+    </div>
+  
+
+  <div class="doc doc-contents">
+    
+
+    
+
+    
+
+    
+      <div class="doc-source">
+        <span class="doc-source-label">Source:</span>
+        
+          <a href="https://github.com/elijahr/lockfreequeues/blob/devel/src/lockfreequeues/unbounded_mupsic.nim#L6" target="_blank" rel="noopener">
+            src/lockfreequeues/unbounded_mupsic.nim:6
+          </a>
+        
+      </div>
+    
+  </div>
+</div>
+      
     
 
     
