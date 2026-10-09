@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Nim
-        uses: jiro4989/setup-nim-action@v2
+        uses: elijahr/vfox-nim@main
         with:
           nim-version: 'stable'
 
@@ -64,7 +64,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Nim ${{ matrix.nim-version }}
-        uses: jiro4989/setup-nim-action@v2
+        uses: elijahr/vfox-nim@main
         with:
           nim-version: ${{ matrix.nim-version }}
 
@@ -124,7 +124,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Nim stable (bootstrap)
-        uses: jiro4989/setup-nim-action@v2
+        uses: elijahr/vfox-nim@main
         with:
           nim-version: 'stable'
 
