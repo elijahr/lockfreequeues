@@ -52,7 +52,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Nim
-        uses: jiro4989/setup-nim-action@v2
+        uses: elijahr/vfox-nim@main
         with:
           nim-version: 'stable'
 
@@ -61,18 +61,8 @@ jobs:
           sudo apt-get update -q -y
           sudo apt-get -qq install -y clang
 
-      - name: Clone and install sibling Nim deps (nim-debra, nim-typestates)
-        # Mirrors bench.yml -- nim.cfg in src/ resolves these via
-        # ../nim-debra/src and ../nim-typestates/src. Pin to release
-        # tags (not `main`) for deterministic CI; bump in lockstep with
-        # build.yml/bench.yml and lockfreequeues.nimble's `requires`.
-        run: |
-          set -e
-          cd ..
-          git clone --depth 1 --branch v0.6.0 https://github.com/elijahr/nim-debra.git
-          git clone --depth 1 --branch v0.7.0 https://github.com/elijahr/nim-typestates.git
-          (cd nim-typestates && nimble install -y)
-          (cd nim-debra && nimble install -y)
+      - name: Install dependencies
+        run: nimble install --depsOnly -y
 
       - name: Vendor unittest2
         run: git clone --depth 1 https://github.com/status-im/nim-unittest2.git deps/unittest2
