@@ -11,7 +11,7 @@ entryPoints    = @["tests/test.nim"]
 # Dependencies
 requires "nim >= 2.2.0"
 requires "unittest2"
-requires "typestates >= 0.7.2"
+requires "typestates >= 0.12.1"
 requires "https://github.com/elijahr/lockfree >= 0.1.0"
 
 # Tasks
