@@ -1,8 +1,14 @@
 # lockfreequeues (Compatibility Facade)
 
-> ⚠️ **Package Consolidated into [`lockfree`](https://github.com/elijahr/lockfree)**  
-> As of version 0.1.0, `lockfreequeues` and `nim-debra` have been unified into a single high-performance library: **[`lockfree`](https://github.com/elijahr/lockfree)**.  
-> This package is maintained as a **zero-overhead backwards-compatibility facade**. New projects should depend directly on `lockfree`.
+> [!IMPORTANT]
+> **Package Consolidated into [`lockfree`](https://github.com/elijahr/lockfree)**  
+> As of version 5.1.0, `lockfreequeues` and `nim-debra` have been unified into a single high-performance library: **[`lockfree`](https://github.com/elijahr/lockfree)**.  
+> This repository is maintained strictly as a **zero-overhead backwards-compatibility facade** mapping historical types to canonical `lockfree` engines.  
+> **All new projects and active development should depend directly on [`lockfree`](https://github.com/elijahr/lockfree).**
+>
+> - 📖 **Documentation**: [https://elijahr.github.io/lockfree/latest/](https://elijahr.github.io/lockfree/latest/)
+> - 🔄 **Migration Guide**: [https://elijahr.github.io/lockfree/latest/migrations/from-lockfreequeues-v5/](https://elijahr.github.io/lockfree/latest/migrations/from-lockfreequeues-v5/)
+> - 📦 **Canonical Repo**: [https://github.com/elijahr/lockfree](https://github.com/elijahr/lockfree)
 
 [![Docs](https://img.shields.io/badge/docs-lockfree-blue.svg)](https://elijahr.github.io/lockfree/latest/)
 [![Migration Guide](https://img.shields.io/badge/guide-migration-orange.svg)](https://elijahr.github.io/lockfree/latest/migrations/from-lockfreequeues-v5/)

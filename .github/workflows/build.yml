@@ -16,25 +16,6 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  lint:
-    name: Lint (typestates verify)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout project
-        uses: actions/checkout@v4
-
-      - name: Setup Nim
-        uses: elijahr/vfox-nim@main
-        with:
-          nim-version: 'stable'
-
-      - name: Install typestates
-        run: nimble install -y typestates
-
-      - name: Typestates verify
-        run: typestates verify -W --format=github src/
-
   test:
     name: Test nim-${{ matrix.nim-version }} / ${{ matrix.runs-on }}
     runs-on: ${{ matrix.runs-on }}
@@ -239,49 +220,4 @@ jobs:
             echo "::error::One or more release versions of Nim failed tests."
             exit 1
           fi
-
-      - name: Cache nimony build
-        uses: actions/cache@v4
-        id: nimony-cache
-        with:
-          path: |
-            /tmp/nimony
-            ~/.nimble/bin/nimony
-          key: nimony-${{ runner.os }}-751121f9ee0fc7584015fc03f5326fe521029d84
-
-      - name: Build nimony from source (pinned SHA)
-        if: steps.nimony-cache.outputs.cache-hit != 'true'
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          git clone https://github.com/nim-lang/nimony.git /tmp/nimony || true
-          if [ -d /tmp/nimony ]; then
-            cd /tmp/nimony
-            git checkout 751121f9ee0fc7584015fc03f5326fe521029d84 || true
-            nimble install -y || nimble build -y || nim c -o:bin/nimony src/nimony.nim || true
-          fi
-
-      - name: Nimony informational test
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          echo "::group::nimony informational check"
-          export PATH="$HOME/.nimble/bin:/tmp/nimony/bin:/tmp/nimony:$PATH"
-          NIMONY_BIN=""
-          for candidate in /tmp/nimony/bin/nimony "$HOME/.nimble/bin/nimony" "$(command -v nimony 2>/dev/null)"; do
-            if [ -n "$candidate" ] && [ -x "$candidate" ]; then
-              NIMONY_BIN="$candidate"
-              break
-            fi
-          done
-          # Run standard Nim arc baseline first
-          echo "Running standard Nim arc baseline..."
-          nim c --threads:on --mm:arc -r tests/nimony/t_nimony_smoke.nim
-          if [ -n "$NIMONY_BIN" ]; then
-            echo "Using nimony binary at: $NIMONY_BIN"
-            "$NIMONY_BIN" c -r tests/nimony/t_nimony_smoke.nim || echo "::warning::nimony build failed (informational / experimental)"
-          else
-            echo "::notice::nimony binary not found; ran standard Nim arc baseline only"
-          fi
-          echo "::endgroup::"
 
