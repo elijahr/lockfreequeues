@@ -1494,7 +1494,7 @@
 capacity (or segments), where to place producer and consumer threads, how
 batch sizing changes amortized cost, and which compile-time settings matter.</p>
 <p>For the published benchmark numbers and methodology, see
-<a href="../benchmarks.md">Benchmarks</a>.</p>
+<a href="https://elijahr.github.io/lockfree/latest/benchmarks/">Benchmarks</a>.</p>
 <h2 id="capacity-segment-sizing">Capacity / segment sizing<a class="headerlink" href="#capacity-segment-sizing" title="Permanent link">¶</a></h2>
 <h3 id="throughput-vs-memory-trade-off">Throughput-vs-memory trade-off<a class="headerlink" href="#throughput-vs-memory-trade-off" title="Permanent link">¶</a></h3>
 <p>Capacity is the single biggest knob on bounded throughput. Too small and
@@ -1523,7 +1523,7 @@ floor.</p>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="kd">var</span><span class="w"> </span><span class="n">events</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">newUnboundedMupmuc</span><span class="o">[</span><span class="mi">1024</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="o">]</span><span class="p">()</span>
 </code></pre></div>
 <h3 id="empirical-data">Empirical data<a class="headerlink" href="#empirical-data" title="Permanent link">¶</a></h3>
-<p>See <a href="../benchmarks.md">Benchmarks</a> for the measured throughput-vs-capacity
+<p>See <a href="https://elijahr.github.io/lockfree/latest/benchmarks/">Benchmarks</a> for the measured throughput-vs-capacity
 curves and the reproducer commands used to generate them.</p>
 <p>For the conceptual rationale, see
 <a href="../bounded-vs-unbounded/#choosing-n-throughput-vs-memory">Bounded vs Unbounded → Choosing N</a>.</p>
@@ -1591,7 +1591,7 @@ on the producer side and an integer count on the consumer side:</p>
 <code>batch_size = 64</code>, by 64× — at which point the per-item slot store
 dominates and further batching stops helping.</p>
 <h3 id="measured-impact-in-bench_nim-overrides">Measured impact in <code>bench_*.nim</code> overrides<a class="headerlink" href="#measured-impact-in-bench_nim-overrides" title="Permanent link">¶</a></h3>
-<p>See <a href="../benchmarks.md">Benchmarks</a> for the bench harness configuration and
+<p>See <a href="https://elijahr.github.io/lockfree/latest/benchmarks/">Benchmarks</a> for the bench harness configuration and
 batch-size sweeps. The bench harness exposes per-shape overrides so you
 can probe a specific (producer-count, consumer-count, batch-size) cell
 without re-running the whole sweep.</p>
@@ -1647,7 +1647,7 @@ some of the atomic builtins the queues rely on.</p>
 <a href="../safety-model/#test-matrix">Safety Model → Test matrix</a> and
 <a href="../memory-management/#item-types-and-arc-orc">Memory Management → Item types and ARC / ORC</a>.</p>
 <h2 id="methodology-link">Methodology link<a class="headerlink" href="#methodology-link" title="Permanent link">¶</a></h2>
-<p>See <a href="../benchmarks.md">Benchmarks</a> for the methodology that produced the
+<p>See <a href="https://elijahr.github.io/lockfree/latest/benchmarks/">Benchmarks</a> for the methodology that produced the
 published numbers, including reproducer commands and CI tuning overrides.</p>
 
 
@@ -1671,7 +1671,7 @@ published numbers, including reproducer commands and CI tuning overrides.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"></path></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="May 6, 2026 04:28:51 UTC"><span class="timeago" datetime="2026-05-06T04:28:51+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="May 6, 2026 04:28:51 UTC">2026-05-06</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="October 11, 2026 08:47:30 UTC"><span class="timeago" datetime="2026-10-11T08:47:30+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="October 11, 2026 08:47:30 UTC">2026-10-11</span>
   </span>
 
     
