@@ -1,10 +1,13 @@
 # UnboundedSipmuc
 
+!!! info "Canonical API Documentation"
+    `lockfreequeues` is a backwards-compatibility wrapper. `UnboundedSipmuc` forwards directly to canonical `lockfree`'s unbounded SPMC `Queue`. For canonical documentation, see [**`lockfree` Documentation**](https://elijahr.github.io/lockfree/).
+
 Unbounded single-producer, multiple-consumer (SPMC) queue using linked segments.
 
 ## Overview
 
-`UnboundedSipmuc` provides an unbounded SPMC queue where a single producer distributes work to multiple consumers. Uses DEBRA+ epoch-based memory reclamation (via [nim-debra](https://github.com/elijahr/nim-debra)) for safe segment deallocation, and a segment-level `tail` atomic for safe publication to concurrent consumers.
+`UnboundedSipmuc` provides an unbounded SPMC queue where a single producer distributes work to multiple consumers. Uses DEBRA / NEBR epoch-based memory reclamation (via canonical [`lockfree`](https://github.com/elijahr/lockfree)) for safe segment deallocation, and a segment-level `tail` atomic for safe publication to concurrent consumers.
 
 > **Note:** With a single producer there is no race on the slot itself,
 > so each segment carries one `tail: Atomic[int]` rather than a per-slot

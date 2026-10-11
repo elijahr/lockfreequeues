@@ -1,5 +1,8 @@
 # Safety Model
 
+!!! info "Compatibility Facade Notice"
+    `lockfreequeues` is a zero-overhead backwards-compatibility facade. For canonical documentation on thread safety and modern concurrency primitives, see [**`lockfree` Documentation**](https://elijahr.github.io/lockfree/).
+
 This document covers the thread-safety contract of `lockfreequeues`: what the
 queues guarantee, what they require of item types, and how the test matrix
 exercises both.

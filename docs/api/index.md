@@ -1,5 +1,8 @@
 # API Reference
 
+!!! info "Canonical API Documentation"
+    `lockfreequeues` is maintained strictly as a **zero-overhead backwards-compatibility facade** around canonical [**`lockfree`**](https://github.com/elijahr/lockfree). For active API documentation, modern channel abstractions (`Channel[T]`), and C ABI interfaces, see [**`lockfree` Documentation**](https://elijahr.github.io/lockfree/).
+
 ## Bounded Queues
 
 Fixed-capacity ring buffer implementations. Capacity and thread counts are compile-time constants.
@@ -11,7 +14,7 @@ Fixed-capacity ring buffer implementations. Capacity and thread counts are compi
 
 ## Unbounded Queues
 
-Dynamic-capacity linked segment implementations. Grow as needed; the MP/MC variants use DEBRA+ epoch-based memory reclamation supplied by [nim-debra](https://github.com/elijahr/nim-debra), while the SPSC variant frees retired segments inline (no manager).
+Dynamic-capacity linked segment implementations. Grow as needed; the MP/MC variants use DEBRA / NEBR epoch-based memory reclamation supplied by canonical [`lockfree`](https://github.com/elijahr/lockfree) (`lockfree/smr/nebr`), while the SPSC variant frees retired segments inline (no manager).
 
 - **[UnboundedSipsic](unbounded_sipsic.md)** - Single-producer, single-consumer (SPSC). Wait-free operations.
 - **[UnboundedSipmuc](unbounded_sipmuc.md)** - Single-producer, multiple-consumer (SPMC). Wait-free push, lock-free pop.

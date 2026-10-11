@@ -1,5 +1,8 @@
 # Performance Tuning
 
+!!! info "Compatibility Facade Notice"
+    `lockfreequeues` is maintained strictly as a **zero-overhead backwards-compatibility facade** around canonical [**`lockfree`**](https://github.com/elijahr/lockfree). For modern benchmarks, Apple Silicon cacheline tuning, and performance analysis, see [**`lockfree` Documentation**](https://elijahr.github.io/lockfree/).
+
 Practical guidance for getting the most out of `lockfreequeues`: how to size
 capacity (or segments), where to place producer and consumer threads, how
 batch sizing changes amortized cost, and which compile-time settings matter.

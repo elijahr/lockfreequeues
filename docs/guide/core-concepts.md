@@ -1,5 +1,8 @@
 # Core Concepts
 
+!!! info "Compatibility Facade Notice"
+    `lockfreequeues` is a zero-overhead backwards-compatibility facade. For canonical documentation on modern concurrency primitives and data structures, see [**`lockfree` Documentation**](https://elijahr.github.io/lockfree/).
+
 The conceptual foundation for the rest of the guide: bounded vs unbounded
 queues, lock-free vs wait-free progress guarantees, the SPSC / SPMC / MPSC /
 MPMC quadrant, and how capacity and segments work under the hood.

@@ -24,7 +24,7 @@ Ring buffer implementations with compile-time capacity. Best for predictable mem
 
 ### Unbounded Queues (Dynamic Capacity)
 
-Linked segment implementations that grow as needed. The MP/MC variants use DEBRA+ epoch-based reclamation (via [nim-debra](https://github.com/elijahr/nim-debra)) for safe memory deallocation; the SPSC variant frees retired segments inline (no manager).
+Linked segment implementations that grow as needed. The MP/MC variants use DEBRA / NEBR epoch-based reclamation (via canonical [`lockfree`](https://github.com/elijahr/lockfree)) for safe memory deallocation; the SPSC variant frees retired segments inline (no manager).
 
 | Queue | Producers | Consumers | Push | Pop |
 |-------|-----------|-----------|------|-----|

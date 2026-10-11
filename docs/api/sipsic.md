@@ -1,5 +1,8 @@
 # Sipsic
 
+!!! info "Canonical API Documentation"
+    `lockfreequeues` is a backwards-compatibility wrapper. `Sipsic` forwards directly to canonical `lockfree`'s wait-free `BQueue` (`newSpscQueue`). For canonical documentation, see [**`lockfree` Documentation**](https://elijahr.github.io/lockfree/).
+
 Single-producer, single-consumer (SPSC) bounded queue. Both pushing and
 popping are wait-free.
 
@@ -60,21 +63,17 @@ proc consumer() {.thread.} =
       discard
 ```
 
-## Typestate notes
+## Architecture notes
 
 Sipsic does not require producer- or consumer-binding handles: there
-is only one of each by construction. The typestate machinery used
-internally (see `spsc_push` / `spsc_pop` in
-`src/lockfreequeues/typestates/`) is a sequencing aid for the push/pop
-verbs themselves, not a binding API exposed to callers. For the
-broader slot-ownership model that all bounded variants share, see
-[Slot Ownership Typestates](../guide/slot-ownership-typestates.md).
+is only one of each by construction. Under the hood, Sipsic maps directly
+to canonical `lockfree`'s wait-free SPSC engine (`newSpscQueue`).
 
 ## See also
 
 - [Safety Model](../guide/safety-model.md) — happens-before guarantees
   and ordering semantics.
-- [Slot Ownership Typestates](../guide/slot-ownership-typestates.md) —
-  the shared internal state machine across all bounded variants.
+- [Canonical SPSC Documentation](https://elijahr.github.io/lockfree/latest/api/bqueue/) —
+  upstream bounded queue reference.
 
 ::: lockfreequeues/sipsic

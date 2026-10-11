@@ -1,10 +1,11 @@
 # Memory Management
 
-> Current as of v4.2.0; DEBRA integration patterns may evolve.
+!!! info "Compatibility Facade Notice"
+    `lockfreequeues` is maintained strictly as a **zero-overhead backwards-compatibility facade** around canonical [**`lockfree`**](https://github.com/elijahr/lockfree). For modern Safe Memory Reclamation (SMR), atomic primitives, and memory architecture, see [**`lockfree` Documentation**](https://elijahr.github.io/lockfree/).
 
 How `lockfreequeues` interacts with the memory model, what guarantees the
 queues provide vs. what the user must guarantee, the role of cache-line
-padding, item-type constraints under ARC / ORC, and the DEBRA epoch-based
+padding, item-type constraints under ARC / ORC, and the DEBRA / NEBR epoch-based
 reclamation hooks used by the unbounded multi-thread variants.
 
 For the broader thread-safety contract, see [Safety Model](safety-model.md).
@@ -293,9 +294,10 @@ when convenient (best for `--mm:none` and embedded targets).
 The default is `Eager` everywhere except `--mm:none`, where `Manual` is
 the default. Override per queue at construction.
 
-### Versioning note
+### Canonical SMR architecture
 
-DEBRA internals may change; treat the patterns documented here as
-current-as-of-v4.2.0. See the
-[DEBRA repository](https://github.com/elijahr/nim-debra) for upstream
-changes.
+Safe memory reclamation has been unified into canonical `lockfree` under
+[`lockfree/smr/nebr`](https://github.com/elijahr/lockfree). `lockfreequeues`
+re-exports `DebraManager` and associated types as compatibility aliases.
+For active development and modern SMR APIs, see
+[lockfree SMR Documentation](https://elijahr.github.io/lockfree/latest/api/smr/nebr/).

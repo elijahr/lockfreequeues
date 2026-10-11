@@ -1,5 +1,13 @@
 # Slot Ownership Typestates
 
+!!! warning "Consolidated into Canonical `lockfree`"
+    Typestate-driven queue and slot ownership APIs have been unified into canonical [**`lockfree`**](https://github.com/elijahr/lockfree) (`lockfree/typestates.nim`).
+    
+    In `lockfreequeues` (v5.1.0+ compatibility facade), queue types wrap the high-performance unified `lockfree` engines directly. For typestate abstractions and active development, refer to:
+    
+    - 📖 **Canonical Documentation**: [https://elijahr.github.io/lockfree/](https://elijahr.github.io/lockfree/)
+    - 🔄 **Migration Guide**: [https://elijahr.github.io/lockfree/latest/migrations/from-lockfreequeues-v5/](https://elijahr.github.io/lockfree/latest/migrations/from-lockfreequeues-v5/)
+
 ## Overview
 
 Slot ownership typestates make data races structurally impossible by tracking slot ownership through the type system. Each state transition enforces critical invariants at compile-time.

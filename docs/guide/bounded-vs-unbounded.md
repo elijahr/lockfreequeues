@@ -1,5 +1,8 @@
 # Bounded vs Unbounded
 
+!!! info "Compatibility Facade Notice"
+    `lockfreequeues` is a zero-overhead backwards-compatibility facade. For canonical documentation on modern concurrency primitives, see [**`lockfree` Documentation**](https://elijahr.github.io/lockfree/).
+
 A decision guide for picking between the bounded ring-buffer queues
 (`Sipsic`, `Sipmuc`, `Mupsic`, `Mupmuc`) and the unbounded segment-linked
 variants (`UnboundedSipsic`, `UnboundedSipmuc`, `UnboundedMupsic`,

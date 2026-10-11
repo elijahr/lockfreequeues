@@ -1,5 +1,8 @@
 # Sipmuc
 
+!!! info "Canonical API Documentation"
+    `lockfreequeues` is a backwards-compatibility wrapper. `Sipmuc` forwards directly to canonical `lockfree`'s SPMC `BQueue` (`newSpmcQueue`). For canonical documentation, see [**`lockfree` Documentation**](https://elijahr.github.io/lockfree/).
+
 Single-producer, multiple-consumer (SPMC) bounded queue.
 
 ## Overview

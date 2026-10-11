@@ -1,5 +1,8 @@
 # Examples
 
+!!! info "Compatibility Facade Notice"
+    `lockfreequeues` is maintained strictly as a **zero-overhead backwards-compatibility facade** around canonical [**`lockfree`**](https://github.com/elijahr/lockfree). For modern examples using CSP channels and modern queue primitives, see [**`lockfree` Documentation**](https://elijahr.github.io/lockfree/).
+
 Practical examples demonstrating lock-free queue patterns.
 
 ## Running Examples

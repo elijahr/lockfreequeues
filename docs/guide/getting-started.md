@@ -1,5 +1,13 @@
 # Getting Started
 
+!!! info "Compatibility Facade Notice"
+    `lockfreequeues` is maintained strictly as a **zero-overhead backwards-compatibility facade** around canonical [**`lockfree`**](https://github.com/elijahr/lockfree).
+    
+    For new projects, active development, modern CSP channels, and cross-language C ABI, depend directly on [`lockfree`](https://github.com/elijahr/lockfree):
+    
+    - 📖 **Canonical Documentation**: [https://elijahr.github.io/lockfree/](https://elijahr.github.io/lockfree/)
+    - 🔄 **Migration Guide**: [https://elijahr.github.io/lockfree/latest/migrations/from-lockfreequeues-v5/](https://elijahr.github.io/lockfree/latest/migrations/from-lockfreequeues-v5/)
+
 Your first five minutes with `lockfreequeues`: install the library, build a
 single-producer / single-consumer queue, push and pop a value, and learn the
 two or three pitfalls that catch most newcomers.
@@ -18,24 +26,25 @@ The library is on the Nimble registry. The package and the import name match.
 nimble install lockfreequeues
 ```
 
-This pulls `lockfreequeues` plus its two runtime dependencies, `typestates`
-and `debra`, and resolves a Nim `>= 2.2.0` requirement against your active
-toolchain. Older Nim versions miss the atomic builtins the queues rely on
-and will be rejected at compile time.
+Under the hood, `lockfreequeues` version 5.1.0+ forwards directly to canonical
+`lockfree`. This resolves `lockfree >= 0.1.0` against your active Nim toolchain
+(requiring Nim `>= 2.2.0`).
 
 ### Pinning a version
 
-Production code should pin. The `requires` line in your own `.nimble` file
-is the right place:
+Existing code should pin to the 5.x series:
 
 ```text
 # In yourproject.nimble
-requires "lockfreequeues == 4.2.0"
+requires "lockfreequeues >= 5.1.0"
 ```
 
-Use `>= 4.2.0` only if you are willing to ride minor-version changes; the
-public API is stable across patches but new minor versions sometimes
-extend the surface (new constructors, new typestate hooks).
+For new projects, depend directly on `lockfree`:
+
+```text
+# In yourproject.nimble
+requires "lockfree >= 0.1.0"
+```
 
 ### Verifying the install
 

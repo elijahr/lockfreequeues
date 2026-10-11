@@ -1,5 +1,8 @@
 # UnboundedSipsic
 
+!!! info "Canonical API Documentation"
+    `lockfreequeues` is a backwards-compatibility wrapper. `UnboundedSipsic` forwards directly to canonical `lockfree`'s unbounded SPSC `Queue`. For canonical documentation, see [**`lockfree` Documentation**](https://elijahr.github.io/lockfree/).
+
 Unbounded single-producer, single-consumer (SPSC) queue using linked segments.
 
 ## Overview

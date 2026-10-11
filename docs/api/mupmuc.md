@@ -1,5 +1,8 @@
 # Mupmuc
 
+!!! info "Canonical API Documentation"
+    `lockfreequeues` is a backwards-compatibility wrapper. `Mupmuc` forwards directly to canonical `lockfree`'s MPMC `BQueue` (`newMpmcQueue`). For canonical documentation, see [**`lockfree` Documentation**](https://elijahr.github.io/lockfree/).
+
 Multi-producer, multi-consumer (MPMC) bounded queue. Both pushing and
 popping are lock-free.
 
@@ -65,7 +68,7 @@ proc consumer() {.thread.} =
       discard
 ```
 
-## Typestate notes
+## Architecture notes
 
 Both producers and consumers must be bound to a thread before
 operating on the queue. Calling `Mupmuc.push()` or `Mupmuc.pop()`
@@ -75,31 +78,15 @@ taken, `getProducer()` raises `NoProducersAvailableError`; if all
 `C` consumer slots are taken, `getConsumer()` raises
 `NoConsumersAvailableError`.
 
-The push/pop verbs internally use the Vyukov per-slot `seq` protocol
-(see `mpmc_push` / `mpmc_pop` in `src/lockfreequeues/typestates/`),
-which carries the producer→consumer and consumer→next-producer
-happens-before edges without a separate `committed` flag array.
-
-```mermaid
-stateDiagram-v2
-    [*] --> Unbound: initMupmuc
-    Unbound --> ProducerBound: getProducer()
-    Unbound --> ConsumerBound: getConsumer()
-    ProducerBound --> ProducerBound: push(item)
-    ConsumerBound --> ConsumerBound: pop()
-    ProducerBound --> Full: queue full (push returns false)
-    ConsumerBound --> Empty: queue empty (pop returns none)
-    Full --> ProducerBound: a consumer pops
-    Empty --> ConsumerBound: a producer pushes
-    Unbound --> [*]
-```
+Under the hood, `Mupmuc` forwards all operations directly to
+canonical `lockfree`'s multi-producer, multi-consumer bounded engine
+(`newMpmcQueue`).
 
 ## See also
 
 - [Safety Model](../guide/safety-model.md) — happens-before
-  guarantees, the Vyukov per-slot `seq` protocol, and ordering
-  semantics.
-- [Slot Ownership Typestates](../guide/slot-ownership-typestates.md) —
-  the shared internal state machine across all bounded variants.
+  guarantees, per-slot protocol, and ordering semantics.
+- [Canonical MPMC Documentation](https://elijahr.github.io/lockfree/latest/api/bqueue/) —
+  upstream bounded queue reference.
 
 ::: lockfreequeues/mupmuc

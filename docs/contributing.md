@@ -1,14 +1,21 @@
 # Contributing
 
-How to set up a development environment for `lockfreequeues`, run the test
-matrix, build the docs locally, and ship a release. This page supersedes
-the short top-level `CONTRIBUTING.md` at the repo root; the root file
-remains as a 9-line tooling stub for tools that expect it (GitHub's
-contributor banner, OSS scanners).
+!!! info "Compatibility Facade Notice"
+    `lockfreequeues` is maintained strictly as a **zero-overhead backwards-compatibility facade** around canonical [**`lockfree`**](https://github.com/elijahr/lockfree).
+    
+    Active feature development, new concurrency primitives (such as CSP `Channel[T]`), cross-language C ABI bindings, and performance benchmarks are developed upstream in **[`lockfree`](https://github.com/elijahr/lockfree)**.
+    
+    - 📖 **Canonical Documentation**: [https://elijahr.github.io/lockfree/](https://elijahr.github.io/lockfree/)
+    - 🔄 **Migration Guide**: [https://elijahr.github.io/lockfree/latest/migrations/from-lockfreequeues-v5/](https://elijahr.github.io/lockfree/latest/migrations/from-lockfreequeues-v5/)
+    - 📦 **Canonical Repository**: [https://github.com/elijahr/lockfree](https://github.com/elijahr/lockfree)
 
-If you are filing a bug or feature request, the project's
-[issue tracker](https://github.com/elijahr/lockfreequeues/issues) is the
-right starting point.
+How to set up a development environment for `lockfreequeues`, run the test
+matrix, build the docs locally, and maintain the facade.
+
+If you are filing a bug or feature request for modern concurrency features,
+the [lockfree issue tracker](https://github.com/elijahr/lockfree/issues) is the
+authoritative destination. Compatibility-specific issues may be filed on the
+[lockfreequeues issue tracker](https://github.com/elijahr/lockfreequeues/issues).
 
 ## Repository orientation
 
@@ -16,53 +23,35 @@ right starting point.
 
 ```text
 lockfreequeues/
-├── src/lockfreequeues/      # public API + internal helpers
-├── tests/                   # unittest2 suites + the `test.nim` aggregator
+├── src/lockfreequeues/      # public API + compatibility mappings
+├── tests/                   # regression suites + test.nim aggregator
 ├── examples/                # runnable examples (driven by `nimble examples`)
-├── benchmarks/              # bench harness (Nim binaries + Python merge)
-├── stress-tests/            # long-running multi-thread shakedown
 ├── docs/                    # mkdocs source (this site)
-├── .github/workflows/       # CI: build, docs, bench, release
+├── .github/workflows/       # CI: build, docs, release
 ├── lockfreequeues.nimble    # package manifest + tasks
 ├── nim.cfg                  # default compile flags
 └── config.nims              # nimble script hooks
 ```
 
-### `src/lockfreequeues/` — the public API
+### `src/lockfreequeues/` — the compatibility API
 
 The four bounded queue types (`Sipsic`, `Sipmuc`, `Mupsic`, `Mupmuc`)
-each live in a single file. Their unbounded counterparts are in
+each live in a single module. Their unbounded counterparts are in
 `unbounded_sipsic.nim` etc. Supporting modules:
 
-- `atomic_dsl.nim` — re-exports `debra/atomics` and the load / store
-  acquire / release DSL.
-- `backoff.nim` — exponential-backoff helper used by the multi-producer
+- `atomic_dsl.nim` — re-exports atomic operations and the load / store
+  acquire / release DSL from canonical `lockfree`.
+- `backoff.nim` — exponential-backoff helper used by multi-producer
   CAS loops.
-- `typestates.nim` plus `typestates/*.nim` — the per-slot state machine
-  that governs publish / claim / drain transitions. See
-  [Slot Ownership Typestates](guide/slot-ownership-typestates.md) for
-  the conceptual treatment.
-- `internal/aligned_alloc.nim` — segment allocator for the unbounded
-  variants, lining up segment storage on `CacheLineBytes` boundaries.
+- `endpoint.nim` — endpoint handles for role separation.
+- `role_tags.nim` — role tags for endpoint types.
 
-When in doubt, the public proc signatures in the four
-queue-type files are the authoritative API surface. The `*Base` types
-in `typestates/*.nim` are an implementation detail and may change
-between minor versions.
-
-### `benchmarks/` — bench harness
-
-See [Benchmarks](https://elijahr.github.io/lockfree/latest/benchmarks/) for the published numbers and the
-methodology used to produce them. The harness lives outside `srcDir` so
-its threading dependencies do not leak into the regular test suite;
-`nimble benchtests` runs the harness's own unit tests.
+All queue types forward operations directly to canonical `lockfree` engines.
 
 ### `tests/` — test runner + the `test.nim` aggregator
 
-`tests/test.nim` imports every individual test module and is the entry
-point for `nimble test`. The convention: one module per logical surface
-(`t_sipsic.nim`, `t_mupsic.nim`, `t_unbounded_mupmuc.nim`, etc.), with
-threaded variants in `*_threaded.nim` files. Tests use `unittest2`.
+`tests/test.nim` imports the compatibility test modules and is the entry
+point for `nimble test`. Tests use `unittest2`.
 
 ## Testing workflow
 
@@ -90,21 +79,6 @@ SANITIZE_THREADS=no SANITIZE_ADDRESS=no nimble test
 
 For the matrix CI exercises, see
 [Safety Model → Test matrix](guide/safety-model.md#test-matrix).
-
-### `nimble benchtests` — bench harness unit tests
-
-The bench harness has its own test suite (`t_bench_common.nim`,
-`t_bench_latency.nim`, `t_bench_adapters.nim`) that validates
-HistogramTopK sizing, latency CLI assertions, and adapter round-trips.
-The harness lives outside `srcDir`, so these tests run via a separate
-task:
-
-```sh
-nimble benchtests
-```
-
-A heavier `benchteststress` variant exercises a 3.3 M-sample p999 path
-and is opt-in (~10-15 s release).
 
 ### Running a single test
 

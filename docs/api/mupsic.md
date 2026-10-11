@@ -1,5 +1,8 @@
 # Mupsic
 
+!!! info "Canonical API Documentation"
+    `lockfreequeues` is a backwards-compatibility wrapper. `Mupsic` forwards directly to canonical `lockfree`'s MPSC `BQueue` (`newMpscQueue`). For canonical documentation, see [**`lockfree` Documentation**](https://elijahr.github.io/lockfree/).
+
 Multi-producer, single-consumer (MPSC) bounded queue. Pushing is
 lock-free across producers; popping is lock-free for the single
 consumer (with defensive CAS — see source).
@@ -62,7 +65,7 @@ proc consumer() {.thread.} =
       discard
 ```
 
-## Typestate notes
+## Architecture notes
 
 Producers must be bound to a thread before pushing. Calling
 `Mupsic.push()` directly raises `InvalidCallDefect`; use
@@ -70,27 +73,14 @@ Producers must be bound to a thread before pushing. Calling
 slot is reclaimed only on queue reset; if all `P` slots are taken,
 `getProducer()` raises `NoProducersAvailableError`.
 
-The push/pop verbs internally use the Vyukov per-slot `seq` protocol
-(see `mpsc_push` / `mpsc_pop` in `src/lockfreequeues/typestates/`),
-which carries the producer→consumer happens-before edge without a
-separate `committed` flag array.
-
-```mermaid
-stateDiagram-v2
-    [*] --> Unbound: initMupsic
-    Unbound --> Bound: getProducer()
-    Bound --> Bound: push(item)
-    Bound --> Full: queue full (push returns false)
-    Full --> Bound: consumer pops
-    Unbound --> [*]
-```
+Under the hood, `Mupsic` forwards all calls to canonical `lockfree`'s
+multi-producer, single-consumer bounded engine (`newMpscQueue`).
 
 ## See also
 
 - [Safety Model](../guide/safety-model.md) — happens-before
-  guarantees, the Vyukov per-slot `seq` protocol, and ordering
-  semantics.
-- [Slot Ownership Typestates](../guide/slot-ownership-typestates.md) —
-  the shared internal state machine across all bounded variants.
+  guarantees, per-slot protocol, and ordering semantics.
+- [Canonical MPSC Documentation](https://elijahr.github.io/lockfree/latest/api/bqueue/) —
+  upstream bounded queue reference.
 
 ::: lockfreequeues/mupsic
