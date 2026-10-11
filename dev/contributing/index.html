@@ -1101,21 +1101,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#srclockfreequeues-the-public-api" class="md-nav__link">
+  <a href="#srclockfreequeues-the-compatibility-api" class="md-nav__link">
     <span class="md-ellipsis">
       
-        src/lockfreequeues/ — the public API
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#benchmarks-bench-harness" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        benchmarks/ — bench harness
+        src/lockfreequeues/ — the compatibility API
       
     </span>
   </a>
@@ -1155,17 +1144,6 @@
     <span class="md-ellipsis">
       
         nimble test — the 8-combo MM × sanitiser matrix
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nimble-benchtests-bench-harness-unit-tests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        nimble benchtests — bench harness unit tests
       
     </span>
   </a>
@@ -1412,21 +1390,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#srclockfreequeues-the-public-api" class="md-nav__link">
+  <a href="#srclockfreequeues-the-compatibility-api" class="md-nav__link">
     <span class="md-ellipsis">
       
-        src/lockfreequeues/ — the public API
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#benchmarks-bench-harness" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        benchmarks/ — bench harness
+        src/lockfreequeues/ — the compatibility API
       
     </span>
   </a>
@@ -1466,17 +1433,6 @@
     <span class="md-ellipsis">
       
         nimble test — the 8-combo MM × sanitiser matrix
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nimble-benchtests-bench-harness-unit-tests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        nimble benchtests — bench harness unit tests
       
     </span>
   </a>
@@ -1686,58 +1642,50 @@
 
 
 <h1 id="contributing">Contributing<a class="headerlink" href="#contributing" title="Permanent link">¶</a></h1>
+<div class="admonition info">
+<p class="admonition-title">Compatibility Facade Notice</p>
+<p><code>lockfreequeues</code> is maintained strictly as a <strong>zero-overhead backwards-compatibility facade</strong> around canonical <a href="https://github.com/elijahr/lockfree"><strong><code>lockfree</code></strong></a>.</p>
+<p>Active feature development, new concurrency primitives (such as CSP <code>Channel[T]</code>), cross-language C ABI bindings, and performance benchmarks are developed upstream in <strong><a href="https://github.com/elijahr/lockfree"><code>lockfree</code></a></strong>.</p>
+<ul>
+<li>📖 <strong>Canonical Documentation</strong>: <a href="https://elijahr.github.io/lockfree/">https://elijahr.github.io/lockfree/</a></li>
+<li>🔄 <strong>Migration Guide</strong>: <a href="https://elijahr.github.io/lockfree/latest/migrations/from-lockfreequeues-v5/">https://elijahr.github.io/lockfree/latest/migrations/from-lockfreequeues-v5/</a></li>
+<li>📦 <strong>Canonical Repository</strong>: <a href="https://github.com/elijahr/lockfree">https://github.com/elijahr/lockfree</a></li>
+</ul>
+</div>
 <p>How to set up a development environment for <code>lockfreequeues</code>, run the test
-matrix, build the docs locally, and ship a release. This page supersedes
-the short top-level <code>CONTRIBUTING.md</code> at the repo root; the root file
-remains as a 9-line tooling stub for tools that expect it (GitHub's
-contributor banner, OSS scanners).</p>
-<p>If you are filing a bug or feature request, the project's
-<a href="https://github.com/elijahr/lockfreequeues/issues">issue tracker</a> is the
-right starting point.</p>
+matrix, build the docs locally, and maintain the facade.</p>
+<p>If you are filing a bug or feature request for modern concurrency features,
+the <a href="https://github.com/elijahr/lockfree/issues">lockfree issue tracker</a> is the
+authoritative destination. Compatibility-specific issues may be filed on the
+<a href="https://github.com/elijahr/lockfreequeues/issues">lockfreequeues issue tracker</a>.</p>
 <h2 id="repository-orientation">Repository orientation<a class="headerlink" href="#repository-orientation" title="Permanent link">¶</a></h2>
 <h3 id="top-level-layout">Top-level layout<a class="headerlink" href="#top-level-layout" title="Permanent link">¶</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>lockfreequeues/
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── src/lockfreequeues/      # public API + internal helpers
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├── tests/                   # unittest2 suites + the `test.nim` aggregator
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── src/lockfreequeues/      # public API + compatibility mappings
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├── tests/                   # regression suites + test.nim aggregator
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>├── examples/                # runnable examples (driven by `nimble examples`)
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>├── benchmarks/              # bench harness (Nim binaries + Python merge)
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>├── stress-tests/            # long-running multi-thread shakedown
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>├── docs/                    # mkdocs source (this site)
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>├── .github/workflows/       # CI: build, docs, bench, release
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>├── lockfreequeues.nimble    # package manifest + tasks
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>├── nim.cfg                  # default compile flags
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>└── config.nims              # nimble script hooks
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>├── docs/                    # mkdocs source (this site)
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>├── .github/workflows/       # CI: build, docs, release
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>├── lockfreequeues.nimble    # package manifest + tasks
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>├── nim.cfg                  # default compile flags
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>└── config.nims              # nimble script hooks
 </code></pre></div>
-<h3 id="srclockfreequeues-the-public-api"><code>src/lockfreequeues/</code> — the public API<a class="headerlink" href="#srclockfreequeues-the-public-api" title="Permanent link">¶</a></h3>
+<h3 id="srclockfreequeues-the-compatibility-api"><code>src/lockfreequeues/</code> — the compatibility API<a class="headerlink" href="#srclockfreequeues-the-compatibility-api" title="Permanent link">¶</a></h3>
 <p>The four bounded queue types (<code>Sipsic</code>, <code>Sipmuc</code>, <code>Mupsic</code>, <code>Mupmuc</code>)
-each live in a single file. Their unbounded counterparts are in
+each live in a single module. Their unbounded counterparts are in
 <code>unbounded_sipsic.nim</code> etc. Supporting modules:</p>
 <ul>
-<li><code>atomic_dsl.nim</code> — re-exports <code>debra/atomics</code> and the load / store
-  acquire / release DSL.</li>
-<li><code>backoff.nim</code> — exponential-backoff helper used by the multi-producer
+<li><code>atomic_dsl.nim</code> — re-exports atomic operations and the load / store
+  acquire / release DSL from canonical <code>lockfree</code>.</li>
+<li><code>backoff.nim</code> — exponential-backoff helper used by multi-producer
   CAS loops.</li>
-<li><code>typestates.nim</code> plus <code>typestates/*.nim</code> — the per-slot state machine
-  that governs publish / claim / drain transitions. See
-  <a href="../guide/slot-ownership-typestates/">Slot Ownership Typestates</a> for
-  the conceptual treatment.</li>
-<li><code>internal/aligned_alloc.nim</code> — segment allocator for the unbounded
-  variants, lining up segment storage on <code>CacheLineBytes</code> boundaries.</li>
+<li><code>endpoint.nim</code> — endpoint handles for role separation.</li>
+<li><code>role_tags.nim</code> — role tags for endpoint types.</li>
 </ul>
-<p>When in doubt, the public proc signatures in the four
-queue-type files are the authoritative API surface. The <code>*Base</code> types
-in <code>typestates/*.nim</code> are an implementation detail and may change
-between minor versions.</p>
-<h3 id="benchmarks-bench-harness"><code>benchmarks/</code> — bench harness<a class="headerlink" href="#benchmarks-bench-harness" title="Permanent link">¶</a></h3>
-<p>See <a href="https://elijahr.github.io/lockfree/latest/benchmarks/">Benchmarks</a> for the published numbers and the
-methodology used to produce them. The harness lives outside <code>srcDir</code> so
-its threading dependencies do not leak into the regular test suite;
-<code>nimble benchtests</code> runs the harness's own unit tests.</p>
+<p>All queue types forward operations directly to canonical <code>lockfree</code> engines.</p>
 <h3 id="tests-test-runner-the-testnim-aggregator"><code>tests/</code> — test runner + the <code>test.nim</code> aggregator<a class="headerlink" href="#tests-test-runner-the-testnim-aggregator" title="Permanent link">¶</a></h3>
-<p><code>tests/test.nim</code> imports every individual test module and is the entry
-point for <code>nimble test</code>. The convention: one module per logical surface
-(<code>t_sipsic.nim</code>, <code>t_mupsic.nim</code>, <code>t_unbounded_mupmuc.nim</code>, etc.), with
-threaded variants in <code>*_threaded.nim</code> files. Tests use <code>unittest2</code>.</p>
+<p><code>tests/test.nim</code> imports the compatibility test modules and is the entry
+point for <code>nimble test</code>. Tests use <code>unittest2</code>.</p>
 <h2 id="testing-workflow">Testing workflow<a class="headerlink" href="#testing-workflow" title="Permanent link">¶</a></h2>
 <h3 id="nimble-test-the-8-combo-mm-sanitiser-matrix"><code>nimble test</code> — the 8-combo MM × sanitiser matrix<a class="headerlink" href="#nimble-test-the-8-combo-mm-sanitiser-matrix" title="Permanent link">¶</a></h3>
 <p>The <code>test</code> task in <code>lockfreequeues.nimble</code> runs the suite under every
@@ -1760,19 +1708,9 @@ relevant combination:</p>
 </code></pre></div>
 <p>For the matrix CI exercises, see
 <a href="../guide/safety-model/#test-matrix">Safety Model → Test matrix</a>.</p>
-<h3 id="nimble-benchtests-bench-harness-unit-tests"><code>nimble benchtests</code> — bench harness unit tests<a class="headerlink" href="#nimble-benchtests-bench-harness-unit-tests" title="Permanent link">¶</a></h3>
-<p>The bench harness has its own test suite (<code>t_bench_common.nim</code>,
-<code>t_bench_latency.nim</code>, <code>t_bench_adapters.nim</code>) that validates
-HistogramTopK sizing, latency CLI assertions, and adapter round-trips.
-The harness lives outside <code>srcDir</code>, so these tests run via a separate
-task:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>nimble<span class="w"> </span>benchtests
-</code></pre></div>
-<p>A heavier <code>benchteststress</code> variant exercises a 3.3 M-sample p999 path
-and is opt-in (~10-15 s release).</p>
 <h3 id="running-a-single-test">Running a single test<a class="headerlink" href="#running-a-single-test" title="Permanent link">¶</a></h3>
 <p>For tight iteration, point Nim straight at one file:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>nim<span class="w"> </span>c<span class="w"> </span>--threads:on<span class="w"> </span>-r<span class="w"> </span>tests/t_sipsic.nim
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>nim<span class="w"> </span>c<span class="w"> </span>--threads:on<span class="w"> </span>-r<span class="w"> </span>tests/t_sipsic.nim
 </code></pre></div>
 <p>Add flags as needed: <code>-d:release</code> for speed,
 <code>--mm:arc -d:nimEnforceLockFreeAtomics</code> to reproduce a CI lane,
@@ -1788,13 +1726,13 @@ producer / consumer thread plumbing.</p>
 <h3 id="mkdocs-serve-local-preview"><code>mkdocs serve</code> — local preview<a class="headerlink" href="#mkdocs-serve-local-preview" title="Permanent link">¶</a></h3>
 <p>Documentation uses MkDocs with the Material theme plus
 <code>mkdocstrings-nim</code> for the API reference. Set up a virtualenv once:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>python3<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>.venv
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nb">source</span><span class="w"> </span>.venv/bin/activate
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>docs-requirements.txt
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>python3<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>.venv
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">source</span><span class="w"> </span>.venv/bin/activate
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>docs-requirements.txt
 </code></pre></div>
 <p>Then serve locally with auto-reload:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>mkdocs<span class="w"> </span>serve
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># Open http://127.0.0.1:8000</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>mkdocs<span class="w"> </span>serve
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># Open http://127.0.0.1:8000</span>
 </code></pre></div>
 <p>The <code>watch:</code> block in <code>mkdocs.yml</code> includes <code>src/</code>, so editing a
 docstring in a Nim source file rebuilds the API page that depends on it.</p>
@@ -1819,8 +1757,8 @@ clickable "source" link on every rendered symbol. Locally those links
 point at the <code>devel</code> branch on GitHub; CI overrides <code>DOCS_SOURCE_REF</code>
 per trigger so PR previews link back to the PR's head.</p>
 <h3 id="building-locally">Building locally<a class="headerlink" href="#building-locally" title="Permanent link">¶</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>mkdocs<span class="w"> </span>build<span class="w"> </span>--strict
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># Output lands in site/</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>mkdocs<span class="w"> </span>build<span class="w"> </span>--strict
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># Output lands in site/</span>
 </code></pre></div>
 <p><code>--strict</code> fails the build on any missing internal link or unrecognised
 reference. CI runs <code>mkdocs build --strict</code> on every push, so a clean
@@ -1877,8 +1815,8 @@ fits better in a follow-up PR after the version bump. Convention is
 "release-prep: vX.Y.Z follow-ups" with a checklist body.</p>
 <h3 id="tagging">Tagging<a class="headerlink" href="#tagging" title="Permanent link">¶</a></h3>
 <p>Tag the version-bump commit and push:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>git<span class="w"> </span>tag<span class="w"> </span>vX.Y.Z
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>vX.Y.Z
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>git<span class="w"> </span>tag<span class="w"> </span>vX.Y.Z
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>vX.Y.Z
 </code></pre></div>
 <p>The tag triggers the release workflow in <code>.github/workflows/release.yml</code>,
 which publishes to nimble and rebuilds the docs site.</p>
@@ -1913,7 +1851,7 @@ Add yourself to <code>AUTHORS</code> in your first PR if you would like attribut
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"></path></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="October 11, 2026 08:46:46 UTC"><span class="timeago" datetime="2026-10-11T08:46:46+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="October 11, 2026 08:46:46 UTC">2026-10-11</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="October 11, 2026 10:19:48 UTC"><span class="timeago" datetime="2026-10-11T10:19:48+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="October 11, 2026 10:19:48 UTC">2026-10-11</span>
   </span>
 
     

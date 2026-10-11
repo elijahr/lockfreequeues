@@ -1534,6 +1534,15 @@
 
 
 <h1 id="getting-started">Getting Started<a class="headerlink" href="#getting-started" title="Permanent link">¶</a></h1>
+<div class="admonition info">
+<p class="admonition-title">Compatibility Facade Notice</p>
+<p><code>lockfreequeues</code> is maintained strictly as a <strong>zero-overhead backwards-compatibility facade</strong> around canonical <a href="https://github.com/elijahr/lockfree"><strong><code>lockfree</code></strong></a>.</p>
+<p>For new projects, active development, modern CSP channels, and cross-language C ABI, depend directly on <a href="https://github.com/elijahr/lockfree"><code>lockfree</code></a>:</p>
+<ul>
+<li>📖 <strong>Canonical Documentation</strong>: <a href="https://elijahr.github.io/lockfree/">https://elijahr.github.io/lockfree/</a></li>
+<li>🔄 <strong>Migration Guide</strong>: <a href="https://elijahr.github.io/lockfree/latest/migrations/from-lockfreequeues-v5/">https://elijahr.github.io/lockfree/latest/migrations/from-lockfreequeues-v5/</a></li>
+</ul>
+</div>
 <p>Your first five minutes with <code>lockfreequeues</code>: install the library, build a
 single-producer / single-consumer queue, push and pop a value, and learn the
 two or three pitfalls that catch most newcomers.</p>
@@ -1545,33 +1554,32 @@ two or three pitfalls that catch most newcomers.</p>
 <p>The library is on the Nimble registry. The package and the import name match.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>nimble<span class="w"> </span>install<span class="w"> </span>lockfreequeues
 </code></pre></div>
-<p>This pulls <code>lockfreequeues</code> plus its two runtime dependencies, <code>typestates</code>
-and <code>debra</code>, and resolves a Nim <code>&gt;= 2.2.0</code> requirement against your active
-toolchain. Older Nim versions miss the atomic builtins the queues rely on
-and will be rejected at compile time.</p>
+<p>Under the hood, <code>lockfreequeues</code> version 5.1.0+ forwards directly to canonical
+<code>lockfree</code>. This resolves <code>lockfree &gt;= 0.1.0</code> against your active Nim toolchain
+(requiring Nim <code>&gt;= 2.2.0</code>).</p>
 <h3 id="pinning-a-version">Pinning a version<a class="headerlink" href="#pinning-a-version" title="Permanent link">¶</a></h3>
-<p>Production code should pin. The <code>requires</code> line in your own <code>.nimble</code> file
-is the right place:</p>
+<p>Existing code should pin to the 5.x series:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a># In yourproject.nimble
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>requires "lockfreequeues == 4.2.0"
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>requires "lockfreequeues &gt;= 5.1.0"
 </code></pre></div>
-<p>Use <code>&gt;= 4.2.0</code> only if you are willing to ride minor-version changes; the
-public API is stable across patches but new minor versions sometimes
-extend the surface (new constructors, new typestate hooks).</p>
+<p>For new projects, depend directly on <code>lockfree</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a># In yourproject.nimble
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>requires "lockfree &gt;= 0.1.0"
+</code></pre></div>
 <h3 id="verifying-the-install">Verifying the install<a class="headerlink" href="#verifying-the-install" title="Permanent link">¶</a></h3>
 <p>A six-line file is enough to confirm the install compiles, links, and runs:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c"># verify.nim</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">import</span><span class="w"> </span><span class="n">options</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="kd">var</span><span class="w"> </span><span class="n">q</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initSipsic</span><span class="o">[</span><span class="mi">16</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="o">]</span><span class="p">()</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="k">discard</span><span class="w"> </span><span class="n">q</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">echo</span><span class="w"> </span><span class="n">q</span><span class="p">.</span><span class="n">pop</span><span class="p">()</span><span class="w">  </span><span class="c"># prints "Some(42)"</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c"># verify.nim</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">import</span><span class="w"> </span><span class="n">options</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="kd">var</span><span class="w"> </span><span class="n">q</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initSipsic</span><span class="o">[</span><span class="mi">16</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="o">]</span><span class="p">()</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="k">discard</span><span class="w"> </span><span class="n">q</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">echo</span><span class="w"> </span><span class="n">q</span><span class="p">.</span><span class="n">pop</span><span class="p">()</span><span class="w">  </span><span class="c"># prints "Some(42)"</span>
 </code></pre></div>
 <p>Compile and run with threads on (the queues require <code>--threads:on</code> even when
 you only touch them from one thread, because they reference threading
 intrinsics):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>nim<span class="w"> </span>c<span class="w"> </span>--threads:on<span class="w"> </span>-r<span class="w"> </span>verify.nim
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>nim<span class="w"> </span>c<span class="w"> </span>--threads:on<span class="w"> </span>-r<span class="w"> </span>verify.nim
 </code></pre></div>
 <p>If you see <code>Some(42)</code>, you are done — the library is installed and working.</p>
 <h2 id="your-first-spsc-queue">Your first SPSC queue<a class="headerlink" href="#your-first-spsc-queue" title="Permanent link">¶</a></h2>
@@ -1581,36 +1589,36 @@ intrinsics):</p>
 thread pushes; one other thread pops; capacity <code>N</code> is a compile-time integer.
 Both <code>push</code> and <code>pop</code> are wait-free, so a slow consumer never stalls the
 producer beyond what the buffer's fullness implies.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="n">options</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">import</span><span class="w"> </span><span class="n">os</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c"># Capacity 16, item type int. The queue is a global `var` so both threads</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c"># can reach it; in production code prefer `ptr` or a shared object that</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c"># you pass into thread procs explicitly.</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="kd">var</span><span class="w"> </span><span class="n">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initSipsic</span><span class="o">[</span><span class="mi">16</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="o">]</span><span class="p">()</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="k">proc</span><span class="w"> </span><span class="nf">producerFunc</span><span class="p">()</span><span class="w"> </span><span class="sx">{.thread.}</span><span class="w"> </span><span class="o">=</span>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">..</span><span class="w"> </span><span class="mi">8</span><span class="p">:</span>
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">    </span><span class="c"># push returns false when the queue is full; here we just retry.</span>
-<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">i</span><span class="p">):</span>
-<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">      </span><span class="n">sleep</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>
-<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="k">proc</span><span class="w"> </span><span class="nf">consumerFunc</span><span class="p">()</span><span class="w"> </span><span class="sx">{.thread.}</span><span class="w"> </span><span class="o">=</span>
-<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">  </span><span class="kd">var</span><span class="w"> </span><span class="n">seen</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
-<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">  </span><span class="k">while</span><span class="w"> </span><span class="n">seen</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">8</span><span class="p">:</span>
-<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="w">    </span><span class="k">let</span><span class="w"> </span><span class="n">item</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">()</span>
-<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">item</span><span class="p">.</span><span class="n">isSome</span><span class="p">:</span>
-<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="w">      </span><span class="n">echo</span><span class="w"> </span><span class="s">"got "</span><span class="p">,</span><span class="w"> </span><span class="n">item</span><span class="p">.</span><span class="n">get</span>
-<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">      </span><span class="n">inc</span><span class="w"> </span><span class="n">seen</span>
-<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="w">    </span><span class="k">else</span><span class="p">:</span>
-<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="w">      </span><span class="n">sleep</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-<a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>
-<a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="kd">var</span><span class="w"> </span><span class="n">threads</span><span class="p">:</span><span class="w"> </span><span class="nb">array</span><span class="o">[</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">Thread</span><span class="o">[</span><span class="n">void</span><span class="o">]]</span>
-<a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="n">createThread</span><span class="p">(</span><span class="n">threads</span><span class="o">[</span><span class="mi">0</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="n">producerFunc</span><span class="p">)</span>
-<a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a><span class="n">createThread</span><span class="p">(</span><span class="n">threads</span><span class="o">[</span><span class="mi">1</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="n">consumerFunc</span><span class="p">)</span>
-<a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a><span class="n">joinThreads</span><span class="p">(</span><span class="n">threads</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">import</span><span class="w"> </span><span class="n">options</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">import</span><span class="w"> </span><span class="n">os</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c"># Capacity 16, item type int. The queue is a global `var` so both threads</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c"># can reach it; in production code prefer `ptr` or a shared object that</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c"># you pass into thread procs explicitly.</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="kd">var</span><span class="w"> </span><span class="n">queue</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initSipsic</span><span class="o">[</span><span class="mi">16</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="o">]</span><span class="p">()</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="k">proc</span><span class="w"> </span><span class="nf">producerFunc</span><span class="p">()</span><span class="w"> </span><span class="sx">{.thread.}</span><span class="w"> </span><span class="o">=</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">..</span><span class="w"> </span><span class="mi">8</span><span class="p">:</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">    </span><span class="c"># push returns false when the queue is full; here we just retry.</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">i</span><span class="p">):</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">      </span><span class="n">sleep</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="k">proc</span><span class="w"> </span><span class="nf">consumerFunc</span><span class="p">()</span><span class="w"> </span><span class="sx">{.thread.}</span><span class="w"> </span><span class="o">=</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">  </span><span class="kd">var</span><span class="w"> </span><span class="n">seen</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">  </span><span class="k">while</span><span class="w"> </span><span class="n">seen</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">8</span><span class="p">:</span>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">    </span><span class="k">let</span><span class="w"> </span><span class="n">item</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">queue</span><span class="p">.</span><span class="n">pop</span><span class="p">()</span>
+<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">item</span><span class="p">.</span><span class="n">isSome</span><span class="p">:</span>
+<a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">      </span><span class="n">echo</span><span class="w"> </span><span class="s">"got "</span><span class="p">,</span><span class="w"> </span><span class="n">item</span><span class="p">.</span><span class="n">get</span>
+<a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="w">      </span><span class="n">inc</span><span class="w"> </span><span class="n">seen</span>
+<a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="w">    </span><span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="w">      </span><span class="n">sleep</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a>
+<a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a><span class="kd">var</span><span class="w"> </span><span class="n">threads</span><span class="p">:</span><span class="w"> </span><span class="nb">array</span><span class="o">[</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">Thread</span><span class="o">[</span><span class="n">void</span><span class="o">]]</span>
+<a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="n">createThread</span><span class="p">(</span><span class="n">threads</span><span class="o">[</span><span class="mi">0</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="n">producerFunc</span><span class="p">)</span>
+<a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="n">createThread</span><span class="p">(</span><span class="n">threads</span><span class="o">[</span><span class="mi">1</span><span class="o">]</span><span class="p">,</span><span class="w"> </span><span class="n">consumerFunc</span><span class="p">)</span>
+<a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a><span class="n">joinThreads</span><span class="p">(</span><span class="n">threads</span><span class="p">)</span>
 </code></pre></div>
 <p>The producer sends the integers 1 through 8; the consumer prints them in
 order. Because <code>Sipsic</code> is FIFO, output is deterministic: <code>got 1</code> ...
@@ -1618,12 +1626,12 @@ order. Because <code>Sipsic</code> is FIFO, output is deterministic: <code>got 1
 <h3 id="running-with-threadson">Running with <code>--threads:on</code><a class="headerlink" href="#running-with-threadson" title="Permanent link">¶</a></h3>
 <p>The queues use Nim's <code>Atomic[T]</code> and <code>Thread[T]</code>, both of which require
 threading enabled at compile time. The flag is mandatory, not optional:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>nim<span class="w"> </span>c<span class="w"> </span>--threads:on<span class="w"> </span>-r<span class="w"> </span>myprog.nim
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>nim<span class="w"> </span>c<span class="w"> </span>--threads:on<span class="w"> </span>-r<span class="w"> </span>myprog.nim
 </code></pre></div>
 <p>For production, layer on <code>-d:release</code> (strips runtime checks, enables
 optimisation) or <code>-d:danger</code> (drops bounds checks too — fastest, least
 forgiving):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>nim<span class="w"> </span>c<span class="w"> </span>--threads:on<span class="w"> </span>-d:release<span class="w"> </span>-r<span class="w"> </span>myprog.nim
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>nim<span class="w"> </span>c<span class="w"> </span>--threads:on<span class="w"> </span>-d:release<span class="w"> </span>-r<span class="w"> </span>myprog.nim
 </code></pre></div>
 <p>See <a href="../performance-tuning/#compile-time-settings">Performance Tuning → Compile-time settings</a>
 for when each flag is appropriate.</p>
@@ -1643,11 +1651,11 @@ ARC/ORC reclaims it when the var goes out of scope.</p>
 you will see a static error from the queue's item-type guard. Reference
 counting on <code>ref</code> types can fall back to spinlocks on some platforms,
 defeating the lock-free guarantee at the item level.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>type Node = ref object
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>  value: int
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a># Compile error under arc/orc with default settings.
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>var q = newUnboundedSipsic[64, Node]()
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>type Node = ref object
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>  value: int
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a># Compile error under arc/orc with default settings.
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>var q = newUnboundedSipsic[64, Node]()
 </code></pre></div>
 <p>The fix in 95% of cases is to use <code>ptr T</code> and manage the lifetime yourself,
 or to redesign the item to be a plain <code>object</code> (passed by value) or an
@@ -1660,11 +1668,11 @@ for the full story on item type requirements.</p>
 power of two so that the head/tail wrap reduces to a bitmask. <code>lockfreequeues</code>
 does not require this: any positive <code>N</code> compiles, and the wrap arithmetic
 is done with modulo against the (possibly non-power-of-two) capacity.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c"># Both compile and work fine.</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="kd">var</span><span class="w"> </span><span class="n">qa</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initSipsic</span><span class="o">[</span><span class="mi">1024</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="o">]</span><span class="p">()</span><span class="w">  </span><span class="c"># power of 2</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="kd">var</span><span class="w"> </span><span class="n">qb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initSipsic</span><span class="o">[</span><span class="mi">1000</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="o">]</span><span class="p">()</span><span class="w">  </span><span class="c"># arbitrary</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">import</span><span class="w"> </span><span class="n">lockfreequeues</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c"># Both compile and work fine.</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="kd">var</span><span class="w"> </span><span class="n">qa</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initSipsic</span><span class="o">[</span><span class="mi">1024</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="o">]</span><span class="p">()</span><span class="w">  </span><span class="c"># power of 2</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="kd">var</span><span class="w"> </span><span class="n">qb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">initSipsic</span><span class="o">[</span><span class="mi">1000</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="o">]</span><span class="p">()</span><span class="w">  </span><span class="c"># arbitrary</span>
 </code></pre></div>
 <p>There is still a slight performance preference for powers of two on hot
 paths, because the compiler can sometimes lower the modulo to a mask. For
@@ -1678,12 +1686,12 @@ for the full rationale.</p>
 <code>std/atomics</code> and reference <code>Thread[T]</code>; without <code>--threads:on</code> Nim
 emits messages like <code>'Atomic' is not declared</code> or <code>'Thread' undeclared</code>.</p>
 <p>The fix is one flag:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>nim<span class="w"> </span>c<span class="w"> </span>--threads:on<span class="w"> </span>-r<span class="w"> </span>myprog.nim
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>nim<span class="w"> </span>c<span class="w"> </span>--threads:on<span class="w"> </span>-r<span class="w"> </span>myprog.nim
 </code></pre></div>
 <p>If you build via Nimble tasks, put <code>--threads:on</code> in your <code>config.nims</code>
 or in the task definition itself so contributors do not have to remember:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a># config.nims
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>switch("threads", "on")
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a># config.nims
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>switch("threads", "on")
 </code></pre></div>
 <h2 id="next-steps">Next steps<a class="headerlink" href="#next-steps" title="Permanent link">¶</a></h2>
 <h3 id="multi-producer-multi-consumer-variants">Multi-producer / multi-consumer variants<a class="headerlink" href="#multi-producer-multi-consumer-variants" title="Permanent link">¶</a></h3>
@@ -1716,7 +1724,7 @@ thread placement, and compile-time settings.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"></path></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="May 6, 2026 04:28:51 UTC"><span class="timeago" datetime="2026-05-06T04:28:51+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="May 6, 2026 04:28:51 UTC">2026-05-06</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="October 11, 2026 10:19:48 UTC"><span class="timeago" datetime="2026-10-11T10:19:48+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="October 11, 2026 10:19:48 UTC">2026-10-11</span>
   </span>
 
     
