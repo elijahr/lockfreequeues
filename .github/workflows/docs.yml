@@ -80,15 +80,6 @@ jobs:
         run: |
           pip install -r docs-requirements.txt
 
-      - name: JS syntax check (bench-charts.js)
-        # Catches typos that mkdocs --strict treats as opaque static
-        # assets. See Phase 4.6.3 green mirage audit; cheap defense
-        # against ships-to-prod browser-console errors. Node is
-        # preinstalled on GitHub-hosted ubuntu runners so no
-        # actions/setup-node step is required.
-        run: |
-          node --check docs/assets/bench-charts.js
-
       - name: Resolve docs source ref
         # mkdocs.yml reads source_ref from $DOCS_SOURCE_REF (with default
         # `devel` — the repo's default branch). Set it explicitly per

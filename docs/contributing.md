@@ -52,7 +52,7 @@ between minor versions.
 
 ### `benchmarks/` — bench harness
 
-See [Benchmarks](benchmarks.md) for the published numbers and the
+See [Benchmarks](https://elijahr.github.io/lockfree/latest/benchmarks/) for the published numbers and the
 methodology used to produce them. The harness lives outside `srcDir` so
 its threading dependencies do not leak into the regular test suite;
 `nimble benchtests` runs the harness's own unit tests.

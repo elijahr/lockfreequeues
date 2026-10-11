@@ -1,5 +1,12 @@
 # lockfreequeues
 
+!!! warning "Package Consolidated into [`lockfree`](https://github.com/elijahr/lockfree)"
+    `lockfreequeues` is now maintained strictly as a **zero-overhead compatibility wrapper** around the unified [**`lockfree`**](https://github.com/elijahr/lockfree) library.
+    
+    All active development, performance tuning, and modern features (CSP `Channel[T]` facade, cross-language C ABI, Apple Silicon cacheline optimizations, and benchmark results) live in canonical **`lockfree`**.
+    
+    👉 **Official Documentation & Guides**: **[https://elijahr.github.io/lockfree](https://elijahr.github.io/lockfree)**
+
 Lock-free queues for Nim, implemented as ring buffers (bounded) and linked segments (unbounded).
 
 ## Overview

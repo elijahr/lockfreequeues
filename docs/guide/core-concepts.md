@@ -127,7 +127,7 @@ store, advance the tail with a CAS that may lose to other producers, and
 do the same dance on the consumer side. Under contention, retries
 multiply.
 
-The published [Benchmarks](../benchmarks.md) page shows the empirical gap;
+The published [Benchmarks](https://elijahr.github.io/lockfree/latest/benchmarks/) page shows the empirical gap;
 expect ~3-5× difference between SPSC and uncontended MPMC, growing with
 producer count.
 

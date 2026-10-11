@@ -31,6 +31,7 @@ theme:
 
 exclude_docs: |
   plans/
+  reviews/
 
 plugins:
   - search
@@ -104,7 +105,6 @@ nav:
       - UnboundedSipmuc: api/unbounded_sipmuc.md
       - UnboundedMupsic: api/unbounded_mupsic.md
       - UnboundedMupmuc: api/unbounded_mupmuc.md
-  - Benchmarks: benchmarks.md
   - Contributing: contributing.md
 
 watch:
@@ -124,5 +124,3 @@ extra:
 
 extra_css:
   - css/custom.css
-  - assets/bench-charts.css
-  - assets/uplot-1.6.27.min.css

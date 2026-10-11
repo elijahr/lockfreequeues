@@ -167,7 +167,7 @@ workload, take the 99th percentile of the high-water mark, and add 25-50%
 slack.
 
 For empirical numbers and the throughput-vs-capacity curve, see
-[Benchmarks](../benchmarks.md) and
+[Benchmarks](https://elijahr.github.io/lockfree/latest/benchmarks/) and
 [Performance Tuning](performance-tuning.md#capacity-segment-sizing).
 
 ### Multiple producers: contention scaling
