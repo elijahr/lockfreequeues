@@ -4,8 +4,8 @@
 > As of version 0.1.0, `lockfreequeues` and `nim-debra` have been unified into a single high-performance library: **[`lockfree`](https://github.com/elijahr/lockfree)**.  
 > This package is maintained as a **zero-overhead backwards-compatibility facade**. New projects should depend directly on `lockfree`.
 
-[![Docs](https://img.shields.io/badge/docs-lockfree-blue.svg)](https://elijahr.github.io/lockfree)
-[![Migration Guide](https://img.shields.io/badge/guide-migration-orange.svg)](https://elijahr.github.io/lockfree/migration/)
+[![Docs](https://img.shields.io/badge/docs-lockfree-blue.svg)](https://elijahr.github.io/lockfree/latest/)
+[![Migration Guide](https://img.shields.io/badge/guide-migration-orange.svg)](https://elijahr.github.io/lockfree/latest/migrations/from-lockfreequeues-v5/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
@@ -56,4 +56,4 @@ var chan = newBoundedChannel[int](64)
 assert chan.send(42)
 ```
 
-Read the full [Migration Guide](https://elijahr.github.io/lockfree/migration/) and [Documentation](https://elijahr.github.io/lockfree).
+Read the full [Migration Guide](https://elijahr.github.io/lockfree/latest/migrations/from-lockfreequeues-v5/) and [Documentation](https://elijahr.github.io/lockfree/latest/).
