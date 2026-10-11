@@ -56,10 +56,6 @@
     
       <link rel="stylesheet" href="../../css/custom.css">
     
-      <link rel="stylesheet" href="../../assets/bench-charts.css">
-    
-      <link rel="stylesheet" href="../../assets/uplot-1.6.27.min.css">
-    
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -1249,33 +1245,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../benchmarks/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Benchmarks
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../contributing/" class="md-nav__link">
         
   
@@ -1525,7 +1494,7 @@
 capacity (or segments), where to place producer and consumer threads, how
 batch sizing changes amortized cost, and which compile-time settings matter.</p>
 <p>For the published benchmark numbers and methodology, see
-<a href="../../benchmarks/">Benchmarks</a>.</p>
+<a href="../benchmarks.md">Benchmarks</a>.</p>
 <h2 id="capacity-segment-sizing">Capacity / segment sizing<a class="headerlink" href="#capacity-segment-sizing" title="Permanent link">¶</a></h2>
 <h3 id="throughput-vs-memory-trade-off">Throughput-vs-memory trade-off<a class="headerlink" href="#throughput-vs-memory-trade-off" title="Permanent link">¶</a></h3>
 <p>Capacity is the single biggest knob on bounded throughput. Too small and
@@ -1554,7 +1523,7 @@ floor.</p>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="kd">var</span><span class="w"> </span><span class="n">events</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">newUnboundedMupmuc</span><span class="o">[</span><span class="mi">1024</span><span class="p">,</span><span class="w"> </span><span class="nb">int</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="o">]</span><span class="p">()</span>
 </code></pre></div>
 <h3 id="empirical-data">Empirical data<a class="headerlink" href="#empirical-data" title="Permanent link">¶</a></h3>
-<p>See <a href="../../benchmarks/">Benchmarks</a> for the measured throughput-vs-capacity
+<p>See <a href="../benchmarks.md">Benchmarks</a> for the measured throughput-vs-capacity
 curves and the reproducer commands used to generate them.</p>
 <p>For the conceptual rationale, see
 <a href="../bounded-vs-unbounded/#choosing-n-throughput-vs-memory">Bounded vs Unbounded → Choosing N</a>.</p>
@@ -1622,7 +1591,7 @@ on the producer side and an integer count on the consumer side:</p>
 <code>batch_size = 64</code>, by 64× — at which point the per-item slot store
 dominates and further batching stops helping.</p>
 <h3 id="measured-impact-in-bench_nim-overrides">Measured impact in <code>bench_*.nim</code> overrides<a class="headerlink" href="#measured-impact-in-bench_nim-overrides" title="Permanent link">¶</a></h3>
-<p>See <a href="../../benchmarks/">Benchmarks</a> for the bench harness configuration and
+<p>See <a href="../benchmarks.md">Benchmarks</a> for the bench harness configuration and
 batch-size sweeps. The bench harness exposes per-shape overrides so you
 can probe a specific (producer-count, consumer-count, batch-size) cell
 without re-running the whole sweep.</p>
@@ -1678,7 +1647,7 @@ some of the atomic builtins the queues rely on.</p>
 <a href="../safety-model/#test-matrix">Safety Model → Test matrix</a> and
 <a href="../memory-management/#item-types-and-arc-orc">Memory Management → Item types and ARC / ORC</a>.</p>
 <h2 id="methodology-link">Methodology link<a class="headerlink" href="#methodology-link" title="Permanent link">¶</a></h2>
-<p>See <a href="../../benchmarks/">Benchmarks</a> for the methodology that produced the
+<p>See <a href="../benchmarks.md">Benchmarks</a> for the methodology that produced the
 published numbers, including reproducer commands and CI tuning overrides.</p>
 
 

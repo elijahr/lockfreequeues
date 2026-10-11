@@ -5,10 +5,6 @@
          <lastmod>2026-10-11</lastmod>
     </url>
     <url>
-         <loc>https://elijahr.github.io/lockfreequeues/latest/benchmarks/</loc>
-         <lastmod>2026-10-11</lastmod>
-    </url>
-    <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/contributing/</loc>
          <lastmod>2026-10-11</lastmod>
     </url>
@@ -78,10 +74,6 @@
     </url>
     <url>
          <loc>https://elijahr.github.io/lockfreequeues/latest/guide/slot-ownership-typestates/</loc>
-         <lastmod>2026-10-11</lastmod>
-    </url>
-    <url>
-         <loc>https://elijahr.github.io/lockfreequeues/latest/reviews/review_lockfreequeues_compat/</loc>
          <lastmod>2026-10-11</lastmod>
     </url>
 </urlset>

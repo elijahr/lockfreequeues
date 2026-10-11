@@ -54,10 +54,6 @@
     
       <link rel="stylesheet" href="css/custom.css">
     
-      <link rel="stylesheet" href="assets/bench-charts.css">
-    
-      <link rel="stylesheet" href="assets/uplot-1.6.27.min.css">
-    
     <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -1202,33 +1198,6 @@
   
   
     <li class="md-nav__item">
-      <a href="benchmarks/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Benchmarks
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="contributing/" class="md-nav__link">
         
   
@@ -1429,6 +1398,12 @@
 
 
 <h1 id="lockfreequeues">lockfreequeues<a class="headerlink" href="#lockfreequeues" title="Permanent link">¶</a></h1>
+<div class="admonition warning">
+<p class="admonition-title">Package Consolidated into <a href="https://github.com/elijahr/lockfree"><code>lockfree</code></a></p>
+<p><code>lockfreequeues</code> is now maintained strictly as a <strong>zero-overhead compatibility wrapper</strong> around the unified <a href="https://github.com/elijahr/lockfree"><strong><code>lockfree</code></strong></a> library.</p>
+<p>All active development, performance tuning, and modern features (CSP <code>Channel[T]</code> facade, cross-language C ABI, Apple Silicon cacheline optimizations, and benchmark results) live in canonical <strong><code>lockfree</code></strong>.</p>
+<p>👉 <strong>Official Documentation &amp; Guides</strong>: <strong><a href="https://elijahr.github.io/lockfree">https://elijahr.github.io/lockfree</a></strong></p>
+</div>
 <p>Lock-free queues for Nim, implemented as ring buffers (bounded) and linked segments (unbounded).</p>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">¶</a></h2>
 <h3 id="bounded-queues-fixed-capacity">Bounded Queues (Fixed Capacity)<a class="headerlink" href="#bounded-queues-fixed-capacity" title="Permanent link">¶</a></h3>
@@ -1608,7 +1583,7 @@ reclamation, plus a per-thread handle for each producer and consumer:</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"></path></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="May 2, 2026 05:24:48 UTC"><span class="timeago" datetime="2026-05-02T05:24:48+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="May 2, 2026 05:24:48 UTC">2026-05-02</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-timeago" title="October 11, 2026 08:46:46 UTC"><span class="timeago" datetime="2026-10-11T08:46:46+00:00" locale="en"></span></span><span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-iso_date" title="October 11, 2026 08:46:46 UTC">2026-10-11</span>
   </span>
 
     
