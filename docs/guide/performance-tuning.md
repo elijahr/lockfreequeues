@@ -5,7 +5,7 @@ capacity (or segments), where to place producer and consumer threads, how
 batch sizing changes amortized cost, and which compile-time settings matter.
 
 For the published benchmark numbers and methodology, see
-[Benchmarks](../benchmarks.md).
+[Benchmarks](https://elijahr.github.io/lockfree/latest/benchmarks/).
 
 ## Capacity / segment sizing
 
@@ -43,7 +43,7 @@ var events = newUnboundedMupmuc[1024, int, 8]()
 
 ### Empirical data
 
-See [Benchmarks](../benchmarks.md) for the measured throughput-vs-capacity
+See [Benchmarks](https://elijahr.github.io/lockfree/latest/benchmarks/) for the measured throughput-vs-capacity
 curves and the reproducer commands used to generate them.
 
 For the conceptual rationale, see
@@ -131,7 +131,7 @@ dominates and further batching stops helping.
 
 ### Measured impact in `bench_*.nim` overrides
 
-See [Benchmarks](../benchmarks.md) for the bench harness configuration and
+See [Benchmarks](https://elijahr.github.io/lockfree/latest/benchmarks/) for the bench harness configuration and
 batch-size sweeps. The bench harness exposes per-shape overrides so you
 can probe a specific (producer-count, consumer-count, batch-size) cell
 without re-running the whole sweep.
@@ -204,5 +204,5 @@ For the safety implications of each memory manager choice, see
 
 ## Methodology link
 
-See [Benchmarks](../benchmarks.md) for the methodology that produced the
+See [Benchmarks](https://elijahr.github.io/lockfree/latest/benchmarks/) for the methodology that produced the
 published numbers, including reproducer commands and CI tuning overrides.
