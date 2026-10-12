@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.1] - 2026-10-11
+
+### Changed
+
+- **Upstream dependency bump**: Updated `lockfree` dependency to `>= 0.2.0` to pull in the latest 10 lock-free collections, C ABI, hardware atomics, and `typestates >= 0.13.0`.
+- **Lean facade cleanup**: Removed obsolete benchmarks, old stress harness, and legacy benchmark scripts.
+- **Documentation alignment**: All documentation pages now feature clear notices linking to canonical `lockfree` documentation.
+
+## [5.1.0] - 2026-10-08
+
+### Changed
+
+- **Compatibility facade for `lockfree`**: Converted `lockfreequeues` into a thin, zero-overhead compatibility facade backed by the modern `lockfree` library.
+- Preserves 100% backward compatibility for existing code using `Sipsic`, `Mupsic`, `Sipmuc`, `Mupmuc`, and unbounded variants.
+
 ## [4.2.0] - 2026-06-24
 
 ### BREAKING

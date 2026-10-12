@@ -1,7 +1,7 @@
 import os
 
 # Package
-version        = "5.1.0"
+version        = "5.1.1"
 author         = "Elijah Shaw-Rutschman"
 description    = "Compatibility facade for lockfree — lock-free queues for Nim."
 license        = "MIT"
@@ -11,7 +11,7 @@ entryPoints    = @["tests/test.nim"]
 # Dependencies
 requires "nim >= 2.2.10"
 requires "unittest2"
-requires "lockfree >= 0.1.0"
+requires "lockfree >= 0.2.0"
 
 # Tasks
 task test, "Runs the test suite":
