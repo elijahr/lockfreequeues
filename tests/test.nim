@@ -1,3 +1,4 @@
+import ./t_atomic_coexistence
 import ./t_atomic_dsl
 import ./t_backoff
 import ./t_wraparound
@@ -8,6 +9,7 @@ import ./t_legacy_mupmuc
 import ./t_legacy_unbounded
 
 export
+  t_atomic_coexistence,
   t_atomic_dsl,
   t_backoff,
   t_wraparound,

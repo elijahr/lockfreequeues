@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.2] - 2026-10-11
+
+### Fixed
+
+- **Namespace hygiene**: Removed `export atomics, dsl` from the root `lockfreequeues` module and queue sub-modules (`sipsic`, `mupsic`, `mupmuc`, `sipmuc`, etc.). This eliminates the `ambiguous identifier: 'Atomic'` conflict when downstream projects import both `std/atomics` and `lockfreequeues` (or any of its queue sub-modules). Callers who specifically want the atomic DSL can explicitly `import lockfreequeues/atomic_dsl` as in v4.x.
+
 ## [5.1.1] - 2026-10-11
 
 ### Changed

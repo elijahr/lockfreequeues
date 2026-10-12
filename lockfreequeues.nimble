@@ -1,7 +1,7 @@
 import os
 
 # Package
-version        = "5.1.1"
+version        = "5.1.2"
 author         = "Elijah Shaw-Rutschman"
 description    = "Compatibility facade for lockfree — lock-free queues for Nim."
 license        = "MIT"

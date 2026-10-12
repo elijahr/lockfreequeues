@@ -7,8 +7,6 @@
 ## arities, and implicit thread registration semantics.
 
 import options
-import lockfree/atomics
-import lockfree/atomics/dsl
 import lockfree/strategy
 import lockfree/cardinality
 import lockfree/exceptions
@@ -19,7 +17,6 @@ import lockfree/smr/nebr as nebr
 import lockfree/smr/nebr/signal as nebr_signal
 import std/typedthreads
 
-export atomics, dsl
 export strategy
 export cardinality
 export exceptions
