@@ -12,6 +12,11 @@ entryPoints    = @["tests/test.nim"]
 requires "nim >= 2.2.10"
 requires "unittest2"
 requires "lockfree >= 0.2.0"
+# typestates 0.14.0 rejects consumeOnTransition transitions that take
+# lent input; lockfree 0.6.0 still declares them that way, so resolving
+# the open ranges fails the build. Hold the verifier below 0.14.0.
+# Revisit when the lockfree floor carries sink transitions.
+requires "typestates < 0.14.0"
 
 # Tasks
 task test, "Runs the test suite":
