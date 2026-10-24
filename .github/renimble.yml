@@ -1,0 +1,14 @@
+version: 1
+updates:
+  - package-ecosystem: "nimble"
+    directory: "/"
+    target-branch: "devel"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "nim"
+    update-compiler-requirement: true
