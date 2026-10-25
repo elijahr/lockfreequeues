@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.3] - 2026-10-24
+
+### Changed
+
+- **Upstream dependency bump (`lockfree >= 0.6.1`)**: Bumped `lockfree` requirement floor to `>= 0.6.1`. Upstream `lockfree 0.6.1` aligns all SMR typestate transitions with upstream `typestates >= 0.14.0` linearity rules (`sink` parameters, explicit `consumeOnTransition = false`), resolving PR #37 natively without needing to artificially cap `typestates`. Also pulls in hardware 128-bit DWCAS stack/queue primitives, dual 64-bit rate limiters, and complete multi-arch benchmark coverage.
+
 ## [5.1.2] - 2026-10-11
 
 ### Fixed
