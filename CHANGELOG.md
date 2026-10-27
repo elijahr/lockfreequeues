@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.4] - 2026-10-27
+
+### Changed
+
+- **Exact upstream dependency pinning (`lockfree == 0.6.3`)**: Pinned `lockfree` to exact version `== 0.6.3` to eliminate floating version drift, guarantee byte-for-byte tested parity, and pull in the latest FlatCombiner Apple Silicon synchronization fixes and benchmark contract updates.
+
 ## [5.1.3] - 2026-10-24
 
 ### Changed
