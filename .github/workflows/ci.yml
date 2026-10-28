@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [main]
+    branches: [devel]
   pull_request:
 
 permissions: {}
@@ -31,7 +31,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        nim-version: [stable, "2.2.6", devel]
+        nim-version: [stable, "2.2.10", devel]
     steps:
       - uses: actions/checkout@v4
 
