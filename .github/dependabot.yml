@@ -1,0 +1,10 @@
+version: 2
+enable-beta-ecosystems: true
+
+updates:
+  # GitHub Actions workflow updates
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10

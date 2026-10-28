@@ -1,0 +1,63 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  secrets-scan:
+    name: Secrets Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install and run Gitleaks
+        run: |
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v8.24.0/gitleaks_8.24.0_linux_x64.tar.gz" | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks detect --verbose --redact
+
+  test-nim:
+    name: Nim (${{ matrix.nim-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        nim-version: [stable, "2.2.6", devel]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: ${{ matrix.nim-version }}
+          parent-nim-install-directory: ${{ runner.temp }}
+
+      - uses: actions/cache@v5
+        with:
+          path: ~/.nimble
+          key: nimble-${{ runner.os }}-${{ hashFiles('**/*.nimble') }}
+
+      - name: Install dependencies
+        run: |
+          nimble install --depsOnly -y
+
+      - name: nph format check
+        run: |
+          nimble install -y nph@0.7.0
+          nph --check .
+        continue-on-error: ${{ matrix.nim-version == 'devel' }}
+
+      - name: nimble check
+        run: nimble check
+        continue-on-error: ${{ matrix.nim-version == 'devel' }}
+
+      - name: Test
+        run: nimble test
+        continue-on-error: ${{ matrix.nim-version == 'devel' }}

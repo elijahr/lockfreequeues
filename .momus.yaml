@@ -1,0 +1,16 @@
+# Momus PR Review Configuration
+# https://github.com/axiomantic/momus
+
+review:
+  emit_nits: false
+  max_findings: 20
+  emphasis_modules:
+    - security
+    - quality_checklist
+
+verify:
+  enabled: true
+
+provider:
+  model: ~anthropic/claude-sonnet-latest
+  base_url: https://openrouter.ai/api/v1
