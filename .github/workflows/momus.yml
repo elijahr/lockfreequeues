@@ -1,0 +1,53 @@
+name: Momus
+
+on:
+  pull_request:
+    types: [opened]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: PR number to review
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: momus-${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pr_number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  call:
+    if: >-
+      github.event.sender.type != 'Bot' && (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'pull_request' && github.event.action == 'opened') ||
+        (
+          github.event_name == 'issue_comment' &&
+          github.event.issue.pull_request != null &&
+          (
+            startsWith(github.event.comment.body, '/ai-review') ||
+            contains(github.event.comment.body, '@axiomantic-momus[bot]')
+          )
+        )
+      )
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    uses: axiomantic/.github/.github/workflows/momus.yml@devel
+    with:
+      pr_number: ${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pr_number }}
+      event_name: ${{ github.event_name }}
+      trigger_command: /ai-review
+      trigger_mention: "@axiomantic-momus[bot]"
+      model: ~anthropic/claude-sonnet-latest
+      base_url: https://openrouter.ai/api/v1
+      only_collaborators: true
+      environment: code-review
+    secrets:
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+      MOMUS_APP_ID: ${{ secrets.MOMUS_APP_ID }}
+      MOMUS_APP_PRIVATE_KEY: ${{ secrets.MOMUS_APP_PRIVATE_KEY }}

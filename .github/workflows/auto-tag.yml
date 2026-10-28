@@ -1,0 +1,33 @@
+name: Auto Tag
+on:
+  push:
+    branches: [main]
+    paths:
+      - "*.nimble"
+permissions: {}
+
+jobs:
+  tag:
+    permissions:
+      contents: write
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, token: "${{ secrets.GITHUB_TOKEN }}" }
+      - name: Extract version from .nimble
+        id: ver
+        run: |
+          NIMBLE=$(ls *.nimble 2>/dev/null | head -1)
+          [ -z "$NIMBLE" ] && { echo "no .nimble file found"; exit 1; }
+          VERSION=$(grep -m1 -E '^version\s*=\s*"' "$NIMBLE" | sed -E 's/^version\s*=\s*"([^"]+)".*/\1/')
+          [ -z "$VERSION" ] && { echo "no version found in $NIMBLE"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Tag if not exists
+        env: { VERSION: "${{ steps.ver.outputs.version }}" }
+        run: |
+          git rev-parse "v$VERSION" >/dev/null 2>&1 && { echo "Tag v$VERSION exists"; exit 0; }
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
