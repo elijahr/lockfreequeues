@@ -31,7 +31,7 @@ const
   SegmentSize = 64
   NumSources = 4
   DurationMs = 200
-  MaxThreads = NumSources + 4  # sources + main/consumer + slack
+  MaxThreads = NumSources + 4 # sources + main/consumer + slack
 
 type
   EventKind = enum
@@ -60,12 +60,12 @@ type
 var
   manager = initDebraManager[MaxThreads]()
   consumerHandle = registerThread(manager)
-  queue = newUnboundedMupsic[SegmentSize, Event, MaxThreads](addr manager, consumerHandle)
+  queue =
+    newUnboundedMupsic[SegmentSize, Event, MaxThreads](addr manager, consumerHandle)
   running: Atomic[bool]
   eventsProduced: array[NumSources, Atomic[int]]
   eventsConsumed: Atomic[int]
   maxQueueDepth: Atomic[int]
-
 
 proc eventSourceThread(ctx: ptr SourceContext) {.thread.} =
   ## Simulates an event source generating events at variable rates.
@@ -77,26 +77,33 @@ proc eventSourceThread(ctx: ptr SourceContext) {.thread.} =
 
     while running.load(moAcquire):
       # Simulate variable event rate with occasional bursts
-      let burstMode = rand(100) < 10  # 10% chance of burst
-      let eventCount = if burstMode: rand(10..20) else: rand(1..3)
+      let burstMode = rand(100) < 10 # 10% chance of burst
+      let eventCount =
+        if burstMode:
+          rand(10 .. 20)
+        else:
+          rand(1 .. 3)
 
-      for _ in 0..<eventCount:
+      for _ in 0 ..< eventCount:
         let event = Event(
           sourceId: ctx.sourceId,
           kind: EventKind(rand(ord(EventKind.high))),
           timestamp: (getMonoTime() - ctx.startTime).inMicroseconds,
-          value: rand(1000)
+          value: rand(1000),
         )
 
         producer.push(event)
         inc produced
 
       # Variable delay between event batches
-      let delayMs = if burstMode: 1 else: rand(5..15)
+      let delayMs =
+        if burstMode:
+          1
+        else:
+          rand(5 .. 15)
       sleep(delayMs)
 
     eventsProduced[ctx.sourceId].store(produced, moRelease)
-
 
 proc processorThread(ctx: ptr ProcessorContext) {.thread.} =
   ## Single processor consumes and processes all events.
@@ -137,7 +144,6 @@ proc processorThread(ctx: ptr ProcessorContext) {.thread.} =
     for kind in EventKind:
       echo "  ", kind, ": ", eventCounts[kind]
 
-
 when isMainModule:
   randomize()
 
@@ -151,32 +157,27 @@ when isMainModule:
   running.store(true, moRelease)
   eventsConsumed.store(0, moRelaxed)
   maxQueueDepth.store(0, moRelaxed)
-  for i in 0..<NumSources:
+  for i in 0 ..< NumSources:
     eventsProduced[i].store(0, moRelaxed)
 
   let startTime = getMonoTime()
 
   # Start processor
   var procCtx = ProcessorContext(
-    queue: addr queue,
-    manager: addr manager,
-    consumerHandle: consumerHandle,
+    queue: addr queue, manager: addr manager, consumerHandle: consumerHandle
   )
   var processor: Thread[ptr ProcessorContext]
   createThread(processor, processorThread, addr procCtx)
 
   # Start event sources
   var sourceContexts: array[NumSources, SourceContext]
-  for i in 0..<NumSources:
+  for i in 0 ..< NumSources:
     sourceContexts[i] = SourceContext(
-      queue: addr queue,
-      manager: addr manager,
-      sourceId: i,
-      startTime: startTime,
+      queue: addr queue, manager: addr manager, sourceId: i, startTime: startTime
     )
 
   var sources: array[NumSources, Thread[ptr SourceContext]]
-  for i in 0..<NumSources:
+  for i in 0 ..< NumSources:
     createThread(sources[i], eventSourceThread, addr sourceContexts[i])
 
   # Run for specified duration
@@ -184,9 +185,9 @@ when isMainModule:
   running.store(false, moRelease)
 
   # Wait for completion
-  for i in 0..<NumSources:
+  for i in 0 ..< NumSources:
     joinThread(sources[i])
-  sleep(50)  # Let processor drain
+  sleep(50) # Let processor drain
   joinThread(processor)
 
   let totalTime = (getMonoTime() - startTime).inMilliseconds
@@ -195,7 +196,7 @@ when isMainModule:
   echo ""
   echo "Results:"
   var totalProduced = 0
-  for i in 0..<NumSources:
+  for i in 0 ..< NumSources:
     let produced = eventsProduced[i].load(moAcquire)
     echo "  Source ", i, ": ", produced, " events"
     totalProduced += produced

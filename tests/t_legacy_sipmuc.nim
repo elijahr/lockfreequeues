@@ -7,13 +7,12 @@ const
   ItemCount = 10000
   ConsumerCount = 4
 
-type
-  SipmucThreadContext[N: static int] = object
-    queue: ptr Sipmuc[N, ConsumerCount, int]
-    received: ptr array[ItemCount, Atomic[bool]]
-    duplicateFound: ptr Atomic[bool]
-    producerDone: ptr Atomic[bool]
-    totalConsumed: ptr Atomic[int]
+type SipmucThreadContext[N: static int] = object
+  queue: ptr Sipmuc[N, ConsumerCount, int]
+  received: ptr array[ItemCount, Atomic[bool]]
+  duplicateFound: ptr Atomic[bool]
+  producerDone: ptr Atomic[bool]
+  totalConsumed: ptr Atomic[int]
 
 proc sipmucProducer[N: static int](ctx: ptr SipmucThreadContext[N]) {.thread.} =
   for i in 1 .. ItemCount:

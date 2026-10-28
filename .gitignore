@@ -1,58 +1,37 @@
-# IDE/editor config (machine-specific)
-.vscode/
-.DS_Store
-
-# Local PR description scratch file (do not commit)
-.pr-description.md
-
-# Nim compiler cache and build artifacts
 nimcache/
+*.exe
+*.out
+*.dll
+*.so
+*.dylib
 nimblecache/
+.nimble/
+htmldocs/
+site/
+.DS_Store
+.idea/
+.vscode/
+*.swp
+justfile.local
+
+
+
+
+
+
+
+# lockfreequeues-specific ignores
 .tmp/
-
-# Generated documentation
-/site/
-
-# Legacy nim doc artifacts (removed in v4.2.0)
-/json/
-/nimdoc.cfg
-/htmldocs/
-
-# Personal IDE / chatmode tooling — keep out of the repo entirely.
-.github/instructions/
-.github/chatmodes/
 nimble.develop
 nimble.paths
-
-# Internal planning docs
 docs/plans/
 deps/
-# Worktree-local symlink to the main repo's deps/ folder, created by
-# the worktree setup so nim.cfg's `--path:"deps/unittest2"` resolves.
-deps
-
-# Embedded repositories (use as dependencies, not submodules)
-nim-typestates/
-nim-unittest2/
-
-# Temporary/generated files
 logs/
-test_typed_introspection*
-benchmarks/nim/bench_latency
-benchmarks/nim/bench_spsc
-benchmarks/nim/bench_mpsc
-benchmarks/nim/bench_mpmc
-benchmarks/nim/bench_unbounded
-
-# Compiled benchmark test binaries (extensionless executables)
+benchmarks/nim/bench_*
 benchmarks/nim/tests/t_*
 !benchmarks/nim/tests/t_*.nim
-
-# Compiled stress-test binaries (extensionless executables)
 stress-tests/[a-z_]*
 !stress-tests/*.nim
-
-# Rust crate build artifacts (FFI bench bridges)
 benchmarks/rust/*/target/
 benchmarks/rust/*/Cargo.lock
 nimbledeps

@@ -1,12 +1,12 @@
 import os
 
 # Package
-version        = "5.1.4"
-author         = "Elijah Shaw-Rutschman"
-description    = "Compatibility facade for lockfree — lock-free queues for Nim."
-license        = "MIT"
-srcDir         = "src"
-entryPoints    = @["tests/test.nim"]
+version = "5.1.4"
+author = "Elijah Shaw-Rutschman"
+description = "Compatibility facade for lockfree — lock-free queues for Nim."
+license = "MIT"
+srcDir = "src"
+entryPoints = @["tests/test.nim"]
 
 # Dependencies
 requires "nim >= 2.2.10"
@@ -36,7 +36,6 @@ task test, "Runs the test suite":
   if getEnv("SANITIZE_ADDRESS") != "no":
     # C (with address sanitization)
     exec "nim c --cc:clang --passC:\"-fsanitize=address\" --passL:\"-fsanitize=address\" --threads:on -r -f tests/test.nim"
-
 
 task examples, "Runs the examples":
   # Bounded queue examples
