@@ -57,7 +57,7 @@ jobs:
           nim-version: '2.2.8'
 
       - name: Cache Nimble packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nimble
           key: ${{ runner.os }}-nimble-docs-${{ hashFiles('*.nimble') }}
