@@ -8,13 +8,12 @@ const
   ProducerCount = 4
   ItemsPerProducer = ItemCount div ProducerCount
 
-type
-  MupsicThreadContext[N: static int] = object
-    queue: ptr Mupsic[N, ProducerCount, int]
-    received: ptr array[ItemCount, Atomic[bool]]
-    duplicateFound: ptr Atomic[bool]
-    producersDone: ptr Atomic[int]
-    producerIdx: int
+type MupsicThreadContext[N: static int] = object
+  queue: ptr Mupsic[N, ProducerCount, int]
+  received: ptr array[ItemCount, Atomic[bool]]
+  duplicateFound: ptr Atomic[bool]
+  producersDone: ptr Atomic[int]
+  producerIdx: int
 
 proc mupsicProducer[N: static int](ctx: ptr MupsicThreadContext[N]) {.thread.} =
   var p = ctx.queue[].getProducer()

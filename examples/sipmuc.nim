@@ -9,17 +9,14 @@ import options
 
 import lockfreequeues
 
-
 const
   NumItems = 100
   NumConsumers = 4
-
 
 var
   queue = initSipmuc[64, NumConsumers, int]()
   done: Atomic[bool]
   processed: array[NumConsumers, Atomic[int]]
-
 
 proc consumerThread(idx: int) {.thread.} =
   let consumer = queue.getConsumer(idx)
@@ -44,29 +41,28 @@ proc consumerThread(idx: int) {.thread.} =
   processed[idx].store(count, moRelease)
   echo "Consumer ", idx, " processed ", count, " items"
 
-
 when isMainModule:
   var threads: array[NumConsumers, Thread[int]]
   done.store(false, moRelaxed)
 
   # Start consumers
-  for i in 0..<NumConsumers:
+  for i in 0 ..< NumConsumers:
     processed[i].store(0, moRelaxed)
     createThread(threads[i], consumerThread, i)
 
   # Producer pushes items
-  for i in 1..NumItems:
+  for i in 1 .. NumItems:
     while not queue.push(i):
       sleep(1)
 
   done.store(true, moRelease)
-  sleep(100)  # Let consumers finish draining
+  sleep(100) # Let consumers finish draining
 
-  for i in 0..<NumConsumers:
+  for i in 0 ..< NumConsumers:
     joinThread(threads[i])
 
   var total = 0
-  for i in 0..<NumConsumers:
+  for i in 0 ..< NumConsumers:
     total += processed[i].load(moAcquire)
 
   echo "Total processed: ", total, " (expected ", NumItems, ")"
