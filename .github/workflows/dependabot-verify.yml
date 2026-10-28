@@ -52,12 +52,19 @@ jobs:
       - name: Validate renovate.json schema & syntax
         run: |
           python3 -c '
-          import json
+          import json, re
           with open(".github/renovate.json", "r") as f:
               data = json.load(f)
           assert "extends" in data, "renovate.json missing extends"
           assert "config:recommended" in data["extends"], "renovate.json missing config:recommended"
-          nimble_cfg = data.get("nimble", {})
-          assert nimble_cfg.get("enabled") is True, f"nimble.enabled must be True, got {nimble_cfg}"
-          print("Renovate configuration validated successfully with nimble enabled.")
+          assert "nimble" not in data, "renovate.json contains unsupported top-level nimble option"
+          assert "customManagers" in data, "renovate.json missing customManagers"
+          cms = data["customManagers"]
+          assert len(cms) >= 1, f"Expected at least 1 customManager for template tracking, got {len(cms)}"
+          for cm in cms:
+              for s in cm.get("matchStrings", []):
+                  py_s = re.sub(r"\(\?<([a-zA-Z0-9_]+)>", r"(?P<\1>", s)
+                  re.compile(py_s)
+          print(f"Renovate configuration validated successfully with {len(cms)} custom managers.")
           '
+          npx --yes --package renovate renovate-config-validator .github/renovate.json

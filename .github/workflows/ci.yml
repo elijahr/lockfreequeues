@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [main]
+    branches: [devel]
   pull_request:
 
 permissions: {}
@@ -18,7 +18,8 @@ jobs:
           fetch-depth: 0
       - name: Install and run Gitleaks
         run: |
-          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v8.24.0/gitleaks_8.24.0_linux_x64.tar.gz" | sudo tar -xz -C /usr/local/bin gitleaks
+          GITLEAKS_VERSION="8.24.0"
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | sudo tar -xz -C /usr/local/bin gitleaks
           gitleaks detect --verbose --redact
 
   test-nim:
@@ -30,7 +31,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        nim-version: [stable, "2.2.6", devel]
+        nim-version: [stable, "2.2.10", devel]
     steps:
       - uses: actions/checkout@v4
 
@@ -38,6 +39,7 @@ jobs:
         with:
           nim-version: ${{ matrix.nim-version }}
           parent-nim-install-directory: ${{ runner.temp }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/cache@v5
         with:

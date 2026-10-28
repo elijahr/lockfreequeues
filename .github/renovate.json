@@ -3,7 +3,52 @@
   "extends": [
     "config:recommended"
   ],
-  "nimble": {
-    "enabled": true
-  }
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Check for Polyform template updates in .copier-answers.yml",
+      "fileMatch": [
+        "(^|/)\\.copier-answers\\.ya?ml$"
+      ],
+      "matchStrings": [
+        "_commit:\\s*[\"']?(?<currentValue>[^\"'\\s]+)[\"']?\\s*(?:#[^\\r\\n]*)?[\\r\\n]+_src_path:\\s*[\"']?(?:gh:|https://github\\.com/|git@github\\.com:)?(?<depName>[a-zA-Z0-9_.-]+/[a-zA-Z0-9_-]+)(?:\\.git)?[\"']?",
+        "_src_path:\\s*[\"']?(?:gh:|https://github\\.com/|git@github\\.com:)?(?<depName>[a-zA-Z0-9_.-]+/[a-zA-Z0-9_-]+)(?:\\.git)?[\"']?\\s*(?:#[^\\r\\n]*)?[\\r\\n]+_commit:\\s*[\"']?(?<currentValue>[^\"'\\s]+)[\"']?"
+      ],
+      "datasourceTemplate": "github-tags"
+    },
+    {
+      "customType": "regex",
+      "description": "Track Gitleaks release download in ci.yml",
+      "fileMatch": [
+        "(^|/)\\.github/workflows/ci\\.ya?ml$"
+      ],
+      "matchStrings": [
+        "GITLEAKS_VERSION=\"(?<currentValue>[0-9.]+)\""
+      ],
+      "depNameTemplate": "gitleaks/gitleaks",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Group Polyform template updates with instructions to run update-template",
+      "matchDatasources": [
+        "github-tags"
+      ],
+      "matchPackageNames": [
+        "axiomantic/polyform"
+      ],
+      "commitMessagePrefix": "chore(template):",
+      "commitMessageTopic": "Polyform template update",
+      "prBodyNotes": [
+        ":rocket: A new version of the **Polyform** template (`{{newVersion}}`) is available.",
+        "",
+        "To apply updated template files and migrations downstream after merging this PR, run:",
+        "```bash",
+        "just update-template",
+        "```"
+      ]
+    }
+  ]
 }
