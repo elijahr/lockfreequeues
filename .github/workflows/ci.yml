@@ -49,24 +49,24 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.nimble
-          key: nimble-${{ runner.os }}-${{ matrix.nim-version }}-${{ hashFiles('**/*.nimble') }}
+          key: nimble-${{ runner.os }}-${{ runner.arch }}-${{ matrix.nim-version }}-${{ hashFiles('**/*.nimble') }}
           restore-keys: |
-            nimble-${{ runner.os }}-${{ matrix.nim-version }}-
-            nimble-${{ runner.os }}-
+            nimble-${{ runner.os }}-${{ runner.arch }}-${{ matrix.nim-version }}-
+            nimble-${{ runner.os }}-${{ runner.arch }}-
           save-always: true
 
       - name: Cache Nim nimcache
         uses: actions/cache@v6
         with:
           path: ~/.cache/nim
-          key: nimcache-${{ runner.os }}-${{ matrix.nim-version }}-${{ hashFiles('**/*.nimble', 'src/**/*.nim', 'tests/**/*.nim') }}
+          key: nimcache-${{ runner.os }}-${{ runner.arch }}-${{ matrix.nim-version }}-${{ hashFiles('**/*.nimble', 'src/**/*.nim', 'tests/**/*.nim') }}
           restore-keys: |
-            nimcache-${{ runner.os }}-${{ matrix.nim-version }}-
+            nimcache-${{ runner.os }}-${{ runner.arch }}-${{ matrix.nim-version }}-
           save-always: true
 
       - name: Install dependencies
         run: |
-          nimble install --depsOnly -y
+          nimble refresh && nimble install -d -y
 
       - name: nph format check
         run: |
