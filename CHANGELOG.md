@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.6] - 2026-10-30
+
+### Changed
+
+- **Patch-compatible `lockfree` and `typestates` dependency ranges (`lockfreequeues.nimble`)**: Updated `lockfree` requirement to `requires "lockfree >= 0.6.5 & < 0.7.0"` and added `requires "typestates >= 0.14.0 & < 0.15.0"`, pulling in `lockfree 0.6.5` (explicit `typestates >= 0.14.0 & < 0.15.0` upper bound and hardened `hasManagedFields` macro covering generic object instances like `Table[K, V]`, `distinct` wrappers over managed types, and closure `proc` types) and ensuring non-breaking `0.x.y` patch compatibility across the dependency graph.
+
 ## [5.1.5] - 2026-10-30
 
 ### Changed
