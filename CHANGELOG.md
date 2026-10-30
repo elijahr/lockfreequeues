@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.7] - 2026-04-19
+
+### Changed
+
+- **Upstream dependency bump (`lockfree >= 0.6.6 & < 0.7.0`)**: Updated `lockfree` requirement in `lockfreequeues.nimble` to `requires "lockfree >= 0.6.6 & < 0.7.0"`.
+- **CI package index refresh and arch-scoped cache keys (`.github/workflows/ci.yml`)**: Added `nimble refresh && nimble install -d -y` in the dependency installation step so cached `~/.nimble` restorations via `restore-keys:` always refresh the Nimble package index to discover newly tagged `lockfree` releases, and scoped `actions/cache@v6` keys by `${{ runner.arch }}`.
+
 ## [5.1.6] - 2026-10-30
 
 ### Changed
