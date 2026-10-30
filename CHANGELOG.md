@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.5] - 2026-10-30
+
+### Changed
+
+- **Patch-compatible upstream dependency range (`lockfree >= 0.6.4 & < 0.7.0`)**: Updated `lockfree` requirement in `lockfreequeues.nimble` to `>= 0.6.4 & < 0.7.0`, pulling in `lockfree 0.6.4` (disjoint-access parallel `len`/`isEmpty` without hot-path atomic RMW counters, zero-copy two-phase `StreamBuffer` reserve/commit C ABI, `0 -> 1` empty-transition `pushEx` APIs, `TaggedStack.tryPush` initialization fix, `Channel` TLS MRU eviction cleanup, and Nim 2.4.0 compatibility) while allowing non-breaking `0.6.x` patch updates.
+- **Test suite and CI caching speedup (`lockfreequeues.nimble`, `.github/workflows/ci.yml`)**: Folded `-d:nimEnforceLockFreeAtomics` into the primary `orc` and `arc` test builds to eliminate two redundant full compilations while preserving 100% of compiler, memory-manager, and sanitizer coverage (`orc`, `cpp`, `arc`, `refc`, `TSAN`, `ASAN`). Replaced `-f` forced rebuilds with isolated per-variant `--nimcache` and `--out` directories under `~/.cache/nim/lockfreequeues_<variant>` and added `matrix.nim-version`-scoped `~/.nimble` and `~/.cache/nim` `actions/cache@v6` steps (`save-always: true`, `restore-keys:`), `timeout-minutes: 20`, and a twice-weekly cache-warm schedule (`0 6 * * 1,4`) in CI.
+
 ## [5.1.4] - 2026-10-27
 
 ### Changed
