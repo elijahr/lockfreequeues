@@ -45,10 +45,14 @@ jobs:
           parent-nim-install-directory: ${{ runner.temp }}
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/cache@v6
+      - name: Cache nimble packages
+        uses: actions/cache@v6
         with:
           path: ~/.nimble
-          key: nimble-${{ runner.os }}-${{ hashFiles('**/*.nimble') }}
+          key: nimble-${{ runner.os }}-${{ matrix.nim-version }}-${{ hashFiles('**/*.nimble') }}
+          restore-keys: |
+            nimble-${{ runner.os }}-${{ matrix.nim-version }}-
+            nimble-${{ runner.os }}-
           save-always: true
 
       - name: Cache Nim nimcache

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Test suite and CI caching speedup (`lockfreequeues.nimble`, `.github/workflows/ci.yml`)**: Folded `-d:nimEnforceLockFreeAtomics` into the primary `orc` and `arc` test builds to eliminate two redundant full compilations while preserving 100% of compiler, memory-manager, and sanitizer coverage (`orc`, `cpp`, `arc`, `refc`, `TSAN`, `ASAN`). Replaced `-f` forced rebuilds with isolated per-variant `--nimcache` and `--out` directories under `~/.cache/nim/lockfreequeues_<variant>` and added `actions/cache@v6` (`save-always: true`), `timeout-minutes: 20`, and a twice-weekly cache-warm schedule (`0 6 * * 1,4`) in CI.
+- **Test suite and CI caching speedup (`lockfreequeues.nimble`, `.github/workflows/ci.yml`)**: Folded `-d:nimEnforceLockFreeAtomics` into the primary `orc` and `arc` test builds to eliminate two redundant full compilations while preserving 100% of compiler, memory-manager, and sanitizer coverage (`orc`, `cpp`, `arc`, `refc`, `TSAN`, `ASAN`). Replaced `-f` forced rebuilds with isolated per-variant `--nimcache` and `--out` directories under `~/.cache/nim/lockfreequeues_<variant>` and added `matrix.nim-version`-scoped `~/.nimble` and `~/.cache/nim` `actions/cache@v6` steps (`save-always: true`, `restore-keys:`), `timeout-minutes: 20`, and a twice-weekly cache-warm schedule (`0 6 * * 1,4`) in CI.
 
 ## [5.1.4] - 2026-10-27
 
