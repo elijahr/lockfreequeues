@@ -15,27 +15,31 @@ requires "lockfree == 0.6.3"
 
 # Tasks
 task test, "Runs the test suite":
-  # C with default MM (orc)
-  exec "nim c --threads:on -r -f tests/test.nim"
+  let nimcacheBase = getHomeDir() / ".cache" / "nim"
+
+  # C with default MM (orc) and lock-free atomic enforcement (ensures no spinlock fallback)
+  exec "nim c --mm:orc -d:nimEnforceLockFreeAtomics --threads:on --nimcache:" &
+    quoteShell(nimcacheBase / "lockfreequeues_orc") & " -r tests/test.nim"
 
   # C++
-  exec "nim cpp --threads:on -r -f tests/test.nim"
+  exec "nim cpp --threads:on --nimcache:" &
+    quoteShell(nimcacheBase / "lockfreequeues_cpp") & " -r tests/test.nim"
 
-  # Test with different memory managers
-  exec "nim c --mm:arc --threads:on -r -f tests/test.nim"
-  exec "nim c --mm:refc --threads:on -r -f tests/test.nim"
-
-  # Test with lock-free enforcement (ensures no spinlock fallback)
-  exec "nim c --mm:arc -d:nimEnforceLockFreeAtomics --threads:on -r -f tests/test.nim"
-  exec "nim c --mm:orc -d:nimEnforceLockFreeAtomics --threads:on -r -f tests/test.nim"
+  # Test with different memory managers (arc with lock-free atomic enforcement, refc)
+  exec "nim c --mm:arc -d:nimEnforceLockFreeAtomics --threads:on --nimcache:" &
+    quoteShell(nimcacheBase / "lockfreequeues_arc") & " -r tests/test.nim"
+  exec "nim c --mm:refc --threads:on --nimcache:" &
+    quoteShell(nimcacheBase / "lockfreequeues_refc") & " -r tests/test.nim"
 
   if getEnv("SANITIZE_THREADS") != "no":
     # C (with thread sanitization, requires atomicArc for thread-safe refcounting)
-    exec "nim c --cc:clang --mm:atomicArc --passC:\"-fsanitize=thread\" --passL:\"-fsanitize=thread\" --threads:on -r -f tests/test.nim"
+    exec "nim c --cc:clang --mm:atomicArc --passC:\"-fsanitize=thread\" --passL:\"-fsanitize=thread\" --threads:on --nimcache:" &
+      quoteShell(nimcacheBase / "lockfreequeues_tsan") & " -r tests/test.nim"
 
   if getEnv("SANITIZE_ADDRESS") != "no":
     # C (with address sanitization)
-    exec "nim c --cc:clang --passC:\"-fsanitize=address\" --passL:\"-fsanitize=address\" --threads:on -r -f tests/test.nim"
+    exec "nim c --cc:clang --passC:\"-fsanitize=address\" --passL:\"-fsanitize=address\" --threads:on --nimcache:" &
+      quoteShell(nimcacheBase / "lockfreequeues_asan") & " -r tests/test.nim"
 
 task examples, "Runs the examples":
   # Bounded queue examples

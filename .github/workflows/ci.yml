@@ -3,6 +3,8 @@ on:
   push:
     branches: [devel]
   pull_request:
+  schedule:
+    - cron: "0 6 * * 1,4"
 
 permissions: {}
 
@@ -10,6 +12,7 @@ jobs:
   secrets-scan:
     name: Secrets Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -25,6 +28,7 @@ jobs:
   test-nim:
     name: Nim (${{ matrix.nim-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     permissions:
       contents: read
     strategy:
@@ -45,6 +49,16 @@ jobs:
         with:
           path: ~/.nimble
           key: nimble-${{ runner.os }}-${{ hashFiles('**/*.nimble') }}
+          save-always: true
+
+      - name: Cache Nim nimcache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/nim
+          key: nimcache-${{ runner.os }}-${{ matrix.nim-version }}-${{ hashFiles('**/*.nimble', 'src/**/*.nim', 'tests/**/*.nim') }}
+          restore-keys: |
+            nimcache-${{ runner.os }}-${{ matrix.nim-version }}-
+          save-always: true
 
       - name: Install dependencies
         run: |
