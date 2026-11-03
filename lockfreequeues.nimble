@@ -11,7 +11,7 @@ entryPoints = @["tests/test.nim"]
 # Dependencies
 requires "nim >= 2.2.10"
 requires "unittest2"
-requires "lockfree >= 0.6.6 & < 0.7.0"
+requires "https://github.com/elijahr/lockfree#feat/headerkit-roundtable-v2"
 requires "typestates >= 0.14.0 & < 0.15.0"
 
 # Tasks
