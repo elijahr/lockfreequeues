@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.8] - 2026-11-03
+
 ### Changed
 
-- **Upstream dependency requirement repin (`lockfreequeues.nimble`)**: Repinned `lockfree` requirement to `requires "lockfree >= 0.6.6 & < 0.7.0"`.
+- **Upstream dependency bump (`lockfree >= 0.6.7 & < 0.7.0`)**: Updated `lockfree` requirement in `lockfreequeues.nimble` to `requires "lockfree >= 0.6.7 & < 0.7.0"` pulling in `lockfree 0.6.7` (atomic `putPrev`/`deletePrev` on `SkipListMap`, declarative HeaderKit ABI diff configuration, and CI cache stabilization).
 
 ## [5.1.7] - 2026-10-30
 
