@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Upstream dependency requirement repin (`lockfreequeues.nimble`)**: Repinned `lockfree` requirement to `requires "lockfree >= 0.6.6 & < 0.7.0"`.
+
 ## [5.1.7] - 2026-10-30
 
 ### Changed
