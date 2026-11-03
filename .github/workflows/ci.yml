@@ -66,7 +66,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          nimble refresh && nimble install -d -y
+          nimble refresh
+          for d in $(find ~/.nimble -type d -name ".git" 2>/dev/null); do
+            git -C "$d/.." fetch --tags 2>/dev/null || true
+          done
+          nimble install -d -y
 
       - name: nph format check
         run: |

@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Upstream dependency bump (`lockfree >= 0.6.7 & < 0.7.0`)**: Updated `lockfree` requirement in `lockfreequeues.nimble` to `requires "lockfree >= 0.6.7 & < 0.7.0"` pulling in `lockfree 0.6.7` (atomic `putPrev`/`deletePrev` on `SkipListMap`, declarative HeaderKit ABI diff configuration, and CI cache stabilization).
+- **CI cached git tag synchronization (`.github/workflows/ci.yml`)**: Added automatic git tag fetching across all cached `~/.nimble` git repositories prior to dependency resolution, preventing Nimble SAT solver cache misses when upstream packages publish new versions.
 
 ## [5.1.7] - 2026-10-30
 
