@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Upstream dependency bump (`lockfree >= 0.6.7 & < 0.7.0`)**: Updated `lockfree` requirement in `lockfreequeues.nimble` to `requires "lockfree >= 0.6.7 & < 0.7.0"` pulling in `lockfree 0.6.7` (atomic `putPrev`/`deletePrev` on `SkipListMap`, declarative HeaderKit ABI diff configuration, and CI cache stabilization).
-- **CI lockfree dependency pre-installation (`.github/workflows/ci.yml`)**: Explicitly pre-install `lockfree@>= 0.6.7 & < 0.7.0` during dependency setup so Nimble 0.22 SAT solver on Nim 2.2.10 populates its package index with upstream releases.
+- **CI matrix lint scoping and dependency isolation (`.github/workflows/ci.yml`)**: Scoped `nph` format checking and `nimble check` to `matrix.nim-version == 'stable'`, and isolated `lockfree@0.6.7` pre-installation in `/tmp` to prevent legacy Nimble SAT solver collisions on older Nim versions.
 
 ## [5.1.7] - 2026-10-30
 

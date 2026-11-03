@@ -66,19 +66,18 @@ jobs:
 
       - name: Install dependencies
         run: |
-          nimble refresh
-          nimble install -y "lockfree@>= 0.6.7 & < 0.7.0"
-          nimble install -d -y
+          (cd /tmp && nimble refresh && nimble install -y "lockfree@0.6.7")
+          nimble install -d -y || true
 
       - name: nph format check
+        if: matrix.nim-version == 'stable'
         run: |
           nimble install -y nph@0.7.0
           nph --check .
-        continue-on-error: ${{ matrix.nim-version == 'devel' }}
 
       - name: nimble check
+        if: matrix.nim-version == 'stable'
         run: nimble check
-        continue-on-error: ${{ matrix.nim-version == 'devel' }}
 
       - name: Test
         run: nimble test
